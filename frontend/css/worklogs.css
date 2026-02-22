@@ -1,0 +1,547 @@
+/**
+ * Work Logs module – manager dashboard.
+ * Table, filters, modals, status colors, responsive.
+ */
+
+.worklogs-module {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.worklogs-module .dashboard-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: var(--gap);
+  border: 1px solid var(--divider);
+}
+
+/* Passkey gate */
+.worklogs-passkey-gate {
+  margin-bottom: var(--gap);
+}
+.worklogs-passkey-card {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+.worklogs-passkey-card .card-title {
+  margin-bottom: 0.5rem;
+}
+.worklogs-passkey-hint {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin: 0 0 1.5rem 0;
+}
+.worklogs-passkey-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+}
+.worklogs-passkey-form .worklogs-input {
+  text-align: center;
+  font-size: 1rem;
+}
+.worklogs-passkey-form .btn-worklogs {
+  align-self: center;
+}
+.worklogs-passkey-request-wrap {
+  margin: 1rem 0 0 0;
+}
+.worklogs-passkey-request-wrap .btn-worklogs {
+  font-size: 0.9rem;
+}
+.worklogs-passkey-error {
+  margin: 1rem 0 0 0;
+  color: var(--status-red);
+  font-size: 0.9rem;
+}
+
+.worklogs-analytics .card-title,
+.worklogs-filters .card-title,
+.worklogs-table-wrap .card-title {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-white);
+}
+
+/* Progress bar */
+.worklogs-progress-wrap {
+  margin-bottom: 1.25rem;
+}
+.worklogs-progress-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.worklogs-progress-bar {
+  height: 12px;
+  background: var(--input-bg);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+.worklogs-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+/* Analytics cards */
+.worklogs-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.worklogs-card {
+  background: var(--input-bg);
+  padding: 1rem;
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.worklogs-card-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.worklogs-card-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-white);
+}
+
+.worklogs-chart-wrap {
+  max-width: 400px;
+  height: 120px;
+}
+
+/* Filters */
+.worklogs-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+.worklogs-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+}
+.worklogs-filter-group label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.worklogs-filter-search {
+  flex: 1;
+  min-width: 180px;
+}
+.worklogs-input {
+  background: var(--input-bg);
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text-white);
+  font-size: 0.9rem;
+}
+.worklogs-input::placeholder {
+  color: var(--input-placeholder);
+}
+.worklogs-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.worklogs-actions-row {
+  margin-bottom: 0.5rem;
+}
+
+/* Buttons */
+.btn-worklogs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-pill);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter var(--transition), transform 0.15s ease;
+}
+.btn-worklogs:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.btn-worklogs:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.btn-worklogs:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-worklogs-primary {
+  background: var(--accent);
+  color: var(--bg-main);
+}
+.btn-worklogs-secondary {
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--divider);
+}
+.btn-worklogs-edit {
+  background: var(--status-yellow);
+  color: #1a1a1a;
+}
+.btn-worklogs-approve {
+  background: var(--status-green);
+  color: #1a1a1a;
+}
+.btn-worklogs-reject {
+  background: var(--status-red);
+  color: #fff;
+}
+.btn-worklogs-archive {
+  background: var(--text-muted);
+  color: var(--bg-main);
+}
+
+/* Table */
+.worklogs-table-wrap {
+  overflow: hidden;
+}
+.worklogs-table-wrap .table-responsive {
+  overflow-x: auto;
+}
+.worklogs-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+.worklogs-table th,
+.worklogs-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--divider);
+}
+.worklogs-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--input-bg);
+}
+.worklogs-table tbody tr {
+  transition: background 0.15s ease;
+}
+.worklogs-table tbody tr:hover {
+  background: var(--row-alt);
+}
+.worklogs-table tbody tr.worklogs-row-filtered {
+  background: rgba(255, 193, 71, 0.12);
+}
+
+/* Status row colors */
+.worklogs-table tbody tr.worklogs-status-pending { background: rgba(255, 201, 71, 0.15); }
+.worklogs-table tbody tr.worklogs-status-pending:hover { background: rgba(255, 201, 71, 0.22); }
+.worklogs-table tbody tr.worklogs-status-approved { background: rgba(73, 230, 126, 0.12); }
+.worklogs-table tbody tr.worklogs-status-approved:hover { background: rgba(73, 230, 126, 0.2); }
+.worklogs-table tbody tr.worklogs-status-edited,
+.worklogs-table tbody tr.worklogs-status-waiting_worker { background: rgba(255, 152, 0, 0.12); }
+.worklogs-table tbody tr.worklogs-status-edited:hover,
+.worklogs-table tbody tr.worklogs-status-waiting_worker:hover { background: rgba(255, 152, 0, 0.2); }
+.worklogs-table tbody tr.worklogs-status-completed { background: rgba(0, 174, 239, 0.12); }
+.worklogs-table tbody tr.worklogs-status-completed:hover { background: rgba(0, 174, 239, 0.2); }
+.worklogs-table tbody tr.worklogs-status-rejected { background: rgba(255, 101, 101, 0.1); }
+
+.worklogs-status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.worklogs-status-badge.status-pending { background: var(--status-yellow); color: #1a1a1a; }
+.worklogs-status-badge.status-approved { background: var(--status-green); color: #1a1a1a; }
+.worklogs-status-badge.status-edited,
+.worklogs-status-badge.status-waiting_worker { background: #ff9800; color: #1a1a1a; }
+.worklogs-status-badge.status-completed { background: var(--btn-primary); color: #fff; }
+.worklogs-status-badge.status-rejected { background: var(--status-red); color: #fff; }
+
+.worklogs-job-id-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+.worklogs-job-id-link:hover {
+  text-decoration: underline;
+}
+
+.worklogs-badge-edited {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  background: #ff9800;
+  color: #1a1a1a;
+  border-radius: 10px;
+  margin-left: 6px;
+}
+
+.worklogs-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* Modals */
+.worklogs-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+.worklogs-modal.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.worklogs-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+}
+
+.worklogs-modal-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.worklogs-modal-dialog-lg {
+  max-width: 640px;
+}
+
+.worklogs-modal-content {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.worklogs-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+.worklogs-modal-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-white);
+}
+.worklogs-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.15s;
+}
+.worklogs-modal-close:hover {
+  color: var(--text-white);
+}
+
+.worklogs-modal-body {
+  padding: 1.25rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.worklogs-modal-body-scroll {
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+.worklogs-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+
+/* Details content */
+#worklogs-details-content dl,
+.worklogs-details-dl {
+  display: grid;
+  gap: 8px 16px;
+  margin: 0 0 1rem;
+}
+#worklogs-details-content dt,
+.worklogs-details-dl dt {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+#worklogs-details-content dd,
+.worklogs-details-dl dd {
+  margin: 0 0 0 0;
+  color: var(--text-primary);
+  grid-column: 2;
+}
+
+.worklogs-details-invoice {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--input-bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--divider);
+}
+.worklogs-invoice-text {
+  margin: 0 0 0.75rem 0;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+.worklogs-btn-download-invoice {
+  margin: 0;
+}
+
+.worklogs-details-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.worklogs-details-photos img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 2px solid var(--divider);
+  transition: border-color 0.15s;
+}
+.worklogs-details-photos img:hover {
+  border-color: var(--accent);
+}
+
+/* Edit form */
+.worklogs-edit-fields {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.worklogs-field label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.worklogs-edit-history {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  padding: 10px;
+  background: var(--input-bg);
+  border-radius: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* Invoice content */
+.worklogs-invoice-content {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+.worklogs-invoice-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+.worklogs-invoice-content th,
+.worklogs-invoice-content td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--divider);
+  text-align: left;
+}
+.worklogs-invoice-total {
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-top: 1rem;
+}
+
+/* Lightbox */
+.worklogs-lightbox .worklogs-lightbox-content {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.worklogs-lightbox-img {
+  max-width: 100%;
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.worklogs-lightbox-close {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  background: var(--bg-card);
+  border: none;
+  color: var(--text-white);
+  font-size: 1.5rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 1;
+}
+.worklogs-lightbox-close:hover {
+  background: var(--input-bg);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .worklogs-filter-row {
+    flex-direction: column;
+  }
+  .worklogs-filter-group {
+    min-width: 100%;
+  }
+  .worklogs-modal-actions {
+    flex-direction: column;
+  }
+  .worklogs-modal-actions .btn-worklogs {
+    width: 100%;
+    justify-content: center;
+  }
+}

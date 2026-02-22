@@ -1,0 +1,94 @@
+/**
+ * Manager login page – centered form, consistent with Proconix theme.
+ */
+
+.login-manager-main {
+  min-height: calc(100vh - 180px);
+  display: flex;
+  align-items: center;
+}
+
+.login-manager-card {
+  background: var(--white);
+  color: var(--dark-blue, #0a1628);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.login-manager-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.login-manager-subtitle {
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+}
+
+.login-manager-card .form-label {
+  color: var(--dark-blue, #0a1628);
+  font-weight: 500;
+}
+
+.login-manager-card .input-group-text {
+  background: #e2e8f0;
+  border: 1px solid #cbd5e0;
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  color: #4a5568;
+}
+
+.login-manager-card .form-control {
+  border-radius: 0 8px 8px 0;
+  border: 1px solid #cbd5e0;
+}
+
+.login-manager-card .form-control:focus {
+  border-color: var(--lighter-blue, #4299e1);
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+}
+
+.login-manager-card .form-check-label {
+  color: #2d3748;
+}
+
+.btn-login-manager {
+  padding: 12px 20px;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #fff;
+  background: linear-gradient(135deg, var(--light-blue, #2c5282), var(--lighter-blue, #4299e1));
+  border: none;
+  border-radius: 12px;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-login-manager:hover {
+  background: linear-gradient(135deg, var(--lighter-blue, #4299e1), var(--accent, #63b3ed));
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(66, 153, 225, 0.35);
+}
+
+.btn-login-manager:disabled {
+  transform: none;
+  opacity: 0.85;
+}
+
+.login-manager-support {
+  font-size: 0.875rem;
+  color: #4a5568;
+  margin-top: 1.5rem;
+  margin-bottom: 0;
+  text-align: center;
+}
+
+.login-manager-support a {
+  color: var(--lighter-blue, #4299e1);
+  text-decoration: none;
+}
+
+.login-manager-support a:hover {
+  text-decoration: underline;
+}

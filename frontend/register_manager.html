@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register Manager – Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/styles.css" rel="stylesheet">
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark py-3">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center" href="/">
+        <span class="logo-text">Proconix</span>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+        <ul class="navbar-nav align-items-lg-center gap-2 gap-lg-3">
+          <li class="nav-item">
+            <a class="nav-link btn-nav" href="/register_company.html">Register a Company</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link btn-nav" href="/see_plans.html">See Plans</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    <div class="container py-5">
+      <div class="row justify-content-center">
+        <div class="col-lg-6">
+          <h1 class="welcome-title mb-2">Register as Manager</h1>
+          <p class="text-white-50 mb-4">Complete your manager account for your company.</p>
+
+          <div id="formMessage" class="alert d-none" role="alert"></div>
+          <div id="noTokenMessage" class="alert alert-warning d-none" role="alert">
+            No onboarding session found. Please <a href="/register_company.html">register your company</a> first.
+          </div>
+
+          <div class="form-card" id="managerFormCard">
+            <form id="registerManagerForm" class="needs-validation" novalidate>
+              <input type="hidden" id="company_id" name="company_id" value="">
+              <div class="mb-3">
+                <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control form-control-proconix" id="name" name="name" required minlength="2" maxlength="120" placeholder="Your name">
+                <div class="invalid-feedback">Please enter your name (at least 2 characters).</div>
+              </div>
+              <div class="mb-3">
+                <label for="surname" class="form-label">Surname <span class="text-danger">*</span></label>
+                <input type="text" class="form-control form-control-proconix" id="surname" name="surname" required minlength="2" maxlength="120" placeholder="Your surname">
+                <div class="invalid-feedback">Please enter your surname (at least 2 characters).</div>
+              </div>
+              <div class="mb-3">
+                <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                <input type="email" class="form-control form-control-proconix" id="email" name="email" required placeholder="you@example.com">
+                <div class="invalid-feedback">Please enter a valid email address.</div>
+              </div>
+              <div class="mb-4">
+                <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
+                <input type="password" class="form-control form-control-proconix" id="password" name="password" required minlength="8" maxlength="128" placeholder="Min. 8 characters">
+                <div class="invalid-feedback">Password must be at least 8 characters.</div>
+              </div>
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-role btn-manager" id="submitBtn">Register Manager</button>
+                <a href="/index.html" class="btn btn-role btn-operative">Cancel</a>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container py-4 text-center">
+      <p class="footer-credit mb-0">This website was created by Roman Demian in 2026.</p>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/register_manager.js"></script>
+</body>
+</html>

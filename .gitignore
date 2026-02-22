@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Environment (passwords, secrets)
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+*.log
+
+# Uploads (user files; keep folder)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+

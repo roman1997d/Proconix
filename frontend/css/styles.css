@@ -1,0 +1,611 @@
+/* ===== Variables ===== */
+:root {
+  --dark-blue: #0a1628;
+  --mid-blue: #1a365d;
+  --light-blue: #2c5282;
+  --lighter-blue: #4299e1;
+  --accent: #63b3ed;
+  --white: #ffffff;
+  --nav-height: 72px;
+}
+
+/* ===== Base & Background ===== */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: linear-gradient(180deg, var(--dark-blue) 0%, var(--mid-blue) 35%, var(--light-blue) 70%, var(--lighter-blue) 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  color: var(--white);
+  overflow-x: hidden;
+}
+
+/* ===== Navigation ===== */
+.navbar {
+  background: rgba(10, 22, 40, 0.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.logo-text {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--white);
+}
+
+.nav-link.btn-nav {
+  color: rgba(255, 255, 255, 0.9) !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.nav-link.btn-nav:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: var(--white) !important;
+  transform: translateY(-1px);
+}
+
+.nav-link.btn-nav-primary {
+  background: linear-gradient(135deg, var(--lighter-blue), var(--accent));
+  color: var(--white) !important;
+}
+
+.nav-link.btn-nav-primary:hover {
+  background: linear-gradient(135deg, var(--accent), var(--lighter-blue));
+  box-shadow: 0 4px 14px rgba(99, 179, 237, 0.4);
+  color: var(--white) !important;
+}
+
+.navbar-toggler {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.navbar-toggler-icon {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+/* ===== Main Content ===== */
+.main-content {
+  padding-top: 1rem;
+}
+
+.min-vh-75 {
+  min-height: 75vh;
+}
+
+.left-section .welcome-title {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--white);
+}
+
+.welcome-sub {
+  font-size: 1.1rem;
+}
+
+/* Role buttons */
+.btn-role {
+  padding: 0.75rem 1.75rem;
+  font-weight: 600;
+  border-radius: 10px;
+  border: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.btn-role:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.btn-manager {
+  background: var(--white);
+  color: var(--dark-blue);
+}
+
+.btn-manager:hover {
+  background: #e2e8f0;
+  color: var(--mid-blue);
+}
+
+.btn-operative {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--white);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+}
+
+.btn-operative:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: var(--white);
+  color: var(--white);
+}
+
+/* ===== Form card (e.g. Register Company) ===== */
+.form-card {
+  background: var(--white);
+  color: var(--dark-blue);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.form-card .form-label {
+  color: var(--dark-blue) !important;
+}
+
+.form-control-proconix,
+.form-select.form-control-proconix {
+  border: 1px solid #cbd5e0;
+  border-radius: 8px;
+}
+
+.form-control-proconix:focus,
+.form-select.form-control-proconix:focus {
+  border-color: var(--lighter-blue);
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.25);
+}
+
+.form-card .form-check-label {
+  color: var(--mid-blue) !important;
+}
+
+/* ===== Right Section – Building animation (construction progress) ===== */
+.building-container {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  padding: 3rem 2rem;
+  min-height: 320px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Background clouds – slow drift */
+.construction-clouds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.cloud {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  animation: cloud-drift 25s linear infinite;
+}
+
+.cloud-1 { width: 60px; height: 24px; left: 10%; top: 15%; animation-delay: 0s; animation-duration: 28s; }
+.cloud-2 { width: 45px; height: 18px; left: 50%; top: 25%; animation-delay: -8s; animation-duration: 22s; }
+.cloud-3 { width: 50px; height: 20px; left: 75%; top: 10%; animation-delay: -15s; animation-duration: 30s; }
+
+@keyframes cloud-drift {
+  from { transform: translateX(-30%); }
+  to   { transform: translateX(120%); }
+}
+
+/* Scene: crane + building side by side */
+.construction-scene {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.5rem;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+/* Crane – SVG with subtle loop animation */
+.crane-wrap {
+  flex-shrink: 0;
+  width: 60px;
+  height: 200px;
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 8px;
+}
+
+.crane-svg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: bottom;
+}
+
+.crane-jib-group {
+  transform-origin: 68px 59px;
+  animation: crane-swing 4s ease-in-out infinite;
+}
+
+.crane-hook {
+  animation: crane-hook 3s ease-in-out infinite;
+}
+
+@keyframes crane-swing {
+  0%, 100% { transform: rotate(-4deg); }
+  50%      { transform: rotate(6deg); }
+}
+
+@keyframes crane-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(3px); }
+}
+
+@keyframes crane-hook {
+  0%, 100% { transform: translate(0, 0); opacity: 1; }
+  50%      { transform: translate(-2px, 2px); opacity: 0.9; }
+}
+
+/* Building wrapper – viewport for rise */
+.building-wrapper {
+  width: 100%;
+  max-width: 130px;
+  height: 220px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.building {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: building-rise 6s ease-in-out infinite;
+}
+
+.building-tower {
+  width: 88px;
+  height: 100%;
+  background: linear-gradient(180deg, #2c5282 0%, #1a365d 50%, #0a1628 100%);
+  border-radius: 8px 8px 0 0;
+  position: relative;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.1), 0 4px 20px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.building-floor {
+  height: 20%;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+.building-floor:last-child {
+  border-bottom: none;
+}
+
+/* Windows grid per floor */
+.floor-windows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  width: 100%;
+  max-width: 56px;
+  height: 100%;
+  max-height: 32px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.window {
+  width: 100%;
+  height: 100%;
+  min-width: 10px;
+  min-height: 8px;
+  max-width: 14px;
+  max-height: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  animation: window-glow 6s ease-in-out infinite;
+  opacity: 0.4;
+}
+
+/* Windows light up in sequence each cycle, then go dark again */
+.building-floor-1 .window { animation-delay: 0s; }
+.building-floor-2 .window { animation-delay: 0.5s; }
+.building-floor-3 .window { animation-delay: 1s; }
+.building-floor-4 .window { animation-delay: 1.5s; }
+.building-floor-5 .window { animation-delay: 2s; }
+
+@keyframes window-glow {
+  0%, 12% {
+    opacity: 0.35;
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: none;
+  }
+  20%, 42% {
+    opacity: 1;
+    background: rgba(255, 236, 179, 0.95);
+    box-shadow: 0 0 8px rgba(255, 220, 150, 0.7), inset 0 0 6px rgba(255, 255, 255, 0.4);
+  }
+  50%, 100% {
+    opacity: 0.35;
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: none;
+  }
+}
+
+/* Building rises and falls in a loop */
+@keyframes building-rise {
+  0%, 100% {
+    transform: translateY(100%);
+    opacity: 0.7;
+  }
+  28% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  42% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  78% {
+    transform: translateY(100%);
+    opacity: 0.7;
+  }
+}
+
+/* ===== Footer ===== */
+.footer {
+  background: rgba(10, 22, 40, 0.6);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: auto;
+}
+
+.footer-credit,
+.footer-contact,
+.footer-thanks {
+  color: var(--white);
+  margin: 0;
+}
+
+.footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+  color: var(--lighter-blue);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 991.98px) {
+  .navbar-collapse {
+    padding-top: 1rem;
+  }
+
+  .nav-link.btn-nav {
+    display: inline-block;
+    text-align: center;
+  }
+
+  .building-container {
+    min-height: 280px;
+    padding: 2rem 1rem;
+  }
+
+  .construction-scene {
+    max-width: 240px;
+  }
+
+  .crane-wrap {
+    width: 48px;
+    height: 160px;
+  }
+
+  .building-wrapper {
+    height: 200px;
+    max-width: 110px;
+  }
+
+  .building-tower {
+    width: 72px;
+  }
+
+  .floor-windows {
+    max-width: 44px;
+    max-height: 26px;
+  }
+
+  .window {
+    min-width: 8px;
+    min-height: 6px;
+    max-width: 12px;
+    max-height: 10px;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .welcome-title {
+    font-size: 1.5rem;
+  }
+
+  .btn-role {
+    width: 100%;
+    text-align: center;
+  }
+
+  .d-flex.flex-wrap.gap-3 {
+    flex-direction: column;
+  }
+}
+
+/* ===== Operative login modal (landing page) ===== */
+.operative-login-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.operative-login-modal.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.operative-login-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 22, 40, 0.85);
+  cursor: pointer;
+}
+
+.operative-login-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+
+.operative-login-content {
+  background: var(--mid-blue);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.operative-login-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.operative-login-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--white);
+}
+
+.operative-login-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: color 0.2s ease;
+}
+
+.operative-login-close:hover {
+  color: var(--white);
+}
+
+.operative-login-body {
+  padding: 1.5rem;
+}
+
+.operative-login-error {
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 1rem;
+  background: rgba(255, 101, 101, 0.2);
+  border: 1px solid rgba(255, 101, 101, 0.5);
+  border-radius: 8px;
+  color: #ffb3b3;
+  font-size: 0.9rem;
+}
+
+.operative-form .form-label {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+  margin-bottom: 0.35rem;
+}
+
+.operative-form .form-control {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: var(--white);
+  padding: 0.5rem 0.75rem;
+  width: 100%;
+}
+
+.operative-form .form-control:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(99, 179, 237, 0.3);
+}
+
+.operative-form .form-control::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.operative-form .form-text {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.operative-btn-primary {
+  margin-top: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  background: var(--lighter-blue);
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.operative-btn-primary:hover {
+  background: var(--accent);
+  transform: translateY(-1px);
+}
+
+.operative-btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.operative-first-time-link {
+  margin: 1rem 0 0 0;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.op-link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.op-link-btn:hover {
+  color: var(--lighter-blue);
+}

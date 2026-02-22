@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register a Company – Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/styles.css" rel="stylesheet">
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <nav class="navbar navbar-expand-lg navbar-dark py-3">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center" href="/">
+        <span class="logo-text">Proconix</span>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+        <ul class="navbar-nav align-items-lg-center gap-2 gap-lg-3">
+          <li class="nav-item">
+            <a class="nav-link btn-nav" href="/register_company.html">Register a Company</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link btn-nav" href="#">Contact Us</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link btn-nav btn-nav-primary" href="/see_plans.html">See Plans</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <div class="container py-5">
+      <div class="row justify-content-center">
+        <div class="col-lg-9">
+          <h1 class="welcome-title mb-2">Register your company</h1>
+          <p class="text-white-50 mb-4">Fill in the details below to get started with Proconix.</p>
+
+          <div id="formMessage" class="alert d-none" role="alert"></div>
+
+          <div class="form-card">
+            <form id="registerCompanyForm" class="needs-validation" novalidate>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label for="companyName" class="form-label">Company name <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control form-control-proconix" id="companyName" name="name" required minlength="1" maxlength="255" placeholder="e.g. Acme Ltd">
+                  <div class="invalid-feedback">Please enter your company name.</div>
+                </div>
+                <div class="col-md-6">
+                  <label for="industryType" class="form-label">Industry type <span class="text-danger">*</span></label>
+                  <select class="form-select form-control-proconix" id="industryType" name="industry_type" required>
+                    <option value="">Select industry</option>
+                    <option value="Drylining">Drylining</option>
+                    <option value="Plumbing">Plumbing</option>
+                    <option value="Electrical">Electrical</option>
+                    <option value="Carpentry">Carpentry</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  <div class="invalid-feedback">Please select an industry type.</div>
+                </div>
+                <div class="col-md-6">
+                  <label for="subscriptionPlan" class="form-label">Subscription plan <span class="text-danger">*</span></label>
+                  <select class="form-select form-control-proconix" id="subscriptionPlan" name="subscription_plan" required>
+                    <option value="">Select plan</option>
+                    <option value="1 month">1 month</option>
+                    <option value="3 months">3 months</option>
+                    <option value="6 months">6 months</option>
+                    <option value="12 months">12 months</option>
+                  </select>
+                  <div class="invalid-feedback">Please select a subscription plan.</div>
+                </div>
+                <div class="col-md-6">
+                  <label for="numberOfUsers" class="form-label">Number of users</label>
+                  <select class="form-select form-control-proconix" id="numberOfUsers" name="number_of_users">
+                    <option value="1–10">1–10</option>
+                    <option value="10–40">10–40</option>
+                    <option value="Unlimited">Unlimited</option>
+                  </select>
+                </div>
+                <div class="col-12">
+                  <label for="officeAddress" class="form-label">Office address <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control form-control-proconix" id="officeAddress" name="office_address" required minlength="1" maxlength="500" placeholder="Street, city, country">
+                  <div class="invalid-feedback">Please enter the office address.</div>
+                </div>
+                <div class="col-md-6">
+                  <label for="headManagerName" class="form-label">Head manager name <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control form-control-proconix" id="headManagerName" name="created_by" required minlength="1" maxlength="255" placeholder="Full name">
+                  <div class="invalid-feedback">Please enter the head manager name.</div>
+                </div>
+                <div class="col-md-6">
+                  <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                  <input type="email" class="form-control form-control-proconix" id="email" name="email" required placeholder="contact@company.com">
+                  <div class="invalid-feedback">Please enter a valid email address.</div>
+                </div>
+                <div class="col-md-6">
+                  <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
+                  <input type="password" class="form-control form-control-proconix" id="password" name="password" required minlength="8" maxlength="128" placeholder="Min. 8 characters">
+                  <div class="invalid-feedback">Password must be at least 8 characters.</div>
+                </div>
+                <div class="col-12">
+                  <label for="securityQuestion" class="form-label">Security question <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control form-control-proconix" id="securityQuestion" name="security_question1" required minlength="1" maxlength="255" placeholder="e.g. Name of first pet">
+                  <div class="invalid-feedback">Please enter a security question.</div>
+                  <div class="form-text text-dark">A security code (3 letters + 3 digits) will be generated automatically after registration.</div>
+                </div>
+                <div class="col-12">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="terms" required>
+                    <label class="form-check-label" for="terms">I agree to the terms of service and privacy policy.</label>
+                  </div>
+                </div>
+                <div class="col-12 pt-2">
+                  <button type="submit" class="btn btn-role btn-manager" id="submitBtn">Submit registration</button>
+                  <a href="/" class="btn btn-role btn-operative ms-2">Back to home</a>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container py-5">
+      <div class="row">
+        <div class="col-lg-8 mx-auto text-center">
+          <p class="footer-credit mb-2">This website was created by Roman Demian in 2026.</p>
+          <p class="footer-contact mb-2">Contact: <a href="mailto:contact@proconix.example">contact@proconix.example</a></p>
+          <p class="footer-thanks text-white-50">Thank you for visiting Proconix. We look forward to supporting your workflow.</p>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    (function () {
+      const form = document.getElementById('registerCompanyForm');
+      const formMessage = document.getElementById('formMessage');
+      const submitBtn = document.getElementById('submitBtn');
+
+      function showMessage(text, isError) {
+        formMessage.textContent = text;
+        formMessage.classList.remove('alert-success', 'alert-danger', 'd-none');
+        formMessage.classList.add(isError ? 'alert-danger' : 'alert-success');
+        formMessage.classList.remove('d-none');
+      }
+
+      function hideMessage() {
+        formMessage.classList.add('d-none');
+      }
+
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        if (!form.checkValidity()) {
+          form.classList.add('was-validated');
+          return;
+        }
+
+        submitBtn.disabled = true;
+        hideMessage();
+
+        const payload = {
+          name: document.getElementById('companyName').value.trim(),
+          industry_type: document.getElementById('industryType').value,
+          subscription_plan: document.getElementById('subscriptionPlan').value,
+          created_by: document.getElementById('headManagerName').value.trim(),
+          office_address: document.getElementById('officeAddress').value.trim(),
+          security_question1: document.getElementById('securityQuestion').value.trim(),
+        };
+
+        try {
+          const res = await fetch('/api/companies/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          const text = await res.text();
+          let data = {};
+          try {
+            data = JSON.parse(text);
+          } catch (_) {
+            if (!res.ok) {
+              showMessage('Server returned ' + res.status + '. Are you running the Express server? Run: npm start (not node index.js)', true);
+              return;
+            }
+          }
+
+          if (res.ok && data.success) {
+            if (data.onboarding_token) {
+              localStorage.setItem('proconix_onboarding_token', data.onboarding_token);
+              window.location.href = '/register_manager.html';
+              return;
+            }
+            var successMsg = data.message || 'Company registered successfully.';
+            if (data.security_token) successMsg += ' Security code: ' + data.security_token + ' (save it).';
+            showMessage(successMsg, false);
+            form.reset();
+            form.classList.remove('was-validated');
+          } else {
+            var msg = (data.errors && data.errors.length) ? data.errors.join(' ') : (data.message || 'Registration failed.');
+            if (data.error) msg += ' — ' + data.error;
+            showMessage(msg, true);
+          }
+        } catch (err) {
+          showMessage('Network error: ' + (err.message || 'Please try again.'), true);
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

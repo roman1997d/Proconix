@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manager Login – Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/styles.css" rel="stylesheet">
+  <link href="css/login_manager.css" rel="stylesheet">
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark py-3">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center" href="/">
+        <span class="logo-text">Proconix</span>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+        <ul class="navbar-nav align-items-lg-center gap-2 gap-lg-3">
+          <li class="nav-item">
+            <a class="nav-link btn-nav" href="/register_company.html">Register a Company</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link btn-nav btn-nav-primary" href="/login_manager.html">Login</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link btn-nav" href="/see_plans.html">See Plans</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="login-manager-main">
+    <div class="container py-5">
+      <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-5">
+          <div class="login-manager-card">
+            <h1 class="login-manager-title">Manager Login</h1>
+            <p class="login-manager-subtitle text-white-50">Sign in to access your dashboard.</p>
+
+            <div id="loginMessage" class="alert d-none" role="alert"></div>
+
+            <form id="loginManagerForm" class="needs-validation" novalidate>
+              <div class="mb-3">
+                <label for="loginEmail" class="form-label">Email <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text"><i class="bi bi-envelope-fill"></i></span>
+                  <input type="email" class="form-control form-control-proconix" id="loginEmail" name="email" required placeholder="you@example.com">
+                </div>
+                <div class="invalid-feedback">Please enter a valid email address.</div>
+              </div>
+              <div class="mb-3">
+                <label for="loginPassword" class="form-label">Password <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                  <input type="password" class="form-control form-control-proconix" id="loginPassword" name="password" required placeholder="Your password">
+                </div>
+                <div class="invalid-feedback">Please enter your password.</div>
+              </div>
+              <div class="mb-4">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="keepLoggedIn" name="keepLoggedIn">
+                  <label class="form-check-label" for="keepLoggedIn">Keep me logged in</label>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-login-manager w-100" id="loginSubmitBtn">
+                <span class="btn-text">Login</span>
+                <span class="btn-loading d-none"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing in…</span>
+              </button>
+            </form>
+
+            <p class="login-manager-support">
+              Forgot password or need help? Contact support at: <a href="mailto:your_email@example.com">your_email@example.com</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container py-4 text-center">
+      <p class="footer-credit mb-0">This website was created by Roman Demian in 2026.</p>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/login_manager.js"></script>
+</body>
+</html>

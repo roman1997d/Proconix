@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>See Plans – Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/styles.css" rel="stylesheet">
+  <link href="css/see_plans.css" rel="stylesheet">
+</head>
+<body class="see-plans-page">
+  <!-- Top Navigation Bar (consistent with homepage) -->
+  <nav class="navbar navbar-expand-lg navbar-dark py-3">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center" href="/index.html">
+        <span class="logo-text">Proconix</span>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+        <ul class="navbar-nav align-items-lg-center gap-2 gap-lg-3">
+          <li class="nav-item">
+            <a class="nav-link btn-nav" href="/register_company.html">Register a Company</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link btn-nav" href="/contact.html">Contact Us</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link btn-nav" href="/index.html">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link btn-nav btn-nav-primary" href="/see_plans.html">See Plans</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero / Page title -->
+  <header class="plans-hero text-center py-5">
+    <div class="container">
+      <h1 class="plans-title mb-3">Choose Your Plan</h1>
+      <p class="plans-subtitle text-white-50">Flexible options for teams of all sizes. Start free and scale as you grow.</p>
+    </div>
+  </header>
+
+  <!-- Pricing cards -->
+  <main class="plans-main py-5">
+    <div class="container">
+      <div class="row g-4 justify-content-center">
+        <!-- Free Plan -->
+        <div class="col-sm-6 col-lg-3">
+          <div class="pricing-card" data-plan="free">
+            <div class="pricing-card-inner">
+              <h2 class="pricing-title">Free Plan</h2>
+              <p class="pricing-desc">For small teams exploring the platform</p>
+              <ul class="pricing-features">
+                <li>1 Project Limit</li>
+                <li><strong>£0</strong> / month</li>
+                <li>Valid for 30 days</li>
+              </ul>
+              <a href="/api/subscriptions/free" class="btn btn-pricing">Choose Free Plan</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Silver Plan -->
+        <div class="col-sm-6 col-lg-3">
+          <div class="pricing-card" data-plan="silver">
+            <div class="pricing-card-inner">
+              <h2 class="pricing-title">Silver Plan</h2>
+              <p class="pricing-desc">Perfect for growing subcontractors</p>
+              <p class="pricing-rule">Minimum 3-month commitment</p>
+              <ul class="pricing-features">
+                <li>Up to 5 Projects</li>
+                <li><strong>£10</strong> / month</li>
+                <li>Cancel anytime after the first 3 months</li>
+              </ul>
+              <a href="/api/subscriptions/silver" class="btn btn-pricing">Select Silver Plan</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gold Plan (popular) -->
+        <div class="col-sm-6 col-lg-3">
+          <div class="pricing-card pricing-card-popular" data-plan="gold">
+            <div class="pricing-badge">Most Popular</div>
+            <div class="pricing-card-inner">
+              <h2 class="pricing-title">Gold Plan</h2>
+              <p class="pricing-desc">Our most popular option</p>
+              <p class="pricing-rule">6-month billing cycle</p>
+              <ul class="pricing-features">
+                <li>Up to 15 Projects</li>
+                <li><strong>£20</strong> / month</li>
+              </ul>
+              <a href="/api/subscriptions/gold" class="btn btn-pricing">Choose Gold Plan</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Platinum Plan -->
+        <div class="col-sm-6 col-lg-3">
+          <div class="pricing-card" data-plan="platinum">
+            <div class="pricing-card-inner">
+              <h2 class="pricing-title">Platinum Plan</h2>
+              <p class="pricing-desc">For advanced companies with multiple sites</p>
+              <p class="pricing-rule">12-month billing cycle</p>
+              <ul class="pricing-features">
+                <li>Up to 30 Projects</li>
+                <li><strong>£40</strong> / month</li>
+              </ul>
+              <a href="/api/subscriptions/platinum" class="btn btn-pricing">Select Platinum Plan</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Plan & Contact Section -->
+    <section class="custom-plan-section py-5">
+      <div class="container">
+        <div class="row justify-content-center">
+          <div class="col-lg-10 col-xl-8">
+            <p class="custom-plan-message text-center">
+              If you need a customized plan or want to discuss a tailored solution, please contact us.
+            </p>
+            <div class="callback-form-card">
+              <h2 class="callback-form-title">Request a Callback</h2>
+              <div id="callbackFormMessage" class="alert d-none" role="alert"></div>
+              <form id="callbackForm" class="callback-form needs-validation" novalidate>
+                <div class="mb-3">
+                  <label for="callbackFullName" class="form-label">
+                    <i class="bi bi-person-fill input-icon" aria-hidden="true"></i> Full Name <span class="text-danger">*</span>
+                  </label>
+                  <input type="text" class="form-control" id="callbackFullName" name="fullName" required minlength="2" maxlength="120" placeholder="Your full name">
+                  <div class="invalid-feedback">Please enter your full name (at least 2 characters).</div>
+                </div>
+                <div class="mb-3">
+                  <label for="callbackEmail" class="form-label">
+                    <i class="bi bi-envelope-fill input-icon" aria-hidden="true"></i> Email Address <span class="text-danger">*</span>
+                  </label>
+                  <input type="email" class="form-control" id="callbackEmail" name="email" required placeholder="you@example.com">
+                  <div class="invalid-feedback">Please enter a valid email address.</div>
+                </div>
+                <div class="mb-4">
+                  <label for="callbackPhone" class="form-label">
+                    <i class="bi bi-telephone-fill input-icon" aria-hidden="true"></i> Phone Number <span class="text-danger">*</span>
+                  </label>
+                  <input type="tel" class="form-control" id="callbackPhone" name="phone" required minlength="6" maxlength="30" placeholder="e.g. +44 7700 900000">
+                  <div class="invalid-feedback">Please enter a valid phone number (at least 6 characters).</div>
+                </div>
+                <div class="text-center">
+                  <button type="submit" class="btn btn-callback" id="callbackSubmitBtn">Request Callback</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="plans-footer py-5">
+    <div class="container text-center">
+      <p class="footer-copyright mb-2">Proconix © 2026 — Created by Roman Demian</p>
+      <p class="footer-email mb-2">Email: <a href="mailto:support@proconix.com">support@proconix.com</a></p>
+      <p class="footer-thanks text-white-50">Thank you for choosing Proconix.</p>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/see_plans.js"></script>
+</body>
+</html>

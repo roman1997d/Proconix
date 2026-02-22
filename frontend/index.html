@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proconix – Your Partner for Tracking Work Processes</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Custom CSS -->
+  <link href="css/styles.css" rel="stylesheet">
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <nav class="navbar navbar-expand-lg navbar-dark py-3">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center" href="/">
+        <span class="logo-text">Proconix</span>
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+        <ul class="navbar-nav align-items-lg-center gap-2 gap-lg-3">
+          <li class="nav-item">
+            <a class="nav-link btn-nav" href="/register_company.html">Register a Company</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link btn-nav" href="#">Contact Us</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link btn-nav btn-nav-primary" href="/see_plans.html">See Plans</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content Section -->
+  <main class="main-content">
+    <div class="container py-5">
+      <div class="row align-items-center min-vh-75">
+        <!-- Left Section -->
+        <div class="col-lg-6 left-section mb-5 mb-lg-0">
+          <h1 class="welcome-title mb-4">
+            Welcome to Proconix, your number one partner for tracking work processes.
+          </h1>
+          <p class="welcome-sub mb-4 text-white-50">
+            Choose your role to get started.
+          </p>
+          <div class="d-flex flex-wrap gap-3">
+            <a href="/login_manager.html" class="btn btn-role btn-manager">I'm Manager</a>
+            <a href="#" class="btn btn-role btn-operative" id="btn-operative-login" aria-haspopup="dialog" aria-expanded="false">I'm Operative</a>
+          </div>
+        </div>
+        <!-- Right Section – Building animation (construction progress) -->
+        <div class="col-lg-6">
+          <div class="building-container" aria-hidden="true">
+            <!-- Optional: subtle background clouds -->
+            <div class="construction-clouds">
+              <div class="cloud cloud-1"></div>
+              <div class="cloud cloud-2"></div>
+              <div class="cloud cloud-3"></div>
+            </div>
+            <div class="construction-scene">
+              <!-- Crane (SVG) -->
+              <div class="crane-wrap">
+                <svg class="crane-svg" viewBox="0 0 120 200" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="craneGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" style="stop-color:#4a5568" />
+                      <stop offset="100%" style="stop-color:#2d3748" />
+                    </linearGradient>
+                  </defs>
+                  <!-- Mast -->
+                  <rect x="52" y="40" width="16" height="155" rx="2" fill="url(#craneGrad)" />
+                  <!-- Jib + cabin (group swings together) -->
+                  <g class="crane-jib-group">
+                    <rect x="68" y="55" width="48" height="8" rx="2" fill="url(#craneGrad)" />
+                    <rect x="108" y="48" width="14" height="22" rx="2" fill="#4a5568" />
+                  </g>
+                  <!-- Hook -->
+                  <circle cx="72" cy="59" r="4" fill="#e2e8f0" class="crane-hook" />
+                </svg>
+              </div>
+              <!-- Building with windows -->
+              <div class="building-wrapper">
+                <div class="building">
+                  <div class="building-tower">
+                    <div class="building-floor building-floor-1">
+                      <div class="floor-windows">
+                        <span class="window"></span><span class="window"></span>
+                        <span class="window"></span><span class="window"></span>
+                      </div>
+                    </div>
+                    <div class="building-floor building-floor-2">
+                      <div class="floor-windows">
+                        <span class="window"></span><span class="window"></span>
+                        <span class="window"></span><span class="window"></span>
+                      </div>
+                    </div>
+                    <div class="building-floor building-floor-3">
+                      <div class="floor-windows">
+                        <span class="window"></span><span class="window"></span>
+                        <span class="window"></span><span class="window"></span>
+                      </div>
+                    </div>
+                    <div class="building-floor building-floor-4">
+                      <div class="floor-windows">
+                        <span class="window"></span><span class="window"></span>
+                        <span class="window"></span><span class="window"></span>
+                      </div>
+                    </div>
+                    <div class="building-floor building-floor-5">
+                      <div class="floor-windows">
+                        <span class="window"></span><span class="window"></span>
+                        <span class="window"></span><span class="window"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container py-5">
+      <div class="row">
+        <div class="col-lg-8 mx-auto text-center">
+          <p class="footer-credit mb-2">
+            This website was created by Roman Demian in 2026.
+          </p>
+          <p class="footer-contact mb-2">
+            Contact: <a href="mailto:contact@proconix.example">contact@proconix.example</a>
+          </p>
+          <p class="footer-thanks text-white-50">
+            Thank you for visiting Proconix. We look forward to supporting your workflow.
+          </p>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Operative login modal (step-based) -->
+  <div class="operative-login-modal" id="operative-login-modal" role="dialog" aria-labelledby="operative-modal-title" aria-modal="true" aria-hidden="true">
+    <div class="operative-login-backdrop" id="operative-modal-backdrop"></div>
+    <div class="operative-login-dialog">
+      <div class="operative-login-content">
+        <div class="operative-login-header">
+          <h2 class="operative-login-title" id="operative-modal-title">Operative Login</h2>
+          <button type="button" class="operative-login-close" id="operative-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="operative-login-body">
+          <p id="operative-modal-error" class="operative-login-error d-none" role="alert"></p>
+
+          <!-- Normal login: email + password -->
+          <div id="operative-step-login" class="operative-step">
+            <form id="operative-form-login" class="operative-form">
+              <div class="mb-3">
+                <label for="operative-login-email" class="form-label">Email</label>
+                <input type="email" id="operative-login-email" name="email" class="form-control" required placeholder="your@email.com" autocomplete="email">
+              </div>
+              <div class="mb-3">
+                <label for="operative-login-password" class="form-label">Password</label>
+                <input type="password" id="operative-login-password" name="password" class="form-control" required placeholder="Your password" autocomplete="current-password">
+              </div>
+              <button type="submit" class="btn operative-btn-primary" id="operative-btn-login">Log in</button>
+              <p class="operative-first-time-link">
+                <button type="button" class="op-link-btn" id="operative-switch-to-temp">First time? Use temporary password</button>
+              </p>
+            </form>
+          </div>
+
+          <!-- Step 1: Temporary login (first time only) -->
+          <div id="operative-step-1" class="operative-step d-none">
+            <form id="operative-form-temp" class="operative-form">
+              <div class="mb-3">
+                <label for="operative-email" class="form-label">Email</label>
+                <input type="email" id="operative-email" name="email" class="form-control" required placeholder="your@email.com" autocomplete="email">
+              </div>
+              <div class="mb-3">
+                <label for="operative-temp-password" class="form-label">Temporary Password</label>
+                <input type="password" id="operative-temp-password" name="temporaryPassword" class="form-control" required placeholder="Enter temporary password" autocomplete="current-password">
+              </div>
+              <button type="submit" class="btn operative-btn-primary" id="operative-btn-validate">Validate</button>
+              <p class="operative-first-time-link">
+                <button type="button" class="op-link-btn" id="operative-switch-to-login">Back to log in</button>
+              </p>
+            </form>
+          </div>
+
+          <!-- Step 2: Set new password -->
+          <div id="operative-step-2" class="operative-step d-none">
+            <form id="operative-form-password" class="operative-form">
+              <div class="mb-3">
+                <label for="operative-new-password" class="form-label">New Password</label>
+                <input type="password" id="operative-new-password" name="newPassword" class="form-control" required minlength="8" placeholder="At least 8 characters" autocomplete="new-password">
+                <div class="form-text">Minimum 8 characters.</div>
+              </div>
+              <div class="mb-3">
+                <label for="operative-confirm-password" class="form-label">Confirm New Password</label>
+                <input type="password" id="operative-confirm-password" name="confirmPassword" class="form-control" required minlength="8" placeholder="Confirm new password" autocomplete="new-password">
+              </div>
+              <button type="submit" class="btn operative-btn-primary" id="operative-btn-set-password">Set Password</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap 5 JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/index.js"></script>
+</body>
+</html>

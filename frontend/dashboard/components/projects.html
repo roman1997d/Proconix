@@ -1,0 +1,144 @@
+<!-- Projects module fragment – loaded into #dashboard-content by dashboard (no full page refresh). -->
+<section class="projects-module dashboard-card">
+  <div class="projects-header">
+    <h2 class="card-title">My Projects</h2>
+    <button type="button" class="btn-projects-add" id="projects-btn-add" aria-label="Add Project">
+      <i class="bi bi-plus-lg"></i> Add Project
+    </button>
+  </div>
+  <div id="projects-access-denied" class="projects-access-denied d-none">
+    <p>Access Denied. You are not authorized to view this project.</p>
+  </div>
+  <div id="projects-list-wrap">
+    <div id="projects-loading" class="projects-loading">Loading projects…</div>
+    <div id="projects-list" class="projects-list"></div>
+    <div id="projects-empty" class="projects-empty d-none">No projects yet. Click "Add Project" to create one.</div>
+  </div>
+  <div id="projects-toast" class="projects-toast d-none" role="status"></div>
+</section>
+
+<!-- Add Project Modal -->
+<div id="projects-modal-add" class="projects-modal" aria-hidden="true" role="dialog">
+  <div class="projects-modal-backdrop" data-dismiss="projects-modal"></div>
+  <div class="projects-modal-dialog">
+    <div class="projects-modal-content">
+      <div class="projects-modal-header">
+        <h3>Add Project</h3>
+        <button type="button" class="projects-modal-close" data-dismiss="projects-modal" aria-label="Close">&times;</button>
+      </div>
+      <div class="projects-modal-body">
+        <form id="projects-form-add">
+          <div class="projects-field">
+            <label for="projects-add-name">Project Name <span class="text-danger">*</span></label>
+            <input type="text" id="projects-add-name" required placeholder="Project name">
+          </div>
+          <div class="projects-field">
+            <label for="projects-add-address">Address</label>
+            <input type="text" id="projects-add-address" placeholder="Address">
+          </div>
+          <div class="projects-field">
+            <label for="projects-add-description">Description</label>
+            <textarea id="projects-add-description" rows="3" placeholder="Description"></textarea>
+          </div>
+          <div class="projects-field-row">
+            <div class="projects-field">
+              <label for="projects-add-start">Start Date</label>
+              <input type="date" id="projects-add-start">
+            </div>
+            <div class="projects-field">
+              <label for="projects-add-planned-end">Planned End Date</label>
+              <input type="date" id="projects-add-planned-end">
+            </div>
+          </div>
+          <div class="projects-field">
+            <label for="projects-add-floors">Number of Floors</label>
+            <input type="number" id="projects-add-floors" min="0" placeholder="e.g. 3">
+          </div>
+          <button type="submit" class="btn-projects-primary">Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Project Modal -->
+<div id="projects-modal-edit" class="projects-modal" aria-hidden="true" role="dialog">
+  <div class="projects-modal-backdrop" data-dismiss="projects-modal"></div>
+  <div class="projects-modal-dialog">
+    <div class="projects-modal-content">
+      <div class="projects-modal-header">
+        <h3>Edit Project</h3>
+        <button type="button" class="projects-modal-close" data-dismiss="projects-modal" aria-label="Close">&times;</button>
+      </div>
+      <div class="projects-modal-body">
+        <form id="projects-form-edit">
+          <input type="hidden" id="projects-edit-id">
+          <div class="projects-field">
+            <label for="projects-edit-name">Project Name <span class="text-danger">*</span></label>
+            <input type="text" id="projects-edit-name" required placeholder="Project name">
+          </div>
+          <div class="projects-field">
+            <label for="projects-edit-address">Address</label>
+            <input type="text" id="projects-edit-address" placeholder="Address">
+          </div>
+          <div class="projects-field">
+            <label for="projects-edit-description">Description</label>
+            <textarea id="projects-edit-description" rows="3" placeholder="Description"></textarea>
+          </div>
+          <div class="projects-field-row">
+            <div class="projects-field">
+              <label for="projects-edit-start">Start Date</label>
+              <input type="date" id="projects-edit-start">
+            </div>
+            <div class="projects-field">
+              <label for="projects-edit-planned-end">Planned End Date</label>
+              <input type="date" id="projects-edit-planned-end">
+            </div>
+          </div>
+          <div class="projects-field">
+            <label for="projects-edit-floors">Number of Floors</label>
+            <input type="number" id="projects-edit-floors" min="0" placeholder="e.g. 3">
+          </div>
+          <button type="submit" class="btn-projects-primary">Save Changes</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- View Details Modal -->
+<div id="projects-modal-details" class="projects-modal" aria-hidden="true" role="dialog">
+  <div class="projects-modal-backdrop" data-dismiss="projects-modal"></div>
+  <div class="projects-modal-dialog">
+    <div class="projects-modal-content">
+      <div class="projects-modal-header">
+        <h3>Project Details</h3>
+        <button type="button" class="projects-modal-close" data-dismiss="projects-modal" aria-label="Close">&times;</button>
+      </div>
+      <div class="projects-modal-body">
+        <div id="projects-details-content"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Deactivate Modal -->
+<div id="projects-modal-deactivate" class="projects-modal" aria-hidden="true" role="dialog">
+  <div class="projects-modal-backdrop" data-dismiss="projects-modal"></div>
+  <div class="projects-modal-dialog">
+    <div class="projects-modal-content">
+      <div class="projects-modal-header">
+        <h3>Deactivate Project</h3>
+        <button type="button" class="projects-modal-close" data-dismiss="projects-modal" aria-label="Close">&times;</button>
+      </div>
+      <div class="projects-modal-body">
+        <p id="projects-deactivate-message">Are you sure you want to deactivate this project?</p>
+        <input type="hidden" id="projects-deactivate-id">
+        <div class="projects-modal-actions">
+          <button type="button" class="btn-projects-secondary" data-dismiss="projects-modal">Cancel</button>
+          <button type="button" class="btn-projects-danger" id="projects-btn-deactivate-confirm">Deactivate</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

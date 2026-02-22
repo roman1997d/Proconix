@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Operative Dashboard – Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/styles.css" rel="stylesheet">
+  <link href="css/operative_dashboard.css" rel="stylesheet">
+</head>
+<body class="operative-dashboard">
+  <div id="op-deactivated-block" class="op-deactivated-block d-none" aria-live="polite">
+    <div class="op-deactivated-card">
+      <div class="op-deactivated-icon"><i class="bi bi-person-x"></i></div>
+      <h1 class="op-deactivated-title">Contul tău a fost dezactivat</h1>
+      <p class="op-deactivated-text">Nu ai acces la dashboard. Contactează managerul.</p>
+      <button type="button" class="op-btn op-btn-primary" id="op-deactivated-logout">Înapoi la login</button>
+    </div>
+  </div>
+
+  <header class="op-header">
+    <div class="op-header-inner">
+      <a href="/" class="op-logo">Proconix</a>
+      <div class="op-header-user">
+        <span id="op-user-name" class="op-user-name" aria-live="polite"></span>
+        <button type="button" class="op-logout" id="op-logout" aria-label="Logout"><i class="bi bi-box-arrow-right"></i></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="op-main">
+    <!-- Clock In / Out -->
+    <section class="op-card op-clock-card" id="op-clock">
+      <h2 class="op-card-title"><i class="bi bi-clock-history"></i> Clock</h2>
+      <div id="op-clock-status" class="op-clock-status">Loading…</div>
+      <div class="op-clock-hours" id="op-hours-today"></div>
+      <button type="button" class="op-btn op-btn-clock-in d-none" id="op-btn-clock-in">Clock In</button>
+      <button type="button" class="op-btn op-btn-clock-out d-none" id="op-btn-clock-out">Clock Out</button>
+      <div id="op-clock-feedback" class="op-feedback d-none"></div>
+    </section>
+
+    <!-- Current Project -->
+    <section class="op-card" id="op-project">
+      <h2 class="op-card-title"><i class="bi bi-building"></i> Current Project</h2>
+      <div id="op-project-content" class="op-project-content">Loading…</div>
+    </section>
+
+    <!-- Weekly Hours -->
+    <section class="op-card">
+      <h2 class="op-card-title"><i class="bi bi-graph-up"></i> This Week</h2>
+      <div id="op-weekly-total" class="op-weekly-total"></div>
+      <div id="op-weekly-bars" class="op-weekly-bars"></div>
+    </section>
+
+    <!-- Log Work (data manager sees in Work Logs) -->
+    <section class="op-card op-worklog-card" id="op-worklog">
+      <h2 class="op-card-title"><i class="bi bi-journal-plus"></i> Log Work</h2>
+      <p class="op-worklog-hint">Submit work details for manager review. These appear in the manager’s Work Logs.</p>
+      <button type="button" class="op-btn op-btn-primary op-worklog-btn-new" id="op-btn-worklog-new">
+        <i class="bi bi-plus-lg"></i> New work entry
+      </button>
+      <div class="op-worklog-list-wrap">
+        <h3 class="op-worklog-list-title">My work entries</h3>
+        <div id="op-worklog-list" class="op-worklog-list"></div>
+      </div>
+    </section>
+
+    <!-- Actions -->
+    <section class="op-actions">
+      <button type="button" class="op-action-btn" id="op-btn-report-issue">
+        <i class="bi bi-exclamation-triangle"></i>
+        <span>Report Issue</span>
+      </button>
+      <button type="button" class="op-action-btn" id="op-btn-upload">
+        <i class="bi bi-upload"></i>
+        <span>Upload Invoice / Booking</span>
+      </button>
+    </section>
+
+    <!-- My Tasks -->
+    <section class="op-card" id="op-tasks">
+      <h2 class="op-card-title"><i class="bi bi-check2-square"></i> My Tasks</h2>
+      <div id="op-tasks-list" class="op-tasks-list">Loading…</div>
+    </section>
+
+    <div class="op-spacer"></div>
+  </main>
+
+  <!-- Bottom nav (optional) -->
+  <nav class="op-bottom-nav" aria-label="Main">
+    <a href="#op-clock" class="op-nav-item"><i class="bi bi-clock"></i><span>Clock</span></a>
+    <a href="#op-project" class="op-nav-item"><i class="bi bi-building"></i><span>Project</span></a>
+    <a href="#op-worklog" class="op-nav-item"><i class="bi bi-journal-plus"></i><span>Work</span></a>
+    <a href="#op-tasks" class="op-nav-item"><i class="bi bi-list-task"></i><span>Tasks</span></a>
+  </nav>
+
+  <!-- Modal: Report Issue -->
+  <div class="op-modal" id="op-modal-issue" aria-hidden="true" role="dialog">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3>Report Issue</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <form id="op-form-issue">
+            <div class="op-field">
+              <label for="op-issue-title">Title <span class="op-required">*</span></label>
+              <input type="text" id="op-issue-title" name="title" required placeholder="Brief title">
+            </div>
+            <div class="op-field">
+              <label for="op-issue-desc">Description</label>
+              <textarea id="op-issue-desc" name="description" rows="3" placeholder="Details (optional)"></textarea>
+            </div>
+            <div class="op-field">
+              <label for="op-issue-file">Attachment (image/PDF)</label>
+              <input type="file" id="op-issue-file" name="file" accept="image/*,.pdf">
+            </div>
+            <div id="op-issue-feedback" class="op-feedback d-none"></div>
+            <button type="submit" class="op-btn op-btn-primary">Submit</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Log Work -->
+  <div class="op-modal op-modal-worklog" id="op-modal-worklog" aria-hidden="true" role="dialog">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog op-modal-dialog-worklog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3>New work entry</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <form id="op-form-worklog">
+            <div class="op-field">
+              <label for="op-wl-worker">Worker (you)</label>
+              <input type="text" id="op-wl-worker" readonly placeholder="Your name">
+            </div>
+            <div class="op-field op-field-row-2">
+              <label for="op-wl-project">Project / Site</label>
+              <input type="text" id="op-wl-project" readonly placeholder="Your assigned project">
+              <span class="op-field-hint">Assigned to you – cannot be changed</span>
+            </div>
+            <div class="op-field-row">
+              <div class="op-field">
+                <label for="op-wl-block">Block</label>
+                <input type="text" id="op-wl-block" placeholder="A">
+              </div>
+              <div class="op-field">
+                <label for="op-wl-floor">Floor</label>
+                <input type="text" id="op-wl-floor" placeholder="1">
+              </div>
+            </div>
+            <div class="op-field-row">
+              <div class="op-field">
+                <label for="op-wl-apartment">Apartment / Unit</label>
+                <input type="text" id="op-wl-apartment" placeholder="101">
+              </div>
+              <div class="op-field">
+                <label for="op-wl-zone">Zone</label>
+                <input type="text" id="op-wl-zone" placeholder="North">
+              </div>
+            </div>
+            <div class="op-field">
+              <label for="op-wl-work-type">Work type</label>
+              <select id="op-wl-work-type">
+                <option value="">Select…</option>
+                <option value="Plastering">Plastering</option>
+                <option value="Drylining">Drylining</option>
+                <option value="Painting">Painting</option>
+                <option value="Electricity">Electricity</option>
+                <option value="Plumbing">Plumbing</option>
+                <option value="Carpentry">Carpentry</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="op-field-row">
+              <div class="op-field">
+                <label for="op-wl-quantity">Quantity</label>
+                <input type="number" id="op-wl-quantity" min="0" step="any" placeholder="0">
+              </div>
+              <div class="op-field">
+                <label for="op-wl-unit-price">Unit price (£)</label>
+                <input type="number" id="op-wl-unit-price" min="0" step="0.01" placeholder="0.00">
+              </div>
+              <div class="op-field">
+                <label for="op-wl-total">Total (£)</label>
+                <input type="number" id="op-wl-total" min="0" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+            <div class="op-field">
+              <label for="op-wl-description">Description of work</label>
+              <textarea id="op-wl-description" rows="3" placeholder="What was done"></textarea>
+            </div>
+            <div class="op-field">
+              <label for="op-wl-photos">Photos (optional, max 5)</label>
+              <input type="file" id="op-wl-photos" accept="image/*" multiple>
+              <div id="op-wl-photo-list" class="op-wl-file-list"></div>
+            </div>
+            <div class="op-field">
+              <label for="op-wl-document">Invoice / document (PDF or Excel)</label>
+              <input type="file" id="op-wl-document" accept=".pdf,.xlsx,.xls">
+              <div id="op-wl-document-name" class="op-wl-file-name d-none"></div>
+            </div>
+            <div id="op-worklog-feedback" class="op-feedback d-none"></div>
+            <button type="submit" class="op-btn op-btn-primary">Submit for manager review</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Upload -->
+  <div class="op-modal" id="op-modal-upload" aria-hidden="true" role="dialog">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3>Upload Invoice / Booking</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <form id="op-form-upload">
+            <div class="op-field">
+              <label for="op-upload-file">File <span class="op-required">*</span></label>
+              <input type="file" id="op-upload-file" name="file" required accept=".pdf,image/*,.doc,.docx">
+            </div>
+            <div class="op-field">
+              <label for="op-upload-desc">Description</label>
+              <input type="text" id="op-upload-desc" name="description" placeholder="Optional">
+            </div>
+            <div id="op-upload-feedback" class="op-feedback d-none"></div>
+            <button type="submit" class="op-btn op-btn-primary">Upload</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/operative_dashboard.js"></script>
+</body>
+</html>

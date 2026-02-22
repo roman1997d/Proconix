@@ -1,0 +1,297 @@
+/**
+ * Dashboard – sidebar, main content area, footer, collapsible menu.
+ * Works with dashboard_manager.css (theme) and dashboard.js (content loading).
+ */
+
+/* ===== Loading state (verifying access) ===== */
+.dashboard-loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-main);
+  color: var(--text-primary);
+  z-index: 300;
+}
+
+.dashboard-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--divider);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: dashboard-spin 0.8s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes dashboard-spin {
+  to { transform: rotate(360deg); }
+}
+
+.dashboard-loading p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+/* ===== Access denied ===== */
+.dashboard-access-denied {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-main);
+  z-index: 300;
+  padding: 24px;
+}
+
+.dashboard-access-denied-card {
+  max-width: 480px;
+  padding: 2rem;
+  background: var(--bg-card);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  text-align: center;
+  border: 1px solid var(--divider);
+}
+
+.dashboard-access-denied-icon {
+  font-size: 3rem;
+  color: #FF6565;
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.dashboard-access-denied-card h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-white);
+  margin: 0 0 1rem 0;
+}
+
+.dashboard-access-denied-message {
+  color: var(--text-primary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.dashboard-access-denied-message a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.dashboard-access-denied-message a:hover {
+  text-decoration: underline;
+}
+
+.d-none {
+  display: none !important;
+}
+
+/* ===== Dashboard app wrapper: sidebar + main in a row ===== */
+#dashboard-app {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#dashboard-app .sidebar {
+  flex-shrink: 0;
+}
+
+#dashboard-app .main-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+/* ===== Sidebar hover ===== */
+.sidebar-nav .sidebar-item {
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-nav .sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #E0E0E0;
+}
+
+/* ===== Main content area (dynamic) ===== */
+.dashboard-content-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 60px; /* space for fixed footer */
+  overflow-y: auto;
+}
+
+.dashboard-content {
+  flex: 1;
+  padding: 0 var(--gap) var(--gap);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  transition: opacity 0.25s ease;
+}
+
+.dashboard-content-fade-out {
+  opacity: 0.4;
+}
+
+.dashboard-content-fade-in {
+  opacity: 1;
+}
+
+/* Quality Assurance module: full-height iframe */
+.dashboard-qa-iframe {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  border: none;
+  display: block;
+}
+
+/* ===== Module placeholder (for simple module views) ===== */
+.module-placeholder {
+  padding: var(--gap);
+  text-align: center;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+.module-placeholder-icon {
+  font-size: 3rem;
+  color: var(--accent);
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.module-placeholder-desc {
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.small {
+  font-size: 0.875rem;
+}
+
+/* ===== Fixed footer ===== */
+.dashboard-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px var(--gap);
+  background: rgba(22, 22, 22, 0.95);
+  border-top: 1px solid var(--divider);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
+  z-index: 100;
+}
+
+.dashboard-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.dashboard-footer a:hover {
+  text-decoration: underline;
+}
+
+/* ===== Sidebar toggle (mobile) ===== */
+.sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 201;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  color: var(--text-primary);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+  background: #2D2D2D;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-toggle i {
+  font-size: 1.25rem;
+}
+
+/* ===== Collapsible sidebar (mobile) ===== */
+@media (max-width: 991.98px) {
+  #dashboard-app {
+    flex-direction: row;
+  }
+
+  .sidebar-toggle {
+    display: flex;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: var(--sidebar-width);
+    height: 100vh;
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    flex-shrink: 0;
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 199;
+  }
+
+  .sidebar-overlay.visible {
+    display: block;
+  }
+
+  .main-wrap {
+    padding-left: 0;
+    min-width: 100%;
+  }
+
+  .dashboard-header {
+    padding-left: 60px; /* space for toggle button */
+  }
+}
+
+@media (min-width: 992px) {
+  .sidebar-overlay {
+    display: none !important;
+  }
+}

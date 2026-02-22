@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manager Dashboard – Proconix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/dashboard_manager.css" rel="stylesheet">
+  <link href="css/dashboard.css" rel="stylesheet">
+  <link href="css/projects.css" rel="stylesheet">
+  <link href="css/worklogs.css" rel="stylesheet">
+</head>
+<body class="dashboard-manager">
+  <!-- Loading state while verifying access -->
+  <div id="dashboard-loading" class="dashboard-loading">
+    <div class="dashboard-loading-spinner"></div>
+    <p>Verifying access…</p>
+  </div>
+
+  <!-- Access denied: shown when not an active manager -->
+  <div id="dashboard-access-denied" class="dashboard-access-denied d-none">
+    <div class="dashboard-access-denied-card">
+      <i class="bi bi-shield-lock-fill dashboard-access-denied-icon"></i>
+      <h2>Access denied</h2>
+      <p class="dashboard-access-denied-message">
+        Oops! It looks like your account hasn’t been activated yet, or you don’t have permission to access this page. Please reach out to the administrator at: <a href="mailto:your_email@example.com">your_email@example.com</a> – they’re friendly, we promise! 😄
+      </p>
+      <a href="/index.html" class="btn btn-primary mt-3">Back to Home</a>
+    </div>
+  </div>
+
+  <!-- Dashboard app: shown only when access is granted -->
+  <div id="dashboard-app" class="d-none">
+  <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle menu">
+    <i class="bi bi-list"></i>
+  </button>
+  <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="sidebar-logo">Proconix</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#" class="sidebar-item" data-module="project-overview">
+        <i class="bi bi-grid-1x2-fill"></i>
+        <span>Project Overview</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="projects">
+        <i class="bi bi-folder-fill"></i>
+        <span>Projects</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="project-builder">
+        <i class="bi bi-diagram-3-fill"></i>
+        <span>Project Builder</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="task-management">
+        <i class="bi bi-check2-square"></i>
+        <span>Task Management</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="material-management">
+        <i class="bi bi-box-seam-fill"></i>
+        <span>Material Management</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="risk-management">
+        <i class="bi bi-shield-exclamation"></i>
+        <span>Risk Management</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="operatives">
+        <i class="bi bi-people-fill"></i>
+        <span>Operatives</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="worklogs">
+        <i class="bi bi-journal-check"></i>
+        <span>Work Logs</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="plants">
+        <i class="bi bi-truck"></i>
+        <span>Plants (Equipment)</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="accounting">
+        <i class="bi bi-calculator-fill"></i>
+        <span>Accounting</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="resources-files">
+        <i class="bi bi-folder-fill"></i>
+        <span>Resources & Files</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="reports">
+        <i class="bi bi-graph-up"></i>
+        <span>Reports</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="complains">
+        <i class="bi bi-chat-dots-fill"></i>
+        <span>Complains</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="issues">
+        <i class="bi bi-bug-fill"></i>
+        <span>Issues</span>
+      </a>
+      <a href="#" class="sidebar-item" data-module="quality-assurance">
+        <i class="bi bi-clipboard-check-fill"></i>
+        <span>Quality Assurance</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="/index.html" class="sidebar-item">
+        <i class="bi bi-box-arrow-left"></i>
+        <span>Back to Home</span>
+      </a>
+    </div>
+  </aside>
+
+  <div class="main-wrap">
+    <header class="dashboard-header">
+      <h1 class="header-title" id="header-title">Project Overview</h1>
+      <div class="dashboard-header-right">
+        <div class="dashboard-my-company">
+          <span class="dashboard-my-company-label">My Company</span>
+          <span class="dashboard-my-company-name" id="dashboard-company-name">—</span>
+          <span class="dashboard-my-company-user" id="dashboard-user-name">—</span>
+        </div>
+        <button type="button" class="btn-dashboard-logout" id="dashboard-logout-btn" aria-label="Logout">
+          <i class="bi bi-box-arrow-right"></i> Logout
+        </button>
+      </div>
+    </header>
+
+    <div class="dashboard-content-wrap">
+      <main id="dashboard-content" class="dashboard-main dashboard-content">
+        <p class="text-muted" style="padding: 24px;">Loading…</p>
+      </main>
+    </div>
+  </div>
+
+  <footer class="dashboard-footer">
+    This website was created by Roman Demian.<br>
+    If you experience any problems, please contact me at: <a href="mailto:your_email@example.com">your_email@example.com</a>
+  </footer>
+  </div><!-- #dashboard-app -->
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="js/dashboard_manager.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/projects.js"></script>
+  <script src="js/worklogs.js"></script>
+</body>
+</html>

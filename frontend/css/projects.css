@@ -1,0 +1,645 @@
+/**
+ * Projects module – manager dashboard.
+ * Cards, status badges, modals, responsive.
+ */
+
+.projects-module {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: var(--gap);
+  border: 1px solid var(--divider);
+}
+
+.projects-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: var(--gap);
+}
+
+.projects-header .card-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-white);
+}
+
+.btn-projects-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: var(--accent);
+  color: var(--bg-main);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: filter var(--transition), transform 0.15s ease;
+}
+
+.btn-projects-add:hover {
+  filter: brightness(1.1);
+}
+
+.btn-projects-add:active {
+  transform: scale(0.98);
+}
+
+.btn-projects-add i {
+  font-size: 1.1rem;
+}
+
+.projects-access-denied {
+  padding: 2rem;
+  text-align: center;
+  background: rgba(255, 101, 101, 0.1);
+  border: 1px solid var(--status-red);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+}
+
+.projects-access-denied p {
+  margin: 0;
+}
+
+.projects-loading {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.projects-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.projects-card {
+  background: var(--bg-main);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  animation: projects-card-fade 0.35s ease forwards;
+  opacity: 0;
+}
+
+@keyframes projects-card-fade {
+  to {
+    opacity: 1;
+  }
+}
+
+.projects-card:nth-child(1) { animation-delay: 0.02s; }
+.projects-card:nth-child(2) { animation-delay: 0.05s; }
+.projects-card:nth-child(3) { animation-delay: 0.08s; }
+.projects-card:nth-child(4) { animation-delay: 0.11s; }
+.projects-card:nth-child(5) { animation-delay: 0.14s; }
+.projects-card:nth-child(6) { animation-delay: 0.17s; }
+.projects-card:nth-child(7) { animation-delay: 0.2s; }
+.projects-card:nth-child(8) { animation-delay: 0.23s; }
+.projects-card:nth-child(n+9) { animation-delay: 0.26s; }
+
+.projects-card-name {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--text-white);
+  margin: 0 0 8px 0;
+}
+
+.projects-card-address {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+}
+
+.projects-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.projects-status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.projects-status-badge.active {
+  background: rgba(73, 230, 126, 0.25);
+  color: var(--status-green);
+}
+
+.projects-status-badge.completed {
+  background: rgba(0, 174, 239, 0.25);
+  color: var(--btn-primary);
+}
+
+.projects-status-badge.on_hold {
+  background: rgba(255, 201, 71, 0.25);
+  color: var(--status-yellow);
+}
+
+.projects-status-badge.inactive {
+  background: rgba(158, 158, 158, 0.25);
+  color: var(--text-muted);
+}
+
+.projects-card-dates {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.projects-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider);
+}
+
+.btn-projects-view,
+.btn-projects-edit,
+.btn-projects-deactivate,
+.btn-projects-assign {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: filter var(--transition);
+}
+
+.btn-projects-view {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.btn-projects-view:hover {
+  filter: brightness(1.15);
+}
+
+.btn-projects-edit {
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.btn-projects-edit:hover {
+  filter: brightness(1.1);
+}
+
+.btn-projects-deactivate {
+  background: rgba(255, 201, 71, 0.2);
+  color: var(--status-yellow);
+}
+
+.btn-projects-deactivate:hover {
+  filter: brightness(1.1);
+}
+
+.btn-projects-assign {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.btn-projects-assign:hover {
+  filter: brightness(1.15);
+}
+
+.projects-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 180px;
+  background: var(--bg-card);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 20;
+  padding: 6px 0;
+  display: none;
+}
+
+.projects-dropdown.is-open {
+  display: block;
+}
+
+.projects-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.projects-dropdown button:hover {
+  background: var(--row-alt);
+}
+
+.projects-dropdown button.projects-dropdown-delete {
+  color: var(--status-red);
+}
+
+.projects-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* ===== Modals ===== */
+.projects-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.projects-modal.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.projects-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+}
+
+.projects-modal-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--divider);
+}
+
+.projects-modal-dialog-lg {
+  max-width: 560px;
+}
+
+.projects-modal-content {
+  padding: 0;
+}
+
+.projects-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px var(--gap);
+  border-bottom: 1px solid var(--divider);
+}
+
+.projects-modal-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-white);
+}
+
+.projects-modal-close {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.projects-modal-close:hover {
+  background: var(--row-alt);
+  color: var(--text-primary);
+}
+
+.projects-modal-body {
+  padding: var(--gap);
+}
+
+.projects-field {
+  margin-bottom: 18px;
+}
+
+.projects-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.projects-field input,
+.projects-field textarea,
+.projects-field select {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--input-bg);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.projects-field input::placeholder,
+.projects-field textarea::placeholder {
+  color: var(--input-placeholder);
+}
+
+.projects-field textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.projects-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.btn-projects-primary {
+  padding: 10px 20px;
+  background: var(--accent);
+  color: var(--bg-main);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: filter var(--transition);
+  margin-top: 8px;
+}
+
+.btn-projects-primary:hover {
+  filter: brightness(1.1);
+}
+
+.btn-projects-secondary {
+  padding: 10px 20px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-pill);
+  font-weight: 500;
+  cursor: pointer;
+  transition: filter var(--transition);
+}
+
+.btn-projects-secondary:hover {
+  filter: brightness(1.1);
+}
+
+.btn-projects-danger {
+  padding: 10px 20px;
+  background: rgba(255, 101, 101, 0.2);
+  color: var(--status-red);
+  border: 1px solid var(--status-red);
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter var(--transition);
+}
+
+.btn-projects-danger:hover {
+  filter: brightness(1.1);
+}
+
+.projects-modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+/* Assign operatives */
+.projects-assign-hint {
+  margin: 0 0 14px 0;
+  font-size: 0.875rem;
+}
+
+.projects-assign-role-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.projects-assign-role-display {
+  display: inline-block;
+  padding: 8px 12px;
+  background: var(--input-bg);
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  min-width: 120px;
+}
+
+.projects-assign-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.projects-assign-form .projects-field {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 140px;
+}
+
+.projects-assign-form .btn-projects-primary {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.projects-assign-table-wrap {
+  overflow-x: auto;
+}
+
+.projects-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.projects-table th,
+.projects-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--divider);
+}
+
+.projects-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.projects-table td {
+  color: var(--text-primary);
+}
+
+.btn-projects-remove {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--status-red);
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-pill);
+  transition: background 0.15s ease;
+}
+
+.btn-projects-remove:hover {
+  background: rgba(255, 101, 101, 0.15);
+}
+
+.projects-assign-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* Details view */
+.projects-details-section {
+  margin-bottom: 20px;
+}
+
+.projects-details-section h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 10px 0;
+}
+
+.projects-details-info p {
+  margin: 0 0 8px 0;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.projects-details-progress {
+  height: 10px;
+  background: var(--input-bg);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.projects-details-progress-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+.projects-details-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.projects-details-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--divider);
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+/* Toast */
+.projects-toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: var(--radius-pill);
+  font-size: 0.9rem;
+  font-weight: 500;
+  z-index: 600;
+  box-shadow: var(--shadow);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.projects-toast.success {
+  background: var(--status-green);
+  color: var(--bg-main);
+}
+
+.projects-toast.error {
+  background: var(--status-red);
+  color: #fff;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .projects-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .projects-list {
+    grid-template-columns: 1fr;
+  }
+
+  .projects-field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .projects-assign-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .projects-card-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-projects-view,
+  .btn-projects-manage {
+    justify-content: center;
+  }
+}

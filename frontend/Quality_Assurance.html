@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quality Assurance – Proconix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/quality_assurance.css" rel="stylesheet">
+</head>
+<body class="qa-page">
+  <header class="qa-nav">
+    <div class="qa-nav-inner">
+      <a href="/" class="qa-logo">Proconix</a>
+      <a href="/dashboard_manager.html" class="qa-btn qa-btn-cancel qa-dashboard-link" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+        <i class="bi bi-grid-1x2-fill"></i> Dashboard
+      </a>
+    </div>
+  </header>
+
+  <main class="qa-main-wrap">
+    <div class="qa-card">
+      <h1 class="qa-title">Quality Assurance Module</h1>
+
+      <div class="qa-select-wrap">
+        <label class="qa-select-label" for="qa-project">Select Project</label>
+        <select id="qa-project" class="qa-select" aria-label="Select project">
+          <option value="">— Choose a project —</option>
+        </select>
+        <p class="qa-message qa-projects-loading d-none" id="qa-projects-loading">Loading projects…</p>
+        <p class="qa-message qa-projects-error d-none" id="qa-projects-error">Could not load projects. Make sure you are logged in as a manager.</p>
+      </div>
+      <p class="qa-message" id="qa-message">You must select a project before creating templates or jobs.</p>
+
+      <div class="qa-actions">
+        <button type="button" class="qa-btn qa-btn-template" id="qa-btn-template" disabled>
+          <i class="bi bi-file-earmark-plus"></i> Create Template
+        </button>
+        <button type="button" class="qa-btn qa-btn-existing" id="qa-btn-existing" disabled>
+          <i class="bi bi-folder2-open"></i> Open Existing Template
+        </button>
+        <button type="button" class="qa-btn qa-btn-job" id="qa-btn-job" disabled>
+          <i class="bi bi-briefcase-plus"></i> Create Job
+        </button>
+        <button type="button" class="qa-btn qa-btn-view-jobs" id="qa-btn-view-jobs" disabled>
+          <i class="bi bi-list-ul"></i> View Jobs
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Create Template Modal -->
+  <div class="qa-modal-overlay" id="qa-modal-template" role="dialog" aria-modal="true" aria-labelledby="qa-modal-template-title" aria-hidden="true">
+    <div class="qa-modal">
+      <div class="qa-modal-header" id="qa-modal-template-title">Create Template</div>
+      <div class="qa-modal-body">
+        <div class="qa-field">
+          <label class="qa-label" for="qa-template-name">Template Name</label>
+          <input type="text" id="qa-template-name" class="qa-input" placeholder="e.g. Standard Inspection Checklist" autocomplete="off">
+        </div>
+        <div class="qa-field">
+          <label class="qa-label">Steps</label>
+          <div class="qa-steps-container" id="qa-steps-container"></div>
+        </div>
+      </div>
+      <div class="qa-modal-footer">
+        <button type="button" class="qa-btn qa-btn-cancel" id="qa-template-cancel">Cancel</button>
+        <button type="button" class="qa-btn qa-btn-save" id="qa-template-save">Save Template</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Open Existing Template Modal -->
+  <div class="qa-modal-overlay" id="qa-modal-existing" role="dialog" aria-modal="true" aria-labelledby="qa-modal-existing-title" aria-hidden="true">
+    <div class="qa-modal qa-modal-existing">
+      <div class="qa-modal-header" id="qa-modal-existing-title">Open Existing Template</div>
+      <div class="qa-modal-body">
+        <div id="qa-existing-list">
+          <div class="qa-existing-toolbar">
+            <div class="qa-existing-search-wrap">
+              <label class="qa-label" for="qa-existing-search">Search</label>
+              <input type="text" id="qa-existing-search" class="qa-input qa-existing-search" placeholder="Search by template name..." autocomplete="off" aria-label="Search templates">
+            </div>
+            <div class="qa-existing-sort-wrap">
+              <label class="qa-label" for="qa-existing-sort">Sort by</label>
+              <select id="qa-existing-sort" class="qa-select qa-existing-sort" aria-label="Sort templates">
+                <option value="name-asc">Name (A–Z)</option>
+                <option value="name-desc">Name (Z–A)</option>
+                <option value="total-asc">Total price (low → high)</option>
+                <option value="total-desc">Total price (high → low)</option>
+              </select>
+            </div>
+          </div>
+          <div class="qa-existing-templates" id="qa-existing-templates-list"></div>
+          <p class="qa-message qa-no-templates d-none" id="qa-existing-no-msg">No templates yet. Create a template first.</p>
+          <p class="qa-message qa-no-templates d-none" id="qa-existing-no-match-msg">No templates match your search.</p>
+        </div>
+        <div id="qa-existing-edit" class="d-none">
+          <input type="hidden" id="qa-edit-template-id" value="">
+          <div class="qa-field">
+            <label class="qa-label" for="qa-edit-name">Template Name</label>
+            <input type="text" id="qa-edit-name" class="qa-input" placeholder="Template name" autocomplete="off">
+          </div>
+          <div class="qa-field">
+            <label class="qa-label">Steps</label>
+            <div class="qa-steps-container" id="qa-edit-steps-container"></div>
+          </div>
+          <div class="qa-existing-edit-actions">
+            <button type="button" class="qa-btn qa-btn-cancel" id="qa-edit-cancel">Cancel</button>
+            <button type="button" class="qa-btn qa-btn-delete" id="qa-edit-delete"><i class="bi bi-trash"></i> Delete</button>
+            <button type="button" class="qa-btn qa-btn-save" id="qa-edit-save"><i class="bi bi-check2"></i> Save</button>
+          </div>
+        </div>
+      </div>
+      <div class="qa-modal-footer">
+        <button type="button" class="qa-btn qa-btn-price-list" id="qa-create-price-list"><i class="bi bi-file-earmark-spreadsheet"></i> Create price list</button>
+        <button type="button" class="qa-btn qa-btn-cancel" id="qa-existing-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Job Modal -->
+  <div class="qa-modal-overlay" id="qa-modal-job" role="dialog" aria-modal="true" aria-labelledby="qa-modal-job-title" aria-hidden="true">
+    <div class="qa-modal qa-modal-job">
+      <div class="qa-modal-header" id="qa-modal-job-title">Create Job</div>
+      <div class="qa-modal-body">
+        <div class="qa-job-tabs" role="tablist">
+          <button type="button" class="qa-job-tab is-active" role="tab" aria-selected="true" aria-controls="qa-job-panel-details" id="qa-job-tab-details" data-tab="details">Job Details</button>
+          <button type="button" class="qa-job-tab" role="tab" aria-selected="false" aria-controls="qa-job-panel-templates" id="qa-job-tab-templates" data-tab="templates">Templates</button>
+          <button type="button" class="qa-job-tab" role="tab" aria-selected="false" aria-controls="qa-job-panel-cost" id="qa-job-tab-cost" data-tab="cost">Cost</button>
+          <button type="button" class="qa-job-tab" role="tab" aria-selected="false" aria-controls="qa-job-panel-personnel" id="qa-job-tab-personnel" data-tab="personnel">Personnel</button>
+        </div>
+        <div class="qa-job-panels">
+          <div class="qa-job-panel" id="qa-job-panel-details" role="tabpanel" aria-labelledby="qa-job-tab-details">
+            <p class="qa-message qa-job-number-note">Job number will be auto-generated.</p>
+            <div class="qa-field">
+              <label class="qa-label" for="qa-job-floor">Select Floor</label>
+              <select id="qa-job-floor" class="qa-select" aria-label="Select floor">
+                <option value="">— Select floor —</option>
+                <option value="ground">Ground</option>
+                <option value="1">Floor 1</option>
+                <option value="2">Floor 2</option>
+                <option value="3">Floor 3</option>
+              </select>
+              <span class="qa-message" style="margin-top: 0.25rem;">Floor will be loaded from database.</span>
+            </div>
+            <div class="qa-field">
+              <label class="qa-label" for="qa-job-location">Location</label>
+              <input type="text" id="qa-job-location" class="qa-input" placeholder="e.g. Building A, Floor 2">
+            </div>
+            <div class="qa-field">
+              <label class="qa-label" for="qa-job-sqm">Total sqm</label>
+              <input type="number" id="qa-job-sqm" class="qa-input" min="0" step="0.01" placeholder="0">
+            </div>
+            <div class="qa-field">
+              <label class="qa-label" for="qa-job-linear">Total linear meters</label>
+              <input type="number" id="qa-job-linear" class="qa-input" min="0" step="0.01" placeholder="0">
+            </div>
+            <div class="qa-field">
+              <label class="qa-label" for="qa-job-spec">Specification</label>
+              <input type="text" id="qa-job-spec" class="qa-input" placeholder="Specification reference">
+            </div>
+            <div class="qa-field">
+              <label class="qa-label" for="qa-job-description">Description</label>
+              <textarea id="qa-job-description" class="qa-textarea" placeholder="Job description..." rows="3"></textarea>
+            </div>
+            <div class="qa-field">
+              <label class="qa-label" for="qa-job-target-date">Target completion date</label>
+              <input type="date" id="qa-job-target-date" class="qa-input" aria-label="Target completion date">
+            </div>
+          </div>
+          <div class="qa-job-panel d-none" id="qa-job-panel-templates" role="tabpanel" aria-labelledby="qa-job-tab-templates">
+            <div class="qa-field">
+              <label class="qa-label">Templates</label>
+              <div class="qa-workers-list qa-templates-list" id="qa-job-templates-list">
+                <p class="qa-message qa-no-templates" id="qa-no-templates-msg">No templates yet. Create templates first.</p>
+              </div>
+              <span class="qa-message" style="margin-top: 0.25rem;">Select one or more templates for this job (optional).</span>
+            </div>
+          </div>
+          <div class="qa-job-panel d-none" id="qa-job-panel-cost" role="tabpanel" aria-labelledby="qa-job-tab-cost">
+            <div class="qa-field qa-cost-section">
+              <label class="qa-checkbox-label">
+                <input type="checkbox" id="qa-job-include-cost" class="qa-checkbox">
+                <span>Do you want to enter the total cost for this job?</span>
+              </label>
+              <div id="qa-cost-options" class="qa-cost-options d-none">
+                <label class="qa-label">Work type</label>
+                <div class="qa-work-type-options">
+                  <label class="qa-radio-label">
+                    <input type="radio" name="qa-work-type" value="day" class="qa-radio">
+                    <span>Day work</span>
+                  </label>
+                  <label class="qa-radio-label">
+                    <input type="radio" name="qa-work-type" value="hour" class="qa-radio">
+                    <span>Hour work</span>
+                  </label>
+                  <label class="qa-radio-label">
+                    <input type="radio" name="qa-work-type" value="price" class="qa-radio">
+                    <span>Price work</span>
+                  </label>
+                </div>
+                <div id="qa-cost-day-wrap" class="qa-cost-input-wrap d-none">
+                  <label class="qa-label" for="qa-job-days">Number of days</label>
+                  <input type="number" id="qa-job-days" class="qa-input" min="0" step="1" placeholder="0">
+                </div>
+                <div id="qa-cost-hour-wrap" class="qa-cost-input-wrap d-none">
+                  <label class="qa-label" for="qa-job-hours">Number of hours</label>
+                  <input type="number" id="qa-job-hours" class="qa-input" min="0" step="0.5" placeholder="0">
+                </div>
+                <div id="qa-cost-price-wrap" class="qa-cost-input-wrap d-none">
+                  <label class="qa-label" for="qa-job-total-price">Total price (£)</label>
+                  <input type="number" id="qa-job-total-price" class="qa-input" min="0" step="0.01" placeholder="0.00">
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="qa-job-panel d-none" id="qa-job-panel-personnel" role="tabpanel" aria-labelledby="qa-job-tab-personnel">
+            <div class="qa-field">
+              <label class="qa-label" for="qa-job-responsible">Assign responsible person for this job</label>
+              <select id="qa-job-responsible" class="qa-select" aria-label="Select supervisor">
+                <option value="">— Select supervisor —</option>
+              </select>
+              <span class="qa-message" style="margin-top: 0.25rem;">Select one supervisor as responsible for this job.</span>
+            </div>
+            <div class="qa-field">
+              <label class="qa-label">Workers</label>
+              <div class="qa-worker-filter-wrap">
+                <label class="qa-select-label" for="qa-worker-category">Filter by category</label>
+                <select id="qa-worker-category" class="qa-select qa-worker-filter" aria-label="Filter workers by category">
+                  <option value="">All categories</option>
+                  <option value="fixers">Fixers</option>
+                  <option value="plaster">Plaster</option>
+                  <option value="electricians">Electricians</option>
+                  <option value="painters">Painters</option>
+                </select>
+              </div>
+              <div class="qa-workers-list" id="qa-workers-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="qa-modal-footer">
+        <button type="button" class="qa-btn qa-btn-cancel" id="qa-job-cancel">Cancel</button>
+        <button type="button" class="qa-btn qa-btn-create-job" id="qa-job-create">Create Job</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- View Jobs Modal (80% width) -->
+  <div class="qa-modal-overlay" id="qa-modal-view-jobs" role="dialog" aria-modal="true" aria-labelledby="qa-view-jobs-title" aria-hidden="true">
+    <div class="qa-modal qa-modal-view-jobs">
+      <div class="qa-view-jobs-header">
+        <h2 class="qa-view-jobs-title" id="qa-view-jobs-title">Jobs for Project: <span id="qa-view-jobs-project-name">—</span></h2>
+        <div class="qa-view-jobs-header-actions">
+          <input type="text" id="qa-view-jobs-search" class="qa-input qa-view-jobs-search" placeholder="Search by job number, location, specification..." aria-label="Search jobs">
+          <button type="button" class="qa-btn qa-btn-close-x" id="qa-view-jobs-close" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+        </div>
+      </div>
+      <div class="qa-view-jobs-filters">
+        <div class="qa-view-jobs-filter">
+          <label class="qa-label" for="qa-view-jobs-floor">Filter by Floor</label>
+          <select id="qa-view-jobs-floor" class="qa-select">
+            <option value="">All floors</option>
+            <option value="ground">Ground</option>
+            <option value="1">Floor 1</option>
+            <option value="2">Floor 2</option>
+            <option value="3">Floor 3</option>
+          </select>
+        </div>
+        <div class="qa-view-jobs-filter">
+          <label class="qa-label" for="qa-view-jobs-cost">Filter by Cost type</label>
+          <select id="qa-view-jobs-cost" class="qa-select">
+            <option value="">All</option>
+            <option value="day">Day work</option>
+            <option value="hour">Hour work</option>
+            <option value="price">Price work</option>
+            <option value="none">No cost provided</option>
+          </select>
+        </div>
+        <div class="qa-view-jobs-filter">
+          <label class="qa-label" for="qa-view-jobs-status">Filter by Status</label>
+          <select id="qa-view-jobs-status" class="qa-select">
+            <option value="">All</option>
+            <option value="new">New</option>
+            <option value="active">Active</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+        <div class="qa-view-jobs-filter">
+          <label class="qa-label" for="qa-view-jobs-target-date">Due by:</label>
+          <input type="date" id="qa-view-jobs-target-date" class="qa-input" aria-label="Filter by target completion date">
+        </div>
+      </div>
+      <div class="qa-view-jobs-body">
+        <div id="qa-view-jobs-list" class="qa-view-jobs-list"></div>
+        <p class="qa-message qa-view-jobs-empty d-none" id="qa-view-jobs-empty">No jobs for this project.</p>
+        <p class="qa-message qa-view-jobs-no-match d-none" id="qa-view-jobs-no-match">No jobs match your search or filters.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Job Details Modal (read-only view) -->
+  <div class="qa-modal-overlay" id="qa-modal-job-details" role="dialog" aria-modal="true" aria-labelledby="qa-job-details-title" aria-hidden="true">
+    <div class="qa-modal">
+      <div class="qa-modal-header">
+        <span id="qa-job-details-title">Job details</span>
+        <button type="button" class="qa-btn qa-btn-close-x" id="qa-job-details-close" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="qa-modal-body" id="qa-job-details-body"></div>
+    </div>
+  </div>
+
+  <!-- Edit Job (Status) Modal -->
+  <div class="qa-modal-overlay" id="qa-modal-job-edit" role="dialog" aria-modal="true" aria-labelledby="qa-job-edit-title" aria-hidden="true">
+    <div class="qa-modal">
+      <div class="qa-modal-header">
+        <span id="qa-job-edit-title">Edit job</span>
+        <button type="button" class="qa-btn qa-btn-close-x" id="qa-job-edit-close" aria-label="Close"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="qa-modal-body">
+        <input type="hidden" id="qa-job-edit-id" value="">
+        <div class="qa-field">
+          <label class="qa-label" for="qa-job-edit-status">Status</label>
+          <select id="qa-job-edit-status" class="qa-select">
+            <option value="new">New</option>
+            <option value="active">Active</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+      </div>
+      <div class="qa-modal-footer">
+        <button type="button" class="qa-btn qa-btn-cancel" id="qa-job-edit-cancel">Cancel</button>
+        <button type="button" class="qa-btn qa-btn-save" id="qa-job-edit-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="qa-toast" class="qa-toast" role="alert" aria-live="polite" aria-hidden="true"></div>
+
+  <script>
+(function () {
+  'use strict';
+
+  if (window !== window.top) {
+    document.addEventListener('DOMContentLoaded', function () {
+      var dashboardLink = document.querySelector('.qa-dashboard-link');
+      if (dashboardLink) {
+        dashboardLink.addEventListener('click', function (e) {
+          e.preventDefault();
+          var base = window.top.location.href.replace(/\/[^/]*$/, '/');
+          window.top.location.href = base + 'dashboard_manager.html';
+        });
+      }
+    });
+  }
+
+  var projectSelect = document.getElementById('qa-project');
+  var btnTemplate = document.getElementById('qa-btn-template');
+  var btnExisting = document.getElementById('qa-btn-existing');
+  var btnJob = document.getElementById('qa-btn-job');
+  var modalTemplate = document.getElementById('qa-modal-template');
+  var modalExisting = document.getElementById('qa-modal-existing');
+  var modalJob = document.getElementById('qa-modal-job');
+  var stepsContainer = document.getElementById('qa-steps-container');
+  var jobTemplatesList = document.getElementById('qa-job-templates-list');
+  var existingTemplatesList = document.getElementById('qa-existing-templates-list');
+  var existingNoMsg = document.getElementById('qa-existing-no-msg');
+  var existingList = document.getElementById('qa-existing-list');
+  var existingEdit = document.getElementById('qa-existing-edit');
+  var editTemplateId = document.getElementById('qa-edit-template-id');
+  var editName = document.getElementById('qa-edit-name');
+  var editStepsContainer = document.getElementById('qa-edit-steps-container');
+
+  var workersData = [
+    { id: 'w1', name: 'John Smith', category: 'fixers' },
+    { id: 'w2', name: 'Maria Garcia', category: 'plaster' },
+    { id: 'w3', name: 'David Brown', category: 'electricians' },
+    { id: 'w4', name: 'Emma Wilson', category: 'painters' },
+    { id: 'w5', name: 'James Taylor', category: 'fixers' },
+    { id: 'w6', name: 'Anna Kowalski', category: 'plaster' },
+    { id: 'w7', name: 'Paul Murphy', category: 'electricians' },
+    { id: 'w8', name: 'Lisa Chen', category: 'painters' }
+  ];
+
+  var supervisorsData = [
+    { id: 'sup1', name: 'Michael Roberts' },
+    { id: 'sup2', name: 'Sarah Clark' },
+    { id: 'sup3', name: 'James Wright' }
+  ];
+
+  // --- QA Data Layer (backend-ready) ---
+  // Set QA_CONFIG.useBackend = true and QA_CONFIG.apiBase = '/api' when backend is available.
+  // If manager session exists (e.g. opened from Manager Dashboard), backend is used automatically.
+  (function () {
+    try {
+      var raw = localStorage.getItem('proconix_manager_session') || sessionStorage.getItem('proconix_manager_session');
+      var session = raw ? JSON.parse(raw) : null;
+      var hasSession = session && session.manager_id != null && session.email;
+      window.QA_CONFIG = window.QA_CONFIG || { useBackend: !!hasSession, apiBase: '/api' };
+      if (hasSession && !window.QA_CONFIG.useBackend) window.QA_CONFIG.useBackend = true;
+    } catch (e) {
+      window.QA_CONFIG = window.QA_CONFIG || { useBackend: false, apiBase: '/api' };
+    }
+  })();
+
+  var qaApiLocal = (function () {
+    var _templates = [];
+    var _jobs = [];
+    function loadFromStorage() {
+      try {
+        var t = localStorage.getItem('qa_templates');
+        if (t) _templates = JSON.parse(t);
+      } catch (e) {}
+      try {
+        var j = localStorage.getItem('qa_jobs');
+        if (j) _jobs = JSON.parse(j);
+      } catch (e) {}
+    }
+    function saveTemplates() {
+      try { localStorage.setItem('qa_templates', JSON.stringify(_templates)); } catch (e) {}
+    }
+    function saveJobs() {
+      try { localStorage.setItem('qa_jobs', JSON.stringify(_jobs)); } catch (e) {}
+    }
+    loadFromStorage();
+
+    return {
+      getTemplates: function () { return Promise.resolve(_templates.slice()); },
+      getTemplate: function (id) {
+        var t = _templates.find(function (x) { return x.id === id; });
+        return Promise.resolve(t ? Object.assign({}, t) : null);
+      },
+      createTemplate: function (data) {
+        var id = 'tpl_' + Date.now();
+        var createdBy = (typeof window.qaCurrentUserName === 'string' && window.qaCurrentUserName.trim()) ? window.qaCurrentUserName.trim() : '';
+        var created = {
+          id: id,
+          name: data.name,
+          steps: data.steps || [],
+          createdAt: new Date().toISOString(),
+          createdBy: createdBy
+        };
+        _templates.push(created);
+        saveTemplates();
+        return Promise.resolve(created);
+      },
+      updateTemplate: function (id, data) {
+        var idx = _templates.findIndex(function (x) { return x.id === id; });
+        if (idx === -1) return Promise.reject(new Error('Template not found'));
+        var existing = _templates[idx];
+        _templates[idx] = {
+          id: id,
+          name: data.name,
+          steps: data.steps || [],
+          createdAt: existing.createdAt || new Date().toISOString(),
+          createdBy: existing.createdBy || ''
+        };
+        saveTemplates();
+        return Promise.resolve(_templates[idx]);
+      },
+      deleteTemplate: function (id) {
+        _templates = _templates.filter(function (x) { return x.id !== id; });
+        saveTemplates();
+        return Promise.resolve();
+      },
+      getJobs: function (projectId) {
+        var list = projectId ? _jobs.filter(function (j) { return j.projectId === projectId; }) : _jobs.slice();
+        return Promise.resolve(list);
+      },
+      getJob: function (id) {
+        var j = _jobs.find(function (x) { return x.id === id; });
+        return Promise.resolve(j ? Object.assign({}, j) : null);
+      },
+      createJob: function (data) {
+        var id = 'job_' + Date.now();
+        var job = Object.assign({ id: id }, data);
+        _jobs.push(job);
+        saveJobs();
+        return Promise.resolve(job);
+      },
+      updateJob: function (id, data) {
+        var j = _jobs.find(function (x) { return x.id === id; });
+        if (!j) return Promise.reject(new Error('Job not found'));
+        Object.keys(data).forEach(function (k) { j[k] = data[k]; });
+        saveJobs();
+        return Promise.resolve(j);
+      },
+      deleteJob: function (id) {
+        _jobs = _jobs.filter(function (x) { return x.id !== id; });
+        saveJobs();
+        return Promise.resolve();
+      },
+      getNextJobNumber: function () {
+        var max = 0;
+        _jobs.forEach(function (j) {
+          var num = parseInt((j.jobNumber || '').replace(/^J-0*/, ''), 10);
+          if (!isNaN(num) && num > max) max = num;
+        });
+        return Promise.resolve('J-' + String(max + 1).padStart(6, '0'));
+      }
+    };
+  })();
+
+  function getQASessionHeaders() {
+    try {
+      var raw = localStorage.getItem('proconix_manager_session') || sessionStorage.getItem('proconix_manager_session');
+      var session = raw ? JSON.parse(raw) : null;
+      if (session && session.manager_id != null && session.email) {
+        return { 'X-Manager-Id': String(session.manager_id), 'X-Manager-Email': session.email };
+      }
+    } catch (e) {}
+    return {};
+  }
+
+  if (window.QA_CONFIG && window.QA_CONFIG.useBackend) {
+    try {
+      var raw = localStorage.getItem('proconix_manager_session') || sessionStorage.getItem('proconix_manager_session');
+      var session = raw ? JSON.parse(raw) : null;
+      if (session && (session.name || session.email)) {
+        window.qaCurrentUserName = [session.name, session.surname].filter(Boolean).join(' ').trim() || session.email || '';
+      }
+    } catch (e) {}
+  }
+
+  function loadQaProjects() {
+    var sel = document.getElementById('qa-project');
+    var loadingEl = document.getElementById('qa-projects-loading');
+    var errorEl = document.getElementById('qa-projects-error');
+    if (!sel) return;
+    var headers = getQASessionHeaders();
+    if (loadingEl) loadingEl.classList.add('d-none');
+    if (errorEl) errorEl.classList.add('d-none');
+    if (!headers['X-Manager-Id']) {
+      if (errorEl) {
+        errorEl.textContent = 'Log in as manager to see your company\'s projects.';
+        errorEl.classList.remove('d-none');
+      }
+      return;
+    }
+    loadingEl.classList.remove('d-none');
+    fetch('/api/projects/list', { headers: headers })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (loadingEl) loadingEl.classList.add('d-none');
+        if (!data || !data.success || !Array.isArray(data.projects)) {
+          if (errorEl) {
+            errorEl.textContent = 'Could not load projects.';
+            errorEl.classList.remove('d-none');
+          }
+          return;
+        }
+        if (errorEl) errorEl.classList.add('d-none');
+        while (sel.options.length > 1) sel.remove(1);
+        data.projects.forEach(function (p) {
+          if (!p || p.id == null) return;
+          var name = (p.project_name || p.name || '').trim() || ('Project #' + p.id);
+          var addr = (p.address || '').trim();
+          var label = addr ? name + ' – ' + addr : name;
+          var opt = document.createElement('option');
+          opt.value = String(p.id);
+          opt.textContent = label;
+          sel.appendChild(opt);
+        });
+      })
+      .catch(function () {
+        if (loadingEl) loadingEl.classList.add('d-none');
+        if (errorEl) {
+          errorEl.textContent = 'Could not load projects. Check your connection.';
+          errorEl.classList.remove('d-none');
+        }
+      });
+  }
+  loadQaProjects();
+
+  function qaFetch(path, opts) {
+    opts = opts || {};
+    var headers = Object.assign({}, getQASessionHeaders(), opts.headers || {});
+    opts.headers = headers;
+    var base = (window.QA_CONFIG && window.QA_CONFIG.apiBase) ? window.QA_CONFIG.apiBase.replace(/\/$/, '') : '/api';
+    var url = base + (path.charAt(0) === '/' ? path : '/' + path);
+    return fetch(url, opts).then(function (res) {
+      if (!res.ok) {
+        return res.text().then(function (text) {
+          var msg = 'Request failed';
+          try {
+            var body = text ? JSON.parse(text) : {};
+            if (body && body.message) msg = body.message;
+            else if (text && text.length) msg = msg + ' (' + res.status + '): ' + text.slice(0, 120);
+            else msg = msg + ' (' + res.status + ')';
+          } catch (_) {
+            if (text && text.length) msg = msg + ' (' + res.status + '): ' + text.slice(0, 120);
+            else msg = msg + ' (' + res.status + ')';
+          }
+          throw new Error(msg);
+        });
+      }
+      if (res.status === 204) return null;
+      return res.json();
+    });
+  }
+
+  var qaApiBackend = {
+    getPersonnel: function () { return qaFetch('/personnel'); },
+    getTemplates: function () { return qaFetch('/templates'); },
+    getTemplate: function (id) { return qaFetch('/templates/' + encodeURIComponent(id)).then(function (t) { return t || null; }, function () { return null; }); },
+    createTemplate: function (data) {
+      var body = { name: data.name, steps: data.steps || [] };
+      return qaFetch('/templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    },
+    updateTemplate: function (id, data) {
+      return qaFetch('/templates/' + encodeURIComponent(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: data.name, steps: data.steps || [] }) });
+    },
+    deleteTemplate: function (id) { return qaFetch('/templates/' + encodeURIComponent(id), { method: 'DELETE' }); },
+    getJobs: function (projectId) { return qaFetch('/jobs?projectId=' + encodeURIComponent(projectId)); },
+    getJob: function (id) { return qaFetch('/jobs/' + encodeURIComponent(id)).then(function (j) { return j || null; }, function () { return null; }); },
+    createJob: function (data) { return qaFetch('/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); },
+    updateJob: function (id, data) { return qaFetch('/jobs/' + encodeURIComponent(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); },
+    deleteJob: function (id) { return qaFetch('/jobs/' + encodeURIComponent(id), { method: 'DELETE' }); },
+    getNextJobNumber: function () {
+      var projectId = projectSelect && projectSelect.value;
+      if (!projectId) return Promise.resolve('J-000001');
+      return qaApiBackend.getJobs(projectId).then(function (jobs) {
+        var max = 0;
+        (jobs || []).forEach(function (j) {
+          var num = parseInt((j.jobNumber || '').replace(/^J-0*/, ''), 10);
+          if (!isNaN(num) && num > max) max = num;
+        });
+        return 'J-' + String(max + 1).padStart(6, '0');
+      }, function () { return 'J-000001'; });
+    }
+  };
+
+  var qaApi = (window.QA_CONFIG && window.QA_CONFIG.useBackend) ? qaApiBackend : qaApiLocal;
+
+  function getSupervisorName(id) {
+    if (!id) return '—';
+    var s = supervisorsData.find(function (x) { return x.id === id; });
+    return s ? s.name : id;
+  }
+
+  function getWorkerNames(ids) {
+    if (!ids || !ids.length) return [];
+    return ids.map(function (id) {
+      var w = workersData.find(function (x) { return x.id === id; });
+      return w ? w.name : id;
+    });
+  }
+
+  function getTemplateNames(templates, ids) {
+    if (!ids || !ids.length) return [];
+    return ids.map(function (id) {
+      var t = (templates || []).find(function (x) { return x.id === id; });
+      return t ? t.name : id;
+    });
+  }
+
+  function refreshJobTemplatesList() {
+    if (!jobTemplatesList) return;
+    jobTemplatesList.innerHTML = '';
+    qaApi.getTemplates().then(function (templates) {
+      if (templates.length === 0) {
+        var msg = document.createElement('p');
+        msg.className = 'qa-message qa-no-templates';
+        msg.id = 'qa-no-templates-msg';
+        msg.textContent = 'No templates yet. Create templates first.';
+        jobTemplatesList.appendChild(msg);
+        return;
+      }
+      templates.forEach(function (t) {
+        var label = document.createElement('label');
+        label.className = 'qa-worker-item qa-template-item';
+        label.innerHTML =
+          '<input type="checkbox" name="qa-job-template" value="' + escapeHtml(t.id) + '">' +
+          '<span class="qa-worker-name">' + escapeHtml(t.name) + ' <span class="qa-template-steps">(' + t.steps.length + ' step' + (t.steps.length !== 1 ? 's' : '') + ')</span></span>';
+        jobTemplatesList.appendChild(label);
+        label.addEventListener('click', function (e) {
+          if (e.target.type !== 'checkbox') {
+            var cb = label.querySelector('input[type="checkbox"]');
+            if (cb) cb.checked = !cb.checked;
+          }
+        });
+      });
+    });
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function generateStepId() {
+    return 'step_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+  }
+
+  function normalizeStepData(s, index) {
+    return {
+      id: s && s.id ? s.id : generateStepId(),
+      description: (s && s.description !== undefined) ? String(s.description) : '',
+      pricePerM2: (s && s.pricePerM2 !== undefined) ? String(s.pricePerM2) : '',
+      pricePerUnit: (s && s.pricePerUnit !== undefined) ? String(s.pricePerUnit) : '',
+      pricePerLinear: (s && s.pricePerLinear !== undefined) ? String(s.pricePerLinear) : ''
+    };
+  }
+
+  function formatTemplatePrice(v) {
+    if (v === undefined || v === null || String(v).trim() === '') return '—';
+    var n = parseFloat(v);
+    if (isNaN(n)) return '—';
+    return '£' + n.toFixed(2);
+  }
+
+  function formatCreatedAt(isoString) {
+    if (!isoString) return { date: '—', by: '—' };
+    var d = new Date(isoString);
+    if (isNaN(d.getTime())) return { date: '—', by: '—' };
+    var day = String(d.getDate()).padStart(2, '0');
+    var month = String(d.getMonth() + 1).padStart(2, '0');
+    var year = d.getFullYear();
+    return { date: day + '/' + month + '/' + year, by: '' };
+  }
+
+  function computeTotalFromSteps(steps) {
+    var total = 0;
+    (steps || []).forEach(function (s) {
+      total += (parseFloat(s && s.pricePerM2) || 0) + (parseFloat(s && s.pricePerUnit) || 0) + (parseFloat(s && s.pricePerLinear) || 0);
+    });
+    return total;
+  }
+
+  function csvEscape(str) {
+    if (str === undefined || str === null) return '';
+    var s = String(str);
+    if (s.indexOf('"') !== -1) s = s.replace(/"/g, '""');
+    if (s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1 || s.indexOf('\r') !== -1) return '"' + s + '"';
+    return s;
+  }
+
+  function createPriceListFile() {
+    qaApi.getTemplates().then(function (templates) {
+      if (!templates.length) {
+        alert('No templates to export. Create templates first.');
+        return;
+      }
+      var rows = [];
+      var header = ['Template Name', 'Total (£)', 'Step', 'Description', 'Price per m² (£)', 'Price per unit (£)', 'Price per linear meter (£)'];
+      rows.push(header.map(csvEscape).join(','));
+      templates.forEach(function (t) {
+      var total = computeTotalFromSteps(t.steps);
+      var totalStr = total > 0 ? total.toFixed(2) : '';
+      var steps = t.steps || [];
+      if (steps.length === 0) {
+        rows.push([t.name || '', totalStr, '', '', '', '', ''].map(csvEscape).join(','));
+      } else {
+        steps.forEach(function (s, i) {
+          rows.push([
+            t.name || '',
+            totalStr,
+            (i + 1),
+            (s.description || '').trim(),
+            (s.pricePerM2 || '').trim(),
+            (s.pricePerUnit || '').trim(),
+            (s.pricePerLinear || '').trim()
+          ].map(csvEscape).join(','));
+        });
+      }
+    });
+      var csv = rows.join('\r\n');
+      var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'template-price-list.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  var btnViewJobs = document.getElementById('qa-btn-view-jobs');
+  var modalViewJobs = document.getElementById('qa-modal-view-jobs');
+  var modalJobDetails = document.getElementById('qa-modal-job-details');
+
+  function enableButtons() {
+    var hasProject = projectSelect && projectSelect.value !== '';
+    btnTemplate.disabled = !hasProject;
+    if (btnExisting) btnExisting.disabled = !hasProject;
+    btnJob.disabled = !hasProject;
+    if (btnViewJobs) btnViewJobs.disabled = !hasProject;
+  }
+
+  projectSelect.addEventListener('change', enableButtons);
+
+  function openModal(overlay) {
+    if (!overlay) return;
+    overlay.classList.add('is-open');
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal(overlay) {
+    if (!overlay) return;
+    overlay.classList.remove('is-open');
+    overlay.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+
+  btnTemplate.addEventListener('click', function () {
+    initTemplateSteps();
+    openModal(modalTemplate);
+    document.getElementById('qa-template-name').focus();
+  });
+
+  btnExisting.addEventListener('click', function () {
+    showExistingList();
+    openModal(modalExisting);
+  });
+
+  function switchJobTab(tabKey) {
+    var tabs = document.querySelectorAll('.qa-job-tab');
+    var panels = document.querySelectorAll('.qa-job-panel');
+    tabs.forEach(function (t) {
+      var isActive = (t.getAttribute('data-tab') === tabKey);
+      t.classList.toggle('is-active', isActive);
+      t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+    panels.forEach(function (p) {
+      p.classList.toggle('d-none', p.id !== 'qa-job-panel-' + tabKey);
+    });
+  }
+
+  document.querySelectorAll('.qa-job-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var key = this.getAttribute('data-tab');
+      if (key) switchJobTab(key);
+    });
+  });
+
+  btnJob.addEventListener('click', function () {
+    refreshJobTemplatesList();
+    renderWorkersList(document.getElementById('qa-worker-category').value);
+    toggleCostOptions();
+    switchJobTab('details');
+    openModal(modalJob);
+    document.getElementById('qa-job-location').focus();
+  });
+
+  var includeCostCheck = document.getElementById('qa-job-include-cost');
+  var costOptions = document.getElementById('qa-cost-options');
+  var costDayWrap = document.getElementById('qa-cost-day-wrap');
+  var costHourWrap = document.getElementById('qa-cost-hour-wrap');
+  var costPriceWrap = document.getElementById('qa-cost-price-wrap');
+
+  function toggleCostOptions() {
+    if (!costOptions) return;
+    if (includeCostCheck && includeCostCheck.checked) {
+      costOptions.classList.remove('d-none');
+      toggleWorkTypeInputs();
+    } else {
+      costOptions.classList.add('d-none');
+      if (costDayWrap) costDayWrap.classList.add('d-none');
+      if (costHourWrap) costHourWrap.classList.add('d-none');
+      if (costPriceWrap) costPriceWrap.classList.add('d-none');
+    }
+  }
+
+  function toggleWorkTypeInputs() {
+    var type = document.querySelector('input[name="qa-work-type"]:checked');
+    var val = type ? type.value : '';
+    if (costDayWrap) costDayWrap.classList.toggle('d-none', val !== 'day');
+    if (costHourWrap) costHourWrap.classList.toggle('d-none', val !== 'hour');
+    if (costPriceWrap) costPriceWrap.classList.toggle('d-none', val !== 'price');
+  }
+
+  if (includeCostCheck) {
+    includeCostCheck.addEventListener('change', toggleCostOptions);
+  }
+  document.querySelectorAll('input[name="qa-work-type"]').forEach(function (radio) {
+    radio.addEventListener('change', toggleWorkTypeInputs);
+  });
+
+  document.getElementById('qa-template-cancel').addEventListener('click', function () {
+    closeModal(modalTemplate);
+  });
+
+  document.getElementById('qa-job-cancel').addEventListener('click', function () {
+    closeModal(modalJob);
+  });
+
+  var toastEl = document.getElementById('qa-toast');
+  var toastTimeout;
+
+  function showToast(message) {
+    if (!toastEl) return;
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastEl.textContent = message;
+    toastEl.classList.add('qa-toast-error', 'qa-toast-show');
+    toastEl.setAttribute('aria-hidden', 'false');
+    toastTimeout = setTimeout(function () {
+      toastEl.classList.remove('qa-toast-show');
+      toastEl.setAttribute('aria-hidden', 'true');
+      toastTimeout = null;
+    }, 4500);
+  }
+
+  function validateTemplateForm() {
+    var nameEl = document.getElementById('qa-template-name');
+    var name = nameEl && nameEl.value.trim();
+    if (!name) {
+      showToast('Template name is required.');
+      if (nameEl) nameEl.focus();
+      return null;
+    }
+    var cards = stepsContainer ? stepsContainer.querySelectorAll('.qa-step-card') : [];
+    if (cards.length === 0) {
+      showToast('At least one step is required.');
+      return null;
+    }
+    if (cards.length > 20) {
+      showToast('Maximum 20 steps allowed.');
+      return null;
+    }
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      var stepNum = i + 1;
+      var pM2 = card.querySelector('.qa-step-price-m2');
+      var pUnit = card.querySelector('.qa-step-price-unit');
+      var pLinear = card.querySelector('.qa-step-price-linear');
+      var checkPrice = function (val) {
+        if (val === undefined || val === null) return true;
+        var s = String(val).trim();
+        if (s === '') return true;
+        var n = parseFloat(s);
+        return !isNaN(n) && n >= 0;
+      };
+      if (!checkPrice(pM2 && pM2.value)) {
+        showToast('Step ' + stepNum + ': Price per m² must be a number ≥ 0.');
+        return null;
+      }
+      if (!checkPrice(pUnit && pUnit.value)) {
+        showToast('Step ' + stepNum + ': Price per unit must be a number ≥ 0.');
+        return null;
+      }
+      if (!checkPrice(pLinear && pLinear.value)) {
+        showToast('Step ' + stepNum + ': Price per linear meter must be a number ≥ 0.');
+        return null;
+      }
+    }
+    return { name: name, cards: cards };
+  }
+
+  document.getElementById('qa-template-save').addEventListener('click', function () {
+    var result = validateTemplateForm();
+    if (!result) return;
+    var name = result.name;
+    var cards = result.cards;
+    var nameEl = document.getElementById('qa-template-name');
+    var steps = [];
+    cards.forEach(function (card) {
+      var stepId = card.getAttribute('data-step-id') || generateStepId();
+      var ta = card.querySelector('.qa-step-desc');
+      var pM2 = card.querySelector('.qa-step-price-m2');
+      var pUnit = card.querySelector('.qa-step-price-unit');
+      var pLinear = card.querySelector('.qa-step-price-linear');
+      steps.push({
+        id: stepId,
+        description: (ta && ta.value) ? ta.value.trim() : '',
+        pricePerM2: (pM2 && pM2.value) ? pM2.value.trim() : '',
+        pricePerUnit: (pUnit && pUnit.value) ? pUnit.value.trim() : '',
+        pricePerLinear: (pLinear && pLinear.value) ? pLinear.value.trim() : ''
+      });
+    });
+    qaApi.createTemplate({ name: name, steps: steps }).then(function () {
+      refreshJobTemplatesList();
+      if (nameEl) nameEl.value = '';
+      closeModal(modalTemplate);
+    }).catch(function (err) {
+      showToast(err && err.message ? err.message : 'Failed to save template.');
+    });
+  });
+
+  stepsContainer.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.qa-add-more-step')) {
+      e.preventDefault();
+      addTemplateStep();
+    }
+  });
+
+  document.getElementById('qa-job-create').addEventListener('click', function () {
+    var projectId = projectSelect && projectSelect.value;
+    if (!projectId) return;
+    var templateIds = [];
+    document.querySelectorAll('#qa-job-templates-list input[name="qa-job-template"]:checked').forEach(function (cb) { templateIds.push(cb.value); });
+    var workerIds = [];
+    document.querySelectorAll('#qa-workers-list input[name="qa-worker"]:checked').forEach(function (cb) { workerIds.push(cb.value); });
+    var includeCost = document.getElementById('qa-job-include-cost') && document.getElementById('qa-job-include-cost').checked;
+    var costType = includeCost && document.querySelector('input[name="qa-work-type"]:checked') ? document.querySelector('input[name="qa-work-type"]:checked').value : '';
+    var costValue = '';
+    if (costType === 'day') costValue = (document.getElementById('qa-job-days') && document.getElementById('qa-job-days').value) || '';
+    else if (costType === 'hour') costValue = (document.getElementById('qa-job-hours') && document.getElementById('qa-job-hours').value) || '';
+    else if (costType === 'price') costValue = (document.getElementById('qa-job-total-price') && document.getElementById('qa-job-total-price').value) || '';
+    var targetEl = document.getElementById('qa-job-target-date');
+    var targetDate = (targetEl && targetEl.value) ? targetEl.value : '';
+    var createdBy = (typeof window.qaCurrentUserName === 'string' && window.qaCurrentUserName.trim()) ? window.qaCurrentUserName.trim() : '';
+    qaApi.getNextJobNumber().then(function (jobNumber) {
+      var job = {
+        projectId: projectId,
+        jobNumber: jobNumber,
+        floor: (document.getElementById('qa-job-floor') && document.getElementById('qa-job-floor').value) || '',
+        location: (document.getElementById('qa-job-location') && document.getElementById('qa-job-location').value) || '',
+        sqm: (document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value) || '',
+        linearMeters: (document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value) || '',
+        specification: (document.getElementById('qa-job-spec') && document.getElementById('qa-job-spec').value) || '',
+        description: (document.getElementById('qa-job-description') && document.getElementById('qa-job-description').value) || '',
+        targetCompletionDate: targetDate,
+        createdAt: new Date().toISOString(),
+        createdBy: createdBy,
+        templateIds: templateIds,
+        costIncluded: !!includeCost,
+        costType: costType,
+        costValue: costValue,
+        responsibleId: (document.getElementById('qa-job-responsible') && document.getElementById('qa-job-responsible').value) || '',
+        workerIds: workerIds,
+        status: 'new'
+      };
+      return qaApi.createJob(job);
+    }).then(function () {
+      closeModal(modalJob);
+    }).catch(function (err) {
+      showToast(err && err.message ? err.message : 'Failed to create job.');
+    });
+  });
+
+  btnViewJobs.addEventListener('click', function () {
+    var projectId = projectSelect && projectSelect.value;
+    if (!projectId) return;
+    var opt = projectSelect.options[projectSelect.selectedIndex];
+    var projectName = opt ? opt.text : '—';
+    document.getElementById('qa-view-jobs-project-name').textContent = projectName;
+    document.getElementById('qa-view-jobs-search').value = '';
+    document.getElementById('qa-view-jobs-floor').value = '';
+    document.getElementById('qa-view-jobs-cost').value = '';
+    document.getElementById('qa-view-jobs-status').value = '';
+    var targetDateEl = document.getElementById('qa-view-jobs-target-date');
+    if (targetDateEl) targetDateEl.value = '';
+    renderViewJobsList(projectId);
+    openModal(modalViewJobs);
+  });
+
+  document.getElementById('qa-view-jobs-close').addEventListener('click', function () { closeModal(modalViewJobs); });
+  modalViewJobs.addEventListener('click', function (e) { if (e.target === modalViewJobs) closeModal(modalViewJobs); });
+  document.getElementById('qa-view-jobs-search').addEventListener('input', function () {
+    var projectId = projectSelect && projectSelect.value;
+    if (projectId) renderViewJobsList(projectId);
+  });
+  document.getElementById('qa-view-jobs-floor').addEventListener('change', function () {
+    var projectId = projectSelect && projectSelect.value;
+    if (projectId) renderViewJobsList(projectId);
+  });
+  document.getElementById('qa-view-jobs-cost').addEventListener('change', function () {
+    var projectId = projectSelect && projectSelect.value;
+    if (projectId) renderViewJobsList(projectId);
+  });
+  document.getElementById('qa-view-jobs-status').addEventListener('change', function () {
+    var projectId = projectSelect && projectSelect.value;
+    if (projectId) renderViewJobsList(projectId);
+  });
+  var targetDateFilterEl = document.getElementById('qa-view-jobs-target-date');
+  if (targetDateFilterEl) targetDateFilterEl.addEventListener('change', function () {
+    var projectId = projectSelect && projectSelect.value;
+    if (projectId) renderViewJobsList(projectId);
+  });
+
+  document.getElementById('qa-job-details-close').addEventListener('click', function () { closeModal(modalJobDetails); });
+  modalJobDetails.addEventListener('click', function (e) { if (e.target === modalJobDetails) closeModal(modalJobDetails); });
+
+  function getCostDisplay(job) {
+    if (!job.costIncluded || !job.costType) return 'No cost provided';
+    var v = job.costValue || '';
+    if (job.costType === 'day') return 'Day work (' + v + ' day' + (v !== '1' ? 's' : '') + ')';
+    if (job.costType === 'hour') return 'Hour work (' + v + ' hour' + (v !== '1' ? 's' : '') + ')';
+    if (job.costType === 'price') return 'Price work (£' + (v ? Number(v).toFixed(2) : '0') + ')';
+    return 'No cost provided';
+  }
+
+  function getStatusLabel(s) {
+    if (s === 'active') return 'Active';
+    if (s === 'completed') return 'Completed';
+    return 'New';
+  }
+
+  function formatJobDate(val) {
+    if (!val) return '—';
+    var d = new Date(val);
+    if (isNaN(d.getTime())) return '—';
+    var day = String(d.getDate()).padStart(2, '0');
+    var month = String(d.getMonth() + 1).padStart(2, '0');
+    var year = d.getFullYear();
+    return day + '/' + month + '/' + year;
+  }
+
+  function renderViewJobsList(projectId) {
+    var listEl = document.getElementById('qa-view-jobs-list');
+    var emptyEl = document.getElementById('qa-view-jobs-empty');
+    var noMatchEl = document.getElementById('qa-view-jobs-no-match');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.classList.add('d-none');
+    if (noMatchEl) noMatchEl.classList.add('d-none');
+    var search = (document.getElementById('qa-view-jobs-search') && document.getElementById('qa-view-jobs-search').value) ? document.getElementById('qa-view-jobs-search').value.trim().toLowerCase() : '';
+    var floorFilter = document.getElementById('qa-view-jobs-floor') && document.getElementById('qa-view-jobs-floor').value;
+    var costFilter = document.getElementById('qa-view-jobs-cost') && document.getElementById('qa-view-jobs-cost').value;
+    var statusFilter = document.getElementById('qa-view-jobs-status') && document.getElementById('qa-view-jobs-status').value;
+    var targetDateFilter = document.getElementById('qa-view-jobs-target-date') && document.getElementById('qa-view-jobs-target-date').value;
+
+    qaApi.getJobs(projectId).then(function (jobs) {
+      if (jobs.length === 0) {
+        if (emptyEl) emptyEl.classList.remove('d-none');
+        return;
+      }
+      if (search) {
+        jobs = jobs.filter(function (j) {
+          var num = (j.jobNumber || '').toLowerCase();
+          var loc = (j.location || '').toLowerCase();
+          var spec = (j.specification || '').toLowerCase();
+          return num.indexOf(search) !== -1 || loc.indexOf(search) !== -1 || spec.indexOf(search) !== -1;
+        });
+      }
+      if (floorFilter) jobs = jobs.filter(function (j) { return (j.floor || '') === floorFilter; });
+      if (costFilter) {
+        if (costFilter === 'none') jobs = jobs.filter(function (j) { return !j.costIncluded || !j.costType; });
+        else jobs = jobs.filter(function (j) { return j.costType === costFilter; });
+      }
+      if (statusFilter) jobs = jobs.filter(function (j) { return (j.status || 'new') === statusFilter; });
+      if (targetDateFilter) {
+        jobs = jobs.filter(function (j) {
+          var target = (j.targetCompletionDate || '').toString().trim();
+          if (!target) return false;
+          var targetNorm = target.indexOf('T') !== -1 ? target.slice(0, 10) : target;
+          return targetNorm <= targetDateFilter;
+        });
+      }
+      if (jobs.length === 0) {
+        if (noMatchEl) noMatchEl.classList.remove('d-none');
+        return;
+      }
+      return qaApi.getTemplates().then(function (templates) {
+        jobs.forEach(function (job) {
+          var tplNames = getTemplateNames(templates, job.templateIds || []);
+      var tplShort = tplNames.slice(0, 3);
+      var tplMore = tplNames.length > 3 ? tplNames.length - 3 : 0;
+      var workerNames = getWorkerNames(job.workerIds || []);
+      var costStr = getCostDisplay(job);
+      var statusClass = (job.status === 'completed') ? 'qa-job-status-completed' : (job.status === 'active') ? 'qa-job-status-active' : 'qa-job-status-new';
+      var createdStr = formatJobDate(job.createdAt);
+      var createdByStr = (job.createdBy && job.createdBy.trim()) ? escapeHtml(job.createdBy.trim()) : '—';
+      var targetStr = formatJobDate(job.targetCompletionDate);
+      var card = document.createElement('div');
+      card.className = 'qa-job-card';
+      card.innerHTML =
+        '<div class="qa-job-card-head">' +
+          '<span class="qa-job-card-number">' + escapeHtml(job.jobNumber || '—') + '</span>' +
+          '<span class="qa-job-card-badge ' + statusClass + '">' + escapeHtml(getStatusLabel(job.status)) + '</span>' +
+        '</div>' +
+        '<div class="qa-job-card-row"><strong>Location:</strong> ' + escapeHtml(job.location || '—') + '</div>' +
+        '<div class="qa-job-card-row"><strong>Templates used:</strong> ' + (tplShort.length ? tplShort.map(escapeHtml).join(', ') + (tplMore ? ' <span class="qa-job-more">+ ' + tplMore + ' more</span>' : '') : '—') + '</div>' +
+        '<div class="qa-job-card-row">' + (job.sqm ? escapeHtml(job.sqm) + ' sqm' : '—') + ' · ' + (job.linearMeters ? escapeHtml(job.linearMeters) + ' linear m' : '—') + '</div>' +
+        '<div class="qa-job-card-row"><strong>Cost:</strong> ' + escapeHtml(costStr) + '</div>' +
+        '<div class="qa-job-card-row"><strong>Responsible:</strong> ' + escapeHtml(getSupervisorName(job.responsibleId)) + '</div>' +
+        '<div class="qa-job-card-row qa-job-card-workers" title="' + escapeHtml(workerNames.join(', ')) + '"><strong>Workers:</strong> ' + (job.workerIds && job.workerIds.length ? job.workerIds.length + ' workers' : '0') + '</div>' +
+        '<div class="qa-job-card-row qa-job-card-meta"><strong>Created:</strong> ' + escapeHtml(createdStr) + ' by ' + createdByStr + '</div>' +
+        '<div class="qa-job-card-row qa-job-card-meta"><strong>Target completion:</strong> ' + escapeHtml(targetStr) + '</div>' +
+        '<div class="qa-job-card-actions">' +
+          '<button type="button" class="qa-btn qa-btn-job-view" data-job-id="' + escapeHtml(job.id) + '">View</button>' +
+          '<button type="button" class="qa-btn qa-btn-job-edit" data-job-id="' + escapeHtml(job.id) + '">Edit</button>' +
+          '<button type="button" class="qa-btn qa-btn-job-delete" data-job-id="' + escapeHtml(job.id) + '">Delete</button>' +
+        '</div>';
+      listEl.appendChild(card);
+      card.querySelector('.qa-btn-job-view').addEventListener('click', function () { openJobDetails(job); });
+      card.querySelector('.qa-btn-job-edit').addEventListener('click', function () { openJobEdit(job, projectId); });
+      card.querySelector('.qa-btn-job-delete').addEventListener('click', function () {
+        if (!confirm('Delete job ' + (job.jobNumber || job.id) + '?')) return;
+        qaApi.deleteJob(job.id).then(function () { renderViewJobsList(projectId); }).catch(function (err) {
+          showToast(err && err.message ? err.message : 'Failed to delete job.');
+        });
+      });
+        });
+      });
+    });
+  }
+
+  function openJobDetails(job) {
+    var workerNames = getWorkerNames(job.workerIds || []);
+    var body = document.getElementById('qa-job-details-body');
+    if (!body) return;
+    document.getElementById('qa-job-details-title').textContent = 'Job ' + (job.jobNumber || job.id);
+    var createdStr = formatJobDate(job.createdAt);
+    var createdByStr = (job.createdBy && job.createdBy.trim()) ? escapeHtml(job.createdBy.trim()) : '—';
+    var targetStr = formatJobDate(job.targetCompletionDate);
+    qaApi.getTemplates().then(function (templates) {
+      var tplNames = getTemplateNames(templates, job.templateIds || []);
+      body.innerHTML =
+        '<p><strong>Job Number:</strong> ' + escapeHtml(job.jobNumber || '—') + '</p>' +
+        '<p><strong>Location:</strong> ' + escapeHtml(job.location || '—') + '</p>' +
+        '<p><strong>Floor:</strong> ' + escapeHtml(job.floor || '—') + '</p>' +
+        '<p><strong>Sqm:</strong> ' + escapeHtml(job.sqm || '—') + '</p>' +
+        '<p><strong>Linear meters:</strong> ' + escapeHtml(job.linearMeters || '—') + '</p>' +
+        '<p><strong>Specification:</strong> ' + escapeHtml(job.specification || '—') + '</p>' +
+        '<p><strong>Description:</strong> ' + escapeHtml(job.description || '—') + '</p>' +
+        '<p><strong>Created:</strong> ' + escapeHtml(createdStr) + ' by ' + createdByStr + '</p>' +
+        '<p><strong>Target completion:</strong> ' + escapeHtml(targetStr) + '</p>' +
+        '<p><strong>Templates used:</strong> ' + (tplNames.length ? tplNames.map(escapeHtml).join(', ') : '—') + '</p>' +
+      '<p><strong>Cost:</strong> ' + escapeHtml(getCostDisplay(job)) + '</p>' +
+      '<p><strong>Responsible:</strong> ' + escapeHtml(getSupervisorName(job.responsibleId)) + '</p>' +
+      '<p><strong>Workers:</strong> ' + (workerNames.length ? workerNames.map(escapeHtml).join(', ') : '—') + '</p>' +
+        '<p><strong>Status:</strong> ' + escapeHtml(getStatusLabel(job.status)) + '</p>';
+      openModal(modalJobDetails);
+    });
+  }
+
+  var modalJobEdit = document.getElementById('qa-modal-job-edit');
+  function openJobEdit(job, projectId) {
+    if (!modalJobEdit) return;
+    document.getElementById('qa-job-edit-id').value = job.id;
+    document.getElementById('qa-job-edit-title').textContent = 'Edit job ' + (job.jobNumber || job.id);
+    var statusEl = document.getElementById('qa-job-edit-status');
+    if (statusEl) statusEl.value = job.status || 'new';
+    modalJobEdit.setAttribute('data-edit-project-id', projectId || '');
+    openModal(modalJobEdit);
+  }
+
+  document.getElementById('qa-job-edit-close').addEventListener('click', function () { closeModal(modalJobEdit); });
+  document.getElementById('qa-job-edit-cancel').addEventListener('click', function () { closeModal(modalJobEdit); });
+  document.getElementById('qa-job-edit-save').addEventListener('click', function () {
+    var id = document.getElementById('qa-job-edit-id') && document.getElementById('qa-job-edit-id').value;
+    var status = document.getElementById('qa-job-edit-status') && document.getElementById('qa-job-edit-status').value;
+    var projectId = modalJobEdit.getAttribute('data-edit-project-id') || (projectSelect && projectSelect.value);
+    if (!id) return;
+    qaApi.updateJob(id, { status: status }).then(function () {
+      if (projectId) renderViewJobsList(projectId);
+      closeModal(modalJobEdit);
+    }).catch(function (err) {
+      showToast(err && err.message ? err.message : 'Failed to update job.');
+    });
+  });
+  if (modalJobEdit) modalJobEdit.addEventListener('click', function (e) { if (e.target === modalJobEdit) closeModal(modalJobEdit); });
+
+  modalTemplate.addEventListener('click', function (e) {
+    if (e.target === modalTemplate) closeModal(modalTemplate);
+  });
+
+  modalExisting.addEventListener('click', function (e) {
+    if (e.target === modalExisting) closeModal(modalExisting);
+  });
+
+  modalJob.addEventListener('click', function (e) {
+    if (e.target === modalJob) closeModal(modalJob);
+  });
+
+  document.getElementById('qa-existing-close').addEventListener('click', function () {
+    closeModal(modalExisting);
+  });
+
+  document.getElementById('qa-create-price-list').addEventListener('click', function () {
+    createPriceListFile();
+  });
+
+  document.getElementById('qa-edit-cancel').addEventListener('click', function () {
+    showExistingList();
+  });
+
+  document.getElementById('qa-edit-delete').addEventListener('click', function () {
+    var id = editTemplateId && editTemplateId.value;
+    if (!id) return;
+    qaApi.getTemplate(id).then(function (t) {
+      if (!t) return;
+      if (!confirm('Delete template "' + (t.name || 'Untitled') + '"?')) return;
+      qaApi.deleteTemplate(id).then(function () {
+        refreshJobTemplatesList();
+        showExistingList();
+      }).catch(function (err) { showToast(err && err.message ? err.message : 'Failed to delete template.'); });
+    });
+  });
+
+  document.getElementById('qa-edit-save').addEventListener('click', function () {
+    var id = editTemplateId && editTemplateId.value;
+    if (!id) return;
+    var name = editName && editName.value.trim();
+    if (!name) {
+      if (editName) editName.focus();
+      return;
+    }
+    var cards = editStepsContainer ? editStepsContainer.querySelectorAll('.qa-step-card') : [];
+    var steps = [];
+    cards.forEach(function (card) {
+      var stepId = card.getAttribute('data-step-id') || generateStepId();
+      var ta = card.querySelector('.qa-step-desc');
+      var pM2 = card.querySelector('.qa-step-price-m2');
+      var pUnit = card.querySelector('.qa-step-price-unit');
+      var pLinear = card.querySelector('.qa-step-price-linear');
+      steps.push({
+        id: stepId,
+        description: (ta && ta.value) ? ta.value.trim() : '',
+        pricePerM2: (pM2 && pM2.value) ? pM2.value.trim() : '',
+        pricePerUnit: (pUnit && pUnit.value) ? pUnit.value.trim() : '',
+        pricePerLinear: (pLinear && pLinear.value) ? pLinear.value.trim() : ''
+      });
+    });
+    qaApi.updateTemplate(id, { name: name, steps: steps }).then(function () {
+      refreshJobTemplatesList();
+      showExistingList();
+    }).catch(function (err) {
+      showToast(err && err.message ? err.message : 'Failed to save template.');
+    });
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (modalTemplate.classList.contains('is-open')) closeModal(modalTemplate);
+    else if (modalExisting.classList.contains('is-open')) closeModal(modalExisting);
+    else if (modalJob.classList.contains('is-open')) closeModal(modalJob);
+    else if (modalViewJobs && modalViewJobs.classList.contains('is-open')) closeModal(modalViewJobs);
+    else if (modalJobDetails && modalJobDetails.classList.contains('is-open')) closeModal(modalJobDetails);
+    else if (modalJobEdit && modalJobEdit.classList.contains('is-open')) closeModal(modalJobEdit);
+  });
+
+  function getExistingSearch() {
+    var el = document.getElementById('qa-existing-search');
+    return (el && el.value) ? el.value.trim().toLowerCase() : '';
+  }
+
+  function getExistingSort() {
+    var el = document.getElementById('qa-existing-sort');
+    return (el && el.value) ? el.value : 'name-asc';
+  }
+
+  function filterAndSortTemplates(templates) {
+    var search = getExistingSearch();
+    var sortVal = getExistingSort();
+    var list = (templates || []).slice();
+    if (search) {
+      list = list.filter(function (t) {
+        return (t.name || '').toLowerCase().indexOf(search) !== -1;
+      });
+    }
+    list.sort(function (a, b) {
+      var cmp;
+      if (sortVal === 'name-asc' || sortVal === 'name-desc') {
+        cmp = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+        return sortVal === 'name-desc' ? -cmp : cmp;
+      }
+      var totalA = computeTotalFromSteps(a.steps);
+      var totalB = computeTotalFromSteps(b.steps);
+      cmp = totalA - totalB;
+      return sortVal === 'total-desc' ? -cmp : cmp;
+    });
+    return list;
+  }
+
+  function showExistingList() {
+    if (existingList) existingList.classList.remove('d-none');
+    if (existingEdit) existingEdit.classList.add('d-none');
+    if (!existingTemplatesList) return;
+    var noMsg = document.getElementById('qa-existing-no-msg');
+    var noMatchMsg = document.getElementById('qa-existing-no-match-msg');
+    existingTemplatesList.innerHTML = '';
+    if (noMsg) noMsg.classList.add('d-none');
+    if (noMatchMsg) noMatchMsg.classList.add('d-none');
+    qaApi.getTemplates().then(function (templates) {
+      if (templates.length === 0) {
+        if (noMsg) noMsg.classList.remove('d-none');
+        return;
+      }
+      var list = filterAndSortTemplates(templates);
+      if (list.length === 0) {
+        if (noMatchMsg) noMatchMsg.classList.remove('d-none');
+        return;
+      }
+      list.forEach(function (t) {
+      var totalStr = formatTemplatePrice(computeTotalFromSteps(t.steps));
+      var created = formatCreatedAt(t.createdAt);
+      var creatorName = (t.createdBy && t.createdBy.trim()) ? escapeHtml(t.createdBy.trim()) : '—';
+      var createdHtml = '<span class="qa-existing-row-created">' + escapeHtml(created.date) + '<br><span class="qa-existing-row-by">by ' + creatorName + '</span></span>';
+      var row = document.createElement('div');
+      row.className = 'qa-existing-row';
+      row.innerHTML =
+        '<span class="qa-existing-row-name">' + escapeHtml(t.name) + '</span>' +
+        '<span class="qa-existing-row-meta">' + t.steps.length + ' step' + (t.steps.length !== 1 ? 's' : '') + '</span>' +
+        '<span class="qa-existing-row-total">' + escapeHtml(totalStr) + '</span>' +
+        createdHtml +
+        '<div class="qa-existing-row-actions">' +
+        '<button type="button" class="qa-btn qa-btn-existing-edit" data-id="' + escapeHtml(t.id) + '" aria-label="Edit">Edit</button>' +
+        '<button type="button" class="qa-btn qa-btn-delete-small" data-id="' + escapeHtml(t.id) + '" aria-label="Delete">Delete</button>' +
+        '</div>';
+      existingTemplatesList.appendChild(row);
+      row.querySelector('.qa-btn-existing-edit').addEventListener('click', function () {
+        openEditTemplate(t.id);
+      });
+      row.querySelector('.qa-btn-delete-small').addEventListener('click', function () {
+        if (!confirm('Delete template "' + (t.name || 'Untitled') + '"?')) return;
+        qaApi.deleteTemplate(t.id).then(function () {
+          refreshJobTemplatesList();
+          showExistingList();
+        }).catch(function (err) { showToast(err && err.message ? err.message : 'Failed to delete template.'); });
+      });
+      });
+    });
+  }
+
+  var existingSearchEl = document.getElementById('qa-existing-search');
+  var existingSortEl = document.getElementById('qa-existing-sort');
+  if (existingSearchEl) {
+    existingSearchEl.addEventListener('input', showExistingList);
+    existingSearchEl.addEventListener('keyup', showExistingList);
+  }
+  if (existingSortEl) {
+    existingSortEl.addEventListener('change', showExistingList);
+  }
+
+  function openEditTemplate(id) {
+    qaApi.getTemplate(id).then(function (t) {
+      if (!t) return;
+      if (existingList) existingList.classList.add('d-none');
+      if (existingEdit) existingEdit.classList.remove('d-none');
+      if (editTemplateId) editTemplateId.value = t.id;
+      if (editName) editName.value = t.name || '';
+      renderEditStepsList(t.steps || []);
+    });
+  }
+
+  editStepsContainer.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.qa-add-more-step')) {
+      e.preventDefault();
+      addEditStep();
+    }
+  });
+
+  function renderEditStepsList(steps) {
+    if (!editStepsContainer) return;
+    editStepsContainer.innerHTML = '';
+    var list = (steps && steps.length) ? steps : [];
+    if (list.length === 0) list = [normalizeStepData(null, 0)];
+    list.forEach(function (s, i) {
+      appendEditStepCard(i + 1, normalizeStepData(s, i));
+    });
+  }
+
+  function appendEditStepCard(stepNum, stepData) {
+    stepData = stepData || normalizeStepData(null, stepNum - 1);
+    var card = document.createElement('div');
+    card.className = 'qa-step-card';
+    card.setAttribute('data-step', String(stepNum));
+    card.setAttribute('data-step-id', stepData.id);
+    card.innerHTML = buildStepCardHtml(stepNum, stepData, true);
+    editStepsContainer.appendChild(card);
+  }
+
+  function addEditStep() {
+    var count = editStepsContainer.querySelectorAll('.qa-step-card').length;
+    if (count >= 20) return;
+    appendEditStepCard(count + 1, normalizeStepData({ id: generateStepId() }, count));
+  }
+
+  function buildStepCardHtml(stepNum, stepData, isEdit) {
+    stepData = stepData || {};
+    var desc = stepData.description !== undefined ? stepData.description : '';
+    var priceM2 = stepData.pricePerM2 !== undefined ? stepData.pricePerM2 : '';
+    var priceUnit = stepData.pricePerUnit !== undefined ? stepData.pricePerUnit : '';
+    var priceLinear = stepData.pricePerLinear !== undefined ? stepData.pricePerLinear : '';
+    var prefix = isEdit ? 'qa-edit' : 'qa';
+    var idPrefix = prefix + '-step-' + stepNum;
+    return (
+      '<h3 class="qa-step-title">Step ' + stepNum + '</h3>' +
+      '<textarea class="qa-textarea qa-step-desc" id="' + idPrefix + '-desc" placeholder="Description for this step..." rows="3">' + escapeHtml(desc) + '</textarea>' +
+      '<div class="qa-step-prices">' +
+      '<label class="qa-step-price-row">' +
+      '<span class="qa-step-price-label">Price per m² (£)</span>' +
+      '<input type="number" class="qa-input qa-step-price-m2" min="0" step="0.01" placeholder="0" value="' + escapeHtml(priceM2) + '">' +
+      '</label>' +
+      '<label class="qa-step-price-row">' +
+      '<span class="qa-step-price-label">Price per unit (£)</span>' +
+      '<input type="number" class="qa-input qa-step-price-unit" min="0" step="0.01" placeholder="0" value="' + escapeHtml(priceUnit) + '">' +
+      '</label>' +
+      '<label class="qa-step-price-row">' +
+      '<span class="qa-step-price-label">Price per linear meter (£)</span>' +
+      '<input type="number" class="qa-input qa-step-price-linear" min="0" step="0.01" placeholder="0" value="' + escapeHtml(priceLinear) + '">' +
+      '</label>' +
+      '</div>' +
+      '<div class="qa-step-footer">' +
+      '<button type="button" class="qa-btn qa-btn-add-step qa-add-more-step"><i class="bi bi-plus-lg"></i> Add more step</button>' +
+      '</div>'
+    );
+  }
+
+  function initTemplateSteps() {
+    if (!stepsContainer) return;
+    stepsContainer.innerHTML = '';
+    addTemplateStep();
+  }
+
+  function addTemplateStep() {
+    if (!stepsContainer) return;
+    var count = stepsContainer.querySelectorAll('.qa-step-card').length;
+    if (count >= 20) return;
+    var stepId = generateStepId();
+    var stepData = normalizeStepData({ id: stepId }, count);
+    var card = document.createElement('div');
+    card.className = 'qa-step-card';
+    card.setAttribute('data-step', String(count + 1));
+    card.setAttribute('data-step-id', stepId);
+    card.innerHTML = buildStepCardHtml(count + 1, stepData, false);
+    stepsContainer.appendChild(card);
+  }
+
+  var workerCategorySelect = document.getElementById('qa-worker-category');
+  if (workerCategorySelect) {
+    workerCategorySelect.addEventListener('change', function () {
+      renderWorkersList(this.value);
+    });
+  }
+
+  function renderWorkersList(categoryFilter) {
+    var listEl = document.getElementById('qa-workers-list');
+    if (!listEl) return;
+    var checked = [];
+    listEl.querySelectorAll('input[name="qa-worker"]:checked').forEach(function (cb) {
+      checked.push(cb.value);
+    });
+    var filtered = categoryFilter
+      ? workersData.filter(function (w) { return w.category === categoryFilter; })
+      : workersData.slice();
+    listEl.innerHTML = '';
+    filtered.forEach(function (w) {
+      var label = document.createElement('label');
+      label.className = 'qa-worker-item';
+      label.setAttribute('data-category', w.category);
+      var isChecked = checked.indexOf(w.id) !== -1;
+      label.innerHTML =
+        '<input type="checkbox" name="qa-worker" value="' + escapeHtml(w.id) + '"' + (isChecked ? ' checked' : '') + '>' +
+        '<span class="qa-worker-name">' + escapeHtml(w.name) + ' <span class="qa-worker-cat">(' + categoryLabel(w.category) + ')</span></span>';
+      listEl.appendChild(label);
+      label.addEventListener('click', function (e) {
+        if (e.target.type !== 'checkbox') {
+          var cb = label.querySelector('input[type="checkbox"]');
+          if (cb) cb.checked = !cb.checked;
+        }
+      });
+    });
+  }
+
+  function categoryLabel(cat) {
+    var labels = { fixers: 'Fixers', plaster: 'Plaster', electricians: 'Electricians', painters: 'Painters' };
+    return labels[cat] || cat;
+  }
+
+  function refreshPersonnelUI() {
+    var sel = document.getElementById('qa-job-responsible');
+    if (sel) {
+      sel.innerHTML = '<option value="">— Select supervisor —</option>';
+      (supervisorsData || []).forEach(function (s) {
+        var opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        sel.appendChild(opt);
+      });
+    }
+    var catSel = document.getElementById('qa-worker-category');
+    if (catSel) {
+      var cats = [];
+      (workersData || []).forEach(function (w) {
+        if (w.category && cats.indexOf(w.category) === -1) cats.push(w.category);
+      });
+      cats.sort();
+      catSel.innerHTML = '<option value="">All categories</option>';
+      cats.forEach(function (c) {
+        var opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = categoryLabel(c);
+        catSel.appendChild(opt);
+      });
+    }
+    renderWorkersList(catSel && catSel.value ? catSel.value : '');
+  }
+
+  function loadQAPersonnel() {
+    if (!(window.QA_CONFIG && window.QA_CONFIG.useBackend) || !qaApi.getPersonnel) return;
+    qaApi.getPersonnel().then(function (data) {
+      if (data && Array.isArray(data.supervisors)) supervisorsData = data.supervisors;
+      if (data && Array.isArray(data.workers)) workersData = data.workers;
+      refreshPersonnelUI();
+    }).catch(function () {});
+  }
+
+  refreshPersonnelUI();
+  loadQAPersonnel();
+
+  enableButtons();
+})();
+  </script>
+</body>
+</html>
