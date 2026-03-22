@@ -30,7 +30,8 @@ Comunicarea este **request/response**: browser-ul face request-uri HTTP la API; 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    NODE.JS + EXPRESS (Backend)                          │
 │  /api/health  /api/companies  /api/auth  /api/projects  /api/worklogs    │
-│  /api/operatives  /api/templates  /api/jobs  /api/dashboard/:module     │
+│  /api/operatives  /api/materials  /api/templates  /api/jobs  /api/dashboard/:module   │
+│  /api/dashboard/overview-stats  /overview-lists  /operative-activity-today (JSON)      │
 │         │                │                   │                   │       │
 │  requireManagerAuth / requireOperativeAuth / onboarding token            │
 └─────────┼────────────────┼───────────────────┼───────────────────┼─────┘
@@ -39,7 +40,8 @@ Comunicarea este **request/response**: browser-ul face request-uri HTTP la API; 
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         POSTGRESQL (DB)                                  │
 │  companies | manager | users | projects | project_assignments          │
-│  work_logs | qa_templates | qa_jobs | qa_* lookup tables                │
+│  work_logs | material_categories | material_suppliers | materials | material_consumption │
+│  qa_templates | qa_jobs | qa_* lookup tables                              │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -75,12 +77,14 @@ Alt exemplu: **Operativ trimite un work log**.
 | **register_company.html**   | Vizitator      | POST /api/companies/create           | companies                      |
 | **register_manager.html**   | Vizitator      | GET /api/onboarding/company, POST /api/managers/create | manager, companies   |
 | **login_manager.html**      | Manager        | POST /api/managers/login             | manager                        |
-| **dashboard_manager.html** | Manager        | GET /api/auth/validate, GET /api/dashboard/:module, /api/projects/*, /api/operatives/*, /api/worklogs/* | manager, companies, projects, users, work_logs |
+| **dashboard_manager.html** | Manager        | GET /api/auth/validate; GET /api/dashboard/:module (HTML partials); **Project Overview**: GET /api/dashboard/overview-stats, overview-lists, operative-activity-today; iframes: Task_Planning, Quality_Assurance, manage_material, **Profile_Settings**, **my_company_settings**; /api/projects/*, /api/operatives/*, /api/worklogs/*; profil: /api/managers/me, phone, change-password; companie: /api/companies/me; invite: POST /api/managers/invite | manager, companies, projects, users, work_logs, work_hours, planning_*, qa_jobs, qa_cost_types |
 | **Modul Projects**          | Manager        | GET/POST/PUT /api/projects/list, create, :id/update, :id/assignments, assign | projects, project_assignments, users |
 | **Modul Operatives**       | Manager        | GET/POST/PATCH/DELETE /api/operatives | users                          |
 | **Modul Work Logs**        | Manager        | GET/POST/PATCH /api/worklogs, approve, reject, archive | work_logs                    |
 | **Quality_Assurance.html** | Manager        | GET/POST/PUT/DELETE /api/templates, /api/jobs, GET /api/projects/list | qa_templates, qa_jobs, qa_* lookup, projects |
-| **operative_dashboard.html**| Operativ       | POST /api/operatives/login, GET/POST /api/operatives/me, work-hours/*, tasks, work-log, issues, uploads | users, work_logs, work_hours, issues, etc. |
+| **Material Management** (manage_material.html) | Manager | GET/POST /api/materials/projects, /categories, /suppliers; GET/POST/PUT/DELETE /api/materials; GET /api/materials/forecast | material_categories, material_suppliers, materials, material_consumption, projects |
+| **Task_Planning.html** (iframe în dashboard) | Manager | GET/POST/PATCH/DELETE `/api/planning/*`; GET `/api/planning/plan-tasks/:id/confirmation-photos` (poze operativ, task planning completat) | planning_plans, planning_plan_tasks; citește `operative_task_photos` (task_source=planning) |
+| **operative_dashboard.html**| Operativ       | POST /api/operatives/login, GET/POST /api/operatives/me, work-hours/* (cu validare geolocație), GET/PATCH `/api/operatives/tasks`, POST `/api/operatives/tasks/:id/photos`, work-log, issues, uploads | users, work_logs, work_hours, projects, tasks, planning_plan_tasks (via listă tasks), operative_task_photos, issues |
 | **see_plans.html**         | Vizitator      | eventual /api/subscriptions          | —                              |
 
 Legătura fiecărei pagini cu backend și DB: toate acțiunile persistente (CRUD, login, submit) trec prin API; API-ul folosește controller-e care citesc/scriu în PostgreSQL.
@@ -144,3 +148,5 @@ Operativ         Frontend (Operative Dashboard)    Backend              DB
 ---
 
 *Documentația trebuie actualizată la fiecare schimbare majoră de structură sau flux.*
+
+**Actualizat:** 16/03/2026

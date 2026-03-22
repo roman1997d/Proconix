@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Company Settings – Proconix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body>
+  <style>
+    :root {
+      --bg-main: #0b1620;
+      --bg-card: #111827;
+      --bg-card-alt: #0f172a;
+      --text-primary: #e5e7eb;
+      --text-secondary: #9ca3af;
+      --text-muted: #9ca3af;
+      --border: rgba(255, 255, 255, 0.08);
+      --accent: #1BE5C6;
+      --accent2: #3b82f6;
+      --danger: #f97373;
+      --success: #4ade80;
+      --radius: 14px;
+      --gap: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 22px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: radial-gradient(1000px 400px at 10% 0%, rgba(27, 229, 198, 0.18), transparent),
+                  linear-gradient(135deg, var(--bg-main) 0%, #020617 100%);
+      color: var(--text-primary);
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+    }
+    .card {
+      background: linear-gradient(180deg, var(--bg-card), var(--bg-card-alt));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      padding: 18px;
+    }
+    .title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 14px;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .title i { color: var(--accent2); font-size: 20px; }
+
+    .msg {
+      display: none;
+      margin-bottom: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text-primary);
+    }
+    .msg.d-block { display: block; }
+    .msg.success { border-color: rgba(74,222,128,0.35); }
+    .msg.error { border-color: rgba(249,115,115,0.35); }
+
+    .kv-table-wrap {
+      overflow: auto;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+      background: rgba(255,255,255,0.02);
+    }
+    th, td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      vertical-align: top;
+      font-size: 14px;
+    }
+    th {
+      color: var(--text-secondary);
+      font-weight: 600;
+      background: rgba(0,0,0,0.15);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    td.key {
+      width: 320px;
+      color: var(--text-secondary);
+      font-weight: 600;
+      word-break: break-word;
+    }
+    td.val {
+      word-break: break-word;
+    }
+
+    .hint {
+      color: var(--text-muted);
+      font-size: 12px;
+      line-height: 1.35;
+      margin-top: 6px;
+    }
+
+    .mm-hidden { display: none !important; }
+
+    .mm-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .mm-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .mm-input, .mm-select {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 11px 12px;
+      border-radius: 10px;
+      outline: none;
+    }
+
+    .mm-input:disabled, .mm-select:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
+    .mm-btn {
+      border: 1px solid var(--border);
+      background: rgba(59,130,246,0.12);
+      color: var(--text-primary);
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .mm-btn:hover { background: rgba(59,130,246,0.18); }
+    .mm-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+
+    .mm-btn-danger {
+      background: rgba(249,115,115,0.12);
+    }
+    .mm-btn-danger:hover { background: rgba(249,115,115,0.18); }
+
+    @media (max-width: 920px) {
+      .mm-row { grid-template-columns: 1fr; }
+    }
+  </style>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="title">
+        <i class="bi bi-building"></i>
+        <span>My Company Settings</span>
+      </div>
+
+      <div id="cs-loading" class="msg d-block">Loading company…</div>
+      <div id="cs-error" class="msg error"></div>
+      <div id="cs-success" class="msg success"></div>
+
+      <div class="hint">
+        Data is loaded from the database for the signed-in manager’s company.
+      </div>
+
+      <div style="height: 14px;"></div>
+      <div class="kv-table-wrap">
+        <table aria-label="Company key/value table">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody id="cs-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="title">
+        <i class="bi bi-person-plus"></i>
+        <span>Add manager</span>
+      </div>
+
+      <div id="mm-error" class="msg error"></div>
+      <div id="mm-success" class="msg success"></div>
+
+      <div class="mm-row">
+        <div>
+          <div class="mm-label">Do you want to add a manager?</div>
+          <select id="mm-want-manager" class="mm-select">
+            <option value="no" selected>No</option>
+            <option value="yes">Yes</option>
+          </select>
+          <div class="hint">Add a manager to your company. A temporary password will be generated.</div>
+        </div>
+
+        <div id="mm-form-wrap" class="mm-hidden">
+          <div class="mm-label">General manager or site manager</div>
+          <select id="mm-manager-type" class="mm-select">
+            <option value="general" selected>General manager</option>
+            <option value="site">Site manager</option>
+          </select>
+
+          <div id="mm-site-project-wrap" style="margin-top: 14px;" class="mm-hidden">
+            <div class="mm-label">Which project?</div>
+            <select id="mm-site-project" class="mm-select">
+              <option value="">— Select a project —</option>
+            </select>
+          </div>
+
+          <div id="mm-email-wrap" style="margin-top: 14px;" class="mm-hidden">
+            <div class="mm-label">Manager email</div>
+            <input id="mm-email" class="mm-input" type="email" placeholder="e.g. manager@company.com" />
+          </div>
+
+          <div style="margin-top: 14px;">
+            <button type="button" id="mm-invite-btn" class="mm-btn" disabled>
+              <i class="bi bi-send-fill"></i> Invite
+            </button>
+          </div>
+
+          <div id="mm-temp-pass-wrap" style="margin-top: 10px;" class="mm-hidden">
+            <div class="hint">
+              Temporary password (share this with the manager):
+            </div>
+            <div id="mm-temp-pass" style="font-weight: 800; color: var(--accent2); word-break: break-word; margin-top: 6px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var SESSION_KEY = 'proconix_manager_session';
+
+      var csLoading = document.getElementById('cs-loading');
+      var csError = document.getElementById('cs-error');
+      var csSuccess = document.getElementById('cs-success');
+      var csTbody = document.getElementById('cs-tbody');
+
+      // Add manager section elements
+      var mmError = document.getElementById('mm-error');
+      var mmSuccess = document.getElementById('mm-success');
+      var mmWantSelect = document.getElementById('mm-want-manager');
+      var mmFormWrap = document.getElementById('mm-form-wrap');
+      var mmTypeSelect = document.getElementById('mm-manager-type');
+      var mmSiteProjectWrap = document.getElementById('mm-site-project-wrap');
+      var mmProjectsSelect = document.getElementById('mm-site-project');
+      var mmEmailWrap = document.getElementById('mm-email-wrap');
+      var mmEmail = document.getElementById('mm-email');
+      var mmInviteBtn = document.getElementById('mm-invite-btn');
+      var mmTempPassWrap = document.getElementById('mm-temp-pass-wrap');
+      var mmTempPass = document.getElementById('mm-temp-pass');
+
+      var projectsCache = null;
+
+      function getSession() {
+        try {
+          var raw = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
+          return raw ? JSON.parse(raw) : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function getSessionHeaders() {
+        var session = getSession();
+        if (!session || session.manager_id == null || !session.email) return null;
+        return {
+          'X-Manager-Id': String(session.manager_id),
+          'X-Manager-Email': session.email
+        };
+      }
+
+      function showError(text) {
+        if (csError) {
+          if (!text) {
+            csError.textContent = '';
+            csError.classList.remove('d-block');
+            return;
+          }
+          csError.textContent = text;
+          csError.classList.add('d-block');
+        }
+        if (csSuccess) csSuccess.classList.remove('d-block');
+      }
+
+      function showSuccess(text) {
+        if (csSuccess) {
+          if (!text) {
+            csSuccess.textContent = '';
+            csSuccess.classList.remove('d-block');
+            return;
+          }
+          csSuccess.textContent = text;
+          csSuccess.classList.add('d-block');
+        }
+        if (csError) csError.classList.remove('d-block');
+      }
+
+      function showMmError(text) {
+        if (!mmError) return;
+        if (!text) {
+          mmError.textContent = '';
+          mmError.classList.remove('d-block');
+          return;
+        }
+        mmError.textContent = text;
+        mmError.classList.add('d-block');
+        if (mmSuccess) mmSuccess.classList.remove('d-block');
+      }
+
+      function showMmSuccess(text) {
+        if (!mmSuccess) return;
+        if (!text) {
+          mmSuccess.textContent = '';
+          mmSuccess.classList.remove('d-block');
+          return;
+        }
+        mmSuccess.textContent = text;
+        mmSuccess.classList.add('d-block');
+        if (mmError) mmError.classList.remove('d-block');
+      }
+
+      function emailLooksValid(email) {
+        return !!email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      }
+
+      function setInviteState() {
+        if (!mmWantSelect || !mmFormWrap) return;
+        var wantYes = mmWantSelect.value === 'yes';
+
+        var type = mmTypeSelect ? mmTypeSelect.value : 'general';
+        var projectId = mmProjectsSelect && mmProjectsSelect.value ? String(mmProjectsSelect.value) : '';
+        var email = mmEmail ? mmEmail.value.trim() : '';
+        var emailOk = emailLooksValid(email);
+
+        var ready = false;
+        if (wantYes) {
+          if (type === 'general') {
+            ready = emailOk;
+          } else {
+            ready = emailOk && !!projectId;
+          }
+        }
+
+        if (mmInviteBtn) mmInviteBtn.disabled = !ready;
+      }
+
+      function resetInviteForm() {
+        showMmError(null);
+        showMmSuccess(null);
+        if (mmTempPassWrap) mmTempPassWrap.classList.add('mm-hidden');
+        if (mmTempPass) mmTempPass.textContent = '';
+
+        if (mmSiteProjectWrap) mmSiteProjectWrap.classList.add('mm-hidden');
+        if (mmEmailWrap) mmEmailWrap.classList.add('mm-hidden');
+        if (mmInviteBtn) mmInviteBtn.disabled = true;
+
+        if (mmProjectsSelect) {
+          mmProjectsSelect.value = '';
+        }
+      }
+
+      function setLoading(isLoading) {
+        if (!csLoading) return;
+        csLoading.style.display = isLoading ? 'block' : 'none';
+      }
+
+      function clearTable() {
+        if (!csTbody) return;
+        csTbody.innerHTML = '';
+      }
+
+      function renderCompany(company) {
+        clearTable();
+        if (!company || typeof company !== 'object') return;
+
+        Object.keys(company).forEach(function (k) {
+          var v = company[k];
+          var val = v == null ? '—' : String(v);
+
+          var tr = document.createElement('tr');
+
+          var tdKey = document.createElement('td');
+          tdKey.className = 'key';
+          tdKey.textContent = k;
+
+          var tdVal = document.createElement('td');
+          tdVal.className = 'val';
+          tdVal.textContent = val;
+
+          tr.appendChild(tdKey);
+          tr.appendChild(tdVal);
+          csTbody.appendChild(tr);
+        });
+      }
+
+      function loadCompany() {
+        var headers = getSessionHeaders();
+        if (!headers) {
+          setLoading(false);
+          showError('Session expired. Please sign in again.');
+          return Promise.reject(new Error('No session headers'));
+        }
+
+        setLoading(true);
+        showError(null);
+        showSuccess(null);
+
+        return fetch('/api/companies/me', { headers: headers })
+          .then(function (res) {
+            return res.json().catch(function () { return null; }).then(function (data) {
+              if (!res.ok) {
+                throw new Error((data && data.message) ? data.message : 'Failed to load company.');
+              }
+              return data;
+            });
+          })
+          .then(function (data) {
+            var company = data && data.company ? data.company : null;
+            renderCompany(company);
+            setLoading(false);
+          })
+          .catch(function (err) {
+            setLoading(false);
+            showError((err && err.message) ? err.message : 'Failed to load company.');
+          });
+      }
+
+      function loadProjects() {
+        var headers = getSessionHeaders();
+        if (!headers) throw new Error('Session expired. Please sign in again.');
+        if (projectsCache && Array.isArray(projectsCache)) return Promise.resolve(projectsCache);
+
+        return fetch('/api/projects/list', { headers: headers })
+          .then(function (res) {
+            return res.json().catch(function () { return null; }).then(function (data) {
+              if (!res.ok) {
+                throw new Error((data && data.message) ? data.message : 'Failed to load projects.');
+              }
+              var projects = data && data.projects ? data.projects : [];
+              projectsCache = projects;
+              return projectsCache;
+            });
+          });
+      }
+
+      function renderProjectsSelect(projects) {
+        if (!mmProjectsSelect) return;
+        mmProjectsSelect.innerHTML = '<option value="">— Select a project —</option>';
+
+        if (!Array.isArray(projects)) return;
+        projects.forEach(function (p) {
+          var id = p && p.id != null ? String(p.id) : '';
+          if (!id) return;
+          var label = (p.project_name || p.name || ('Project ' + id));
+          var opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = label;
+          mmProjectsSelect.appendChild(opt);
+        });
+      }
+
+      function syncVisibilityByType() {
+        if (!mmFormWrap || !mmSiteProjectWrap || !mmEmailWrap) return;
+
+        var type = mmTypeSelect ? mmTypeSelect.value : 'general';
+
+        if (type === 'general') {
+          if (mmSiteProjectWrap) mmSiteProjectWrap.classList.add('mm-hidden');
+          if (mmEmailWrap) mmEmailWrap.classList.remove('mm-hidden');
+          if (mmProjectsSelect) mmProjectsSelect.value = '';
+        } else {
+          if (mmSiteProjectWrap) mmSiteProjectWrap.classList.remove('mm-hidden');
+          // Email field is shown only after selecting a project.
+          if (mmEmailWrap) mmEmailWrap.classList.add('mm-hidden');
+          if (mmProjectsSelect) mmProjectsSelect.value = '';
+        }
+
+        if (mmTempPassWrap) mmTempPassWrap.classList.add('mm-hidden');
+        setInviteState();
+      }
+
+      function onWantManagerChange() {
+        var wantYes = mmWantSelect && mmWantSelect.value === 'yes';
+        if (!mmFormWrap) return;
+
+        if (wantYes) {
+          mmFormWrap.classList.remove('mm-hidden');
+          // Show correct initial visibility
+          syncVisibilityByType();
+        } else {
+          mmFormWrap.classList.add('mm-hidden');
+          resetInviteForm();
+          if (mmFormWrap) mmFormWrap.classList.add('mm-hidden');
+        }
+      }
+
+      function onProjectChange() {
+        var type = mmTypeSelect ? mmTypeSelect.value : 'general';
+        if (type !== 'site') {
+          setInviteState();
+          return;
+        }
+
+        var hasProject = mmProjectsSelect && mmProjectsSelect.value ? true : false;
+        if (mmEmailWrap) {
+          if (hasProject) mmEmailWrap.classList.remove('mm-hidden');
+          else mmEmailWrap.classList.add('mm-hidden');
+        }
+        setInviteState();
+      }
+
+      function onInvite() {
+        showMmError(null);
+        showMmSuccess(null);
+
+        var headers = getSessionHeaders();
+        if (!headers) {
+          showMmError('Session expired. Please sign in again.');
+          return;
+        }
+
+        var type = mmTypeSelect ? mmTypeSelect.value : 'general';
+        var email = mmEmail ? mmEmail.value.trim() : '';
+        if (!emailLooksValid(email)) {
+          showMmError('Please enter a valid email.');
+          return;
+        }
+
+        var payload = { manager_type: type, email: email };
+        if (type === 'site') {
+          if (!mmProjectsSelect || !mmProjectsSelect.value) {
+            showMmError('Please select a project for site manager.');
+            return;
+          }
+          payload.project_id = mmProjectsSelect.value;
+        }
+
+        if (mmInviteBtn) mmInviteBtn.disabled = true;
+
+        fetch('/api/managers/invite', {
+          method: 'POST',
+          headers: Object.assign({}, headers, { 'Content-Type': 'application/json' }),
+          body: JSON.stringify(payload)
+        })
+          .then(function (res) {
+            return res.json().catch(function () { return null; }).then(function (data) {
+              if (!res.ok) {
+                throw new Error((data && data.message) ? data.message : 'Failed to invite manager.');
+              }
+              return data;
+            });
+          })
+          .then(function (data) {
+            showMmSuccess(data && data.message ? data.message : 'Manager invited.');
+            if (mmTempPassWrap && data && data.temporaryPassword) {
+              mmTempPassWrap.classList.remove('mm-hidden');
+              if (mmTempPass) mmTempPass.textContent = String(data.temporaryPassword);
+            }
+          })
+          .catch(function (err) {
+            showMmError((err && err.message) ? err.message : 'Failed to invite manager.');
+          })
+          .finally(function () {
+            setInviteState();
+          });
+      }
+
+      // Wiring UI events
+      if (mmWantSelect) mmWantSelect.addEventListener('change', onWantManagerChange);
+      if (mmTypeSelect) {
+        mmTypeSelect.addEventListener('change', function () {
+          showMmError(null);
+          showMmSuccess(null);
+          if (mmTempPassWrap) mmTempPassWrap.classList.add('mm-hidden');
+
+          var type = mmTypeSelect.value;
+          if (type === 'site') {
+            // Load projects only when needed
+            loadProjects().then(function (projects) {
+              renderProjectsSelect(projects);
+              syncVisibilityByType();
+            }).catch(function (err) {
+              showMmError((err && err.message) ? err.message : 'Failed to load projects.');
+              syncVisibilityByType();
+            });
+          } else {
+            syncVisibilityByType();
+          }
+        });
+      }
+      if (mmProjectsSelect) mmProjectsSelect.addEventListener('change', onProjectChange);
+      if (mmEmail) mmEmail.addEventListener('input', function () {
+        setInviteState();
+        if (mmTempPassWrap) mmTempPassWrap.classList.add('mm-hidden');
+      });
+      if (mmInviteBtn) mmInviteBtn.addEventListener('click', onInvite);
+
+      // Initial state
+      resetInviteForm();
+      onWantManagerChange();
+
+      loadCompany();
+    })();
+  </script>
+</body>
+</html>
+

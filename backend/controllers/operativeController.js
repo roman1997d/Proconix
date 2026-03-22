@@ -351,7 +351,7 @@ async function login(req, res) {
       });
     }
 
-    if (user.hasOwnProperty('onboarding') && user.onboarding !== 'yes') {
+    if (Object.prototype.hasOwnProperty.call(user, 'onboarding') && user.onboarding !== 'yes') {
       return res.status(400).json({
         success: false,
         message: 'First-time login: please use your temporary password to set your password.',

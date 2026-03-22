@@ -428,7 +428,7 @@
     loadFromStorage();
 
     return {
-      getTemplates: function () { return Promise.resolve(_templates.slice()); },
+      getTemplates: function (projectId) { return Promise.resolve(_templates.slice()); },
       getTemplate: function (id) {
         var t = _templates.find(function (x) { return x.id === id; });
         return Promise.resolve(t ? Object.assign({}, t) : null);
@@ -604,10 +604,15 @@
 
   var qaApiBackend = {
     getPersonnel: function () { return qaFetch('/personnel'); },
-    getTemplates: function () { return qaFetch('/templates'); },
+    getTemplates: function (projectId) {
+      if (!projectId) return Promise.resolve([]);
+      return qaFetch('/templates?projectId=' + encodeURIComponent(projectId));
+    },
     getTemplate: function (id) { return qaFetch('/templates/' + encodeURIComponent(id)).then(function (t) { return t || null; }, function () { return null; }); },
     createTemplate: function (data) {
-      var body = { name: data.name, steps: data.steps || [] };
+      var projectId = projectSelect && projectSelect.value;
+      if (!projectId) return Promise.reject(new Error('Select a project first.'));
+      var body = { name: data.name, steps: data.steps || [], projectId: parseInt(projectId, 10) };
       return qaFetch('/templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     },
     updateTemplate: function (id, data) {
@@ -660,7 +665,9 @@
   function refreshJobTemplatesList() {
     if (!jobTemplatesList) return;
     jobTemplatesList.innerHTML = '';
-    qaApi.getTemplates().then(function (templates) {
+    var projectId = projectSelect && projectSelect.value;
+    var api = (window.QA_CONFIG && window.QA_CONFIG.useBackend) ? qaApiBackend : qaApiLocal;
+    api.getTemplates(projectId).then(function (templates) {
       if (templates.length === 0) {
         var msg = document.createElement('p');
         msg.className = 'qa-message qa-no-templates';
@@ -740,7 +747,12 @@
   }
 
   function createPriceListFile() {
-    qaApi.getTemplates().then(function (templates) {
+    var projectId = projectSelect && projectSelect.value;
+    if (!projectId && window.QA_CONFIG && window.QA_CONFIG.useBackend) {
+      alert('Select a project first.');
+      return;
+    }
+    qaApi.getTemplates(projectId).then(function (templates) {
       if (!templates.length) {
         alert('No templates to export. Create templates first.');
         return;
@@ -972,7 +984,12 @@
         pricePerLinear: (pLinear && pLinear.value) ? pLinear.value.trim() : ''
       });
     });
-    qaApi.createTemplate({ name: name, steps: steps }).then(function () {
+    var projectId = projectSelect && projectSelect.value;
+    if (window.QA_CONFIG && window.QA_CONFIG.useBackend && !projectId) {
+      showToast('Select a project first.', true);
+      return;
+    }
+    qaApi.createTemplate({ name: name, steps: steps, projectId: projectId }).then(function () {
       refreshJobTemplatesList();
       if (nameEl) nameEl.value = '';
       closeModal(modalTemplate);
@@ -1146,7 +1163,7 @@
         if (noMatchEl) noMatchEl.classList.remove('d-none');
         return;
       }
-      return qaApi.getTemplates().then(function (templates) {
+      return qaApi.getTemplates(projectId).then(function (templates) {
         jobs.forEach(function (job) {
           var tplNames = getTemplateNames(templates, job.templateIds || []);
       var tplShort = tplNames.slice(0, 3);
@@ -1199,7 +1216,8 @@
     var createdStr = formatJobDate(job.createdAt);
     var createdByStr = (job.createdBy && job.createdBy.trim()) ? escapeHtml(job.createdBy.trim()) : '—';
     var targetStr = formatJobDate(job.targetCompletionDate);
-    qaApi.getTemplates().then(function (templates) {
+    var projId = job.projectId || (projectSelect && projectSelect.value);
+    qaApi.getTemplates(projId).then(function (templates) {
       var tplNames = getTemplateNames(templates, job.templateIds || []);
       body.innerHTML =
         '<p><strong>Job Number:</strong> ' + escapeHtml(job.jobNumber || '—') + '</p>' +
@@ -1368,7 +1386,12 @@
     existingTemplatesList.innerHTML = '';
     if (noMsg) noMsg.classList.add('d-none');
     if (noMatchMsg) noMatchMsg.classList.add('d-none');
-    qaApi.getTemplates().then(function (templates) {
+    var projectId = projectSelect && projectSelect.value;
+    if (window.QA_CONFIG && window.QA_CONFIG.useBackend && !projectId) {
+      if (noMsg) { noMsg.textContent = 'Select a project first to see its templates.'; noMsg.classList.remove('d-none'); }
+      return;
+    }
+    qaApi.getTemplates(projectId).then(function (templates) {
       if (templates.length === 0) {
         if (noMsg) noMsg.classList.remove('d-none');
         return;

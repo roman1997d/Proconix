@@ -14,10 +14,24 @@ function getCreatedBy(req) {
   return '';
 }
 
-// ---- Templates ----
+// ---- Templates (scoped by logged-in company and selected project) ----
 
 async function listTemplates(req, res) {
+  const companyId = req.manager?.company_id;
+  if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
+  const projectId = req.query.projectId != null ? parseInt(String(req.query.projectId), 10) : NaN;
+  if (!Number.isInteger(projectId) || projectId < 1) {
+    return res.status(400).json({ message: 'projectId is required.' });
+  }
   try {
+    const projectCheck = await pool.query(
+      'SELECT id FROM projects WHERE id = $1 AND company_id = $2',
+      [projectId, companyId]
+    );
+    if (projectCheck.rows.length === 0) {
+      return res.status(403).json({ message: 'Project not found or access denied.' });
+    }
+
     const stepsResult = await pool.query(
       `SELECT id, template_id, sort_order, description, price_per_m2 AS "pricePerM2",
               price_per_unit AS "pricePerUnit", price_per_linear AS "pricePerLinear",
@@ -39,7 +53,10 @@ async function listTemplates(req, res) {
 
     const tplResult = await pool.query(
       `SELECT id, name, created_at AS "createdAt", created_by AS "createdBy"
-       FROM qa_templates ORDER BY id`
+       FROM qa_templates
+       WHERE company_id = $1 AND project_id = $2
+       ORDER BY id`,
+      [companyId, projectId]
     );
     const list = tplResult.rows.map((t) => ({
       id: String(t.id),
@@ -60,11 +77,13 @@ async function getTemplate(req, res) {
   if (!Number.isInteger(id) || id < 1) {
     return res.status(400).json({ message: 'Invalid template id.' });
   }
+  const companyId = req.manager?.company_id;
+  if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
   try {
     const tpl = await pool.query(
       `SELECT id, name, created_at AS "createdAt", created_by AS "createdBy"
-       FROM qa_templates WHERE id = $1`,
-      [id]
+       FROM qa_templates WHERE id = $1 AND company_id = $2`,
+      [id, companyId]
     );
     if (tpl.rows.length === 0) return res.status(404).json({ message: 'Template not found.' });
     const row = tpl.rows[0];
@@ -101,13 +120,26 @@ async function createTemplate(req, res) {
   const name = (b.name && String(b.name).trim()) || '';
   const steps = Array.isArray(b.steps) ? b.steps : [];
   if (!name) return res.status(400).json({ message: 'Template name is required.' });
+  const projectId = b.projectId != null ? parseInt(String(b.projectId), 10) : NaN;
+  if (!Number.isInteger(projectId) || projectId < 1) {
+    return res.status(400).json({ message: 'projectId is required.' });
+  }
+  const companyId = req.manager?.company_id;
+  if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
 
   const createdBy = getCreatedBy(req);
 
   try {
+    const projectCheck = await pool.query(
+      'SELECT id FROM projects WHERE id = $1 AND company_id = $2',
+      [projectId, companyId]
+    );
+    if (projectCheck.rows.length === 0) {
+      return res.status(403).json({ message: 'Project not found or access denied.' });
+    }
     const insert = await pool.query(
-      `INSERT INTO qa_templates (name, created_by) VALUES ($1, $2) RETURNING id, created_at, created_by`,
-      [name, createdBy]
+      `INSERT INTO qa_templates (name, created_by, company_id, project_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at, created_by`,
+      [name, createdBy, companyId, projectId]
     );
     const templateId = insert.rows[0].id;
     const createdAt = insert.rows[0].created_at;
@@ -161,6 +193,8 @@ async function updateTemplate(req, res) {
   if (!Number.isInteger(id) || id < 1) {
     return res.status(400).json({ message: 'Invalid template id.' });
   }
+  const companyId = req.manager?.company_id;
+  if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
   const b = req.body || {};
   const name = (b.name && String(b.name).trim()) || '';
   const steps = Array.isArray(b.steps) ? b.steps : [];
@@ -168,8 +202,8 @@ async function updateTemplate(req, res) {
 
   try {
     const existing = await pool.query(
-      'SELECT id, created_at, created_by FROM qa_templates WHERE id = $1',
-      [id]
+      'SELECT id, created_at, created_by FROM qa_templates WHERE id = $1 AND company_id = $2',
+      [id, companyId]
     );
     if (existing.rows.length === 0) return res.status(404).json({ message: 'Template not found.' });
     const createdBy = existing.rows[0].created_by;
@@ -230,8 +264,10 @@ async function deleteTemplate(req, res) {
   if (!Number.isInteger(id) || id < 1) {
     return res.status(400).json({ message: 'Invalid template id.' });
   }
+  const companyId = req.manager?.company_id;
+  if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
   try {
-    const r = await pool.query('DELETE FROM qa_templates WHERE id = $1 RETURNING id', [id]);
+    const r = await pool.query('DELETE FROM qa_templates WHERE id = $1 AND company_id = $2 RETURNING id', [id, companyId]);
     if (r.rowCount === 0) return res.status(404).json({ message: 'Template not found.' });
     return res.status(204).send();
   } catch (err) {
@@ -578,6 +614,16 @@ async function createJob(req, res) {
     const outTemplateIds = tplLinks.rows.map((r) => String(r.template_id));
     const outWorkerIds = (workerUserLinks.rows || []).map((r) => String(r.user_id));
 
+    // --- Auto sync into Task & Planning (Gantt + Kanban) ---
+    // Make QA jobs visible in Planning and keep them in sync on updates/deletes.
+    try {
+      const managerId = req.manager && req.manager.id ? req.manager.id : null;
+      await syncPlanningForQaJob(companyId, jobId, managerId);
+    } catch (err) {
+      // Do not fail QA job creation; only log planning sync errors.
+      console.error('Auto planning sync from QA createJob failed:', err);
+    }
+
     return res.status(201).json(
       jobRowToJson(
         row,
@@ -593,6 +639,260 @@ async function createJob(req, res) {
     console.error('QA createJob:', err);
     return res.status(500).json({ message: err.message || 'Failed to create job.' });
   }
+}
+
+async function syncPlanningForQaJob(companyId, qaJobId, managerId) {
+  // Creates/updates a Planning daily plan + a Planning task so the QA job is visible
+  // on Gantt + Kanban.
+  //
+  // Requires:
+  // - planning_plans, planning_plan_tasks
+  // - planning_plan_tasks.qa_job_id (set by migration)
+
+  const toYmdLocal = (d) => {
+    if (!d) return null;
+    const dt = d instanceof Date ? d : new Date(d);
+    if (Number.isNaN(dt.getTime())) return null;
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const dbDateToYmd = (v) => {
+    if (!v) return null;
+    if (v instanceof Date) {
+      if (Number.isNaN(v.getTime())) return null;
+      return toYmdLocal(v);
+    }
+    // Assume string-ish DB DATE -> "YYYY-MM-DD"
+    var s = String(v).slice(0, 10);
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (m) {
+      return `${m[1]}-${m[2]}-${m[3]}`;
+    }
+    // Fallback parse
+    const dt = new Date(v);
+    if (Number.isNaN(dt.getTime())) return null;
+    return toYmdLocal(dt);
+  };
+
+  // Load QA job with company-scoping + status code.
+  const qaRes = await pool.query(
+    `SELECT
+        j.id,
+        j.project_id,
+        j.job_number,
+        j.floor_code,
+        j.location,
+        j.specification,
+        j.description,
+        j.target_completion_date,
+        j.responsible_user_id,
+        j.status_id,
+        j.created_at,
+        s.code AS status_code
+     FROM qa_jobs j
+     INNER JOIN projects p ON p.id = j.project_id AND p.company_id = $1
+     INNER JOIN qa_job_statuses s ON s.id = j.status_id
+     WHERE j.id = $2`,
+    [companyId, qaJobId]
+  );
+
+  if (!qaRes.rows.length) return { skipped: true };
+  const qa = qaRes.rows[0];
+
+  const deadlineYmdResolved = dbDateToYmd(qa.target_completion_date);
+  const pickupYmdResolved = toYmdLocal(qa.created_at || new Date());
+
+  if (!deadlineYmdResolved || !pickupYmdResolved) return { skipped: true };
+
+  const planningStatus = qa.status_code === 'completed'
+    ? 'completed'
+    : qa.status_code === 'active'
+      ? 'in_progress'
+      : 'not_started';
+
+  // Map assigned users -> names for planning (TEXT[]).
+  const responsibleUid = qa.responsible_user_id != null ? parseInt(String(qa.responsible_user_id), 10) : null;
+  const workerRes = await pool.query(
+    `SELECT u.user_id
+     FROM qa_job_user_workers u
+     WHERE u.job_id = $1`,
+    [qaJobId]
+  );
+  const workerUidNums = (workerRes.rows || [])
+    .map((r) => parseInt(String(r.user_id), 10))
+    .filter((n) => Number.isInteger(n));
+
+  const allUids = [...new Set([responsibleUid, ...workerUidNums].filter((x) => Number.isInteger(x)))];
+  let assignedNames = [];
+  if (allUids.length) {
+    const userRes = await pool.query(
+      'SELECT id, name FROM users WHERE id = ANY($1::int[]) AND company_id = $2',
+      [allUids, companyId]
+    );
+    assignedNames = (userRes.rows || [])
+      .map((r) => r.name)
+      .filter((n) => n != null && String(n).trim().length > 0);
+  }
+  if (!assignedNames.length) assignedNames = ['Unassigned'];
+
+  // Create or reuse daily plan for the deadline day.
+  const createdByInt = managerId != null ? managerId : null;
+  let planId;
+  const planRes = await pool.query(
+    `SELECT id
+     FROM planning_plans
+     WHERE company_id = $1
+       AND type = 'daily'
+       AND start_date = $2
+       AND end_date = $2
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [companyId, deadlineYmdResolved]
+  );
+  if (planRes.rows.length) {
+    planId = planRes.rows[0].id;
+  } else {
+    const insPlan = await pool.query(
+      `INSERT INTO planning_plans (company_id, type, start_date, end_date, created_by, created_at)
+       VALUES ($1, 'daily', $2, $2, $3, NOW())
+       RETURNING id`,
+      [companyId, deadlineYmdResolved, createdByInt]
+    );
+    planId = insPlan.rows[0].id;
+  }
+
+  // Build planning task fields.
+  const title = qa.job_number ? String(qa.job_number) : `QA-${qaJobId}`;
+  const descBits = [];
+  if (qa.floor_code) descBits.push('Floor: ' + qa.floor_code);
+  if (qa.location) descBits.push('Location: ' + qa.location);
+  if (qa.target_completion_date) descBits.push('Target: ' + String(qa.target_completion_date).slice(0, 10));
+  if (qa.description) descBits.push(String(qa.description));
+  const taskDescription = descBits.join(' • ') || qa.description || null;
+
+  const notesBits = [];
+  if (qa.specification) notesBits.push('Specification: ' + qa.specification);
+  const notes = notesBits.length ? notesBits.join(' • ') : null;
+
+  const deadlineIso = `${deadlineYmdResolved}T12:00:00.000Z`;
+
+  // Upsert planning task by qa_job_id.
+  const existingTaskRes = await pool.query(
+    `SELECT id, plan_id
+     FROM planning_plan_tasks
+     WHERE qa_job_id = $1
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [qaJobId]
+  );
+
+  if (existingTaskRes.rows.length) {
+    const taskId = existingTaskRes.rows[0].id;
+    await pool.query(
+      `UPDATE planning_plan_tasks
+       SET
+         plan_id = $2,
+         title = $3,
+         description = $4,
+         assigned_to = $5,
+         priority = $6,
+         deadline = $7,
+         pickup_start_date = $8,
+         notes = $9,
+         status = $10,
+         send_to_assignees = $11
+       WHERE id = $1`,
+      [
+        taskId,
+        planId,
+        title,
+        taskDescription,
+        assignedNames,
+        'medium',
+        deadlineIso,
+        pickupYmdResolved,
+        notes,
+        planningStatus,
+        true,
+      ]
+    );
+    return { updated: true, taskId };
+  }
+
+  // Fallback for already-created tasks (before qa_job_id migration):
+  // try to match by title (job_number) inside any planning plan of this company.
+  const fallbackTaskRes = await pool.query(
+    `SELECT t.id, t.plan_id
+     FROM planning_plan_tasks t
+     INNER JOIN planning_plans p ON p.id = t.plan_id
+     WHERE p.company_id = $1
+       AND t.title = $2
+     ORDER BY t.created_at DESC
+     LIMIT 1`,
+    [companyId, title]
+  );
+
+  if (fallbackTaskRes.rows.length) {
+    const taskId = fallbackTaskRes.rows[0].id;
+    await pool.query(
+      `UPDATE planning_plan_tasks
+       SET
+         qa_job_id = $1,
+         plan_id = $2,
+         title = $3,
+         description = $4,
+         assigned_to = $5,
+         priority = $6,
+         deadline = $7,
+         pickup_start_date = $8,
+         notes = $9,
+         status = $10,
+         send_to_assignees = $11
+       WHERE id = $12`,
+      [
+        qaJobId,
+        planId,
+        title,
+        taskDescription,
+        assignedNames,
+        'medium',
+        deadlineIso,
+        pickupYmdResolved,
+        notes,
+        planningStatus,
+        true,
+        taskId,
+      ]
+    );
+    return { updated: true, taskId, backfilled: true };
+  }
+
+  // Insert new task.
+  const insTask = await pool.query(
+    `INSERT INTO planning_plan_tasks
+      (plan_id, qa_job_id, title, description, assigned_to, priority, deadline, pickup_start_date, notes, status, send_to_assignees, created_at)
+     VALUES
+      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+     RETURNING id`,
+    [
+      planId,
+      qaJobId,
+      title,
+      taskDescription,
+      assignedNames,
+      'medium',
+      deadlineIso,
+      pickupYmdResolved,
+      notes,
+      planningStatus,
+      true,
+    ]
+  );
+
+  return { created: true, taskId: insTask.rows[0].id };
 }
 
 async function updateJob(req, res) {
@@ -631,6 +931,12 @@ async function updateJob(req, res) {
       `UPDATE qa_jobs SET ${updates.join(', ')} WHERE id = $${idx}`,
       values
     );
+    // Keep Planning synchronized with this QA job update.
+    try {
+      await syncPlanningForQaJob(companyId, id, req.manager && req.manager.id ? req.manager.id : null);
+    } catch (syncErr) {
+      console.error('Auto planning sync from QA updateJob failed:', syncErr);
+    }
     return getJob(req, res);
   } catch (err) {
     console.error('QA updateJob:', err);
@@ -645,11 +951,62 @@ async function deleteJob(req, res) {
   if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
 
   try {
+    // Capture job_number + impacted planning plan_ids before QA deletion.
+    const jobRes = await pool.query(
+      `SELECT j.job_number
+       FROM qa_jobs j
+       INNER JOIN projects p ON p.id = j.project_id AND p.company_id = $1
+       WHERE j.id = $2`,
+      [companyId, id]
+    );
+    const jobNumber = jobRes.rows.length ? jobRes.rows[0].job_number : null;
+
+    const impactedPlanIdsRes = await pool.query(
+      `SELECT DISTINCT plan_id
+       FROM planning_plan_tasks
+       WHERE qa_job_id = $1`,
+      [id]
+    );
+    const impactedPlanIds = (impactedPlanIdsRes.rows || []).map((r) => r.plan_id).filter(Boolean);
+
     const r = await pool.query(
       `DELETE FROM qa_jobs j USING projects p WHERE j.project_id = p.id AND p.company_id = $1 AND j.id = $2 RETURNING j.id`,
       [companyId, id]
     );
     if (r.rowCount === 0) return res.status(404).json({ message: 'Job not found.' });
+
+    // Delete corresponding planning task(s).
+    await pool.query(
+      `DELETE FROM planning_plan_tasks
+       WHERE qa_job_id = $1`,
+      [id]
+    );
+    // Fallback for old tasks created before qa_job_id migration.
+    if (jobNumber) {
+      await pool.query(
+        `DELETE FROM planning_plan_tasks t
+         USING planning_plans p
+         WHERE p.id = t.plan_id
+           AND p.company_id = $1
+           AND t.qa_job_id IS NULL
+           AND t.title = $2`,
+        [companyId, jobNumber]
+      );
+    }
+
+    // Cleanup empty plans (only those impacted by this QA job).
+    if (impactedPlanIds.length) {
+      await pool.query(
+        `DELETE FROM planning_plans p
+         WHERE p.company_id = $1
+           AND p.id = ANY($2::int[])
+           AND NOT EXISTS (
+             SELECT 1 FROM planning_plan_tasks t WHERE t.plan_id = p.id
+           )`,
+        [companyId, impactedPlanIds]
+      );
+    }
+
     return res.status(204).send();
   } catch (err) {
     console.error('QA deleteJob:', err);

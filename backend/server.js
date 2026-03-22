@@ -19,6 +19,11 @@ const operativeRoutes = require('./routes/operativeRoutes');
 const projectsRoutes = require('./routes/projectsRoutes');
 const worklogsRoutes = require('./routes/worklogsRoutes');
 const qaRoutes = require('./routes/qaRoutes');
+const materialsRoutes = require('./routes/materialsRoutes');
+const planningRoutes = require('./routes/planningRoutes');
+const platformAdminRoutes = require('./routes/platformAdminRoutes');
+const { metricsMiddleware } = require('./middleware/metricsMiddleware');
+const { printStartupConsoleBanner } = require('./lib/startupConsoleBanner');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -28,6 +33,7 @@ const frontendDir = path.resolve(__dirname, '../frontend');
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(metricsMiddleware);
 
 // Health check (database connectivity)
 app.get('/api/health', async (req, res) => {
@@ -89,6 +95,15 @@ app.use('/api/worklogs', worklogsRoutes);
 // Quality Assurance (templates, jobs) – GET/POST/PUT/DELETE /api/templates, /api/jobs
 app.use('/api', qaRoutes);
 
+// Material Management – GET/POST/PUT/DELETE under /api/materials
+app.use('/api/materials', materialsRoutes);
+
+// Planning (Task & Planning module)
+app.use('/api/planning', planningRoutes);
+
+// Platform administrators (Proconix operator console)
+app.use('/api/platform-admin', platformAdminRoutes);
+
 // API 404 – ensure all unmatched /api/* return JSON (no HTML)
 app.use('/api', (req, res) => {
   res.status(404).json({ message: 'API endpoint not found.', path: req.path });
@@ -116,18 +131,9 @@ app.listen(PORT, HOST, async () => {
   const dbStatus = await testConnection();
   const dbName = process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB';
 
-  console.log('-------------------------------------------');
-  console.log(`  Server:       http://${HOST}:${PORT}/`);
-  console.log(`  Proconix:     http://${HOST}:${PORT}/`);
-  console.log(`  Register:     http://${HOST}:${PORT}/register_company.html`);
-  console.log(`  API health:   http://${HOST}:${PORT}/api/health`);
-  console.log(`  API create:   POST http://${HOST}:${PORT}/api/companies/create`);
-  console.log('-------------------------------------------');
-  if (dbStatus.ok) {
-    console.log(`  Database (${dbName}): CONNECTED`);
-  } else {
-    console.log(`  Database (${dbName}): NOT CONNECTED`);
-    console.log('  Error:', dbStatus.error);
-  }
-  console.log('-------------------------------------------');
+  printStartupConsoleBanner({
+    dbOk: dbStatus.ok,
+    dbName,
+    dbError: dbStatus.error || null,
+  });
 });

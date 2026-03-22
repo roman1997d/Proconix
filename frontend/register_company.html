@@ -67,12 +67,17 @@
                   <label for="subscriptionPlan" class="form-label">Subscription plan <span class="text-danger">*</span></label>
                   <select class="form-select form-control-proconix" id="subscriptionPlan" name="subscription_plan" required>
                     <option value="">Select plan</option>
-                    <option value="1 month">1 month</option>
-                    <option value="3 months">3 months</option>
-                    <option value="6 months">6 months</option>
-                    <option value="12 months">12 months</option>
+                    <option value="Free">Free Plan</option>
+                    <option value="Silver">Silver Plan</option>
+                    <option value="Gold">Gold Plan</option>
+                    <option value="Platinum">Platinum Plan</option>
+                    <option value="1 month">1 month (legacy)</option>
+                    <option value="3 months">3 months (legacy)</option>
+                    <option value="6 months">6 months (legacy)</option>
+                    <option value="12 months">12 months (legacy)</option>
                   </select>
                   <div class="invalid-feedback">Please select a subscription plan.</div>
+                  <p id="planFromSeePlansHint" class="form-text text-muted small mb-0 d-none">Plan pre-selected from <a href="/see_plans.html">See Plans</a>.</p>
                 </div>
                 <div class="col-md-6">
                   <label for="numberOfUsers" class="form-label">Number of users</label>
@@ -143,6 +148,41 @@
   <script src="js/main.js"></script>
   <script>
     (function () {
+      var STORAGE_KEY = 'proconix_selected_plan';
+      var PLAN_MAP = {
+        free: 'Free',
+        silver: 'Silver',
+        gold: 'Gold',
+        platinum: 'Platinum',
+      };
+
+      function applyPlanFromStorage() {
+        var raw = null;
+        try {
+          raw = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
+        } catch (e) {}
+        if (!raw) return;
+        var key = String(raw).toLowerCase().trim();
+        var value = PLAN_MAP[key];
+        if (!value) return;
+        var sel = document.getElementById('subscriptionPlan');
+        if (!sel) return;
+        var opt = Array.prototype.slice.call(sel.options).some(function (o) {
+          return o.value === value;
+        });
+        if (opt) {
+          sel.value = value;
+          var hint = document.getElementById('planFromSeePlansHint');
+          if (hint) hint.classList.remove('d-none');
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyPlanFromStorage);
+      } else {
+        applyPlanFromStorage();
+      }
+
       const form = document.getElementById('registerCompanyForm');
       const formMessage = document.getElementById('formMessage');
       const submitBtn = document.getElementById('submitBtn');
@@ -196,6 +236,10 @@
           }
 
           if (res.ok && data.success) {
+            try {
+              localStorage.removeItem('proconix_selected_plan');
+              sessionStorage.removeItem('proconix_selected_plan');
+            } catch (_) {}
             if (data.onboarding_token) {
               localStorage.setItem('proconix_onboarding_token', data.onboarding_token);
               window.location.href = '/register_manager.html';

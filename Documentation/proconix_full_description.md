@@ -65,7 +65,7 @@ Sesiunea manager este stocată în **localStorage** sau **sessionStorage** (chei
 |--------|------|------|
 | **Home / Landing** | `index.html` | Alegere rol: „I'm Manager” → login_manager.html; „I'm Operative” → modal login operative pe aceeași pagină. Link-uri: Register a Company, See Plans, Contact. |
 | **Register Company** | `register_company.html` | Formular înregistrare companie. La succes, backend returnează (sau trimite) un **onboarding token**; utilizatorul e redirecționat la register_manager.html (cu token în localStorage). |
-| **See Plans** | `see_plans.html` | Afișare planuri (Free, Silver, Gold, Platinum); butoane către `/api/subscriptions/...` (placeholder). |
+| **See Plans** | `see_plans.html` | Afișare planuri (Free, Silver, Gold, Platinum); la click, planul se salvează în `localStorage` / `sessionStorage` (`proconix_selected_plan`) și utilizatorul merge la `register_company.html`, unde planul e pre-selectat în formular. |
 | **Manager Login** | `login_manager.html` | Email + parolă; „Keep me logged in” (localStorage vs sessionStorage). POST `/api/managers/login` → salvare sesiune → redirect la `dashboard_manager.html`. |
 | **Register Manager** | `register_manager.html` | Se deschide după register company; citește token din localStorage, GET `/api/onboarding/company?token=...` pentru company_id. Formular: name, surname, email, password etc. POST `/api/managers/create` → după succes poate redirect la login sau dashboard. |
 
@@ -137,7 +137,7 @@ Quality_Assurance.html
 ## 7. Componente backend importante
 
 - **middleware:** requireManagerAuth, requireOperativeAuth, requireManagerOrOperativeAuth.
-- **controllers:** companyController, managerController, operativeController, operativeDashboardController, projectsController, worklogsController; dashboardRoutes conține funcții care returnează HTML (getProjectOverviewHtml, getProjectsHtml, getOperativesHtml, getWorkLogsHtml, placeholder pentru celelalte module).
+- **controllers:** companyController (create + companies/me), managerController (login, create, me, phone, change-password, invite), operativeController, operativeDashboardController, projectsController, worklogsController, qaController, materialsController, **dashboardOverviewController** (overview-stats, overview-lists, operative-activity-today); **dashboardRoutes** – HTML partials (`GET /api/dashboard/:module`) + rute JSON înregistrate înainte de `/:module`.
 - **db/pool.js:** pool PostgreSQL și testConnection.
 
 ---
@@ -149,7 +149,9 @@ Quality_Assurance.html
 | **Stack** | Node.js, Express, PostgreSQL; frontend static (HTML/CSS/JS), fără framework SPA. |
 | **Auth manager** | Session în localStorage/sessionStorage; header-e X-Manager-Id, X-Manager-Email; validare prin requireManagerAuth. |
 | **Auth operative** | Session/token; requireOperativeAuth pe rutele de operative. |
-| **Dashboard conținut** | HTML partiale din backend (GET /api/dashboard/:module) + excepție QA (iframe). |
-| **QA** | Frontend-only (localStorage + qaApi); pregătit pentru backend (QA_CONFIG.useBackend, QA-BACKEND-API.md, qa_backend_action_plan.md). |
+| **Dashboard conținut** | HTML partiale din `GET /api/dashboard/:module`; iframes pentru QA, Task & Planning, Materials, Profile Settings, My Company Settings; Project Overview: JSON `overview-stats`, `overview-lists`, `operative-activity-today`. |
+| **QA** | Persistat în PostgreSQL (`qa_*` tabele); API `/api/templates`, `/api/jobs`; sync opțional cu Planning (`qa_job_id`). |
 
 Acest document oferă o imagine de ansamblu pentru a înțelege cum funcționează Proconix și cum se leagă între ele index.js, componentele frontend și cele backend.
+
+**Actualizat:** 16/03/2026 – pentru lista detaliată a modificărilor recente vezi [README.md](README.md) (secțiunea „Modificări recente”).

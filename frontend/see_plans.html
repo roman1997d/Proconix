@@ -25,7 +25,7 @@
             <a class="nav-link btn-nav" href="/register_company.html">Register a Company</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link btn-nav" href="/contact.html">Contact Us</a>
+            <a class="nav-link btn-nav" href="/ContactUs.html">Contact Us</a>
           </li>
           <li class="nav-item">
             <a class="nav-link btn-nav" href="/index.html">Home</a>
@@ -41,15 +41,18 @@
   <!-- Hero / Page title -->
   <header class="plans-hero text-center py-5">
     <div class="container">
-      <h1 class="plans-title mb-3">Choose Your Plan</h1>
-      <p class="plans-subtitle text-white-50">Flexible options for teams of all sizes. Start free and scale as you grow.</p>
+      <p class="plans-eyebrow mb-2">Pricing built for modern construction teams</p>
+      <h1 class="plans-title mb-3">Start with one site, grow without friction.</h1>
+      <p class="plans-subtitle text-white-50">
+        Clear plans for tracking projects, operatives, work logs, QA and materials — without hidden fees.
+      </p>
     </div>
   </header>
 
   <!-- Pricing cards -->
   <main class="plans-main py-5">
     <div class="container">
-      <div class="row g-4 justify-content-center">
+      <div class="row g-4 justify-content-center align-items-stretch">
         <!-- Free Plan -->
         <div class="col-sm-6 col-lg-3">
           <div class="pricing-card" data-plan="free">
@@ -61,7 +64,7 @@
                 <li><strong>£0</strong> / month</li>
                 <li>Valid for 30 days</li>
               </ul>
-              <a href="/api/subscriptions/free" class="btn btn-pricing">Choose Free Plan</a>
+              <a href="/register_company.html" class="btn btn-pricing js-plan-register" data-plan="free">Choose Free Plan</a>
             </div>
           </div>
         </div>
@@ -78,7 +81,7 @@
                 <li><strong>£10</strong> / month</li>
                 <li>Cancel anytime after the first 3 months</li>
               </ul>
-              <a href="/api/subscriptions/silver" class="btn btn-pricing">Select Silver Plan</a>
+              <a href="/register_company.html" class="btn btn-pricing js-plan-register" data-plan="silver">Select Silver Plan</a>
             </div>
           </div>
         </div>
@@ -95,7 +98,7 @@
                 <li>Up to 15 Projects</li>
                 <li><strong>£20</strong> / month</li>
               </ul>
-              <a href="/api/subscriptions/gold" class="btn btn-pricing">Choose Gold Plan</a>
+              <a href="/register_company.html" class="btn btn-pricing js-plan-register" data-plan="gold">Choose Gold Plan</a>
             </div>
           </div>
         </div>
@@ -111,7 +114,7 @@
                 <li>Up to 30 Projects</li>
                 <li><strong>£40</strong> / month</li>
               </ul>
-              <a href="/api/subscriptions/platinum" class="btn btn-pricing">Select Platinum Plan</a>
+              <a href="/register_company.html" class="btn btn-pricing js-plan-register" data-plan="platinum">Select Platinum Plan</a>
             </div>
           </div>
         </div>
@@ -128,6 +131,9 @@
             </p>
             <div class="callback-form-card">
               <h2 class="callback-form-title">Request a Callback</h2>
+              <p class="callback-form-subtitle text-muted">
+                Share your details and we will reach out with a tailored walkthrough for your projects and team size.
+              </p>
               <div id="callbackFormMessage" class="alert d-none" role="alert"></div>
               <form id="callbackForm" class="callback-form needs-validation" novalidate>
                 <div class="mb-3">

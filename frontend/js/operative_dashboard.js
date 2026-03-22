@@ -78,6 +78,8 @@
   var weeklyTotalEl = document.getElementById('op-weekly-total');
   var weeklyBarsEl = document.getElementById('op-weekly-bars');
   var tasksListEl = document.getElementById('op-tasks-list');
+  /** @type {{ task: object|null }} */
+  var taskModalContext = { task: null };
 
   function showFeedback(el, message, isError) {
     if (!el) return;
@@ -106,6 +108,18 @@
     try {
       var d = new Date(iso);
       return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+    } catch (e) {
+      return '—';
+    }
+  }
+
+  /** Deadline for task rows (date-only or ISO timestamp). */
+  function formatTaskDeadline(val) {
+    if (!val) return '—';
+    try {
+      var d = new Date(val);
+      if (isNaN(d.getTime())) return String(val);
+      return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
     } catch (e) {
       return '—';
     }
@@ -200,22 +214,50 @@
     api('/tasks')
       .then(function (r) {
         if (!r.data.success || !r.data.tasks || r.data.tasks.length === 0) {
-          tasksListEl.innerHTML = '<p class="op-text-muted" style="margin:0">No tasks assigned.</p>';
+          tasksListEl.innerHTML =
+            '<p class="op-text-muted" style="margin:0">No tasks assigned yet. When your manager assigns work in Task &amp; Planning (with your name) or legacy tasks, they will appear here.</p>';
           return;
         }
         tasksListEl.innerHTML = r.data.tasks.map(function (t) {
-          var status = (t.status || 'pending').toLowerCase().replace(/\s/g, '-');
+          var title = escapeHtml(t.title || t.name || '—');
+          var statusRaw = (t.status || 'pending').toString().replace(/_/g, ' ');
+          var statusClass = statusRaw.toLowerCase().replace(/\s/g, '-');
+          var src = t.source === 'planning' ? '<span class="op-task-source">Planning</span>' : '';
+          var pri =
+            t.priority && t.source === 'planning'
+              ? '<span class="op-task-priority">' + escapeHtml(t.priority) + '</span>'
+              : '';
+          var srcVal = escapeHtml(t.source || 'legacy');
+          var idVal = escapeHtml(String(t.id != null ? t.id : ''));
           return (
-            '<div class="op-task-item">' +
-            '<div><div class="op-task-name">' + escapeHtml(t.name || '—') + '</div>' +
-            '<div class="op-task-meta">Due: ' + (t.deadline ? escapeHtml(t.deadline) : '—') + '</div></div>' +
-            '<span class="op-task-status ' + status + '">' + escapeHtml(t.status || 'pending') + '</span>' +
+            '<div class="op-task-item op-task-item--clickable" role="button" tabindex="0" data-task-source="' +
+            srcVal +
+            '" data-task-id="' +
+            idVal +
+            '">' +
+            '<div class="op-task-body">' +
+            '<div class="op-task-name">' +
+            title +
+            ' ' +
+            src +
+            '</div>' +
+            '<div class="op-task-meta">Due: ' +
+            escapeHtml(formatTaskDeadline(t.deadline)) +
+            (t.pickup_start_date ? ' · Start: ' + escapeHtml(formatDate(t.pickup_start_date)) : '') +
+            '</div>' +
+            pri +
+            '</div>' +
+            '<span class="op-task-status ' +
+            statusClass +
+            '">' +
+            escapeHtml(statusRaw) +
+            '</span>' +
             '</div>'
           );
         }).join('');
       })
       .catch(function () {
-        tasksListEl.textContent = '—';
+        tasksListEl.innerHTML = '<p class="op-text-muted" style="margin:0">Could not load tasks.</p>';
       });
   }
 
@@ -226,46 +268,343 @@
     return div.innerHTML;
   }
 
+  var modalTask = document.getElementById('op-modal-task');
+  var opTaskDetailLoading = document.getElementById('op-task-detail-loading');
+  var opTaskDetailContent = document.getElementById('op-task-detail-content');
+  var opTaskDetailFeedback = document.getElementById('op-task-detail-feedback');
+
+  function showTaskDetailFeedback(message, isError) {
+    if (!opTaskDetailFeedback) return;
+    opTaskDetailFeedback.textContent = message || '';
+    opTaskDetailFeedback.classList.remove('success', 'error', 'd-none');
+    opTaskDetailFeedback.classList.add(isError ? 'error' : 'success');
+  }
+
+  function hideTaskDetailFeedback() {
+    if (opTaskDetailFeedback) opTaskDetailFeedback.classList.add('d-none');
+  }
+
+  function renderTaskPhotos(urls) {
+    var grid = document.getElementById('op-task-photos-grid');
+    var countEl = document.getElementById('op-task-photo-count');
+    var wrap = document.getElementById('op-task-photo-upload-wrap');
+    var input = document.getElementById('op-task-photo-input');
+    var n = urls && urls.length ? urls.length : 0;
+    if (countEl) countEl.textContent = '(' + n + ' / 10)';
+    if (grid) {
+      grid.innerHTML = (urls || []).map(function (url) {
+        return (
+          '<a href="' +
+          escapeHtml(url) +
+          '" target="_blank" rel="noopener" class="op-task-photo-thumb"><img src="' +
+          escapeHtml(url) +
+          '" alt="Confirmation photo"></a>'
+        );
+      }).join('');
+    }
+    var t = taskModalContext.task;
+    var st = t ? String(t.status || '').toLowerCase() : '';
+    var closed = st === 'declined' || st === 'completed';
+    if (wrap) {
+      if (closed || n >= 10) wrap.classList.add('d-none');
+      else wrap.classList.remove('d-none');
+    }
+    if (input) input.value = '';
+  }
+
+  function updateTaskActionButtons(t) {
+    var st = String(t.status || '').toLowerCase();
+    var closed = st === 'completed' || st === 'declined';
+    var actions = document.getElementById('op-task-modal-actions');
+    var btnD = document.getElementById('op-task-btn-decline');
+    var btnP = document.getElementById('op-task-btn-progress');
+    var btnC = document.getElementById('op-task-btn-complete');
+    if (!actions) return;
+    if (closed) {
+      actions.classList.add('d-none');
+    } else {
+      actions.classList.remove('d-none');
+      if (btnD) btnD.disabled = false;
+      if (btnP) btnP.disabled = st === 'in_progress';
+      if (btnC) btnC.disabled = false;
+    }
+  }
+
+  function renderTaskDetail(t) {
+    taskModalContext.task = t;
+    var titleEl = document.getElementById('op-task-modal-title');
+    if (titleEl) titleEl.textContent = t.title || 'Task';
+    var metaEl = document.getElementById('op-task-detail-meta');
+    if (metaEl) {
+      var parts = [];
+      parts.push(
+        'Status: <strong>' +
+          escapeHtml(String(t.status || '').replace(/_/g, ' ')) +
+          '</strong>'
+      );
+      parts.push('Due: ' + escapeHtml(formatTaskDeadline(t.deadline)));
+      if (t.priority) parts.push('Priority: ' + escapeHtml(String(t.priority)));
+      if (t.pickup_start_date) {
+        parts.push('Start: ' + escapeHtml(formatDate(t.pickup_start_date)));
+      }
+      metaEl.innerHTML = parts.join(' · ');
+    }
+    var descEl = document.getElementById('op-task-detail-desc');
+    if (descEl) {
+      if (t.description && String(t.description).trim()) {
+        descEl.innerHTML =
+          '<strong>Description</strong><br>' +
+          escapeHtml(String(t.description)).replace(/\n/g, '<br>');
+        descEl.classList.remove('d-none');
+      } else {
+        descEl.innerHTML = '';
+        descEl.classList.add('d-none');
+      }
+    }
+    var notesEl = document.getElementById('op-task-detail-notes');
+    if (notesEl) {
+      if (t.notes && String(t.notes).trim()) {
+        notesEl.innerHTML =
+          '<strong>Notes</strong><br>' + escapeHtml(String(t.notes)).replace(/\n/g, '<br>');
+        notesEl.classList.remove('d-none');
+      } else {
+        notesEl.innerHTML = '';
+        notesEl.classList.add('d-none');
+      }
+    }
+    renderTaskPhotos(t.confirmation_photos || []);
+    updateTaskActionButtons(t);
+  }
+
+  function reloadTaskDetailInModal() {
+    var t = taskModalContext.task;
+    if (!t || t.id == null || !t.source) return;
+    api('/tasks/' + t.id + '?source=' + encodeURIComponent(t.source))
+      .then(function (r) {
+        if (r.data.success && r.data.task) {
+          renderTaskDetail(r.data.task);
+        }
+      })
+      .catch(function () {});
+  }
+
+  function openTaskModal(source, id) {
+    if (!modalTask || !opTaskDetailLoading || !opTaskDetailContent) return;
+    hideTaskDetailFeedback();
+    opTaskDetailLoading.textContent = 'Loading…';
+    opTaskDetailLoading.classList.remove('d-none');
+    opTaskDetailContent.classList.add('d-none');
+    openModal(modalTask);
+    api('/tasks/' + id + '?source=' + encodeURIComponent(source))
+      .then(function (r) {
+        opTaskDetailLoading.classList.add('d-none');
+        if (!r.data.success || !r.data.task) {
+          opTaskDetailLoading.textContent = (r.data && r.data.message) || 'Could not load task.';
+          opTaskDetailLoading.classList.remove('d-none');
+          return;
+        }
+        opTaskDetailContent.classList.remove('d-none');
+        renderTaskDetail(r.data.task);
+      })
+      .catch(function () {
+        opTaskDetailLoading.classList.remove('d-none');
+        opTaskDetailContent.classList.add('d-none');
+        opTaskDetailLoading.textContent = 'Could not load task.';
+      });
+  }
+
+  function patchTaskAction(action) {
+    var t = taskModalContext.task;
+    if (!t || t.id == null) return;
+    hideTaskDetailFeedback();
+    api('/tasks/' + t.id, {
+      method: 'PATCH',
+      body: JSON.stringify({ source: t.source, action: action }),
+    })
+      .then(function (r) {
+        if (r.data.success) {
+          showTaskDetailFeedback('Updated.', false);
+          t.status = r.data.status;
+          renderTaskDetail(t);
+          loadTasks();
+        } else {
+          showTaskDetailFeedback(r.data.message || 'Update failed.', true);
+        }
+      })
+      .catch(function (err) {
+        showTaskDetailFeedback(err.message || 'Update failed.', true);
+      });
+  }
+
+  function uploadTaskPhotosSequentially(files, index) {
+    var t = taskModalContext.task;
+    if (!t || index >= files.length) {
+      reloadTaskDetailInModal();
+      loadTasks();
+      return;
+    }
+    var fd = new FormData();
+    fd.append('file', files[index]);
+    fd.append('source', t.source);
+    var token = getToken();
+    if (!token) return;
+    fetch('/api/operatives/tasks/' + t.id + '/photos', {
+      method: 'POST',
+      headers: { 'X-Operative-Token': token },
+      body: fd,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (out.ok && out.data.success) {
+          taskModalContext.task.confirmation_photos = out.data.confirmation_photos || [];
+          renderTaskPhotos(taskModalContext.task.confirmation_photos);
+          uploadTaskPhotosSequentially(files, index + 1);
+        } else {
+          showTaskDetailFeedback((out.data && out.data.message) || 'Upload failed.', true);
+          reloadTaskDetailInModal();
+        }
+      })
+      .catch(function () {
+        showTaskDetailFeedback('Upload failed.', true);
+      });
+  }
+
+  if (tasksListEl) {
+    tasksListEl.addEventListener('click', function (e) {
+      var item = e.target.closest('.op-task-item--clickable');
+      if (!item) return;
+      var source = item.getAttribute('data-task-source');
+      var id = item.getAttribute('data-task-id');
+      if (source && id) openTaskModal(source, id);
+    });
+    tasksListEl.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var item = e.target.closest('.op-task-item--clickable');
+      if (!item) return;
+      e.preventDefault();
+      var source = item.getAttribute('data-task-source');
+      var id = item.getAttribute('data-task-id');
+      if (source && id) openTaskModal(source, id);
+    });
+  }
+
+  var opTaskPhotoInput = document.getElementById('op-task-photo-input');
+  if (opTaskPhotoInput) {
+    opTaskPhotoInput.addEventListener('change', function () {
+      var t = taskModalContext.task;
+      if (!t || !this.files || !this.files.length) return;
+      var existing = (t.confirmation_photos && t.confirmation_photos.length) || 0;
+      var remaining = 10 - existing;
+      if (remaining <= 0) {
+        showTaskDetailFeedback('Maximum 10 photos reached.', true);
+        this.value = '';
+        return;
+      }
+      var arr = Array.prototype.slice.call(this.files, 0, remaining);
+      hideTaskDetailFeedback();
+      uploadTaskPhotosSequentially(arr, 0);
+    });
+  }
+
+  var btnTaskDecline = document.getElementById('op-task-btn-decline');
+  var btnTaskProgress = document.getElementById('op-task-btn-progress');
+  var btnTaskComplete = document.getElementById('op-task-btn-complete');
+  if (btnTaskDecline) btnTaskDecline.addEventListener('click', function () { patchTaskAction('decline'); });
+  if (btnTaskProgress) btnTaskProgress.addEventListener('click', function () { patchTaskAction('in_progress'); });
+  if (btnTaskComplete) btnTaskComplete.addEventListener('click', function () { patchTaskAction('complete'); });
+
+  function withGeolocation(callback) {
+    if (!navigator.geolocation) {
+      callback(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        callback({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
+      },
+      function () {
+        // If user denies or it fails, continue without location
+        callback(null);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }
+
   function clockIn() {
     if (!btnClockIn) return;
     btnClockIn.disabled = true;
     hideFeedback(clockFeedbackEl);
-    api('/work-hours/clock-in', { method: 'POST', body: JSON.stringify({}) })
-      .then(function (r) {
-        btnClockIn.disabled = false;
-        if (r.data.success) {
-          showFeedback(clockFeedbackEl, 'Clocked in.', false);
-          loadClockStatus();
-          loadWeekly();
-        } else {
-          showFeedback(clockFeedbackEl, r.data.message || 'Failed.', true);
-        }
-      })
-      .catch(function (err) {
-        btnClockIn.disabled = false;
-        showFeedback(clockFeedbackEl, err.message || 'Failed.', true);
-      });
+    withGeolocation(function (loc) {
+      var body = {};
+      if (loc) {
+        body.clock_in_latitude = loc.latitude;
+        body.clock_in_longitude = loc.longitude;
+      }
+      api('/work-hours/clock-in', { method: 'POST', body: JSON.stringify(body) })
+        .then(function (r) {
+          btnClockIn.disabled = false;
+          if (r.data.success) {
+            var msg = 'Clocked in.';
+            if (typeof r.data.on_site === 'boolean') {
+              msg = r.data.on_site ? 'You are on site.' : 'You are not on site.';
+            }
+            if (loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+              msg += ' (Lat: ' + loc.latitude.toFixed(6) + ', Long: ' + loc.longitude.toFixed(6) + ')';
+            }
+            showFeedback(clockFeedbackEl, msg, !r.data.on_site && typeof r.data.on_site === 'boolean');
+            loadClockStatus();
+            loadWeekly();
+          } else {
+            showFeedback(clockFeedbackEl, r.data.message || 'Failed.', true);
+          }
+        })
+        .catch(function (err) {
+          btnClockIn.disabled = false;
+          showFeedback(clockFeedbackEl, err.message || 'Failed.', true);
+        });
+    });
   }
 
   function clockOut() {
     if (!btnClockOut) return;
     btnClockOut.disabled = true;
     hideFeedback(clockFeedbackEl);
-    api('/work-hours/clock-out', { method: 'POST', body: JSON.stringify({}) })
-      .then(function (r) {
-        btnClockOut.disabled = false;
-        if (r.data.success) {
-          showFeedback(clockFeedbackEl, 'Clocked out.', false);
-          loadClockStatus();
-          loadWeekly();
-        } else {
-          showFeedback(clockFeedbackEl, r.data.message || 'Failed.', true);
-        }
-      })
-      .catch(function (err) {
-        btnClockOut.disabled = false;
-        showFeedback(clockFeedbackEl, err.message || 'Failed.', true);
-      });
+    withGeolocation(function (loc) {
+      var body = {};
+      if (loc) {
+        body.clock_out_latitude = loc.latitude;
+        body.clock_out_longitude = loc.longitude;
+      }
+      api('/work-hours/clock-out', { method: 'POST', body: JSON.stringify(body) })
+        .then(function (r) {
+          btnClockOut.disabled = false;
+          if (r.data.success) {
+            var msg = 'Clocked out.';
+            if (typeof r.data.on_site === 'boolean') {
+              msg = r.data.on_site
+                ? 'Clocked out – you were on site.'
+                : 'Clocked out – you were not on site.';
+            }
+            showFeedback(clockFeedbackEl, msg, false);
+            loadClockStatus();
+            loadWeekly();
+          } else {
+            showFeedback(clockFeedbackEl, r.data.message || 'Failed.', true);
+          }
+        })
+        .catch(function (err) {
+          btnClockOut.disabled = false;
+          showFeedback(clockFeedbackEl, err.message || 'Failed.', true);
+        });
+    });
   }
 
   // Modals

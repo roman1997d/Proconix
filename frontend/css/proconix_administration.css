@@ -1,0 +1,425 @@
+/**
+ * Proconix platform administration login – distinct accent from manager login.
+ */
+
+.px-admin-main {
+  min-height: calc(100vh - 180px);
+  display: flex;
+  align-items: center;
+}
+
+.px-admin-card {
+  background: var(--white);
+  color: var(--dark-blue, #0a1628);
+  border-radius: 16px;
+  padding: 0;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.px-admin-card-banner {
+  background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 45%, #0ea5e9 100%);
+  color: #fff;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.px-admin-card-banner i {
+  font-size: 1.35rem;
+  opacity: 0.95;
+}
+
+.px-admin-card-inner {
+  padding: 2rem;
+}
+
+.px-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.12);
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  margin-bottom: 0.75rem;
+}
+
+.px-admin-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.px-admin-subtitle {
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+  color: #64748b;
+}
+
+.px-admin-card .form-label {
+  color: var(--dark-blue, #0a1628);
+  font-weight: 500;
+}
+
+.px-admin-card .input-group-text {
+  background: #e2e8f0;
+  border: 1px solid #cbd5e0;
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  color: #4a5568;
+}
+
+.px-admin-card .form-control {
+  border-radius: 0 8px 8px 0;
+  border: 1px solid #cbd5e0;
+}
+
+.px-admin-card .form-control:focus {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+}
+
+.px-admin-card .form-check-label {
+  color: #2d3748;
+}
+
+.btn-px-admin-signin {
+  padding: 12px 20px;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #fff;
+  background: linear-gradient(135deg, #5b21b6, #7c3aed);
+  border: none;
+  border-radius: 12px;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-px-admin-signin:hover {
+  background: linear-gradient(135deg, #7c3aed, #0ea5e9);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.35);
+  color: #fff;
+}
+
+.btn-px-admin-signin:disabled {
+  transform: none;
+  opacity: 0.85;
+}
+
+.px-admin-notice {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.px-admin-notice i {
+  color: #94a3b8;
+  margin-top: 0.1rem;
+}
+
+.px-admin-footer-note {
+  font-size: 0.875rem;
+  color: #4a5568;
+  margin-top: 1.25rem;
+  margin-bottom: 0;
+  text-align: center;
+}
+
+.px-admin-footer-note a {
+  color: #7c3aed;
+  text-decoration: none;
+}
+
+.px-admin-footer-note a:hover {
+  text-decoration: underline;
+}
+
+/* ----- Admin console (post-login) ----- */
+
+.px-admin-app-body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.px-admin-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.px-admin-topbar-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0.65rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.px-admin-brand-sub {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(196, 181, 253, 0.95);
+  margin-left: 0.15rem;
+}
+
+.px-admin-layout {
+  flex: 1;
+  display: flex;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  align-items: stretch;
+}
+
+.px-admin-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(15, 23, 42, 0.5);
+  padding: 1rem 0;
+}
+
+.px-admin-main-area {
+  flex: 1;
+  min-width: 0;
+  padding: 1.25rem 1rem 2rem;
+}
+
+.px-admin-main-inner {
+  max-width: 960px;
+}
+
+.px-admin-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0 0.5rem;
+}
+
+.px-admin-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 8px;
+  color: rgba(226, 232, 240, 0.85);
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.px-admin-nav-link:hover {
+  background: rgba(124, 58, 237, 0.2);
+  color: #fff;
+}
+
+.px-admin-nav-link.active {
+  background: rgba(124, 58, 237, 0.35);
+  color: #fff;
+  font-weight: 600;
+}
+
+.px-admin-nav-link i {
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+.px-admin-offcanvas {
+  background: #0f172a;
+  width: min(280px, 85vw) !important;
+}
+
+.px-admin-offcanvas .offcanvas-title {
+  color: #fff;
+}
+
+.px-admin-panel-card {
+  background: rgba(30, 41, 59, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.px-admin-stat-card {
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  padding: 1rem 1.15rem;
+}
+
+.px-admin-stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0.25rem 0;
+}
+
+.px-admin-dev-banner {
+  background: rgba(14, 165, 233, 0.15) !important;
+  border: 1px solid rgba(14, 165, 233, 0.35);
+  color: #e0f2fe !important;
+}
+
+.px-admin-dev-banner.alert-success {
+  background: rgba(34, 197, 94, 0.15) !important;
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #dcfce7 !important;
+}
+
+.px-admin-dev-banner .alert-link {
+  color: #7dd3fc;
+}
+
+.px-admin-app-footer {
+  margin-top: auto;
+}
+
+.px-admin-menu-toggle {
+  border-color: rgba(255, 255, 255, 0.35) !important;
+  color: #fff !important;
+}
+
+.px-admin-data-table {
+  --bs-table-bg: rgba(15, 23, 42, 0.6);
+  --bs-table-striped-bg: rgba(30, 41, 59, 0.45);
+  --bs-table-hover-bg: rgba(124, 58, 237, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.px-admin-data-table thead th {
+  white-space: nowrap;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(226, 232, 240, 0.85);
+  border-bottom-color: rgba(148, 163, 184, 0.25);
+}
+
+.px-admin-data-table td {
+  vertical-align: middle;
+  max-width: 14rem;
+  word-break: break-word;
+}
+
+.px-admin-companies-table .px-admin-company-row {
+  cursor: pointer;
+}
+
+.px-admin-companies-table .px-admin-company-row:hover {
+  filter: brightness(1.08);
+}
+
+.px-admin-modal-content {
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.px-admin-modal-content .form-control:focus {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 0.2rem rgba(124, 58, 237, 0.25);
+}
+
+.px-admin-form-switch .form-check-input {
+  width: 2.5rem;
+  height: 1.25rem;
+  cursor: pointer;
+  background-color: rgba(148, 163, 184, 0.35);
+  border-color: rgba(148, 163, 184, 0.6);
+}
+
+.px-admin-form-switch .form-check-input:checked {
+  background-color: #22c55e;
+  border-color: #16a34a;
+}
+
+/* System & health — terminal mirror (fixed-height scroll area) */
+.px-admin-sys-console-outer {
+  border-radius: 0.375rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #020617;
+}
+
+.px-admin-sys-console {
+  display: block;
+  height: 13rem;
+  max-height: 42vh;
+  overflow: auto;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #e2e8f0;
+  white-space: pre;
+  tab-size: 4;
+}
+
+/* System & health — mini chart */
+.px-admin-sys-chart-canvas {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+}
+
+.px-admin-sys-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 3px;
+  vertical-align: middle;
+  margin-right: 0.35rem;
+  border-radius: 1px;
+}
+
+.px-admin-sys-legend-ms {
+  background: #22d3ee;
+}
+
+.px-admin-sys-legend-err {
+  background: #f87171;
+}
+
+/* Billing table — compact controls */
+.px-admin-billing-table .form-select,
+.px-admin-billing-table .form-control {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.5rem;
+  min-width: 7rem;
+}
+
+.px-admin-billing-table .px-billing-expires {
+  min-width: 10rem;
+}
+
+.px-admin-billing-table td {
+  vertical-align: middle;
+}
+
+.px-admin-form-switch .form-check-input:focus {
+  box-shadow: 0 0 0 0.2rem rgba(34, 197, 94, 0.25);
+}

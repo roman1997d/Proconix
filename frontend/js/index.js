@@ -1,7 +1,28 @@
 /**
- * Proconix Landing Page – Operative login modal (temp password + set new password).
- * Triggered by "I'm Operative" button; step-based flow; AJAX; redirect on success.
+ * Proconix Landing Page – index.js
+ * Operative login modal, scroll reveal, smooth scroll.
  */
+
+(function () {
+  'use strict';
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMain);
+  } else {
+    initMain();
+  }
+  function initMain() {
+    document.body.classList.add('loaded');
+    document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
+      anchor.addEventListener('click', function (e) {
+        var target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth' });
+        }
+      });
+    });
+  }
+})();
 
 (function () {
   'use strict';
@@ -101,8 +122,14 @@
   if (backdrop) backdrop.addEventListener('click', closeModal);
   if (closeBtn) closeBtn.addEventListener('click', closeModal);
 
-  document.getElementById('operative-switch-to-temp').addEventListener('click', showStepTemp);
-  document.getElementById('operative-switch-to-login').addEventListener('click', showStepLogin);
+  var switchToTempBtn = document.getElementById('operative-switch-to-temp');
+  var switchToLoginBtn = document.getElementById('operative-switch-to-login');
+  if (switchToTempBtn) {
+    switchToTempBtn.addEventListener('click', showStepTemp);
+  }
+  if (switchToLoginBtn) {
+    switchToLoginBtn.addEventListener('click', showStepLogin);
+  }
 
   // Normal login: email + password
   if (formLogin) {
@@ -243,6 +270,34 @@
           setLoading(btn, false);
           showError('Request failed. Please try again.');
         });
+    });
+  }
+})();
+
+// Scroll animations for landing page (cursor effects removed)
+(function () {
+  'use strict';
+
+  var revealEls = document.querySelectorAll('.reveal-on-scroll');
+  if (revealEls.length && 'IntersectionObserver' in window) {
+    var observer = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('reveal-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.15 }
+    );
+
+    revealEls.forEach(function (el) {
+      observer.observe(el);
+    });
+  } else {
+    revealEls.forEach(function (el) {
+      el.classList.add('reveal-visible');
     });
   }
 })();

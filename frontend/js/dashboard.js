@@ -23,19 +23,13 @@
   var moduleTitles = {
     'project-overview': 'Project Overview',
     'projects': 'My Projects',
-    'project-builder': 'Project Builder',
-    'task-management': 'Task Management',
-    'material-management': 'Material Management',
-    'risk-management': 'Risk Management',
+    'manage-material': 'Material Management',
     'operatives': 'Operatives',
     'worklogs': 'Work Logs',
-    'plants': 'Plants (Equipment)',
-    'accounting': 'Accounting',
-    'resources-files': 'Resources & Files',
-    'reports': 'Reports',
-    'complains': 'Complains',
-    'issues': 'Issues',
     'quality-assurance': 'Quality Assurance',
+    'task-planning': 'Task & Planning',
+    'profile-settings': 'Profile Settings',
+    'my-company-settings': 'My Company Settings'
   };
 
   function getSession() {
@@ -129,11 +123,56 @@
   function loadModule(module, pushState) {
     if (!contentEl) return;
 
+    if (module === 'task-planning') {
+      contentEl.classList.add('dashboard-content-fade-out');
+      setActiveItem(module);
+      updateHeaderTitle(module);
+      contentEl.innerHTML =
+        '<iframe src="Task_Planning.html" class="dashboard-qa-iframe" title="Task &amp; Planning"></iframe>';
+      contentEl.classList.remove('dashboard-content-fade-out');
+      contentEl.classList.add('dashboard-content-fade-in');
+      if (pushState !== false) history.pushState({ module: module }, '', '#');
+      return;
+    }
+
     if (module === 'quality-assurance') {
       contentEl.classList.add('dashboard-content-fade-out');
       setActiveItem(module);
       updateHeaderTitle(module);
       contentEl.innerHTML = '<iframe src="Quality_Assurance.html" class="dashboard-qa-iframe" title="Quality Assurance Module"></iframe>';
+      contentEl.classList.remove('dashboard-content-fade-out');
+      contentEl.classList.add('dashboard-content-fade-in');
+      if (pushState !== false) history.pushState({ module: module }, '', '#');
+      return;
+    }
+    if (module === 'manage-material') {
+      contentEl.classList.add('dashboard-content-fade-out');
+      setActiveItem(module);
+      updateHeaderTitle(module);
+      contentEl.innerHTML = '<iframe src="manage_material.html" class="dashboard-qa-iframe" title="Material Management"></iframe>';
+      contentEl.classList.remove('dashboard-content-fade-out');
+      contentEl.classList.add('dashboard-content-fade-in');
+      if (pushState !== false) history.pushState({ module: module }, '', '#');
+      return;
+    }
+
+    if (module === 'profile-settings') {
+      contentEl.classList.add('dashboard-content-fade-out');
+      setActiveItem(module);
+      updateHeaderTitle(module);
+      contentEl.innerHTML = '<iframe src="Profile_Settings.html" class="dashboard-qa-iframe" title="Profile Settings"></iframe>';
+      contentEl.classList.remove('dashboard-content-fade-out');
+      contentEl.classList.add('dashboard-content-fade-in');
+      if (pushState !== false) history.pushState({ module: module }, '', '#');
+      return;
+    }
+
+    if (module === 'my-company-settings') {
+      contentEl.classList.add('dashboard-content-fade-out');
+      setActiveItem(module);
+      updateHeaderTitle(module);
+      contentEl.innerHTML =
+        '<iframe src="my_company_settings.html" class="dashboard-qa-iframe" title="My Company Settings"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
       if (pushState !== false) history.pushState({ module: module }, '', '#');
@@ -174,11 +213,14 @@
         if (module === 'worklogs' && typeof window.initWorkLogsModule === 'function') {
           window.initWorkLogsModule();
         }
-        if (module === 'project-overview') {
-          loadProjectOverviewOperativesCount();
-        }
         if (typeof window.initDashboardCharts === 'function') {
           window.initDashboardCharts();
+        }
+        if (module === 'project-overview') {
+          loadProjectOverviewOperativesCount();
+          loadProjectOverviewStats();
+          loadProjectOverviewLists();
+          loadProjectOverviewOperativeActivityToday();
         }
         if (pushState !== false) {
           history.pushState({ module: module }, '', '#');
@@ -448,6 +490,59 @@
     return div.innerHTML;
   }
 
+  function formatWorkLogsTotalCost(amount) {
+    var n = typeof amount === 'number' ? amount : parseFloat(amount);
+    if (Number.isNaN(n)) n = 0;
+    try {
+      return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(n);
+    } catch (_) {
+      return '£' + n.toFixed(2);
+    }
+  }
+
+  function loadProjectOverviewStats() {
+    var projEl = contentEl && contentEl.querySelector('#project-overview-projects-count');
+    var tasksEl = contentEl && contentEl.querySelector('#project-overview-planning-tasks-count');
+    var costEl = contentEl && contentEl.querySelector('#project-overview-worklogs-total');
+    if (!projEl || !tasksEl || !costEl) return;
+    var headers = getSessionHeaders();
+    if (!headers['X-Manager-Id']) {
+      projEl.textContent = '—';
+      tasksEl.textContent = '—';
+      costEl.textContent = '—';
+      return;
+    }
+    fetch('/api/dashboard/overview-stats', { headers: headers })
+      .then(function (res) {
+        return res.json().catch(function () { return null; });
+      })
+      .then(function (data) {
+        if (data && data.success) {
+          projEl.textContent = data.projects_count != null ? String(data.projects_count) : '0';
+          tasksEl.textContent = data.planning_tasks_count != null ? String(data.planning_tasks_count) : '0';
+          costEl.textContent = formatWorkLogsTotalCost(data.work_logs_total_cost);
+          if (typeof window.updateQaWorkTypePieChart === 'function') {
+            window.updateQaWorkTypePieChart(data.qa_job_cost_by_type || []);
+          }
+        } else {
+          projEl.textContent = '—';
+          tasksEl.textContent = '—';
+          costEl.textContent = '—';
+          if (typeof window.updateQaWorkTypePieChart === 'function') {
+            window.updateQaWorkTypePieChart([]);
+          }
+        }
+      })
+      .catch(function () {
+        projEl.textContent = '—';
+        tasksEl.textContent = '—';
+        costEl.textContent = '—';
+        if (typeof window.updateQaWorkTypePieChart === 'function') {
+          window.updateQaWorkTypePieChart([]);
+        }
+      });
+  }
+
   function loadProjectOverviewOperativesCount() {
     var countEl = contentEl && contentEl.querySelector('#project-overview-operatives-count');
     if (!countEl) return;
@@ -467,6 +562,252 @@
       })
       .catch(function () {
         countEl.textContent = '—';
+      });
+  }
+
+  function formatOverviewDateTime(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  }
+
+  function planningOverviewStatusClass(status) {
+    if (status === 'in_progress') return 'status-yellow';
+    if (status === 'paused') return 'status-red';
+    if (status === 'not_started') return 'status-yellow';
+    return 'status-yellow';
+  }
+
+  function worklogOverviewStatusClass(status) {
+    if (status === 'approved') return 'status-green';
+    if (status === 'rejected') return 'status-red';
+    return 'status-yellow';
+  }
+
+  function loadProjectOverviewLists() {
+    if (!contentEl) return;
+    var tasksLoading = contentEl.querySelector('#po-tasks-loading');
+    var tasksEmpty = contentEl.querySelector('#po-tasks-empty');
+    var tasksTable = contentEl.querySelector('#po-tasks-table');
+    var tasksTbody = contentEl.querySelector('#po-tasks-tbody');
+    var logsLoading = contentEl.querySelector('#po-logs-loading');
+    var logsEmpty = contentEl.querySelector('#po-logs-empty');
+    var logsTable = contentEl.querySelector('#po-logs-table');
+    var logsTbody = contentEl.querySelector('#po-logs-tbody');
+
+    function resetPoListsUi() {
+      if (tasksLoading) {
+        tasksLoading.textContent = 'Loading…';
+        tasksLoading.classList.remove('d-none');
+      }
+      if (tasksEmpty) tasksEmpty.classList.add('d-none');
+      if (tasksTable) tasksTable.classList.add('d-none');
+      if (tasksTbody) tasksTbody.innerHTML = '';
+      if (logsLoading) {
+        logsLoading.textContent = 'Loading…';
+        logsLoading.classList.remove('d-none');
+      }
+      if (logsEmpty) logsEmpty.classList.add('d-none');
+      if (logsTable) logsTable.classList.add('d-none');
+      if (logsTbody) logsTbody.innerHTML = '';
+    }
+
+    resetPoListsUi();
+
+    var headers = getSessionHeaders();
+    if (!headers['X-Manager-Id']) {
+      if (tasksLoading) {
+        tasksLoading.textContent = '—';
+        tasksLoading.classList.remove('d-none');
+      }
+      if (logsLoading) {
+        logsLoading.textContent = '—';
+        logsLoading.classList.remove('d-none');
+      }
+      return;
+    }
+
+    fetch('/api/dashboard/overview-lists', { headers: headers })
+      .then(function (res) {
+        return res.json().catch(function () { return null; });
+      })
+      .then(function (data) {
+        if (!data || !data.success) {
+          if (tasksLoading) tasksLoading.classList.add('d-none');
+          if (tasksEmpty) {
+            tasksEmpty.textContent = 'Could not load tasks.';
+            tasksEmpty.classList.remove('d-none');
+          }
+          if (logsLoading) logsLoading.classList.add('d-none');
+          if (logsEmpty) {
+            logsEmpty.textContent = 'Could not load work logs.';
+            logsEmpty.classList.remove('d-none');
+          }
+          return;
+        }
+
+        var tlist = Array.isArray(data.tasks_deadline_next_7_days) ? data.tasks_deadline_next_7_days : [];
+        if (tasksLoading) tasksLoading.classList.add('d-none');
+        if (tlist.length === 0) {
+          if (tasksEmpty) {
+            tasksEmpty.textContent = 'No tasks with a deadline in the next 7 days.';
+            tasksEmpty.classList.remove('d-none');
+          }
+          if (tasksTable) tasksTable.classList.add('d-none');
+        } else {
+          if (tasksEmpty) tasksEmpty.classList.add('d-none');
+          if (tasksTable) tasksTable.classList.remove('d-none');
+          if (tasksTbody) {
+            var th = '';
+            for (var i = 0; i < tlist.length; i++) {
+              var t = tlist[i];
+              var title = escapeHtml(t.title || '—');
+              var dl = formatOverviewDateTime(t.deadline);
+              var stRaw = (t.status || '').replace(/_/g, ' ');
+              var st = escapeHtml(stRaw || '—');
+              var sc = planningOverviewStatusClass(t.status);
+              th += '<tr><td>' + title + '</td><td>' + escapeHtml(dl) + '</td><td><span class="status-badge ' + sc + '">' + st + '</span></td></tr>';
+            }
+            tasksTbody.innerHTML = th;
+          }
+        }
+
+        var wlist = Array.isArray(data.worklogs_unapproved_queue)
+          ? data.worklogs_unapproved_queue
+          : (Array.isArray(data.worklogs_unapproved_over_7_days) ? data.worklogs_unapproved_over_7_days : []);
+        if (logsLoading) logsLoading.classList.add('d-none');
+        if (wlist.length === 0) {
+          if (logsEmpty) {
+            logsEmpty.textContent = 'No unapproved work logs. All caught up.';
+            logsEmpty.classList.remove('d-none');
+          }
+          if (logsTable) logsTable.classList.add('d-none');
+        } else {
+          if (logsEmpty) logsEmpty.classList.add('d-none');
+          if (logsTable) logsTable.classList.remove('d-none');
+          if (logsTbody) {
+            var wh = '';
+            for (var j = 0; j < wlist.length; j++) {
+              var w = wlist[j];
+              var job = escapeHtml(w.job_display_id || '—');
+              var stale = w.is_stale === true;
+              var staleHtml = stale
+                ? ' <span class="status-badge status-red" title="Awaiting approval for over 7 days">Stale</span>'
+                : '';
+              var worker = escapeHtml(w.worker_name || '—');
+              var proj = escapeHtml(w.project || '—');
+              var sub = formatOverviewDateTime(w.submitted_at);
+              var wst = escapeHtml((w.status || '').replace(/_/g, ' ') || '—');
+              var wsc = worklogOverviewStatusClass(w.status);
+              var tot = w.total != null && !Number.isNaN(Number(w.total)) ? formatWorkLogsTotalCost(w.total) : '—';
+              wh += '<tr' + (stale ? ' class="po-worklog-row-stale"' : '') + '><td>' + job + staleHtml + '</td><td>' + worker + '</td><td>' + proj + '</td><td>' + escapeHtml(sub) + '</td><td><span class="status-badge ' + wsc + '">' + wst + '</span></td><td>' + escapeHtml(tot) + '</td></tr>';
+            }
+            logsTbody.innerHTML = wh;
+          }
+        }
+      })
+      .catch(function () {
+        if (tasksLoading) tasksLoading.classList.add('d-none');
+        if (tasksEmpty) {
+          tasksEmpty.textContent = 'Failed to load tasks.';
+          tasksEmpty.classList.remove('d-none');
+        }
+        if (logsLoading) logsLoading.classList.add('d-none');
+        if (logsEmpty) {
+          logsEmpty.textContent = 'Failed to load work logs.';
+          logsEmpty.classList.remove('d-none');
+        }
+      });
+  }
+
+  /** Operatives who clocked in today (server local day) + latest session project. */
+  function loadProjectOverviewOperativeActivityToday() {
+    if (!contentEl) return;
+    var loading = contentEl.querySelector('#po-act-loading');
+    var summary = contentEl.querySelector('#po-act-summary');
+    var countEl = contentEl.querySelector('#po-act-count');
+    var empty = contentEl.querySelector('#po-act-empty');
+    var table = contentEl.querySelector('#po-act-table');
+    var tbody = contentEl.querySelector('#po-act-tbody');
+
+    if (loading) {
+      loading.textContent = 'Loading…';
+      loading.classList.remove('d-none');
+    }
+    if (summary) summary.classList.add('d-none');
+    if (empty) {
+      empty.textContent = 'No operatives have clocked in today yet.';
+      empty.classList.add('d-none');
+    }
+    if (table) table.classList.add('d-none');
+    if (tbody) tbody.innerHTML = '';
+
+    var headers = getSessionHeaders();
+    if (!headers['X-Manager-Id']) {
+      if (loading) {
+        loading.textContent = '—';
+        loading.classList.remove('d-none');
+      }
+      return;
+    }
+
+    fetch('/api/dashboard/operative-activity-today', { headers: headers })
+      .then(function (res) {
+        return res.json().catch(function () { return null; });
+      })
+      .then(function (data) {
+        if (loading) loading.classList.add('d-none');
+        if (!data || !data.success) {
+          if (summary) summary.classList.add('d-none');
+          if (table) table.classList.add('d-none');
+          if (empty) {
+            empty.textContent = 'Could not load operative activity.';
+            empty.classList.remove('d-none');
+          }
+          return;
+        }
+
+        var list = Array.isArray(data.operatives) ? data.operatives : [];
+        var n = data.count != null ? Number(data.count) : list.length;
+        if (countEl) countEl.textContent = String(n);
+
+        if (list.length === 0) {
+          if (summary) summary.classList.add('d-none');
+          if (empty) {
+            empty.textContent = 'No operatives have clocked in today yet.';
+            empty.classList.remove('d-none');
+          }
+          if (table) table.classList.add('d-none');
+          return;
+        }
+
+        if (summary) summary.classList.remove('d-none');
+        if (empty) empty.classList.add('d-none');
+        if (table) table.classList.remove('d-none');
+        if (tbody) {
+          var rows = '';
+          for (var i = 0; i < list.length; i++) {
+            var o = list[i];
+            var name = escapeHtml(o.user_name || '—');
+            var proj = o.project_name ? escapeHtml(o.project_name) : '—';
+            var cin = escapeHtml(formatOverviewDateTime(o.clock_in));
+            var onShift = o.is_on_shift === true || (o.clock_out == null && o.is_on_shift !== false);
+            var statusLabel = onShift ? 'On shift' : 'Clocked out';
+            var statusClass = onShift ? 'status-green' : 'status-yellow';
+            rows += '<tr><td>' + name + '</td><td>' + proj + '</td><td>' + cin + '</td><td><span class="status-badge ' + statusClass + '">' + statusLabel + '</span></td></tr>';
+          }
+          tbody.innerHTML = rows;
+        }
+      })
+      .catch(function () {
+        if (loading) loading.classList.add('d-none');
+        if (summary) summary.classList.add('d-none');
+        if (table) table.classList.add('d-none');
+        if (empty) {
+          empty.textContent = 'Failed to load operative activity.';
+          empty.classList.remove('d-none');
+        }
       });
   }
 

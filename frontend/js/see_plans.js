@@ -29,11 +29,20 @@
     });
   }
 
-  // Intercept plan links
+  var STORAGE_KEY = 'proconix_selected_plan';
+
+  /** Values: free | silver | gold | platinum — same as data-plan on cards */
   function initPlanLinks() {
-    document.querySelectorAll('a[href^="/api/subscriptions/"]').forEach(function (link) {
-      link.addEventListener('click', function (e) {
-        // Allow normal GET (backend returns JSON)
+    document.querySelectorAll('a.js-plan-register[data-plan]').forEach(function (link) {
+      link.addEventListener('click', function () {
+        var plan = link.getAttribute('data-plan');
+        if (!plan) return;
+        try {
+          localStorage.setItem(STORAGE_KEY, plan);
+          sessionStorage.setItem(STORAGE_KEY, plan);
+        } catch (e) {
+          /* ignore quota / private mode */
+        }
       });
     });
   }

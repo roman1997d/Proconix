@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Proconix – Construction workflow platform. Centralize projects, operatives, work logs and QA. Approve work faster, invoice with confidence.">
+  <meta name="theme-color" content="#020617">
   <title>Proconix – Your Partner for Tracking Work Processes</title>
-  <!-- Bootstrap 5 CSS -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Custom CSS -->
   <link href="css/styles.css" rel="stylesheet">
 </head>
 <body>
@@ -25,7 +27,7 @@
             <a class="nav-link btn-nav" href="/register_company.html">Register a Company</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link btn-nav" href="#">Contact Us</a>
+            <a class="nav-link btn-nav" href="/ContactUs.html">Contact Us</a>
           </li>
           <li class="nav-item">
             <a class="nav-link btn-nav btn-nav-primary" href="/see_plans.html">See Plans</a>
@@ -38,91 +40,184 @@
   <!-- Main Content Section -->
   <main class="main-content">
     <div class="container py-5">
-      <div class="row align-items-center min-vh-75">
-        <!-- Left Section -->
+      <div class="row align-items-center min-vh-75 reveal-on-scroll reveal-visible" data-reveal="fade-up">
+        <!-- Left Section – Sales-focused hero -->
         <div class="col-lg-6 left-section mb-5 mb-lg-0">
-          <h1 class="welcome-title mb-4">
-            Welcome to Proconix, your number one partner for tracking work processes.
+          <span class="hero-eyebrow mb-2 d-inline-block">Construction workflow platform</span>
+          <h1 class="welcome-title mb-3">
+            Turn chaotic projects into one clear, controllable workflow.
           </h1>
           <p class="welcome-sub mb-4 text-white-50">
-            Choose your role to get started.
+            Proconix centralizes projects, operatives, work logs and quality assurance in one place,
+            so you can approve work faster, invoice with confidence and keep every site on track.
           </p>
-          <div class="d-flex flex-wrap gap-3">
-            <a href="/login_manager.html" class="btn btn-role btn-manager">I'm Manager</a>
-            <a href="#" class="btn btn-role btn-operative" id="btn-operative-login" aria-haspopup="dialog" aria-expanded="false">I'm Operative</a>
+          <div class="hero-cta-group d-flex flex-wrap gap-3 mb-3">
+            <a href="/login_manager.html" class="btn btn-role btn-manager">
+              Start as manager
+            </a>
+            <button
+              type="button"
+              class="btn btn-role btn-operative"
+              id="btn-operative-login"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              Operative quick access
+            </button>
           </div>
+          <p class="hero-subnote text-white-50 mb-0">
+            No long-term contracts. Designed for small and mid-size construction companies.
+          </p>
         </div>
-        <!-- Right Section – Building animation (construction progress) -->
+
+        <!-- Right Section – Product preview & motion -->
         <div class="col-lg-6">
-          <div class="building-container" aria-hidden="true">
-            <!-- Optional: subtle background clouds -->
+          <div class="building-container hero-visual reveal-on-scroll" data-reveal="fade-left" aria-hidden="true">
             <div class="construction-clouds">
               <div class="cloud cloud-1"></div>
               <div class="cloud cloud-2"></div>
               <div class="cloud cloud-3"></div>
             </div>
-            <div class="construction-scene">
-              <!-- Crane (SVG) -->
-              <div class="crane-wrap">
-                <svg class="crane-svg" viewBox="0 0 120 200" aria-hidden="true">
-                  <defs>
-                    <linearGradient id="craneGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" style="stop-color:#4a5568" />
-                      <stop offset="100%" style="stop-color:#2d3748" />
-                    </linearGradient>
-                  </defs>
-                  <!-- Mast -->
-                  <rect x="52" y="40" width="16" height="155" rx="2" fill="url(#craneGrad)" />
-                  <!-- Jib + cabin (group swings together) -->
-                  <g class="crane-jib-group">
-                    <rect x="68" y="55" width="48" height="8" rx="2" fill="url(#craneGrad)" />
-                    <rect x="108" y="48" width="14" height="22" rx="2" fill="#4a5568" />
-                  </g>
-                  <!-- Hook -->
-                  <circle cx="72" cy="59" r="4" fill="#e2e8f0" class="crane-hook" />
-                </svg>
+            <div class="hero-dashboard-shell">
+              <div class="hero-dashboard-header">
+                <span class="hero-pill hero-pill-green">Live project overview</span>
+                <span class="hero-pill hero-pill-blue">Work logs & QA</span>
               </div>
-              <!-- Building with windows -->
-              <div class="building-wrapper">
-                <div class="building">
-                  <div class="building-tower">
-                    <div class="building-floor building-floor-1">
-                      <div class="floor-windows">
-                        <span class="window"></span><span class="window"></span>
-                        <span class="window"></span><span class="window"></span>
-                      </div>
+              <div class="hero-dashboard-body">
+                <div class="hero-dashboard-left">
+                  <p class="hero-metric-label">Approved work value (this month)</p>
+                  <p class="hero-metric-value">£148,920</p>
+                  <p class="hero-metric-sub">+24% vs last month</p>
+                  <div class="hero-metric-row">
+                    <div class="hero-metric-card">
+                      <span class="hero-metric-small-label">Open QA jobs</span>
+                      <span class="hero-metric-small-value">37</span>
                     </div>
-                    <div class="building-floor building-floor-2">
-                      <div class="floor-windows">
-                        <span class="window"></span><span class="window"></span>
-                        <span class="window"></span><span class="window"></span>
-                      </div>
-                    </div>
-                    <div class="building-floor building-floor-3">
-                      <div class="floor-windows">
-                        <span class="window"></span><span class="window"></span>
-                        <span class="window"></span><span class="window"></span>
-                      </div>
-                    </div>
-                    <div class="building-floor building-floor-4">
-                      <div class="floor-windows">
-                        <span class="window"></span><span class="window"></span>
-                        <span class="window"></span><span class="window"></span>
-                      </div>
-                    </div>
-                    <div class="building-floor building-floor-5">
-                      <div class="floor-windows">
-                        <span class="window"></span><span class="window"></span>
-                        <span class="window"></span><span class="window"></span>
-                      </div>
+                    <div class="hero-metric-card">
+                      <span class="hero-metric-small-label">Sites on schedule</span>
+                      <span class="hero-metric-small-value hero-positive">12 / 14</span>
                     </div>
                   </div>
+                </div>
+                <div class="hero-dashboard-right">
+                  <div class="hero-list-heading">
+                    <span>Today on site</span>
+                    <span class="hero-badge">Real-time</span>
+                  </div>
+                  <ul class="hero-list">
+                    <li class="hero-list-item">
+                      <span class="hero-list-title">Block A – concrete works</span>
+                      <span class="hero-list-meta">8 operatives · 4 work logs pending approval</span>
+                    </li>
+                    <li class="hero-list-item">
+                      <span class="hero-list-title">QA punch list – Tower 2</span>
+                      <span class="hero-list-meta">12 items open · 5 due today</span>
+                    </li>
+                    <li class="hero-list-item">
+                      <span class="hero-list-title">Materials – Project Riverside</span>
+                      <span class="hero-list-meta">3 critical materials · reorder suggested</span>
+                    </li>
+                  </ul>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- Sales sections under hero -->
+      <section class="landing-section mt-5 reveal-on-scroll" data-reveal="fade-up">
+        <div class="row g-4">
+          <div class="col-lg-4">
+            <h2 class="landing-section-title">From spreadsheets and chats to one source of truth.</h2>
+          </div>
+          <div class="col-lg-8">
+            <div class="landing-cards-grid">
+              <article class="landing-card">
+                <h3 class="landing-card-title">No more scattered work logs</h3>
+                <p class="landing-card-text">
+                  Replace photos in messaging apps and manual Excel sheets with structured work logs that flow
+                  straight into approvals and billing.
+                </p>
+              </article>
+              <article class="landing-card">
+                <h3 class="landing-card-title">Instant visibility on every project</h3>
+                <p class="landing-card-text">
+                  See, at a glance, which projects are on schedule, which jobs are blocked and where your team is
+                  spending time.
+                </p>
+              </article>
+              <article class="landing-card">
+                <h3 class="landing-card-title">Materials and QA under control</h3>
+                <p class="landing-card-text">
+                  Track stock, forecast usage and manage QA jobs in the same place where work is logged and approved.
+                </p>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-section mt-5 reveal-on-scroll" data-reveal="fade-up">
+        <div class="row g-4 align-items-start">
+          <div class="col-lg-5">
+            <h2 class="landing-section-title">How Proconix fits into your day.</h2>
+            <p class="landing-section-sub">
+              A simple flow your team can follow from the first project to every single work log.
+            </p>
+          </div>
+          <div class="col-lg-7">
+            <ol class="how-it-works-list">
+              <li>
+                <h3>Set up your company and projects</h3>
+                <p>Add your company, managers and active projects in a few minutes. No complex configuration.</p>
+              </li>
+              <li>
+                <h3>Invite operatives and supervisors</h3>
+                <p>
+                  Give field teams a clear dashboard for hours, tasks, issues, uploads and work logs – on desktop or
+                  tablet.
+                </p>
+              </li>
+              <li>
+                <h3>Approve, forecast and invoice with confidence</h3>
+                <p>
+                  Managers approve or reject work logs, monitor materials and QA, and always know what can be invoiced.
+                </p>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-section mt-5 reveal-on-scroll" data-reveal="fade-up">
+        <div class="row g-4 align-items-center">
+          <div class="col-lg-6">
+            <h2 class="landing-section-title">Built for real construction teams, not just software demos.</h2>
+            <ul class="benefits-list">
+              <li>Clear roles for managers and operatives with focused dashboards.</li>
+              <li>Designed for small and mid-size construction and trades companies.</li>
+              <li>Fast to deploy on your own infrastructure or VPS.</li>
+              <li>Database-first design with a documented schema and audit trails.</li>
+            </ul>
+          </div>
+          <div class="col-lg-6">
+            <div class="social-proof-card">
+              <p class="social-proof-eyebrow">What teams achieve with Proconix</p>
+              <p class="social-proof-quote">
+                “We finally have one place where projects, work logs, QA and materials come together. Approvals take
+                minutes instead of days.”
+              </p>
+              <p class="social-proof-meta">
+                Construction manager – mid-size contractor
+              </p>
+              <p class="social-proof-note">
+                Start with one project and expand as your team adopts the platform.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   </main>
 
@@ -135,7 +230,7 @@
             This website was created by Roman Demian in 2026.
           </p>
           <p class="footer-contact mb-2">
-            Contact: <a href="mailto:contact@proconix.example">contact@proconix.example</a>
+            Contact: <a href="mailto:rdemian732@gmail.com">rdemian732@gmail.com</a>
           </p>
           <p class="footer-thanks text-white-50">
             Thank you for visiting Proconix. We look forward to supporting your workflow.
@@ -213,9 +308,7 @@
     </div>
   </div>
 
-  <!-- Bootstrap 5 JS Bundle -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="js/main.js"></script>
-  <script src="js/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" defer></script>
+  <script src="js/index.js" defer></script>
 </body>
 </html>

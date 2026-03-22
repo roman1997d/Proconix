@@ -23,21 +23,21 @@
 
 - Înregistrare companie și manager (onboarding + token).
 - Login manager și sesiune (localStorage + header-e).
-- Dashboard manager cu module: Project Overview, Projects (CRUD + assignments), Operatives (CRUD), Work Logs (listă, filtre, approve/reject/archive, edit, passkey), placeholder-e pentru Task Management, Material, Risk, Plants, Accounting, Reports, Complains, Issues.
+- Dashboard manager: **Project Overview** cu indicatori reali (proiecte, task-uri planning, operatives, cost work logs), liste (deadline 7 zile, coadă work logs neaprobate, activitate operativi azi), grafic **QA – tip cost** (day/hour/price); **Task & Planning** (Gantt + Kanban) în iframe; Projects (CRUD + assignments + geolocație), Operatives (CRUD), Work Logs (passkey, filtre, approve/reject/archive), **Material Management** (iframe), **Quality Assurance** (iframe), **Profile Settings** și **My Company Settings** (iframe: profil, parolă, telefon, date companie, invite manager). Placeholder-e pentru Risk, Plants, Accounting, Reports, Complains, Issues (conținut minimal).
 - Quality Assurance: template-uri (CRUD) și joburi (CRUD) pe proiect, cu pași, workers, status, cost type, floor.
 - Dashboard operativ: login, ore (clock-in/out), proiect curent, task-uri, raportare issue cu fișier, upload documente, work log (vizualizare și creare).
 - API REST cu autentificare (manager headers, operative session); erori în JSON; 404/error handler pentru /api.
 
 ### Ce poate veni în versiuni ulterioare
 
-- Task Management real (task-uri create de manager, asignate operativilor).
-- Material Management, Risk Management, Plants – conținut real în loc de placeholder.
+- Îmbunătățiri Task & Planning (notificări, dependențe între task-uri, export).
+- Risk Management, Plants – conținut real în loc de placeholder (Material Management este deja implementat).
 - Accounting: integrare cu work logs aprobate, facturi, costuri.
 - Reports: rapoarte pe proiect / perioadă / worker.
 - Complains / Issues: flux complet (manager vede issue-uri, schimbă status).
 - Notificări (email / in-app) la aprobare/respingere work log.
 - Planuri de abonament (Silver/Gold) cu limite sau funcții extra.
-- Multi-tenancy îmbunătățit (invitații manager, permisiuni granulare).
+- Multi-tenancy îmbunătățit (permisiuni granulare între general / site manager – invite de bază există).
 
 ---
 
@@ -62,3 +62,5 @@
 ---
 
 *Actualizează acest document la schimbări de scop, roadmap sau monetizare.*
+
+**Actualizat:** 16/03/2026

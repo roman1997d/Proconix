@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Materials – Stock & Inventory | Proconix</title>
+  <meta name="description" content="Proconix Manage Materials: track stock, inventory, and supplies per project. Built for construction and project managers.">
+  <meta name="keywords" content="manage materials, stock management, inventory, construction materials, project supplies, Proconix">
+  <meta name="author" content="Proconix">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://proconix.example.com/material.html">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Manage Materials – Stock & Inventory | Proconix">
+  <meta property="og:description" content="Track materials, stock, and supplies per project. For construction and project managers.">
+  <meta property="og:url" content="https://proconix.example.com/material.html">
+  <meta property="og:locale" content="en_GB">
+  <meta property="og:site_name" content="Proconix">
+
+  <!-- Theme / mobile -->
+  <meta name="theme-color" content="#1e3a5f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/manage_materials.css" rel="stylesheet">
+</head>
+<body class="manage-materials-page">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <header class="mm-header" role="banner">
+    <div class="mm-header-inner">
+      <a href="/" class="mm-logo" aria-label="Proconix home">Proconix</a>
+      <nav class="mm-nav" aria-label="Main navigation">
+        <a href="/">Home</a>
+        <a href="/dashboard_manager.html">Manager Dashboard</a>
+        <a href="/register_company.html">Register</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content" class="mm-main" role="main">
+    <section class="mm-hero" aria-labelledby="hero-heading">
+      <div class="mm-hero-inner">
+        <h1 id="hero-heading" class="mm-hero-title">Manage Materials</h1>
+        <p class="mm-hero-lead">Track stock, inventory, and supplies per project. One place for your company and your teams.</p>
+        <a href="/dashboard_manager.html" class="mm-btn mm-btn-primary">
+          <i class="bi bi-box-seam-fill" aria-hidden="true"></i> Open in Dashboard
+        </a>
+      </div>
+    </section>
+
+    <section class="mm-section mm-features" aria-labelledby="features-heading">
+      <div class="mm-container">
+        <h2 id="features-heading" class="mm-section-title">What you can do</h2>
+        <ul class="mm-feature-grid" role="list">
+          <li class="mm-feature-card">
+            <span class="mm-feature-icon" aria-hidden="true"><i class="bi bi-collection-fill"></i></span>
+            <h3 class="mm-feature-title">Per-project stock</h3>
+            <p class="mm-feature-desc">Assign materials to projects and see initial, used, and remaining quantities at a glance.</p>
+          </li>
+          <li class="mm-feature-card">
+            <span class="mm-feature-icon" aria-hidden="true"><i class="bi bi-tags-fill"></i></span>
+            <h3 class="mm-feature-title">Categories & units</h3>
+            <p class="mm-feature-desc">Organise by category and unit (buc, kg, m², m³, l) for clear reporting.</p>
+          </li>
+          <li class="mm-feature-card">
+            <span class="mm-feature-icon" aria-hidden="true"><i class="bi bi-truck"></i></span>
+            <h3 class="mm-feature-title">Suppliers</h3>
+            <p class="mm-feature-desc">Keep supplier details—name, email, phone—in one place for your company.</p>
+          </li>
+          <li class="mm-feature-card">
+            <span class="mm-feature-icon" aria-hidden="true"><i class="bi bi-graph-down"></i></span>
+            <h3 class="mm-feature-title">Low-stock alerts</h3>
+            <p class="mm-feature-desc">Set thresholds and see when stock is running low so you can reorder in time.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="mm-section mm-cta" aria-labelledby="cta-heading">
+      <div class="mm-container mm-cta-inner">
+        <h2 id="cta-heading" class="mm-cta-title">Ready to manage your materials?</h2>
+        <p class="mm-cta-text">Sign in as a manager and use the dashboard to add projects, materials, categories, and suppliers.</p>
+        <a href="/login_manager.html" class="mm-btn mm-btn-secondary">
+          <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i> Manager login
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="mm-footer" role="contentinfo">
+    <div class="mm-footer-inner">
+      <p class="mm-footer-brand">Proconix</p>
+      <p class="mm-footer-copy">Manage Materials &middot; Part of Proconix. Track work processes and resources in one place.</p>
+      <p class="mm-footer-links">
+        <a href="/">Home</a>
+        <a href="/dashboard_manager.html">Dashboard</a>
+        <a href="/Quality_Assurance.html">Quality Assurance</a>
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    // Optional: canonical URL update for current origin
+    (function () {
+      var canonical = document.querySelector('link[rel="canonical"]');
+      if (canonical && window.location.origin) {
+        canonical.href = window.location.origin + window.location.pathname;
+      }
+    })();
+  </script>
+</body>
+</html>

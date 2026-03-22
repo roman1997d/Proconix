@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Material Management – Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    .mm-header-bar { background: var(--bs-dark); color: #fff; padding: 1rem 0; }
+    .mm-card { border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .mm-table-wrap { overflow-x: auto; }
+    .mm-table th { white-space: nowrap; cursor: pointer; user-select: none; }
+    .mm-table th i.sort-icon { opacity: 0.4; }
+    .mm-table th.sorted i.sort-icon { opacity: 1; }
+    .mm-table tr.low-stock { background-color: #fff3cd; }
+    .mm-table tr.out-of-stock { background-color: #f8d7da; }
+    .toast-container-custom { z-index: 1100; }
+    .forecast-chart-wrap { height: 260px; }
+    .mm-card-clickable { cursor: pointer; transition: box-shadow 0.2s; }
+    .mm-card-clickable:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+  </style>
+</head>
+<body class="bg-light">
+  <!-- Toast container -->
+  <div class="toast-container position-fixed top-0 end-0 p-3 toast-container-custom" id="toastContainer"></div>
+
+  <!-- Header -->
+  <header class="mm-header-bar">
+    <div class="container-fluid d-flex align-items-center justify-content-between">
+      <h1 class="h4 mb-0">Material Management</h1>
+      <a href="dashboard_manager.html" class="btn btn-light btn-sm">
+        <i class="bi bi-arrow-left-circle"></i> Go back to dashboard
+      </a>
+    </div>
+  </header>
+
+  <div class="container-fluid py-4">
+    <!-- Toolbar: Project + Actions -->
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+      <div class="d-flex align-items-center gap-2">
+        <label class="form-label mb-0 fw-semibold">Project / Site</label>
+        <select id="projectSelect" class="form-select form-select-lg" style="min-width: 220px;">
+          <option value="">— Select project —</option>
+        </select>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalCategory">
+          <i class="bi bi-tag-fill"></i> Manage Categories
+        </button>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalSupplier">
+          <i class="bi bi-truck"></i> Add Supplier
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalMaterial">
+          <i class="bi bi-plus-lg"></i> Add Material
+        </button>
+        <a href="manage_material.html" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary" title="Open in a new window">
+          <i class="bi bi-box-arrow-up-right"></i> Open in a new window
+        </a>
+      </div>
+    </div>
+
+    <!-- Overview Cards -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        <div class="card mm-card h-100">
+          <div class="card-body">
+            <h6 class="card-subtitle text-muted mb-1">Total Stock</h6>
+            <p class="card-title h4 mb-0" id="overviewTotalStock">—</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card mm-card h-100">
+          <div class="card-body">
+            <h6 class="card-subtitle text-muted mb-1">Stock by Categories</h6>
+            <p class="card-title mb-0 small" id="overviewByCategory">—</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card mm-card mm-card-clickable h-100 border-warning" id="cardCritical" role="button" tabindex="0" aria-label="View critical materials">
+          <div class="card-body">
+            <h6 class="card-subtitle text-muted mb-1"><i class="bi bi-exclamation-triangle text-warning"></i> Critical Materials</h6>
+            <p class="card-title h4 mb-0 text-warning" id="overviewCritical">0</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card mm-card mm-card-clickable h-100" id="cardAlerts" role="button" tabindex="0" aria-label="View alerts">
+          <div class="card-body">
+            <h6 class="card-subtitle text-muted mb-1">Alerts</h6>
+            <p class="card-title mb-0 small text-danger" id="overviewAlerts">None</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Forecast Section -->
+    <div class="card mm-card mb-4">
+      <div class="card-header bg-white">
+        <h5 class="mb-0">Material Forecast</h5>
+      </div>
+      <div class="card-body">
+        <div class="row align-items-end">
+          <div class="col-md-8">
+            <div class="forecast-chart-wrap">
+              <canvas id="forecastChart"></canvas>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <p class="mb-1"><strong>Forecasted usage this week:</strong> <span id="forecastThisWeek">—</span></p>
+            <p class="mb-1"><strong>Usage last week:</strong> <span id="forecastLastWeek">—</span></p>
+            <p class="mb-0 text-danger small" id="forecastAlert"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters + Table -->
+    <div class="card mm-card">
+      <div class="card-header bg-white d-flex flex-wrap align-items-center gap-2">
+        <h5 class="mb-0 me-auto">Materials</h5>
+        <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="Search by name..." style="max-width: 200px;">
+        <select id="filterCategory" class="form-select form-select-sm" style="max-width: 160px;">
+          <option value="">All categories</option>
+        </select>
+        <select id="filterStatus" class="form-select form-select-sm" style="max-width: 140px;">
+          <option value="">All statuses</option>
+          <option value="normal">Normal</option>
+          <option value="low">Low Stock</option>
+          <option value="out">Out of Stock</option>
+        </select>
+        <select id="filterSupplier" class="form-select form-select-sm" style="max-width: 160px;">
+          <option value="">All suppliers</option>
+        </select>
+        <button type="button" class="btn btn-sm btn-success" id="btnExportExcel">
+          <i class="bi bi-file-earmark-excel"></i> Export Excel
+        </button>
+      </div>
+      <div class="card-body p-0 mm-table-wrap">
+        <table class="table table-hover mb-0 mm-table" id="materialsTable">
+          <thead class="table-light">
+            <tr>
+              <th data-sort="name">Material Name <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="category">Category <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="supplier">Supplier <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="unit">Unit <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="quantityInitial">Qty Initial <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="quantityUsed">Qty Used <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="quantityRemaining">Qty Remaining <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="status">Status <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="materialsTbody">
+            <tr><td colspan="9" class="text-center text-muted py-4">Select a project to load materials.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Create Material Category -->
+  <div class="modal fade" id="modalCategory" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Manage Material Categories</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <input type="hidden" id="categoryId">
+          <div class="mb-3">
+            <label class="form-label">Category Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="categoryName" required placeholder="e.g. Cement, Timber">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Description (optional)</label>
+            <textarea class="form-control" id="categoryDescription" rows="2" placeholder="Optional description"></textarea>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <small class="text-muted">Select a category below to edit or delete.</small>
+            <button type="button" class="btn btn-outline-danger btn-sm d-none" id="btnDeleteCategory">Delete selected</button>
+          </div>
+          <div class="border rounded small" style="max-height: 220px; overflow-y: auto;">
+            <ul class="list-group list-group-flush" id="categoryList">
+              <li class="list-group-item text-muted">No categories yet.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="btnSaveCategory">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Supplier -->
+  <div class="modal fade" id="modalSupplier" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Manage Suppliers</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <input type="hidden" id="supplierId">
+          <div class="mb-3">
+            <label class="form-label">Supplier Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="supplierName" required placeholder="Company or supplier name">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Contact Person</label>
+            <input type="text" class="form-control" id="supplierContact" placeholder="Contact name">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email / Phone</label>
+            <input type="text" class="form-control" id="supplierEmailPhone" placeholder="Email or phone">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Address (optional)</label>
+            <input type="text" class="form-control" id="supplierAddress" placeholder="Address">
+          </div>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <small class="text-muted">Select a supplier below to edit or delete.</small>
+            <button type="button" class="btn btn-outline-danger btn-sm d-none" id="btnDeleteSupplier">Delete selected</button>
+          </div>
+          <div class="border rounded small" style="max-height: 220px; overflow-y: auto;">
+            <ul class="list-group list-group-flush" id="supplierList">
+              <li class="list-group-item text-muted">No suppliers yet.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="btnSaveSupplier">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Add Material -->
+  <div class="modal fade" id="modalMaterial" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Add Material</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Material Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="materialName" required placeholder="Material name">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Category</label>
+            <select class="form-select" id="materialCategory"></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Supplier</label>
+            <select class="form-select" id="materialSupplier"></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Unit</label>
+            <select class="form-select" id="materialUnit">
+              <option value="kg">kg</option>
+              <option value="m²">m²</option>
+              <option value="pcs">pcs</option>
+              <option value="m">m</option>
+              <option value="m³">m³</option>
+              <option value="l">l</option>
+            </select>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Quantity Initial <span class="text-danger">*</span></label>
+              <input type="number" class="form-control" id="materialQtyInitial" min="0" step="any" required value="0">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Low Stock Threshold</label>
+              <input type="number" class="form-control" id="materialLowStock" min="0" step="any" value="0" placeholder="Alert when below">
+            </div>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="materialEmailNotify">
+            <label class="form-check-label" for="materialEmailNotify">Receive Email Notification when low stock</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="btnSaveMaterial">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Material (full) -->
+  <div class="modal fade" id="modalEditMaterial" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Edit Material (full)</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <input type="hidden" id="editMaterialId">
+          <div class="mb-3">
+            <label class="form-label">Material Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="editMaterialName" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Category</label>
+            <select class="form-select" id="editMaterialCategory"></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Supplier</label>
+            <select class="form-select" id="editMaterialSupplier"></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Unit</label>
+            <select class="form-select" id="editMaterialUnit">
+              <option value="kg">kg</option>
+              <option value="m²">m²</option>
+              <option value="pcs">pcs</option>
+              <option value="m">m</option>
+              <option value="m³">m³</option>
+              <option value="l">l</option>
+            </select>
+          </div>
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Quantity Initial</label>
+              <input type="number" class="form-control" id="editMaterialQtyInitial" min="0" step="any">
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Quantity Used</label>
+              <input type="number" class="form-control" id="editMaterialQtyUsed" min="0" step="any">
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Low Stock Threshold</label>
+              <input type="number" class="form-control" id="editMaterialLowStock" min="0" step="any">
+            </div>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="editMaterialEmailNotify">
+            <label class="form-check-label" for="editMaterialEmailNotify">Receive Email Notification when low stock</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="btnUpdateMaterial">Update</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit only qty -->
+  <div class="modal fade" id="modalEditQty" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Edit only qty</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <input type="hidden" id="editQtyMaterialId">
+          <p class="mb-3 text-muted"><strong id="editQtyMaterialName"></strong></p>
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Quantity Initial</label>
+              <input type="number" class="form-control" id="editQtyInitial" min="0" step="any">
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Quantity Used</label>
+              <input type="number" class="form-control" id="editQtyUsed" min="0" step="any">
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label">Low Stock Threshold</label>
+              <input type="number" class="form-control" id="editQtyLowStock" min="0" step="any">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="btnUpdateQty">Update</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Critical Materials -->
+  <div class="modal fade" id="modalCritical" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-exclamation-triangle text-warning me-2"></i>Critical Materials</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">Materials below low-stock threshold or out of stock. Click to see why each one is critical.</p>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover">
+              <thead class="table-light">
+                <tr>
+                  <th>Material</th>
+                  <th>Category</th>
+                  <th>Unit</th>
+                  <th>Remaining</th>
+                  <th>Threshold</th>
+                  <th>Status</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="modalCriticalTbody">
+                <tr><td colspan="7" class="text-center text-muted py-3">No critical materials.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Alerts -->
+  <div class="modal fade" id="modalAlerts" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title text-danger"><i class="bi bi-bell-fill me-2"></i>Alerts</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">Materials that need attention: low stock or out of stock. Reason is shown for each.</p>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover">
+              <thead class="table-light">
+                <tr>
+                  <th>Material</th>
+                  <th>Category</th>
+                  <th>Remaining</th>
+                  <th>Threshold</th>
+                  <th>Status</th>
+                  <th>Why this alert</th>
+                </tr>
+              </thead>
+              <tbody id="modalAlertsTbody">
+                <tr><td colspan="6" class="text-center text-muted py-3">No alerts.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Stock check -->
+  <div class="modal fade" id="modalStockCheck" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-clipboard-data me-2"></i>Stock check</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="stockCheckMaterialId">
+          <p class="fw-semibold mb-3" id="stockCheckMaterialName"></p>
+          <ul class="list-group list-group-flush">
+            <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Quantity initial</span><span id="stockCheckInitial"></span></li>
+            <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Quantity used</span><span id="stockCheckUsed"></span></li>
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span class="text-muted">Quantity remaining</span>
+              <input type="number" class="form-control form-control-sm" id="stockCheckRemainingInput" min="0" step="any" style="max-width: 120px;" placeholder="0">
+            </li>
+            <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Low stock threshold</span><span id="stockCheckThreshold"></span></li>
+            <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Status</span><span id="stockCheckStatus"></span></li>
+          </ul>
+          <p class="mt-3 mb-0 small text-muted" id="stockCheckMessage"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" id="btnStockCheckUpdate">Update</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Delete confirmation -->
+  <div class="modal fade" id="modalDeleteMaterial" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Delete Material</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <p class="mb-0">Delete <strong id="deleteMaterialName"></strong>? This cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-danger" id="btnConfirmDelete">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <script>
+(function () {
+  'use strict';
+
+  // ---- Backend config: set window.MATERIAL_USE_MOCK = true to use mock data when API is not available ----
+  var USE_MOCK = window.MATERIAL_USE_MOCK === true;
+  var API_BASE = (window.MATERIAL_API_BASE != null ? window.MATERIAL_API_BASE : '').replace(/\/$/, '') || '/api/materials';
+  var SESSION_KEY = 'proconix_manager_session';
+
+  function getSessionHeaders() {
+    try {
+      var raw = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
+      var s = raw ? JSON.parse(raw) : null;
+      if (!s || s.manager_id == null || !s.email) return {};
+      return { 'X-Manager-Id': String(s.manager_id), 'X-Manager-Email': s.email };
+    } catch (e) { return {}; }
+  }
+
+  function materialFetch(path, opts) {
+    opts = opts || {};
+    var url = API_BASE + (path.charAt(0) === '/' ? path : '/' + path);
+    opts.headers = Object.assign({}, getSessionHeaders(), opts.headers || {});
+    return fetch(url, opts).then(function (res) {
+      if (res.status === 401) return res.text().then(function () { throw new Error('Session expired. Please log in again.'); });
+      if (!res.ok) return res.text().then(function (t) { throw new Error(t || 'Request failed'); });
+      if (res.status === 204) return null;
+      return res.json();
+    });
+  }
+
+  var materialApi = {
+    getProjects: function () { return materialFetch('/projects'); },
+    getMaterials: function (projectId) { return materialFetch('?projectId=' + encodeURIComponent(projectId)); },
+    getCategories: function () { return materialFetch('/categories'); },
+    getSuppliers: function () { return materialFetch('/suppliers'); },
+    createCategory: function (body) { return materialFetch('/categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); },
+    createSupplier: function (body) { return materialFetch('/suppliers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); },
+    updateCategory: function (id, body) { return materialFetch('/categories/' + encodeURIComponent(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); },
+    deleteCategory: function (id) { return materialFetch('/categories/' + encodeURIComponent(id), { method: 'DELETE' }); },
+    updateSupplier: function (id, body) { return materialFetch('/suppliers/' + encodeURIComponent(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); },
+    deleteSupplier: function (id) { return materialFetch('/suppliers/' + encodeURIComponent(id), { method: 'DELETE' }); },
+    createMaterial: function (body) { return materialFetch('', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); },
+    updateMaterial: function (id, body) { return materialFetch('/' + encodeURIComponent(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); },
+    deleteMaterial: function (id) { return materialFetch('/' + encodeURIComponent(id), { method: 'DELETE' }); },
+    getForecast: function (projectId) { return materialFetch('/forecast?projectId=' + encodeURIComponent(projectId)).catch(function () { return { thisWeek: 0, lastWeek: 0 }; }); }
+  };
+
+  function normalizeMaterial(m) {
+    var id = m.id != null ? String(m.id) : '';
+    var cat = m.category != null ? String(m.category) : (m.categoryName || '');
+    var catId = m.categoryId != null ? String(m.categoryId) : (m.category ? m.category : '');
+    var supId = m.supplierId != null ? String(m.supplierId) : '';
+    return { id: id, name: m.name || '', categoryId: catId, categoryName: cat || m.categoryName || '', supplierId: supId, supplierName: m.supplierName || '', unit: m.unit || 'kg', quantityInitial: Number(m.quantityInitial) || 0, quantityUsed: Number(m.quantityUsed) || 0, quantityRemaining: m.quantityRemaining != null ? Number(m.quantityRemaining) : (Number(m.quantityInitial) || 0) - (Number(m.quantityUsed) || 0), lowStockThreshold: m.lowStockThreshold != null ? Number(m.lowStockThreshold) : null, status: m.status || 'normal', emailNotify: !!m.emailNotify };
+  }
+
+  // ---- State (filled from API or mock) ----
+  var projects = [];
+  var categories = [];
+  var suppliers = [];
+  var materials = [];
+  var forecastThisWeek = 0;
+  var forecastLastWeek = 0;
+  var sortKey = '';
+  var sortDir = 1;
+  var deleteTargetId = null;
+  var chartInstance = null;
+  var currentProjectId = null;
+
+  function getProjectMaterialsMock(projectId) {
+    if (!projectId) return [];
+    return [
+      { id: 'm1', name: 'Portland Cement', categoryId: 'c1', categoryName: 'Cement', supplierId: 's1', supplierName: 'BuildCo Ltd', unit: 'kg', quantityInitial: 5000, quantityUsed: 3200, quantityRemaining: 1800, lowStockThreshold: 500, status: 'normal', emailNotify: true },
+      { id: 'm2', name: 'Timber 2x4', categoryId: 'c2', categoryName: 'Timber', supplierId: 's2', supplierName: 'TimberWorld', unit: 'm', quantityInitial: 200, quantityUsed: 180, quantityRemaining: 20, lowStockThreshold: 50, status: 'low', emailNotify: false },
+      { id: 'm3', name: 'Cable 2.5mm', categoryId: 'c3', categoryName: 'Electrical', supplierId: 's1', supplierName: 'BuildCo Ltd', unit: 'm', quantityInitial: 500, quantityUsed: 500, quantityRemaining: 0, lowStockThreshold: 100, status: 'out', emailNotify: true }
+    ];
+  }
+  function getForecastMock(projectId) { return projectId ? { thisWeek: 420, lastWeek: 380 } : { thisWeek: 0, lastWeek: 0 }; }
+
+  function showToast(message, isError) {
+    var container = document.getElementById('toastContainer');
+    if (!container) return;
+    var toast = document.createElement('div');
+    toast.className = 'toast align-items-center text-bg-' + (isError ? 'danger' : 'success') + ' border-0';
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = '<div class="d-flex"><div class="toast-body">' + escapeHtml(message) + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+    container.appendChild(toast);
+    var bsToast = new bootstrap.Toast(toast, { delay: 4000 });
+    bsToast.show();
+    toast.addEventListener('hidden.bs.toast', function () { toast.remove(); });
+  }
+  function escapeHtml(s) { if (s == null) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function loadProjectDropdown() {
+    var sel = document.getElementById('projectSelect');
+    if (!sel) return;
+    if (USE_MOCK) {
+      projects = [{ id: 'p1', name: 'Site Alpha' }, { id: 'p2', name: 'Site Beta' }, { id: 'p3', name: 'Site Gamma' }];
+      categories = [{ id: 'c1', name: 'Cement' }, { id: 'c2', name: 'Timber' }, { id: 'c3', name: 'Electrical' }];
+      suppliers = [{ id: 's1', name: 'BuildCo Ltd', contact: 'John', emailPhone: 'john@buildco.com', address: '' }, { id: 's2', name: 'TimberWorld', contact: 'Jane', emailPhone: '07900123456', address: '' }];
+    } else {
+      if (!getSessionHeaders()['X-Manager-Id']) {
+        showToast('Log in as manager to load projects.', true);
+        return;
+      }
+      materialApi.getProjects().then(function (data) {
+        projects = (data && data.projects) ? data.projects.map(function (p) { return { id: String(p.id), name: p.name || '', address: p.address || '' }; }) : [];
+        while (sel.options.length > 1) sel.remove(1);
+        projects.forEach(function (p) { sel.appendChild(new Option(p.name || ('Project #' + p.id), p.id)); });
+      }).catch(function (err) { showToast(err.message || 'Could not load projects.', true); });
+      materialApi.getCategories().then(function (list) {
+        categories = Array.isArray(list) ? list.map(function (c) { return { id: String(c.id), name: c.name || '', description: c.description || '' }; }) : [];
+        populateCategoryFilter();
+        fillMaterialCategoryDropdown('materialCategory');
+        fillMaterialCategoryDropdown('editMaterialCategory');
+        renderCategoryList();
+      }).catch(function () { categories = []; renderCategoryList(); });
+      materialApi.getSuppliers().then(function (list) {
+        suppliers = Array.isArray(list) ? list.map(function (s) { return { id: String(s.id), name: s.name || '', contact: s.contact || '', emailPhone: s.email || s.phone || s.emailPhone || '', address: s.address || '' }; }) : [];
+        populateSupplierFilter();
+        fillMaterialSupplierDropdown('materialSupplier');
+        fillMaterialSupplierDropdown('editMaterialSupplier');
+        renderSupplierList();
+      }).catch(function () { suppliers = []; renderSupplierList(); });
+      return;
+    }
+    while (sel.options.length > 1) sel.remove(1);
+    projects.forEach(function (p) { sel.appendChild(new Option(p.name, p.id)); });
+  }
+
+  function loadMaterialsForProject(projectId) {
+    if (!projectId) {
+      materials = [];
+      forecastThisWeek = 0;
+      forecastLastWeek = 0;
+      renderOverview();
+      renderForecast();
+      renderTable();
+      populateCategoryFilter();
+      populateSupplierFilter();
+      return;
+    }
+    if (USE_MOCK) {
+      materials = getProjectMaterialsMock(projectId);
+      var fc = getForecastMock(projectId);
+      forecastThisWeek = fc.thisWeek;
+      forecastLastWeek = fc.lastWeek;
+    } else {
+      Promise.all([materialApi.getMaterials(projectId), materialApi.getForecast(projectId)]).then(function (results) {
+        var list = results[0];
+        var fc = results[1] || {};
+        materials = Array.isArray(list) ? list.map(normalizeMaterial) : [];
+        forecastThisWeek = Number(fc.thisWeek) || 0;
+        forecastLastWeek = Number(fc.lastWeek) || 0;
+        renderOverview();
+        renderForecast();
+        renderTable();
+        populateCategoryFilter();
+        populateSupplierFilter();
+      }).catch(function (err) {
+        showToast(err.message || 'Could not load materials.', true);
+        materials = [];
+        forecastThisWeek = 0;
+        forecastLastWeek = 0;
+        renderOverview();
+        renderForecast();
+        renderTable();
+      });
+      return;
+    }
+    renderOverview();
+    renderForecast();
+    renderTable();
+    populateCategoryFilter();
+    populateSupplierFilter();
+  }
+
+  function renderOverview() {
+    var total = 0;
+    var byCat = {};
+    var critical = 0;
+    var alertNames = [];
+    materials.forEach(function (m) {
+      total += m.quantityRemaining || 0;
+      var cat = m.categoryName || 'Uncategorised';
+      byCat[cat] = (byCat[cat] || 0) + (m.quantityRemaining || 0);
+      if (m.status === 'low' || m.status === 'out') {
+        critical++;
+        alertNames.push(m.name);
+      }
+    });
+    document.getElementById('overviewTotalStock').textContent = total.toLocaleString();
+    document.getElementById('overviewByCategory').innerHTML = Object.keys(byCat).length ? Object.entries(byCat).map(function (e) { return e[0] + ': ' + e[1].toLocaleString(); }).join(' · ') : '—';
+    document.getElementById('overviewCritical').textContent = critical;
+    document.getElementById('overviewAlerts').textContent = alertNames.length ? alertNames.join(', ') : 'None';
+  }
+
+  function getCriticalMaterialsWithReason() {
+    return materials.filter(function (m) { return m.status === 'low' || m.status === 'out'; }).map(function (m) {
+      var reason = m.status === 'out'
+        ? 'Out of stock: remaining quantity is 0.'
+        : 'Low stock: remaining (' + (m.quantityRemaining != null ? m.quantityRemaining : 0) + ') is at or below threshold (' + (m.lowStockThreshold != null ? m.lowStockThreshold : 0) + ').';
+      return { m: m, reason: reason };
+    });
+  }
+
+  function openCriticalModal() {
+    var list = getCriticalMaterialsWithReason();
+    var tbody = document.getElementById('modalCriticalTbody');
+    if (!tbody) return;
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">No critical materials.</td></tr>';
+    } else {
+      tbody.innerHTML = list.map(function (item) {
+        var m = item.m;
+        var statusLabel = m.status === 'out' ? 'Out of Stock' : 'Low Stock';
+        var statusClass = m.status === 'out' ? 'text-danger' : 'text-warning';
+        return '<tr>' +
+          '<td>' + escapeHtml(m.name) + '</td>' +
+          '<td>' + escapeHtml(m.categoryName || '—') + '</td>' +
+          '<td>' + escapeHtml(m.unit || '—') + '</td>' +
+          '<td>' + (m.quantityRemaining != null ? m.quantityRemaining : '—') + '</td>' +
+          '<td>' + (m.lowStockThreshold != null ? m.lowStockThreshold : '—') + '</td>' +
+          '<td><span class="' + statusClass + '">' + escapeHtml(statusLabel) + '</span></td>' +
+          '<td class="small">' + escapeHtml(item.reason) + '</td></tr>';
+      }).join('');
+    }
+    new bootstrap.Modal(document.getElementById('modalCritical')).show();
+  }
+
+  function openAlertsModal() {
+    var list = getCriticalMaterialsWithReason();
+    var tbody = document.getElementById('modalAlertsTbody');
+    if (!tbody) return;
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No alerts.</td></tr>';
+    } else {
+      tbody.innerHTML = list.map(function (item) {
+        var m = item.m;
+        var statusLabel = m.status === 'out' ? 'Out of Stock' : 'Low Stock';
+        var statusClass = m.status === 'out' ? 'text-danger' : 'text-warning';
+        return '<tr>' +
+          '<td>' + escapeHtml(m.name) + '</td>' +
+          '<td>' + escapeHtml(m.categoryName || '—') + '</td>' +
+          '<td>' + (m.quantityRemaining != null ? m.quantityRemaining : '—') + '</td>' +
+          '<td>' + (m.lowStockThreshold != null ? m.lowStockThreshold : '—') + '</td>' +
+          '<td><span class="' + statusClass + '">' + escapeHtml(statusLabel) + '</span></td>' +
+          '<td class="small">' + escapeHtml(item.reason) + '</td></tr>';
+      }).join('');
+    }
+    new bootstrap.Modal(document.getElementById('modalAlerts')).show();
+  }
+
+  function renderForecast() {
+    document.getElementById('forecastThisWeek').textContent = forecastThisWeek.toLocaleString();
+    document.getElementById('forecastLastWeek').textContent = forecastLastWeek.toLocaleString();
+    var totalRemaining = materials.reduce(function (sum, m) { return sum + (m.quantityRemaining || 0); }, 0);
+    var alertEl = document.getElementById('forecastAlert');
+    if (forecastThisWeek > totalRemaining && totalRemaining > 0) {
+      alertEl.textContent = 'Forecasted usage this week (' + forecastThisWeek + ') exceeds available stock (' + totalRemaining + '). Consider reordering.';
+    } else {
+      alertEl.textContent = '';
+    }
+    if (chartInstance) {
+      chartInstance.data.datasets[0].data = [forecastLastWeek, forecastThisWeek];
+      chartInstance.update();
+    } else {
+      var ctx = document.getElementById('forecastChart');
+      if (ctx) {
+        chartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: ['Last week (actual)', 'This week (forecast)'],
+            datasets: [{ label: 'Usage', data: [forecastLastWeek, forecastThisWeek], backgroundColor: ['rgba(100,100,100,0.6)', 'rgba(13,110,253,0.6)'] }]
+          },
+          options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
+      }
+    }
+  }
+
+  function getFilteredMaterials() {
+    var search = (document.getElementById('filterSearch') && document.getElementById('filterSearch').value || '').toLowerCase();
+    var cat = document.getElementById('filterCategory') && document.getElementById('filterCategory').value;
+    var status = document.getElementById('filterStatus') && document.getElementById('filterStatus').value;
+    var supplier = document.getElementById('filterSupplier') && document.getElementById('filterSupplier').value;
+    var list = materials.filter(function (m) {
+      if (search && (m.name || '').toLowerCase().indexOf(search) === -1) return false;
+      if (cat && m.categoryId !== cat) return false;
+      if (status && m.status !== status) return false;
+      if (supplier && m.supplierId !== supplier) return false;
+      return true;
+    });
+    if (sortKey) {
+      list.sort(function (a, b) {
+        var va = a[sortKey];
+        var vb = b[sortKey];
+        if (typeof va === 'number' && typeof vb === 'number') return sortDir * (va - vb);
+        return sortDir * String(va || '').localeCompare(String(vb || ''));
+      });
+    }
+    return list;
+  }
+
+  function renderTable() {
+    var tbody = document.getElementById('materialsTbody');
+    if (!tbody) return;
+    var list = getFilteredMaterials();
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No materials match the filters.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(function (m) {
+      var rowClass = m.status === 'out' ? 'out-of-stock' : (m.status === 'low' ? 'low-stock' : '');
+      var statusLabel = m.status === 'out' ? 'Out of Stock' : (m.status === 'low' ? 'Low Stock' : 'Normal');
+      return '<tr class="' + rowClass + '" data-id="' + escapeHtml(m.id) + '">' +
+        '<td>' + escapeHtml(m.name) + '</td>' +
+        '<td>' + escapeHtml(m.categoryName || '—') + '</td>' +
+        '<td>' + escapeHtml(m.supplierName || '—') + '</td>' +
+        '<td>' + escapeHtml(m.unit || '—') + '</td>' +
+        '<td>' + (m.quantityInitial != null ? m.quantityInitial : '—') + '</td>' +
+        '<td>' + (m.quantityUsed != null ? m.quantityUsed : '—') + '</td>' +
+        '<td>' + (m.quantityRemaining != null ? m.quantityRemaining : '—') + '</td>' +
+        '<td>' + escapeHtml(statusLabel) + '</td>' +
+        '<td><button type="button" class="btn btn-sm btn-outline-info me-1 btn-stock-check" data-id="' + escapeHtml(m.id) + '">Stock check</button><button type="button" class="btn btn-sm btn-outline-primary me-1 btn-edit-full" data-id="' + escapeHtml(m.id) + '">Edit full</button><button type="button" class="btn btn-sm btn-outline-secondary me-1 btn-edit-qty" data-id="' + escapeHtml(m.id) + '">Edit only qty</button><button type="button" class="btn btn-sm btn-outline-danger btn-delete" data-id="' + escapeHtml(m.id) + '" data-name="' + escapeHtml(m.name) + '">Delete</button></td></tr>';
+    }).join('');
+    tbody.querySelectorAll('.btn-stock-check').forEach(function (btn) {
+      btn.addEventListener('click', function () { openStockCheckModal(btn.getAttribute('data-id')); });
+    });
+    tbody.querySelectorAll('.btn-edit-full').forEach(function (btn) {
+      btn.addEventListener('click', function () { openEditModal(btn.getAttribute('data-id')); });
+    });
+    tbody.querySelectorAll('.btn-edit-qty').forEach(function (btn) {
+      btn.addEventListener('click', function () { openEditQtyModal(btn.getAttribute('data-id')); });
+    });
+    tbody.querySelectorAll('.btn-delete').forEach(function (btn) {
+      btn.addEventListener('click', function () { openDeleteModal(btn.getAttribute('data-id'), btn.getAttribute('data-name')); });
+    });
+  }
+
+  function populateCategoryFilter() {
+    var sel = document.getElementById('filterCategory');
+    if (!sel) return;
+    var v = sel.value;
+    sel.innerHTML = '<option value="">All categories</option>';
+    categories.forEach(function (c) { sel.appendChild(new Option(c.name, c.id)); });
+    sel.value = v;
+  }
+
+  function renderCategoryList() {
+    var listEl = document.getElementById('categoryList');
+    if (!listEl) return;
+    if (!categories.length) {
+      listEl.innerHTML = '<li class="list-group-item text-muted">No categories yet.</li>';
+      return;
+    }
+    listEl.innerHTML = categories.map(function (c) {
+      var desc = c.description ? '<div class="small text-muted">' + escapeHtml(c.description) + '</div>' : '';
+      return '<li class="list-group-item d-flex justify-content-between align-items-start" data-id="' + escapeHtml(c.id) + '">' +
+        '<div><div class="fw-semibold">' + escapeHtml(c.name) + '</div>' + desc + '</div>' +
+        '<button type="button" class="btn btn-sm btn-outline-primary ms-2 btn-edit-category">Edit</button>' +
+        '</li>';
+    }).join('');
+    listEl.querySelectorAll('.btn-edit-category').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var li = btn.closest('li[data-id]');
+        if (!li) return;
+        var id = li.getAttribute('data-id');
+        var cat = categories.find(function (c) { return String(c.id) === String(id); });
+        if (!cat) return;
+        document.getElementById('categoryId').value = cat.id;
+        document.getElementById('categoryName').value = cat.name || '';
+        document.getElementById('categoryDescription').value = cat.description || '';
+        var delBtn = document.getElementById('btnDeleteCategory');
+        if (delBtn) delBtn.classList.remove('d-none');
+        var saveBtn = document.getElementById('btnSaveCategory');
+        if (saveBtn) saveBtn.textContent = 'Update';
+      });
+    });
+  }
+  function populateSupplierFilter() {
+    var sel = document.getElementById('filterSupplier');
+    if (!sel) return;
+    var v = sel.value;
+    sel.innerHTML = '<option value="">All suppliers</option>';
+    suppliers.forEach(function (s) { sel.appendChild(new Option(s.name, s.id)); });
+    sel.value = v;
+  }
+
+  function renderSupplierList() {
+    var listEl = document.getElementById('supplierList');
+    if (!listEl) return;
+    if (!suppliers.length) {
+      listEl.innerHTML = '<li class="list-group-item text-muted">No suppliers yet.</li>';
+      return;
+    }
+    listEl.innerHTML = suppliers.map(function (s) {
+      var line2Parts = [];
+      if (s.contact) line2Parts.push(escapeHtml(s.contact));
+      if (s.emailPhone) line2Parts.push(escapeHtml(s.emailPhone));
+      if (s.address) line2Parts.push(escapeHtml(s.address));
+      var line2 = line2Parts.length ? '<div class="small text-muted">' + line2Parts.join(' · ') + '</div>' : '';
+      return '<li class="list-group-item d-flex justify-content-between align-items-start" data-id="' + escapeHtml(s.id) + '">' +
+        '<div><div class="fw-semibold">' + escapeHtml(s.name) + '</div>' + line2 + '</div>' +
+        '<button type="button" class="btn btn-sm btn-outline-primary ms-2 btn-edit-supplier">Edit</button>' +
+        '</li>';
+    }).join('');
+    listEl.querySelectorAll('.btn-edit-supplier').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var li = btn.closest('li[data-id]');
+        if (!li) return;
+        var id = li.getAttribute('data-id');
+        var sup = suppliers.find(function (s) { return String(s.id) === String(id); });
+        if (!sup) return;
+        document.getElementById('supplierId').value = sup.id;
+        document.getElementById('supplierName').value = sup.name || '';
+        document.getElementById('supplierContact').value = sup.contact || '';
+        document.getElementById('supplierEmailPhone').value = sup.emailPhone || '';
+        document.getElementById('supplierAddress').value = sup.address || '';
+        var delBtn = document.getElementById('btnDeleteSupplier');
+        if (delBtn) delBtn.classList.remove('d-none');
+        var saveBtn = document.getElementById('btnSaveSupplier');
+        if (saveBtn) saveBtn.textContent = 'Update';
+      });
+    });
+  }
+
+  function fillMaterialCategoryDropdown(selectId) {
+    var sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Select —</option>';
+    categories.forEach(function (c) { sel.appendChild(new Option(c.name, c.id)); });
+  }
+  function fillMaterialSupplierDropdown(selectId) {
+    var sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Select —</option>';
+    suppliers.forEach(function (s) { sel.appendChild(new Option(s.name, s.id)); });
+  }
+
+  function openEditModal(id) {
+    var m = materials.find(function (x) { return x.id === id; });
+    if (!m) return;
+    document.getElementById('editMaterialId').value = m.id;
+    document.getElementById('editMaterialName').value = m.name || '';
+    document.getElementById('editMaterialQtyInitial').value = m.quantityInitial != null ? m.quantityInitial : '';
+    document.getElementById('editMaterialQtyUsed').value = m.quantityUsed != null ? m.quantityUsed : '';
+    document.getElementById('editMaterialLowStock').value = m.lowStockThreshold != null ? m.lowStockThreshold : '';
+    document.getElementById('editMaterialEmailNotify').checked = !!m.emailNotify;
+    var unit = m.unit || 'kg';
+    ['editMaterialUnit', 'editMaterialCategory', 'editMaterialSupplier'].forEach(function (id, i) {
+      var s = document.getElementById(id);
+      if (s) s.value = i === 0 ? unit : (i === 1 ? m.categoryId : m.supplierId) || '';
+    });
+    fillMaterialCategoryDropdown('editMaterialCategory');
+    fillMaterialSupplierDropdown('editMaterialSupplier');
+    document.getElementById('editMaterialCategory').value = m.categoryId || '';
+    document.getElementById('editMaterialSupplier').value = m.supplierId || '';
+    new bootstrap.Modal(document.getElementById('modalEditMaterial')).show();
+  }
+
+  function openStockCheckModal(id) {
+    var m = materials.find(function (x) { return x.id === id; });
+    if (!m) return;
+    document.getElementById('stockCheckMaterialId').value = m.id;
+    document.getElementById('stockCheckMaterialName').textContent = m.name || 'Material';
+    document.getElementById('stockCheckInitial').textContent = m.quantityInitial != null ? m.quantityInitial : '—';
+    document.getElementById('stockCheckUsed').textContent = m.quantityUsed != null ? m.quantityUsed : '—';
+    document.getElementById('stockCheckRemainingInput').value = m.quantityRemaining != null ? m.quantityRemaining : '';
+    document.getElementById('stockCheckThreshold').textContent = m.lowStockThreshold != null ? m.lowStockThreshold : '—';
+    var statusLabel = m.status === 'out' ? 'Out of Stock' : (m.status === 'low' ? 'Low Stock' : 'Normal');
+    var statusEl = document.getElementById('stockCheckStatus');
+    statusEl.textContent = statusLabel;
+    statusEl.className = m.status === 'out' ? 'text-danger fw-semibold' : (m.status === 'low' ? 'text-warning fw-semibold' : 'text-success');
+    var msg = m.status === 'out'
+      ? 'Stock is exhausted. Reorder as soon as possible.'
+      : (m.status === 'low' ? 'Remaining is at or below threshold. Consider reordering.' : 'Stock level is OK.');
+    document.getElementById('stockCheckMessage').textContent = msg;
+    new bootstrap.Modal(document.getElementById('modalStockCheck')).show();
+  }
+
+  document.getElementById('btnStockCheckUpdate').addEventListener('click', function () {
+    var id = document.getElementById('stockCheckMaterialId').value;
+    var m = materials.find(function (x) { return x.id === id; });
+    if (!m) return;
+    var initial = m.quantityInitial != null ? m.quantityInitial : 0;
+    var newRemaining = parseFloat(document.getElementById('stockCheckRemainingInput').value);
+    if (isNaN(newRemaining) || newRemaining < 0) {
+      showToast('Quantity remaining must be a number ≥ 0.', true);
+      return;
+    }
+    if (newRemaining > initial) {
+      showToast('Quantity remaining cannot exceed quantity initial.', true);
+      return;
+    }
+    var newUsed = initial - newRemaining;
+    if (USE_MOCK) {
+      m.quantityUsed = newUsed;
+      m.quantityRemaining = newRemaining;
+      m.status = newRemaining <= 0 ? 'out' : (m.lowStockThreshold != null && m.lowStockThreshold > 0 && newRemaining <= m.lowStockThreshold ? 'low' : 'normal');
+      bootstrap.Modal.getInstance(document.getElementById('modalStockCheck')).hide();
+      showToast('Quantity remaining updated.');
+      renderOverview();
+      renderTable();
+      renderForecast();
+    } else {
+      materialApi.updateMaterial(id, { quantityUsed: newUsed, quantityRemaining: newRemaining }).then(function () {
+        bootstrap.Modal.getInstance(document.getElementById('modalStockCheck')).hide();
+        showToast('Quantity remaining updated.');
+        loadMaterialsForProject(currentProjectId);
+      }).catch(function (err) { showToast(err.message || 'Update failed.', true); });
+    }
+  });
+
+  function openEditQtyModal(id) {
+    var m = materials.find(function (x) { return x.id === id; });
+    if (!m) return;
+    document.getElementById('editQtyMaterialId').value = m.id;
+    document.getElementById('editQtyMaterialName').textContent = m.name || 'Material';
+    document.getElementById('editQtyInitial').value = m.quantityInitial != null ? m.quantityInitial : '';
+    document.getElementById('editQtyUsed').value = m.quantityUsed != null ? m.quantityUsed : '';
+    document.getElementById('editQtyLowStock').value = m.lowStockThreshold != null ? m.lowStockThreshold : '';
+    new bootstrap.Modal(document.getElementById('modalEditQty')).show();
+  }
+
+  function openDeleteModal(id, name) {
+    deleteTargetId = id;
+    document.getElementById('deleteMaterialName').textContent = name || id;
+    new bootstrap.Modal(document.getElementById('modalDeleteMaterial')).show();
+  }
+
+  function exportExcel() {
+    var list = getFilteredMaterials();
+    if (list.length === 0) {
+      showToast('No data to export.', true);
+      return;
+    }
+    var rows = [
+      ['Material Name', 'Category', 'Supplier', 'Unit', 'Quantity Initial', 'Quantity Used', 'Quantity Remaining', 'Status']
+    ];
+    list.forEach(function (m) {
+      rows.push([
+        m.name || '',
+        m.categoryName || '',
+        m.supplierName || '',
+        m.unit || '',
+        m.quantityInitial != null ? m.quantityInitial : '',
+        m.quantityUsed != null ? m.quantityUsed : '',
+        m.quantityRemaining != null ? m.quantityRemaining : '',
+        m.status === 'out' ? 'Out of Stock' : (m.status === 'low' ? 'Low Stock' : 'Normal')
+      ]);
+    });
+    var wb = XLSX.utils.book_new();
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Materials');
+    XLSX.writeFile(wb, 'materials_export.xlsx');
+    showToast('Excel file downloaded.');
+  }
+
+  // ---- Event bindings ----
+  document.getElementById('projectSelect').addEventListener('change', function () {
+    currentProjectId = this.value || null;
+    loadMaterialsForProject(currentProjectId);
+  });
+
+  document.getElementById('cardCritical').addEventListener('click', openCriticalModal);
+  document.getElementById('cardCritical').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCriticalModal(); } });
+  document.getElementById('cardAlerts').addEventListener('click', openAlertsModal);
+  document.getElementById('cardAlerts').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAlertsModal(); } });
+
+  document.getElementById('btnSaveCategory').addEventListener('click', function () {
+    var id = document.getElementById('categoryId').value;
+    var name = document.getElementById('categoryName').value.trim();
+    if (!name) { showToast('Category name is required.', true); return; }
+    var description = document.getElementById('categoryDescription').value.trim();
+    var isEdit = !!id;
+    if (USE_MOCK) {
+      if (isEdit) {
+        var existing = categories.find(function (c) { return String(c.id) === String(id); });
+        if (existing) {
+          existing.name = name;
+          existing.description = description;
+          showToast('Category updated.');
+        }
+      } else {
+        categories.push({ id: 'c' + Date.now(), name: name, description: description });
+        showToast('Category created.');
+      }
+      document.getElementById('categoryId').value = '';
+      document.getElementById('categoryName').value = '';
+      document.getElementById('categoryDescription').value = '';
+      var delBtn = document.getElementById('btnDeleteCategory');
+      if (delBtn) delBtn.classList.add('d-none');
+      var saveBtn = document.getElementById('btnSaveCategory');
+      if (saveBtn) saveBtn.textContent = 'Save';
+      populateCategoryFilter();
+      fillMaterialCategoryDropdown('materialCategory');
+      fillMaterialCategoryDropdown('editMaterialCategory');
+      renderCategoryList();
+    } else {
+      var op = isEdit ? materialApi.updateCategory(id, { name: name, description: description }) : materialApi.createCategory({ name: name, description: description });
+      op.then(function () {
+        document.getElementById('categoryId').value = '';
+        document.getElementById('categoryName').value = '';
+        document.getElementById('categoryDescription').value = '';
+        var delBtn = document.getElementById('btnDeleteCategory');
+        if (delBtn) delBtn.classList.add('d-none');
+        var saveBtn = document.getElementById('btnSaveCategory');
+        if (saveBtn) saveBtn.textContent = 'Save';
+        bootstrap.Modal.getInstance(document.getElementById('modalCategory')).hide();
+        showToast(isEdit ? 'Category updated.' : 'Category created.');
+        return materialApi.getCategories();
+      }).then(function (list) {
+        categories = Array.isArray(list) ? list.map(function (c) { return { id: String(c.id), name: c.name || '', description: c.description || '' }; }) : [];
+        populateCategoryFilter();
+        fillMaterialCategoryDropdown('materialCategory');
+        fillMaterialCategoryDropdown('editMaterialCategory');
+        renderCategoryList();
+      }).catch(function (err) { showToast(err.message || (isEdit ? 'Could not update category.' : 'Could not create category.'), true); });
+    }
+  });
+
+  var deleteCategoryBtn = document.getElementById('btnDeleteCategory');
+  if (deleteCategoryBtn) {
+    deleteCategoryBtn.addEventListener('click', function () {
+      var id = document.getElementById('categoryId').value;
+      if (!id) {
+        showToast('Select a category to delete.', true);
+        return;
+      }
+      if (!confirm('Delete this category? Materials will keep their current category label if already loaded.')) {
+        return;
+      }
+      if (USE_MOCK) {
+        categories = categories.filter(function (c) { return String(c.id) !== String(id); });
+        document.getElementById('categoryId').value = '';
+        document.getElementById('categoryName').value = '';
+        document.getElementById('categoryDescription').value = '';
+        deleteCategoryBtn.classList.add('d-none');
+        var saveBtn = document.getElementById('btnSaveCategory');
+        if (saveBtn) saveBtn.textContent = 'Save';
+        showToast('Category deleted.');
+        populateCategoryFilter();
+        fillMaterialCategoryDropdown('materialCategory');
+        fillMaterialCategoryDropdown('editMaterialCategory');
+        renderCategoryList();
+      } else {
+        materialApi.deleteCategory(id).then(function () {
+          document.getElementById('categoryId').value = '';
+          document.getElementById('categoryName').value = '';
+          document.getElementById('categoryDescription').value = '';
+          deleteCategoryBtn.classList.add('d-none');
+          var saveBtn = document.getElementById('btnSaveCategory');
+          if (saveBtn) saveBtn.textContent = 'Save';
+          showToast('Category deleted.');
+          return materialApi.getCategories();
+        }).then(function (list) {
+          categories = Array.isArray(list) ? list.map(function (c) { return { id: String(c.id), name: c.name || '', description: c.description || '' }; }) : [];
+          populateCategoryFilter();
+          fillMaterialCategoryDropdown('materialCategory');
+          fillMaterialCategoryDropdown('editMaterialCategory');
+          renderCategoryList();
+        }).catch(function (err) { showToast(err.message || 'Could not delete category.', true); });
+      }
+    });
+  }
+
+  document.getElementById('btnSaveSupplier').addEventListener('click', function () {
+    var id = document.getElementById('supplierId').value;
+    var name = document.getElementById('supplierName').value.trim();
+    if (!name) { showToast('Supplier name is required.', true); return; }
+    var contact = document.getElementById('supplierContact').value.trim();
+    var emailPhone = document.getElementById('supplierEmailPhone').value.trim();
+    var address = document.getElementById('supplierAddress').value.trim();
+    var isEdit = !!id;
+    if (USE_MOCK) {
+      if (isEdit) {
+        var sup = suppliers.find(function (s) { return String(s.id) === String(id); });
+        if (sup) {
+          sup.name = name;
+          sup.contact = contact;
+          sup.emailPhone = emailPhone;
+          sup.address = address;
+          showToast('Supplier updated.');
+        }
+      } else {
+        suppliers.push({ id: 's' + Date.now(), name: name, contact: contact, emailPhone: emailPhone, address: address });
+        showToast('Supplier added.');
+      }
+      document.getElementById('supplierId').value = '';
+      document.getElementById('supplierName').value = '';
+      document.getElementById('supplierContact').value = '';
+      document.getElementById('supplierEmailPhone').value = '';
+      document.getElementById('supplierAddress').value = '';
+      var delBtn = document.getElementById('btnDeleteSupplier');
+      if (delBtn) delBtn.classList.add('d-none');
+      var saveBtn = document.getElementById('btnSaveSupplier');
+      if (saveBtn) saveBtn.textContent = 'Save';
+      populateSupplierFilter();
+      fillMaterialSupplierDropdown('materialSupplier');
+      fillMaterialSupplierDropdown('editMaterialSupplier');
+      renderSupplierList();
+    } else {
+      var op = isEdit
+        ? materialApi.updateSupplier(id, { name: name, contact: contact, emailPhone: emailPhone, address: address })
+        : materialApi.createSupplier({ name: name, contact: contact, emailPhone: emailPhone, address: address });
+      op.then(function () {
+        document.getElementById('supplierId').value = '';
+        document.getElementById('supplierName').value = '';
+        document.getElementById('supplierContact').value = '';
+        document.getElementById('supplierEmailPhone').value = '';
+        document.getElementById('supplierAddress').value = '';
+        var delBtn = document.getElementById('btnDeleteSupplier');
+        if (delBtn) delBtn.classList.add('d-none');
+        var saveBtn = document.getElementById('btnSaveSupplier');
+        if (saveBtn) saveBtn.textContent = 'Save';
+        bootstrap.Modal.getInstance(document.getElementById('modalSupplier')).hide();
+        showToast(isEdit ? 'Supplier updated.' : 'Supplier added.');
+        return materialApi.getSuppliers();
+      }).then(function (list) {
+        suppliers = Array.isArray(list) ? list.map(function (s) { return { id: String(s.id), name: s.name || '', contact: s.contact || '', emailPhone: s.email || s.phone || s.emailPhone || '', address: s.address || '' }; }) : [];
+        populateSupplierFilter();
+        fillMaterialSupplierDropdown('materialSupplier');
+        fillMaterialSupplierDropdown('editMaterialSupplier');
+        renderSupplierList();
+      }).catch(function (err) { showToast(err.message || (isEdit ? 'Could not update supplier.' : 'Could not add supplier.'), true); });
+    }
+  });
+
+  var deleteSupplierBtn = document.getElementById('btnDeleteSupplier');
+  if (deleteSupplierBtn) {
+    deleteSupplierBtn.addEventListener('click', function () {
+      var id = document.getElementById('supplierId').value;
+      if (!id) {
+        showToast('Select a supplier to delete.', true);
+        return;
+      }
+      if (!confirm('Delete this supplier? Existing materials will keep the current supplier label if already loaded.')) {
+        return;
+      }
+      if (USE_MOCK) {
+        suppliers = suppliers.filter(function (s) { return String(s.id) !== String(id); });
+        document.getElementById('supplierId').value = '';
+        document.getElementById('supplierName').value = '';
+        document.getElementById('supplierContact').value = '';
+        document.getElementById('supplierEmailPhone').value = '';
+        document.getElementById('supplierAddress').value = '';
+        deleteSupplierBtn.classList.add('d-none');
+        var saveBtn = document.getElementById('btnSaveSupplier');
+        if (saveBtn) saveBtn.textContent = 'Save';
+        showToast('Supplier deleted.');
+        populateSupplierFilter();
+        fillMaterialSupplierDropdown('materialSupplier');
+        fillMaterialSupplierDropdown('editMaterialSupplier');
+        renderSupplierList();
+      } else {
+        materialApi.deleteSupplier(id).then(function () {
+          document.getElementById('supplierId').value = '';
+          document.getElementById('supplierName').value = '';
+          document.getElementById('supplierContact').value = '';
+          document.getElementById('supplierEmailPhone').value = '';
+          document.getElementById('supplierAddress').value = '';
+          deleteSupplierBtn.classList.add('d-none');
+          var saveBtn = document.getElementById('btnSaveSupplier');
+          if (saveBtn) saveBtn.textContent = 'Save';
+          showToast('Supplier deleted.');
+          return materialApi.getSuppliers();
+        }).then(function (list) {
+          suppliers = Array.isArray(list) ? list.map(function (s) { return { id: String(s.id), name: s.name || '', contact: s.contact || '', emailPhone: s.email || s.phone || s.emailPhone || '', address: s.address || '' }; }) : [];
+          populateSupplierFilter();
+          fillMaterialSupplierDropdown('materialSupplier');
+          fillMaterialSupplierDropdown('editMaterialSupplier');
+          renderSupplierList();
+        }).catch(function (err) { showToast(err.message || 'Could not delete supplier.', true); });
+      }
+    });
+  }
+
+  document.getElementById('btnSaveMaterial').addEventListener('click', function () {
+    var name = document.getElementById('materialName').value.trim();
+    if (!name) { showToast('Material name is required.', true); return; }
+    var qty = parseFloat(document.getElementById('materialQtyInitial').value);
+    var thresh = parseFloat(document.getElementById('materialLowStock').value) || 0;
+    if (isNaN(qty) || qty < 0) { showToast('Quantity must be a valid number.', true); return; }
+    if (qty <= thresh && thresh > 0) showToast('Material will be low stock immediately.', true);
+    var catId = document.getElementById('materialCategory').value || null;
+    var supId = document.getElementById('materialSupplier').value || null;
+    var unit = document.getElementById('materialUnit').value || 'kg';
+    var emailNotify = document.getElementById('materialEmailNotify').checked;
+    if (!currentProjectId && !USE_MOCK) { showToast('Select a project first.', true); return; }
+    if (USE_MOCK) {
+      var cat = categories.find(function (c) { return c.id === catId; });
+      var sup = suppliers.find(function (s) { return s.id === supId; });
+      var newId = 'm' + Date.now();
+      var newMat = { id: newId, name: name, categoryId: catId, categoryName: cat ? cat.name : '', supplierId: supId, supplierName: sup ? sup.name : '', unit: unit, quantityInitial: qty, quantityUsed: 0, quantityRemaining: qty, lowStockThreshold: thresh, status: (qty <= thresh && thresh > 0) ? 'low' : (qty === 0 ? 'out' : 'normal'), emailNotify: emailNotify };
+      materials.push(newMat);
+      document.getElementById('materialName').value = '';
+      document.getElementById('materialQtyInitial').value = '0';
+      document.getElementById('materialLowStock').value = '0';
+      document.getElementById('materialEmailNotify').checked = false;
+      bootstrap.Modal.getInstance(document.getElementById('modalMaterial')).hide();
+      showToast('Material added.');
+      renderOverview();
+      renderTable();
+      renderForecast();
+    } else {
+      materialApi.createMaterial({ projectId: currentProjectId, name: name, categoryId: catId, supplierId: supId, unit: unit, quantityInitial: qty, lowStockThreshold: thresh, emailNotify: emailNotify }).then(function () {
+        document.getElementById('materialName').value = '';
+        document.getElementById('materialQtyInitial').value = '0';
+        document.getElementById('materialLowStock').value = '0';
+        document.getElementById('materialEmailNotify').checked = false;
+        bootstrap.Modal.getInstance(document.getElementById('modalMaterial')).hide();
+        showToast('Material added.');
+        loadMaterialsForProject(currentProjectId);
+      }).catch(function (err) { showToast(err.message || 'Could not add material.', true); });
+    }
+  });
+
+  document.getElementById('btnUpdateMaterial').addEventListener('click', function () {
+    var id = document.getElementById('editMaterialId').value;
+    var m = materials.find(function (x) { return x.id === id; });
+    if (!m) return;
+    var name = document.getElementById('editMaterialName').value.trim();
+    if (!name) { showToast('Material name is required.', true); return; }
+    var initial = parseFloat(document.getElementById('editMaterialQtyInitial').value) || 0;
+    var used = parseFloat(document.getElementById('editMaterialQtyUsed').value) || 0;
+    if (used > initial) { showToast('Quantity used cannot exceed initial.', true); return; }
+    var remaining = initial - used;
+    var thresh = parseFloat(document.getElementById('editMaterialLowStock').value) || 0;
+    var categoryId = document.getElementById('editMaterialCategory').value || null;
+    var supplierId = document.getElementById('editMaterialSupplier').value || null;
+    var unit = document.getElementById('editMaterialUnit').value || 'kg';
+    var emailNotify = document.getElementById('editMaterialEmailNotify').checked;
+    if (USE_MOCK) {
+      m.name = name;
+      m.categoryId = categoryId;
+      m.categoryName = (categories.find(function (c) { return c.id === categoryId; }) || {}).name || '';
+      m.supplierId = supplierId;
+      m.supplierName = (suppliers.find(function (s) { return s.id === supplierId; }) || {}).name || '';
+      m.unit = unit;
+      m.quantityInitial = initial;
+      m.quantityUsed = used;
+      m.quantityRemaining = remaining;
+      m.lowStockThreshold = thresh;
+      m.status = remaining <= 0 ? 'out' : (thresh > 0 && remaining <= thresh ? 'low' : 'normal');
+      m.emailNotify = emailNotify;
+      bootstrap.Modal.getInstance(document.getElementById('modalEditMaterial')).hide();
+      showToast('Material updated.');
+      renderOverview();
+      renderTable();
+      renderForecast();
+    } else {
+      materialApi.updateMaterial(id, { name: name, categoryId: categoryId, supplierId: supplierId, unit: unit, quantityInitial: initial, quantityUsed: used, quantityRemaining: remaining, lowStockThreshold: thresh, emailNotify: emailNotify }).then(function () {
+        bootstrap.Modal.getInstance(document.getElementById('modalEditMaterial')).hide();
+        showToast('Material updated.');
+        loadMaterialsForProject(currentProjectId);
+      }).catch(function (err) { showToast(err.message || 'Update failed.', true); });
+    }
+  });
+
+  document.getElementById('btnUpdateQty').addEventListener('click', function () {
+    var id = document.getElementById('editQtyMaterialId').value;
+    var m = materials.find(function (x) { return x.id === id; });
+    if (!m) return;
+    var initial = parseFloat(document.getElementById('editQtyInitial').value) || 0;
+    var used = parseFloat(document.getElementById('editQtyUsed').value) || 0;
+    if (used > initial) { showToast('Quantity used cannot exceed initial.', true); return; }
+    var remaining = initial - used;
+    var thresh = parseFloat(document.getElementById('editQtyLowStock').value) || 0;
+    if (USE_MOCK) {
+      m.quantityInitial = initial;
+      m.quantityUsed = used;
+      m.quantityRemaining = remaining;
+      m.lowStockThreshold = thresh;
+      m.status = remaining <= 0 ? 'out' : (thresh > 0 && remaining <= thresh ? 'low' : 'normal');
+      bootstrap.Modal.getInstance(document.getElementById('modalEditQty')).hide();
+      showToast('Quantities updated.');
+      renderOverview();
+      renderTable();
+      renderForecast();
+    } else {
+      materialApi.updateMaterial(id, { quantityInitial: initial, quantityUsed: used, quantityRemaining: remaining, lowStockThreshold: thresh }).then(function () {
+        bootstrap.Modal.getInstance(document.getElementById('modalEditQty')).hide();
+        showToast('Quantities updated.');
+        loadMaterialsForProject(currentProjectId);
+      }).catch(function (err) { showToast(err.message || 'Update failed.', true); });
+    }
+  });
+
+  document.getElementById('btnConfirmDelete').addEventListener('click', function () {
+    if (!deleteTargetId) return;
+    var id = deleteTargetId;
+    if (USE_MOCK) {
+      materials = materials.filter(function (m) { return m.id !== id; });
+      bootstrap.Modal.getInstance(document.getElementById('modalDeleteMaterial')).hide();
+      deleteTargetId = null;
+      showToast('Material deleted.');
+      renderOverview();
+      renderTable();
+      renderForecast();
+    } else {
+      materialApi.deleteMaterial(id).then(function () {
+        bootstrap.Modal.getInstance(document.getElementById('modalDeleteMaterial')).hide();
+        deleteTargetId = null;
+        showToast('Material deleted.');
+        loadMaterialsForProject(currentProjectId);
+      }).catch(function (err) { showToast(err.message || 'Could not delete material.', true); });
+    }
+  });
+
+  document.getElementById('filterSearch').addEventListener('input', renderTable);
+  document.getElementById('filterCategory').addEventListener('change', renderTable);
+  document.getElementById('filterStatus').addEventListener('change', renderTable);
+  document.getElementById('filterSupplier').addEventListener('change', renderTable);
+  document.getElementById('btnExportExcel').addEventListener('click', exportExcel);
+
+  document.querySelectorAll('#materialsTable th[data-sort]').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var key = this.getAttribute('data-sort');
+      sortDir = (sortKey === key ? -sortDir : 1);
+      sortKey = key;
+      document.querySelectorAll('#materialsTable th[data-sort]').forEach(function (t) { t.classList.remove('sorted'); });
+      this.classList.add('sorted');
+      renderTable();
+    });
+  });
+
+  document.getElementById('modalMaterial').addEventListener('show.bs.modal', function () {
+    fillMaterialCategoryDropdown('materialCategory');
+    fillMaterialSupplierDropdown('materialSupplier');
+  });
+  document.getElementById('modalEditMaterial').addEventListener('show.bs.modal', function () {
+    fillMaterialCategoryDropdown('editMaterialCategory');
+    fillMaterialSupplierDropdown('editMaterialSupplier');
+  });
+
+  loadProjectDropdown();
+  var sel = document.getElementById('projectSelect');
+  if (sel && sel.value) { currentProjectId = sel.value; loadMaterialsForProject(currentProjectId); }
+  fillMaterialCategoryDropdown('materialCategory');
+  fillMaterialSupplierDropdown('materialSupplier');
+})();
+  </script>
+</body>
+</html>

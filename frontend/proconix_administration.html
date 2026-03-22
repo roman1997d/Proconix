@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Admin console – Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/styles.css" rel="stylesheet">
+  <link href="css/proconix_administration.css" rel="stylesheet">
+</head>
+<body class="px-admin-app-body">
+  <header class="px-admin-topbar">
+    <div class="px-admin-topbar-inner">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <button class="btn btn-outline-light btn-sm d-lg-none px-admin-menu-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#pxAdminSidebar" aria-controls="pxAdminSidebar" aria-label="Open menu">
+          <i class="bi bi-list"></i>
+        </button>
+        <a class="px-admin-brand text-decoration-none text-white d-flex align-items-center gap-2" href="proconix_administration.html">
+          <i class="bi bi-shield-check text-info"></i>
+          <span class="fw-bold">Proconix</span>
+          <span class="px-admin-brand-sub d-none d-sm-inline">Admin</span>
+        </a>
+      </div>
+      <div class="d-flex align-items-center gap-2 gap-md-3 flex-wrap">
+        <span class="px-admin-user text-white-50 small text-end">
+          <span id="pxAdminUserName" class="d-none d-md-inline text-white me-2"></span>
+          <i class="bi bi-person-circle me-1"></i>
+          <span id="pxAdminUserEmail">—</span>
+        </span>
+        <a class="btn btn-sm btn-outline-light" href="/">Home</a>
+        <button type="button" class="btn btn-sm btn-outline-light" id="pxAdminSignOut">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="offcanvas offcanvas-start px-admin-offcanvas d-lg-none" tabindex="-1" id="pxAdminSidebar" aria-labelledby="pxAdminSidebarLabel">
+    <div class="offcanvas-header border-bottom border-secondary">
+      <h2 class="offcanvas-title h5 mb-0" id="pxAdminSidebarLabel">Menu</h2>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-0">
+      <nav class="nav flex-column px-admin-nav" id="pxAdminSideNavMobile"></nav>
+    </div>
+  </div>
+
+  <div class="px-admin-layout">
+    <aside class="px-admin-sidebar d-none d-lg-block">
+      <nav class="px-admin-nav" id="pxAdminSideNav" aria-label="Administration">
+        <a href="#" class="px-admin-nav-link active" data-px-admin-section="overview" data-px-admin-title="Overview">
+          <i class="bi bi-speedometer2"></i> Overview
+        </a>
+        <a href="#" class="px-admin-nav-link" data-px-admin-section="companies" data-px-admin-title="Companies &amp; tenants">
+          <i class="bi bi-buildings"></i> Companies &amp; tenants
+        </a>
+        <a href="#" class="px-admin-nav-link" data-px-admin-section="users" data-px-admin-title="Platform users">
+          <i class="bi bi-people"></i> Platform users
+        </a>
+        <a href="#" class="px-admin-nav-link" data-px-admin-section="billing" data-px-admin-title="Billing &amp; plans">
+          <i class="bi bi-credit-card-2-front"></i> Billing &amp; plans
+        </a>
+        <a href="#" class="px-admin-nav-link" data-px-admin-section="system" data-px-admin-title="System &amp; health">
+          <i class="bi bi-heart-pulse"></i> System &amp; health
+        </a>
+        <a href="#" class="px-admin-nav-link" data-px-admin-section="audit" data-px-admin-title="Audit &amp; logs">
+          <i class="bi bi-journal-text"></i> Audit &amp; logs
+        </a>
+        <a href="#" class="px-admin-nav-link" data-px-admin-section="content" data-px-admin-title="Content &amp; communications">
+          <i class="bi bi-envelope-paper"></i> Content &amp; communications
+        </a>
+        <a href="#" class="px-admin-nav-link" data-px-admin-section="settings" data-px-admin-title="Platform settings">
+          <i class="bi bi-gear"></i> Platform settings
+        </a>
+      </nav>
+    </aside>
+
+    <main class="px-admin-main-area">
+      <div class="px-admin-main-inner">
+        <h1 class="h3 text-white mb-4" id="pxAdminPageTitle">Overview</h1>
+
+        <div id="pxAdminDevBanner" class="alert alert-info px-admin-dev-banner d-flex align-items-start gap-2" role="status">
+          <i class="bi bi-hourglass-split flex-shrink-0 mt-1"></i>
+          <div>
+            <strong>Verifying session…</strong> Contacting the server. If this stays here, check that the API is running and you are signed in.
+          </div>
+        </div>
+
+        <div data-px-admin-panel="overview">
+          <div class="row g-3 mb-4">
+            <div class="col-sm-6 col-xl-3">
+              <div class="px-admin-stat-card">
+                <div class="text-white-50 small">Companies</div>
+                <div class="px-admin-stat-value">—</div>
+                <div class="small text-white-50">Connect API</div>
+              </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+              <div class="px-admin-stat-card">
+                <div class="text-white-50 small">Active managers</div>
+                <div class="px-admin-stat-value">—</div>
+                <div class="small text-white-50">Connect API</div>
+              </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+              <div class="px-admin-stat-card">
+                <div class="text-white-50 small">Operatives</div>
+                <div class="px-admin-stat-value">—</div>
+                <div class="small text-white-50">Connect API</div>
+              </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+              <div class="px-admin-stat-card">
+                <div class="text-white-50 small">Work logs (30d)</div>
+                <div class="px-admin-stat-value">—</div>
+                <div class="small text-white-50">Connect API</div>
+              </div>
+            </div>
+          </div>
+          <div class="px-admin-panel-card">
+            <h2 class="h5 text-white mb-3">Quick actions</h2>
+            <p class="text-white-50 mb-0">Tool panels on the left will host full admin workflows. Each section is a placeholder until backend routes are implemented.</p>
+          </div>
+        </div>
+
+        <div class="d-none" data-px-admin-panel="companies">
+          <div class="px-admin-panel-card">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+              <h2 class="h5 text-white mb-0">Companies &amp; tenants</h2>
+              <button type="button" class="btn btn-sm btn-outline-light" id="pxAdminCompaniesRefresh" title="Reload list">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
+              </button>
+            </div>
+            <p class="text-white-50 small mb-3">Click a row to view full record, edit fields, or delete the company. <strong>Head manager</strong> = manager row with <code class="text-info">company_id</code> = this company (prefers <code class="text-info">is_head_manager</code> = Yes, else lowest <code class="text-info">id</code>). <strong>Head manager email</strong> = that row’s <code class="text-info">email</code>.</p>
+            <div id="pxAdminCompaniesAlert" class="alert alert-danger d-none" role="alert"></div>
+            <div id="pxAdminCompaniesLoading" class="text-white-50 py-3 d-none">Loading companies…</div>
+            <div id="pxAdminCompaniesTableWrap" class="table-responsive d-none">
+              <table class="table table-dark table-striped table-hover table-sm px-admin-data-table px-admin-companies-table mb-0">
+                <thead>
+                  <tr>
+                    <th scope="col">ID</th>
+                    <th scope="col">Company name</th>
+                    <th scope="col">Head manager</th>
+                    <th scope="col">Head manager email</th>
+                  </tr>
+                </thead>
+                <tbody id="pxAdminCompaniesBody"></tbody>
+              </table>
+            </div>
+            <p id="pxAdminCompaniesEmpty" class="text-white-50 py-3 mb-0 d-none">No companies registered yet.</p>
+          </div>
+        </div>
+
+        <div class="d-none" data-px-admin-panel="users">
+          <div class="px-admin-panel-card">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+              <h2 class="h5 text-white mb-0">Platform users</h2>
+              <button type="button" class="btn btn-sm btn-outline-light" id="pxAdminPuRefresh" title="Reload list">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
+              </button>
+            </div>
+            <p class="text-white-50 small mb-3">All rows from <code class="text-info">manager</code> and <code class="text-info">users</code> (cross-tenant). Click a row to edit or delete.</p>
+            <div id="pxAdminPuToolbar" class="row g-2 align-items-end mb-3 d-none">
+              <div class="col-sm-6 col-lg-3">
+                <label class="form-label text-white-50 small mb-1" for="pxAdminPuFilterCompany">Company</label>
+                <select id="pxAdminPuFilterCompany" class="form-select form-select-sm bg-dark text-white border-secondary" title="Filter by company">
+                  <option value="">All companies</option>
+                </select>
+              </div>
+              <div class="col-sm-6 col-lg-2">
+                <label class="form-label text-white-50 small mb-1" for="pxAdminPuFilterType">Type</label>
+                <select id="pxAdminPuFilterType" class="form-select form-select-sm bg-dark text-white border-secondary" title="Manager or User">
+                  <option value="">All types</option>
+                  <option value="manager">Manager</option>
+                  <option value="user">User</option>
+                </select>
+              </div>
+              <div class="col-sm-12 col-lg-4">
+                <label class="form-label text-white-50 small mb-1" for="pxAdminPuSearch">Search</label>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-dark text-white-50 border-secondary"><i class="bi bi-search" aria-hidden="true"></i></span>
+                  <input type="search" id="pxAdminPuSearch" class="form-control bg-dark text-white border-secondary" placeholder="Name, email, company, ID, role…" autocomplete="off">
+                </div>
+              </div>
+              <div class="col-sm-12 col-lg-3 text-lg-end">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="pxAdminPuClearFilters" title="Reset filters">Clear filters</button>
+              </div>
+            </div>
+            <div id="pxAdminPuAlert" class="alert alert-danger d-none" role="alert"></div>
+            <div id="pxAdminPuLoading" class="text-white-50 py-3 d-none">Loading users…</div>
+            <div id="pxAdminPuTableWrap" class="table-responsive d-none">
+              <table class="table table-dark table-striped table-hover table-sm px-admin-data-table mb-0">
+                <thead>
+                  <tr>
+                    <th scope="col">Type</th>
+                    <th scope="col">ID</th>
+                    <th scope="col">Company</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Role / label</th>
+                    <th scope="col">Active</th>
+                    <th scope="col">Password set</th>
+                  </tr>
+                </thead>
+                <tbody id="pxAdminPuBody"></tbody>
+              </table>
+            </div>
+            <p id="pxAdminPuEmpty" class="text-white-50 py-3 mb-0 d-none">No users or managers in the database.</p>
+            <p id="pxAdminPuNoResults" class="text-white-50 py-3 mb-0 d-none">No rows match the current filters or search.</p>
+          </div>
+        </div>
+
+        <div class="d-none" data-px-admin-panel="billing">
+          <div class="px-admin-panel-card">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+              <h2 class="h5 text-white mb-0">Billing &amp; plans</h2>
+              <button type="button" class="btn btn-sm btn-outline-light" id="pxAdminBillingRefresh" title="Reload list">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
+              </button>
+            </div>
+            <p class="text-white-50 small mb-3">Editează pe rând: <strong>Status</strong> (Achitat/Activ, Neachitat/Suspendat, Neachitat/Activ), <strong>data expirării</strong> (calendar), <strong>metoda de plată</strong>, apoi <strong>Salvează</strong>. Planul și data achiziției rămân informative până le legi de un gateway de plată.</p>
+            <div id="pxAdminBillingAlert" class="alert alert-danger d-none" role="alert"></div>
+            <div id="pxAdminBillingLoading" class="text-white-50 py-3 d-none">Loading billing data…</div>
+            <div id="pxAdminBillingTableWrap" class="table-responsive d-none">
+              <table class="table table-dark table-striped table-hover table-sm px-admin-data-table px-admin-billing-table mb-0">
+                <thead>
+                  <tr>
+                    <th scope="col">ID</th>
+                    <th scope="col">Company</th>
+                    <th scope="col">Plan</th>
+                    <th scope="col">Purchased / started</th>
+                    <th scope="col">Expires</th>
+                    <th scope="col">Payment method</th>
+                    <th scope="col">Status</th>
+                    <th scope="col"></th>
+                  </tr>
+                </thead>
+                <tbody id="pxAdminBillingBody"></tbody>
+              </table>
+            </div>
+            <p id="pxAdminBillingEmpty" class="text-white-50 py-3 mb-0 d-none">No companies yet.</p>
+          </div>
+        </div>
+
+        <div class="d-none" data-px-admin-panel="system">
+          <div class="px-admin-panel-card">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+              <h2 class="h5 text-white mb-0">System &amp; health</h2>
+              <button type="button" class="btn btn-sm btn-outline-light" id="pxAdminSysRefresh" title="Reload metrics">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
+              </button>
+            </div>
+            <p class="text-white-50 small mb-3">Health checks, API timing &amp; errors (per-minute), pool / PostgreSQL stats, optional slow-query hints, and <code class="text-info">FEATURE_*</code> env flags.</p>
+            <div id="pxAdminSysAlert" class="alert alert-danger d-none" role="alert"></div>
+            <div id="pxAdminSysLoading" class="text-white-50 py-3 d-none">Loading system metrics…</div>
+            <div id="pxAdminSysContent" class="d-none">
+              <div class="px-admin-sys-console-card mb-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                  <h3 class="h6 text-white mb-0">Server log (terminal mirror)</h3>
+                  <span class="small text-white-50">Same text as on startup · DB status is live</span>
+                </div>
+                <div class="px-admin-sys-console-outer">
+                  <pre id="pxAdminSysConsole" class="px-admin-sys-console mb-0" role="region" aria-label="Server startup log"></pre>
+                </div>
+              </div>
+              <div class="row g-3 mb-3">
+                <div class="col-sm-6 col-xl-3">
+                  <div class="px-admin-stat-card h-100">
+                    <div class="text-white-50 small">API</div>
+                    <div class="px-admin-stat-value" id="pxAdminSysApiStatus">—</div>
+                    <div class="small text-white-50">Process responding</div>
+                  </div>
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                  <div class="px-admin-stat-card h-100">
+                    <div class="text-white-50 small">Database</div>
+                    <div class="px-admin-stat-value" id="pxAdminSysDbStatus">—</div>
+                    <div class="small text-white-50" id="pxAdminSysDbLatency">Ping latency</div>
+                  </div>
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                  <div class="px-admin-stat-card h-100">
+                    <div class="text-white-50 small">Uptime</div>
+                    <div class="px-admin-stat-value small" id="pxAdminSysUptime">—</div>
+                    <div class="small text-white-50">Node process</div>
+                  </div>
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                  <div class="px-admin-stat-card h-100">
+                    <div class="text-white-50 small">Queue depth</div>
+                    <div class="px-admin-stat-value" id="pxAdminSysQueue">—</div>
+                    <div class="small text-white-50" id="pxAdminSysQueueNote">Background jobs</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="px-admin-sys-chart-wrap border border-secondary rounded-3 p-3 mb-3" style="background: rgba(15, 23, 42, 0.5);">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                  <h3 class="h6 text-white mb-0">API response time &amp; error rate</h3>
+                  <span class="small text-white-50">/api requests · 1-minute buckets</span>
+                </div>
+                <div class="px-admin-sys-chart-legend small text-white-50 mb-2">
+                  <span class="me-3"><span class="px-admin-sys-legend-dot px-admin-sys-legend-ms"></span> Avg response (ms)</span>
+                  <span><span class="px-admin-sys-legend-dot px-admin-sys-legend-err"></span> Error rate (4xx+5xx %)</span>
+                </div>
+                <canvas id="pxAdminSysChart" class="px-admin-sys-chart-canvas" width="900" height="140" role="img" aria-label="Response time and error rate chart"></canvas>
+                <p class="small text-white-50 mb-0 mt-2" id="pxAdminSysMetricsDesc"></p>
+              </div>
+
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <h3 class="h6 text-white mb-2">Connection pool (pg)</h3>
+                  <ul class="list-unstyled small text-white-50 mb-0" id="pxAdminSysPool"></ul>
+                </div>
+                <div class="col-md-6">
+                  <h3 class="h6 text-white mb-2">PostgreSQL connections</h3>
+                  <ul class="list-unstyled small text-white-50 mb-0" id="pxAdminSysPgConn"></ul>
+                </div>
+              </div>
+
+              <h3 class="h6 text-white mb-2">Slow / expensive queries</h3>
+              <p class="small text-white-50" id="pxAdminSysSlowNote"></p>
+              <div class="table-responsive mb-4">
+                <table class="table table-dark table-sm px-admin-data-table mb-0">
+                  <thead>
+                    <tr>
+                      <th scope="col">Query (truncated)</th>
+                      <th scope="col">Calls</th>
+                      <th scope="col">Mean (ms)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pxAdminSysSlowBody"></tbody>
+                </table>
+              </div>
+
+              <h3 class="h6 text-white mb-2">Feature flags</h3>
+              <p class="small text-white-50 mb-2">Environment keys starting with <code class="text-info">FEATURE_</code> or <code class="text-info">PROCONIX_FLAG_</code>, plus optional JSON in <code class="text-info">FEATURE_FLAGS_JSON</code>.</p>
+              <div class="table-responsive">
+                <table class="table table-dark table-sm px-admin-data-table mb-0">
+                  <thead>
+                    <tr>
+                      <th scope="col">Key</th>
+                      <th scope="col">Value</th>
+                      <th scope="col">Enabled</th>
+                      <th scope="col">Source</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pxAdminSysFlagsBody"></tbody>
+                </table>
+              </div>
+              <p id="pxAdminSysFlagsEmpty" class="text-white-50 small mb-0 d-none">No feature flags found in this process environment.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-none" data-px-admin-panel="audit">
+          <div class="px-admin-panel-card">
+            <h2 class="h5 text-white mb-3">Audit &amp; logs</h2>
+            <p class="text-white-50">Security events, admin actions, export for compliance.</p>
+            <span class="badge bg-secondary">Coming soon</span>
+          </div>
+        </div>
+
+        <div class="d-none" data-px-admin-panel="content">
+          <div class="px-admin-panel-card">
+            <h2 class="h5 text-white mb-3">Content &amp; communications</h2>
+            <p class="text-white-50">Email templates, in-app announcements, legal pages.</p>
+            <span class="badge bg-secondary">Coming soon</span>
+          </div>
+        </div>
+
+        <div class="d-none" data-px-admin-panel="settings">
+          <div class="px-admin-panel-card">
+            <h2 class="h5 text-white mb-3">Platform settings</h2>
+            <p class="text-white-50">Global limits, geolocation rules, integrations (email provider, storage).</p>
+            <span class="badge bg-secondary">Coming soon</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Platform user (manager / operative) edit modal -->
+  <div class="modal fade" id="pxAdminPuModal" tabindex="-1" aria-labelledby="pxAdminPuModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content px-admin-modal-content">
+        <div class="modal-header border-secondary">
+          <h2 class="modal-title h5" id="pxAdminPuModalLabel">Platform user</h2>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="pxAdminPuModalLoading" class="text-white-50 py-4 text-center">Loading…</div>
+          <div id="pxAdminPuModalForm" class="d-none">
+            <div id="pxAdminPuModalFeedback" class="alert d-none" role="alert"></div>
+
+            <div id="pxPu_block_manager" class="d-none">
+              <h3 class="h6 text-white-50 text-uppercase small mb-3">Manager (database)</h3>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label text-white-50 small" for="pxPu_m_id">ID</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_m_id" readonly>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-white-50 small" for="pxPu_m_created_at">Created at</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_m_created_at" readonly>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-white-50 small" for="pxPu_m_company_id">Company ID</label>
+                  <input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_m_company_id" min="1">
+                </div>
+                <div class="col-12">
+                  <label class="form-label text-white-50 small" for="pxPu_m_company_name">Company name</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_m_company_name" readonly>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_m_name">First name</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_m_name">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_m_surname">Surname</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_m_surname">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_m_email">Email</label>
+                  <input type="email" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_m_email">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_m_is_head_manager">Is head manager</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_m_is_head_manager" placeholder="Yes / No">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_m_project_onboard_name">Project onboard name</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_m_project_onboard_name">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_m_dezactivation_date">Deactivation time</label>
+                  <input type="time" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_m_dezactivation_date" step="1">
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check form-switch mt-4 pt-1">
+                    <input class="form-check-input" type="checkbox" role="switch" id="pxPu_m_active">
+                    <label class="form-check-label text-white" for="pxPu_m_active">Active (can sign in)</label>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check form-switch mt-4 pt-1">
+                    <input class="form-check-input" type="checkbox" role="switch" id="pxPu_m_active_status">
+                    <label class="form-check-label text-white" for="pxPu_m_active_status">Active status flag</label>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_m_new_password">New password (optional)</label>
+                  <input type="password" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_m_new_password" placeholder="Min. 8 characters" autocomplete="new-password">
+                </div>
+              </div>
+            </div>
+
+            <div id="pxPu_block_user" class="d-none">
+              <h3 class="h6 text-white-50 text-uppercase small mb-3">User / operative (database)</h3>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label text-white-50 small" for="pxPu_u_id">ID</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_u_id" readonly>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-white-50 small" for="pxPu_u_created_at">Created at</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_u_created_at" readonly>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label text-white-50 small" for="pxPu_u_company_id">Company ID</label>
+                  <input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_u_company_id" min="1">
+                </div>
+                <div class="col-12">
+                  <label class="form-label text-white-50 small" for="pxPu_u_company_name">Company name</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_u_company_name" readonly>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_u_project_id">Project ID</label>
+                  <input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_u_project_id" min="1" placeholder="empty = none">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_u_role">Role</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_u_role">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_u_name">Name</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_u_name">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_u_email">Email</label>
+                  <input type="email" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_u_email">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_u_onboarding">Onboarding</label>
+                  <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_u_onboarding" placeholder="yes / no">
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check form-switch mt-4 pt-1">
+                    <input class="form-check-input" type="checkbox" role="switch" id="pxPu_u_onboarded">
+                    <label class="form-check-label text-white" for="pxPu_u_onboarded">Onboarded</label>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check form-switch mt-4 pt-1">
+                    <input class="form-check-input" type="checkbox" role="switch" id="pxPu_u_active">
+                    <label class="form-check-label text-white" for="pxPu_u_active">Active</label>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-check form-switch mt-4 pt-1">
+                    <input class="form-check-input" type="checkbox" role="switch" id="pxPu_u_active_status">
+                    <label class="form-check-label text-white" for="pxPu_u_active_status">Active status</label>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small" for="pxPu_u_new_password">New password (optional)</label>
+                  <input type="password" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxPu_u_new_password" placeholder="Min. 8 characters" autocomplete="new-password">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary flex-wrap gap-2">
+          <button type="button" class="btn btn-outline-danger me-auto" id="pxAdminPuDeleteBtn">Delete record</button>
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="pxAdminPuSaveBtn">Save changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Company detail / edit modal -->
+  <div class="modal fade" id="pxAdminCompanyModal" tabindex="-1" aria-labelledby="pxAdminCompanyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content px-admin-modal-content">
+        <div class="modal-header border-secondary">
+          <h2 class="modal-title h5" id="pxAdminCompanyModalLabel">Company details</h2>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="pxAdminCompanyModalLoading" class="text-white-50 py-4 text-center">Loading…</div>
+          <div id="pxAdminCompanyModalForm" class="d-none">
+            <div id="pxAdminCompanyModalFeedback" class="alert d-none" role="alert"></div>
+
+            <h3 class="h6 text-white-50 text-uppercase small mb-3">Company (database)</h3>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label text-white-50 small" for="pxCo_id">ID</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxCo_id" readonly>
+              </div>
+              <div class="col-md-8">
+                <label class="form-label text-white-50 small" for="pxCo_created_at">Created at</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxCo_created_at" readonly>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-white-50 small" for="pxCo_name">Name</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxCo_name">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-white-50 small" for="pxCo_industry_type">Industry type</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxCo_industry_type">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-white-50 small" for="pxCo_subscription_plan">Subscription plan</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxCo_subscription_plan">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-white-50 small" for="pxCo_active">Active (status)</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxCo_active" placeholder="e.g. not_active">
+              </div>
+              <div class="col-12">
+                <label class="form-label text-white-50 small" for="pxCo_created_by">Created by (head name at signup)</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxCo_created_by">
+              </div>
+              <div class="col-12">
+                <label class="form-label text-white-50 small" for="pxCo_office_address">Office address</label>
+                <textarea class="form-control form-control-sm bg-dark text-white border-secondary" id="pxCo_office_address" rows="2"></textarea>
+              </div>
+              <div class="col-12">
+                <label class="form-label text-white-50 small" for="pxCo_security_question1">Security question</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxCo_security_question1">
+              </div>
+              <div class="col-12">
+                <label class="form-label text-white-50 small" for="pxCo_security_token1">Security token</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxCo_security_token1">
+              </div>
+            </div>
+
+            <hr class="border-secondary my-4">
+
+            <h3 class="h6 text-white-50 text-uppercase small mb-3">Head manager account</h3>
+            <p id="pxHm_missing_note" class="small text-warning d-none">No manager row found for this company (<code>manager.company_id</code> does not match or table is empty).</p>
+            <input type="hidden" id="pxHm_id" value="">
+            <div class="row g-3" id="pxHm_fields">
+              <div class="col-md-4">
+                <label class="form-label text-white-50 small" for="pxHm_name">First name</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxHm_name">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label text-white-50 small" for="pxHm_surname">Surname</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxHm_surname">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label text-white-50 small" for="pxHm_email">Email</label>
+                <input type="email" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxHm_email">
+              </div>
+              <div class="col-12">
+                <div class="px-admin-hm-status border border-secondary rounded-3 p-3" style="background: rgba(15, 23, 42, 0.6);">
+                  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <span class="text-white-50 small text-uppercase fw-semibold" style="letter-spacing: 0.04em;">Account status</span>
+                    <span id="pxHm_status_badge" class="badge bg-secondary">—</span>
+                  </div>
+                  <div class="form-check form-switch px-admin-form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" role="switch" id="pxHm_active" aria-describedby="pxHm_active_help">
+                    <label class="form-check-label text-white" for="pxHm_active">Allow sign in (active account)</label>
+                  </div>
+                  <p id="pxHm_active_help" class="text-white-50 small mb-3">When off, the manager cannot log in to the dashboard. Click <strong>Save changes</strong> to apply.</p>
+                  <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-sm btn-success" id="pxHm_btn_activate">
+                      <i class="bi bi-check-circle" aria-hidden="true"></i> Activate account
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="pxHm_btn_deactivate">
+                      <i class="bi bi-slash-circle" aria-hidden="true"></i> Deactivate account
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-white-50 small" for="pxHm_new_password">New password (optional)</label>
+                <input type="password" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxHm_new_password" placeholder="Min. 8 characters" autocomplete="new-password">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary flex-wrap gap-2">
+          <button type="button" class="btn btn-outline-danger me-auto" id="pxAdminCompanyDeleteBtn">Delete company</button>
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="pxAdminCompanySaveBtn">Save changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer px-admin-app-footer">
+    <div class="container py-3 text-center">
+      <p class="footer-credit mb-0 small">Proconix platform administration · Roman Demian · 2026</p>
+    </div>
+  </footer>
+
+  <template id="pxAdminNavTemplate">
+    <a href="#" class="px-admin-nav-link active" data-px-admin-section="overview" data-px-admin-title="Overview">
+      <i class="bi bi-speedometer2"></i> Overview
+    </a>
+    <a href="#" class="px-admin-nav-link" data-px-admin-section="companies" data-px-admin-title="Companies &amp; tenants">
+      <i class="bi bi-buildings"></i> Companies &amp; tenants
+    </a>
+    <a href="#" class="px-admin-nav-link" data-px-admin-section="users" data-px-admin-title="Platform users">
+      <i class="bi bi-people"></i> Platform users
+    </a>
+    <a href="#" class="px-admin-nav-link" data-px-admin-section="billing" data-px-admin-title="Billing &amp; plans">
+      <i class="bi bi-credit-card-2-front"></i> Billing &amp; plans
+    </a>
+    <a href="#" class="px-admin-nav-link" data-px-admin-section="system" data-px-admin-title="System &amp; health">
+      <i class="bi bi-heart-pulse"></i> System &amp; health
+    </a>
+    <a href="#" class="px-admin-nav-link" data-px-admin-section="audit" data-px-admin-title="Audit &amp; logs">
+      <i class="bi bi-journal-text"></i> Audit &amp; logs
+    </a>
+    <a href="#" class="px-admin-nav-link" data-px-admin-section="content" data-px-admin-title="Content &amp; communications">
+      <i class="bi bi-envelope-paper"></i> Content &amp; communications
+    </a>
+    <a href="#" class="px-admin-nav-link" data-px-admin-section="settings" data-px-admin-title="Platform settings">
+      <i class="bi bi-gear"></i> Platform settings
+    </a>
+  </template>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    (function () {
+      var tpl = document.getElementById('pxAdminNavTemplate');
+      var mobile = document.getElementById('pxAdminSideNavMobile');
+      if (tpl && mobile) {
+        mobile.innerHTML = tpl.innerHTML;
+      }
+    })();
+  </script>
+  <script src="js/proconix_administration_dashboard.js"></script>
+</body>
+</html>

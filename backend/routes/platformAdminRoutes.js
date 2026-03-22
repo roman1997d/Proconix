@@ -1,0 +1,40 @@
+/**
+ * Proconix platform administration API (operators), not company managers.
+ */
+
+const express = require('express');
+const router = express.Router();
+const {
+  login,
+  me,
+  listCompanies,
+  getCompany,
+  updateCompany,
+  deleteCompany,
+  listBillingSubscriptions,
+  updateBillingSubscription,
+} = require('../controllers/platformAdminController');
+const {
+  listPlatformUsers,
+  getPlatformUser,
+  updatePlatformUser,
+  deletePlatformUser,
+} = require('../controllers/platformUsersAdminController');
+const { getSystemHealth } = require('../controllers/systemHealthAdminController');
+const { requirePlatformAdminAuth } = require('../middleware/requirePlatformAdminAuth');
+
+router.post('/login', login);
+router.get('/me', requirePlatformAdminAuth, me);
+router.get('/system-health', requirePlatformAdminAuth, getSystemHealth);
+router.get('/billing-subscriptions', requirePlatformAdminAuth, listBillingSubscriptions);
+router.patch('/billing-subscriptions/:id', requirePlatformAdminAuth, updateBillingSubscription);
+router.get('/platform-users', requirePlatformAdminAuth, listPlatformUsers);
+router.get('/platform-users/:kind/:id', requirePlatformAdminAuth, getPlatformUser);
+router.patch('/platform-users/:kind/:id', requirePlatformAdminAuth, updatePlatformUser);
+router.delete('/platform-users/:kind/:id', requirePlatformAdminAuth, deletePlatformUser);
+router.get('/companies', requirePlatformAdminAuth, listCompanies);
+router.get('/companies/:id', requirePlatformAdminAuth, getCompany);
+router.patch('/companies/:id', requirePlatformAdminAuth, updateCompany);
+router.delete('/companies/:id', requirePlatformAdminAuth, deleteCompany);
+
+module.exports = router;

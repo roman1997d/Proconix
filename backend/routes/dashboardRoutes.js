@@ -7,13 +7,13 @@
 const express = require('express');
 const router = express.Router();
 const { requireManagerAuth } = require('../middleware/requireManagerAuth');
+const dashboardOverviewController = require('../controllers/dashboardOverviewController');
 
 const modules = {
   'project-overview': getProjectOverviewHtml,
   'projects': getProjectsHtml,
   'project-builder': getProjectBuilderHtml,
   'task-management': getTaskManagementHtml,
-  'material-management': getMaterialManagementHtml,
   'risk-management': getRiskManagementHtml,
   'operatives': getOperativesHtml,
   'worklogs': getWorkLogsHtml,
@@ -23,6 +23,7 @@ const modules = {
   'reports': getReportsHtml,
   'complains': getComplainsHtml,
   'issues': getIssuesHtml,
+  'profile-settings': getProfileSettingsHtml,
 };
 
 function getProjectOverviewHtml() {
@@ -31,15 +32,15 @@ function getProjectOverviewHtml() {
       <div class="stat-card stat-card-patients">
         <div class="stat-card-content">
           <span class="stat-label">Total Projects</span>
-          <span class="stat-value">24</span>
-          <span class="stat-badge">+12%</span>
+          <span class="stat-value" id="project-overview-projects-count">—</span>
+          <span class="stat-badge d-none" aria-hidden="true"></span>
         </div>
       </div>
       <div class="stat-card stat-card-appointments">
         <div class="stat-card-content">
           <span class="stat-label">Active Tasks</span>
-          <span class="stat-value">156</span>
-          <span class="stat-badge">+8%</span>
+          <span class="stat-value" id="project-overview-planning-tasks-count">—</span>
+          <span class="stat-badge d-none" aria-hidden="true"></span>
         </div>
       </div>
       <div class="stat-card stat-card-surgery">
@@ -51,9 +52,50 @@ function getProjectOverviewHtml() {
       </div>
       <div class="stat-card stat-card-revenue">
         <div class="stat-card-content">
-          <span class="stat-label">Total Revenue</span>
-          <span class="stat-value">£48.2K</span>
-          <span class="stat-badge">+18%</span>
+          <span class="stat-label">Total project cost</span>
+          <span class="stat-value" id="project-overview-worklogs-total">—</span>
+          <span class="stat-badge d-none" aria-hidden="true"></span>
+        </div>
+      </div>
+    </section>
+    <section class="dashboard-grid dashboard-grid-one-col">
+      <div class="dashboard-card table-card">
+        <h2 class="card-title">Operative activity today</h2>
+        <p class="text-muted small" id="po-act-loading">Loading…</p>
+        <p class="text-muted small d-none" id="po-act-summary">
+          <span id="po-act-count-wrap">Operatives who clocked in today: <strong id="po-act-count">0</strong></span>
+        </p>
+        <p class="text-muted small d-none" id="po-act-empty">No operatives have clocked in today yet.</p>
+        <div class="table-wrap">
+          <table class="data-table d-none" id="po-act-table" aria-label="Operative activity today">
+            <thead><tr><th>Operative</th><th>Project</th><th>Clock in</th><th>Status</th></tr></thead>
+            <tbody id="po-act-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <section class="dashboard-grid">
+      <div class="dashboard-card table-card">
+        <h2 class="card-title">Tasks due in the next 7 days</h2>
+        <p class="text-muted small" id="po-tasks-loading">Loading…</p>
+        <p class="text-muted small d-none" id="po-tasks-empty">No tasks with a deadline in the next 7 days.</p>
+        <div class="table-wrap">
+          <table class="data-table d-none" id="po-tasks-table" aria-label="Upcoming task deadlines">
+            <thead><tr><th>Task</th><th>Deadline</th><th>Status</th></tr></thead>
+            <tbody id="po-tasks-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="dashboard-card table-card">
+        <h2 class="card-title">Unapproved work logs</h2>
+        <p class="text-muted small po-logs-hint">Oldest submissions first (up to 20). <strong>Stale</strong> = pending approval for over 7 days.</p>
+        <p class="text-muted small" id="po-logs-loading">Loading…</p>
+        <p class="text-muted small d-none" id="po-logs-empty">No unapproved work logs. All caught up.</p>
+        <div class="table-wrap">
+          <table class="data-table d-none" id="po-logs-table" aria-label="Unapproved work logs queue">
+            <thead><tr><th>Job</th><th>Worker</th><th>Project</th><th>Submitted</th><th>Status</th><th>Total</th></tr></thead>
+            <tbody id="po-logs-tbody"></tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -63,23 +105,9 @@ function getProjectOverviewHtml() {
         <div class="chart-wrap"><canvas id="lineChart" height="200"></canvas></div>
       </div>
       <div class="dashboard-card chart-card">
-        <h2 class="card-title">Revenue Distribution</h2>
+        <h2 class="card-title">QA – work type (cost)</h2>
+        <p class="text-muted small chart-subtitle-pie">Jobs from Quality Assurance: day work, hour work, price work.</p>
         <div class="chart-wrap chart-wrap-pie"><canvas id="pieChart" height="200"></canvas></div>
-      </div>
-    </section>
-    <section class="dashboard-grid">
-      <div class="dashboard-card table-card">
-        <h2 class="card-title">Recent Activity</h2>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Project</th><th>Status</th><th>Date</th></tr></thead>
-            <tbody>
-              <tr><td>Site Alpha</td><td><span class="status-badge status-green">Active</span></td><td>12 Feb 2026</td></tr>
-              <tr><td>Site Beta</td><td><span class="status-badge status-yellow">Pending</span></td><td>11 Feb 2026</td></tr>
-              <tr><td>Site Gamma</td><td><span class="status-badge status-red">Overdue</span></td><td>10 Feb 2026</td></tr>
-            </tbody>
-          </table>
-        </div>
       </div>
     </section>
   `;
@@ -96,14 +124,27 @@ function getPlaceholderHtml(title, icon, description) {
   `;
 }
 
+function getProfileSettingsHtml() {
+  return getPlaceholderHtml(
+    'Profile Settings',
+    'bi-gear-fill',
+    'Configure manager profile settings (placeholder).'
+  );
+}
+
 function getProjectsHtml() {
   return `
     <section class="projects-module dashboard-card">
       <div class="projects-header">
         <h2 class="card-title">My Projects</h2>
-        <button type="button" class="btn-projects-add" id="projects-btn-add" aria-label="Add Project">
-          <i class="bi bi-plus-lg"></i> Add Project
-        </button>
+        <div class="projects-header-actions">
+          <button type="button" class="btn-projects-secondary" id="projects-btn-toggle-hidden">
+            Show hidden projects
+          </button>
+          <button type="button" class="btn-projects-add" id="projects-btn-add" aria-label="Add Project">
+            <i class="bi bi-plus-lg"></i> Add Project
+          </button>
+        </div>
       </div>
       <div id="projects-access-denied" class="projects-access-denied d-none">
         <p>Access Denied. You are not authorized to view this project.</p>
@@ -198,6 +239,21 @@ function getProjectsHtml() {
                 <label for="projects-edit-floors">Number of Floors</label>
                 <input type="number" id="projects-edit-floors" min="0" placeholder="e.g. 3">
               </div>
+              <div class="projects-field-row">
+                <div class="projects-field">
+                  <label for="projects-edit-latitude">Project Latitude</label>
+                  <input type="number" step="0.000001" id="projects-edit-latitude" placeholder="e.g. 51.507351">
+                </div>
+                <div class="projects-field">
+                  <label for="projects-edit-longitude">Project Longitude</label>
+                  <input type="number" step="0.000001" id="projects-edit-longitude" placeholder="e.g. -0.127758">
+                </div>
+              </div>
+              <div class="projects-field">
+                <button type="button" class="btn-projects-secondary" id="projects-edit-use-location">
+                  Use current location
+                </button>
+              </div>
               <button type="submit" class="btn-projects-primary">Save Changes</button>
             </form>
           </div>
@@ -285,10 +341,6 @@ function getProjectBuilderHtml() {
 
 function getTaskManagementHtml() {
   return getPlaceholderHtml('Task Management', 'bi-check2-square', 'Manage tasks and assignments.');
-}
-
-function getMaterialManagementHtml() {
-  return getPlaceholderHtml('Material Management', 'bi-box-seam-fill', 'Track materials and inventory.');
 }
 
 function getRiskManagementHtml() {
@@ -653,6 +705,10 @@ function getComplainsHtml() {
 function getIssuesHtml() {
   return getPlaceholderHtml('Issues', 'bi-bug-fill', 'Track and resolve issues.');
 }
+
+router.get('/overview-stats', requireManagerAuth, dashboardOverviewController.getOverviewStats);
+router.get('/overview-lists', requireManagerAuth, dashboardOverviewController.getOverviewLists);
+router.get('/operative-activity-today', requireManagerAuth, dashboardOverviewController.getOperativeActivityToday);
 
 router.get('/:module', requireManagerAuth, function (req, res) {
   const slug = req.params.module;

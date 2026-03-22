@@ -37,7 +37,7 @@
 body.dashboard-manager {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: var(--bg-main);
+  background: linear-gradient(135deg, #1F1F1F 0%, #111827 40%, #020617 100%);
   color: var(--text-primary);
   min-height: 100vh;
   display: flex;
@@ -275,6 +275,15 @@ body.dashboard-manager {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--gap);
+}
+
+.dashboard-grid-one-col {
+  grid-template-columns: 1fr;
+}
+
+/* Project overview: work log awaiting approval > 7 days */
+.po-worklog-row-stale td {
+  background: rgba(220, 53, 69, 0.08);
 }
 
 .dashboard-card {

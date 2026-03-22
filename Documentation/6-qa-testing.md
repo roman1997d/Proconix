@@ -43,6 +43,23 @@ Ce trebuie să funcționeze și cum se verifică, pe fluxuri principale.
 
 ---
 
+### Material Management (Manager)
+
+| Scenariu | Pași | Rezultat așteptat |
+|----------|------|--------------------|
+| Acces modul | Dashboard → Material Management | Pagina manage_material.html se încarcă (iframe sau tab); GET /api/materials/projects 200 dacă sesiune manager |
+| Listă proiecte | Deschide Material Management | Dropdown proiecte populat cu proiectele companiei |
+| Listă materiale | Selectează un proiect | GET /api/materials?projectId= 200; tabel materiale + GET /api/materials/forecast pentru Usage last week / Forecast this week |
+| Creare categorie | Create Material Category → nume, descriere → Save | POST /api/materials/categories 201; categoria apare în dropdown-uri |
+| Creare furnizor | Add Supplier → nume, contact, email/phone, adresă → Save | POST /api/materials/suppliers 201; furnizorul apare în dropdown-uri |
+| Adăugare material | Add Material → nume, categorie, furnizor, unitate, cantitate, prag low-stock → Save | POST /api/materials 201; materialul apare în tabel; snapshot în material_consumption pentru ziua curentă |
+| Stock check | Pe rând → Stock check → modifică Quantity remaining → Update | PUT /api/materials/:id cu quantityUsed/quantityRemaining; snapshot actualizat; listă reîncărcată |
+| Edit full / Edit qty | Edit full sau Edit only qty → modificări → Update | PUT /api/materials/:id; listă actualizată |
+| Ștergere material | Delete → confirmare | DELETE /api/materials/:id 204 (soft delete); materialul dispare din listă |
+| Forecast | Selectează proiect cu istoric snapshot-uri | GET /api/materials/forecast?projectId= returnează thisWeek, lastWeek (din material_consumption); alertă dacă forecast > stoc |
+
+---
+
 ### Work Logs (Manager)
 
 | Scenariu | Pași | Rezultat așteptat |
@@ -74,13 +91,52 @@ Ce trebuie să funcționeze și cum se verifică, pe fluxuri principale.
 
 ---
 
-### Operative Dashboard
+### Project Overview (Manager Dashboard)
 
+| Scenariu | Pași | Rezultat așteptat |
+|----------|------|--------------------|
+| Stat cards | Dashboard → Project Overview | GET /api/dashboard/overview-stats 200; valori pentru proiecte, task-uri planning, operatives (din /api/operatives), cost total work logs; grafic doughnut populat din `qa_job_cost_by_type` |
+| Task-uri deadline 7 zile | Aceeași pagină | GET /api/dashboard/overview-lists; tabel „Tasks due in the next 7 days” sau mesaj gol |
+| Work logs neaprobate | Aceeași pagină | `worklogs_unapproved_queue` în overview-lists; rânduri „Stale” pentru >7 zile |
+| Activitate operativi azi | Aceeași pagină | GET /api/dashboard/operative-activity-today; număr + tabel (proiect, clock in, status) |
+| Fără sesiune | Header-e lipsă | Carduri „—” sau mesaj sesiune expirată |
+
+### Profile Settings & My Company (Manager)
+
+| Scenariu | Pași | Rezultat așteptat |
+|----------|------|--------------------|
+| Profil | Profile Settings | GET /api/managers/me 200; schimbare parolă POST /api/managers/change-password; telefon PATCH /api/managers/phone dacă suportat în DB |
+| Companie | My Company Settings | GET /api/companies/me 200; formular cu date companie |
+| Invite manager | My Company → Add manager | POST /api/managers/invite; general vs site (cu project_id); răspuns cu parolă temporară |
+
+---
+
+### QA Job → Task & Planning Sync (Gantt + Kanban)
+| Scenariu | Pași | Rezultat așteptat |
+|----------|------|--------------------|
+| Auto-create în Planning | Quality Assurance → Create job → Save | Se creează automat `planning_plans(type='daily')` pentru `target_completion_date` și un `planning_plan_tasks` asociat; apare pe `Task_Planning.html` în Gantt și Kanban. |
+| Sync status | QA: edit job cu status `active/completed` → Save | Task-ul din Planning se actualizează status (`active → in_progress`, `completed → completed`). |
+| Sync delete | QA: Delete job → confirm | Task-ul asociat din Planning dispare (și planul poate fi curățat dacă rămâne fără task-uri). |
+| Legătură stabilă (DB) | Verificare în DB | `planning_plan_tasks.qa_job_id` este setat corect pentru joburile create prin QA. |
+
+---
+
+### Task & Planning – poze confirmare (manager + operativ)
+| Scenariu | Pași | Rezultat așteptat |
+|----------|------|--------------------|
+| Operativ – modal task (EN) | Login operativ → click pe un task din listă | Se deschide modal cu etichete în engleză: **Confirmation photos (n / 10)**, **Add photos (max. 10 total)**, butoane **Decline** / **Mark in progress** / **Complete** |
+| Operativ – upload + finalizare | Alege imagini → Complete (după progres) | POST `/api/operatives/tasks/:id/photos` 200; la finalizare PATCH cu `action: complete`; pozele apar în `operative_task_photos` |
+| Manager – vizualizare poze | Dashboard → Task & Planning → task **completed** cu poze → deschide **Task details** | Secțiune **Confirmation photos** cu miniaturi; GET `/api/planning/plan-tasks/:id/confirmation-photos` 200; click deschide imaginea |
+
+---
+
+### Operative Dashboard
 | Scenariu | Pași | Rezultat așteptat |
 |----------|------|--------------------|
 | Login operativ | Email + parolă (sau temp) → Submit | 200; sesiune; redirect în dashboard |
 | Clock-in / Clock-out | Butoane Clock In / Clock Out | POST work-hours/clock-in, clock-out 200; status actualizat |
 | Vizualizare proiect curent | Secțiunea Project / Tasks | GET project/current, tasks 200; date afișate |
+| Detalii task + acțiuni | Click pe task în listă | GET `/api/operatives/tasks/:id?source=` 200; PATCH status după acțiune; mesaj **Updated.** la succes |
 | Raportare issue | Formular issue + opțional fișier → Submit | POST /api/operatives/issues 200; issue în DB |
 | Upload document | Upload document → fișier → Submit | POST /api/operatives/uploads 200 |
 | Creare work log | Work Log → completare date → Submit | POST /api/operatives/work-log 201 |
@@ -133,3 +189,5 @@ Logurile sunt scrise în directorul configurat de PM2 (ex: `~/.pm2/logs/`).
 ---
 
 *Actualizează test cases la adăugarea de funcționalități noi.*
+
+**Actualizat:** 16/03/2026

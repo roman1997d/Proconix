@@ -20,6 +20,12 @@
   margin-bottom: var(--gap);
 }
 
+.projects-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .projects-header .card-title {
   margin: 0;
   font-size: 1.35rem;
@@ -52,6 +58,20 @@
 
 .btn-projects-add i {
   font-size: 1.1rem;
+}
+
+.btn-projects-secondary {
+  background: transparent;
+  border: 1px solid var(--divider);
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.btn-projects-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .projects-access-denied {
@@ -123,8 +143,37 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   margin-bottom: 16px;
+}
+
+.projects-card-timeline {
+  flex-shrink: 0;
+}
+
+.projects-card-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.projects-card-badge-soon {
+  background: rgba(14, 165, 233, 0.16);
+  color: #0ea5e9;
+}
+
+.projects-card-badge-today {
+  background: rgba(250, 204, 21, 0.16);
+  color: #facc15;
+}
+
+.projects-card-badge-overdue {
+  background: rgba(239, 68, 68, 0.16);
+  color: #ef4444;
 }
 
 .projects-status-badge {
@@ -168,6 +217,26 @@
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid var(--divider);
+}
+
+.btn-projects-hide {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  border: 1px dashed rgba(156, 163, 175, 0.7);
+  color: var(--text-muted);
+}
+
+.btn-projects-hide:hover {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .btn-projects-view,
@@ -552,6 +621,53 @@
   font-weight: 600;
   color: var(--text-muted);
   margin: 0 0 10px 0;
+}
+
+.projects-details-notes-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.projects-notes-textarea {
+  width: 100%;
+  margin-top: 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-white);
+}
+
+.projects-notes-textarea:focus {
+  outline: none;
+  border-color: rgba(14, 165, 233, 0.85);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.3);
+}
+
+.projects-details-notes-actions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-projects-save-notes {
+  background: linear-gradient(135deg, #0ea5e9, #22c55e);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.btn-projects-save-notes:hover {
+  filter: brightness(1.08);
+}
+
+.projects-notes-status {
+  font-size: 0.8rem;
 }
 
 .projects-details-info p {

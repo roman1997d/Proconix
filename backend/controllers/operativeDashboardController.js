@@ -3,7 +3,23 @@
  * All handlers expect req.operative (set by requireOperativeAuth).
  */
 
+const fs = require('fs');
 const { pool } = require('../db/pool');
+
+const MAX_TASK_CONFIRMATION_PHOTOS = 10;
+
+function haversineMiles(lat1, lon1, lat2, lon2) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 3958.8; // Earth radius in miles
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 function getOperative(req) {
   const op = req.operative;
@@ -46,24 +62,115 @@ async function getMe(req, res) {
 
 /**
  * POST /api/operatives/work-hours/clock-in
- * Body: { project_id? } optional
+ * Body: { project_id?, clock_in_latitude?, clock_in_longitude? }
  */
 async function clockIn(req, res) {
   const op = getOperative(req);
   if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
 
-  const projectId = req.body && req.body.project_id != null ? req.body.project_id : null;
+  const body = req.body || {};
+  let projectId = body.project_id != null ? body.project_id : null;
+  const lat = body.clock_in_latitude != null ? Number(body.clock_in_latitude) : null;
+  const lng = body.clock_in_longitude != null ? Number(body.clock_in_longitude) : null;
 
   try {
+    if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Location is required to clock in.',
+      });
+    }
+
+    // Determine operative's current project if not explicitly provided
+    if (projectId == null) {
+      try {
+        const userRow = await pool.query(
+          'SELECT project_id FROM users WHERE id = $1',
+          [op.id]
+        );
+        if (userRow.rows.length > 0 && userRow.rows[0].project_id != null) {
+          projectId = userRow.rows[0].project_id;
+        }
+      } catch (userErr) {
+        if (userErr.code === '42703') {
+          try {
+            await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS project_id INT');
+            const retry = await pool.query('SELECT project_id FROM users WHERE id = $1', [op.id]);
+            if (retry.rows.length > 0 && retry.rows[0].project_id != null) {
+              projectId = retry.rows[0].project_id;
+            }
+          } catch (_) {
+            /* ignore */
+          }
+        }
+      }
+      if (projectId == null) {
+        try {
+          const paRow = await pool.query(
+            'SELECT project_id FROM project_assignments WHERE user_id = $1 ORDER BY assigned_at DESC LIMIT 1',
+            [op.id]
+          );
+          if (paRow.rows.length > 0 && paRow.rows[0].project_id != null) {
+            projectId = paRow.rows[0].project_id;
+          }
+        } catch (paErr) {
+          if (paErr.code !== '42P01') {
+            console.error('clockIn project_assignments lookup:', paErr.message);
+          }
+        }
+      }
+    }
+
+    // Compute on-site status if we have both operative location and project location
+    let onSite = null;
+    let distanceMiles = null;
+    if (!Number.isNaN(lat) && !Number.isNaN(lng) && projectId != null) {
+      try {
+        const projRow = await pool.query(
+          'SELECT latitude, longitude FROM projects WHERE id = $1',
+          [projectId]
+        );
+        if (projRow.rows.length > 0 && projRow.rows[0].latitude != null && projRow.rows[0].longitude != null) {
+          const pLat = Number(projRow.rows[0].latitude);
+          const pLng = Number(projRow.rows[0].longitude);
+          if (!Number.isNaN(pLat) && !Number.isNaN(pLng)) {
+            distanceMiles = haversineMiles(pLat, pLng, lat, lng);
+            if (!Number.isNaN(distanceMiles)) {
+              onSite = distanceMiles <= 0.01; // 0.01 miles margin (~16 m)
+            }
+          }
+        }
+      } catch (projErr) {
+        console.error('clockIn project location lookup:', projErr.message || projErr);
+      }
+    }
+
+    if (onSite === false) {
+      return res.status(400).json({
+        success: false,
+        message: 'You are not on site. Clock in not allowed.',
+        on_site: false,
+        distance_miles: distanceMiles != null ? Number(distanceMiles.toFixed(2)) : null,
+      });
+    }
+
     const result = await pool.query(
-      `INSERT INTO work_hours (user_id, project_id, clock_in)
-       VALUES ($1, $2, NOW())
-       RETURNING id, user_id, project_id, clock_in, clock_out`,
-      [op.id, projectId]
+      `INSERT INTO work_hours (user_id, project_id, clock_in, clock_in_latitude, clock_in_longitude)
+       VALUES ($1, $2, NOW(), $3, $4)
+       RETURNING id, user_id, project_id, clock_in, clock_out, clock_in_latitude, clock_in_longitude`,
+      [op.id, projectId, Number.isNaN(lat) ? null : lat, Number.isNaN(lng) ? null : lng]
     );
+    let message = 'Clocked in.';
+    if (onSite === true) {
+      message = 'You are on site.';
+    } else if (onSite === false) {
+      message = 'You are not on site.';
+    }
     return res.status(201).json({
       success: true,
-      message: 'Clocked in.',
+      message,
+      on_site: onSite,
+      distance_miles: distanceMiles != null ? Number(distanceMiles.toFixed(2)) : null,
       work_hour: result.rows[0],
     });
   } catch (err) {
@@ -74,31 +181,92 @@ async function clockIn(req, res) {
 
 /**
  * POST /api/operatives/work-hours/clock-out
+ * Body: { clock_out_latitude?, clock_out_longitude? }
  * Clocks out the most recent open record (clock_out IS NULL) for this user.
  */
 async function clockOut(req, res) {
   const op = getOperative(req);
   if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
 
+  const body = req.body || {};
+  const lat = body.clock_out_latitude != null ? Number(body.clock_out_latitude) : null;
+  const lng = body.clock_out_longitude != null ? Number(body.clock_out_longitude) : null;
+
   try {
-    const result = await pool.query(
-      `UPDATE work_hours
-       SET clock_out = NOW()
-       WHERE id = (
-         SELECT id FROM work_hours
-         WHERE user_id = $1 AND clock_out IS NULL
-         ORDER BY clock_in DESC LIMIT 1
-       )
-       RETURNING id, user_id, project_id, clock_in, clock_out`,
+    if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Location is required to clock out.',
+      });
+    }
+
+    // Find the current open work_hours record
+    const currentRow = await pool.query(
+      `SELECT id, project_id
+       FROM work_hours
+       WHERE user_id = $1 AND clock_out IS NULL
+       ORDER BY clock_in DESC
+       LIMIT 1`,
       [op.id]
     );
-    if (result.rows.length === 0) {
+    if (currentRow.rows.length === 0) {
       return res.status(400).json({ success: false, message: 'No active clock-in found.' });
     }
+
+    const workHourId = currentRow.rows[0].id;
+    const projectId = currentRow.rows[0].project_id;
+
+    // Validate location against project location (if available)
+    let onSite = null;
+    let distanceMiles = null;
+    if (projectId != null) {
+      try {
+        const projRow = await pool.query(
+          'SELECT latitude, longitude FROM projects WHERE id = $1',
+          [projectId]
+        );
+        if (projRow.rows.length > 0 && projRow.rows[0].latitude != null && projRow.rows[0].longitude != null) {
+          const pLat = Number(projRow.rows[0].latitude);
+          const pLng = Number(projRow.rows[0].longitude);
+          if (!Number.isNaN(pLat) && !Number.isNaN(pLng)) {
+            distanceMiles = haversineMiles(pLat, pLng, lat, lng);
+            if (!Number.isNaN(distanceMiles)) {
+              onSite = distanceMiles <= 0.01; // 0.01 miles margin (~16 m)
+            }
+          }
+        }
+      } catch (projErr) {
+        console.error('clockOut project location lookup:', projErr.message || projErr);
+      }
+    }
+
+    if (onSite === false) {
+      return res.status(400).json({
+        success: false,
+        message: 'You are not on site. Clock out not allowed.',
+        on_site: false,
+        distance_miles: distanceMiles != null ? Number(distanceMiles.toFixed(2)) : null,
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE work_hours
+       SET clock_out = NOW(),
+           clock_out_latitude = COALESCE($2, clock_out_latitude),
+           clock_out_longitude = COALESCE($3, clock_out_longitude)
+       WHERE id = $1 AND user_id = $4
+       RETURNING id, user_id, project_id, clock_in, clock_out, clock_in_latitude, clock_in_longitude, clock_out_latitude, clock_out_longitude`,
+      [workHourId, Number.isNaN(lat) ? null : lat, Number.isNaN(lng) ? null : lng, op.id]
+    );
+    const row = result.rows[0];
+
+    let message = 'Clocked out.';
     return res.status(200).json({
       success: true,
-      message: 'Clocked out.',
-      work_hour: result.rows[0],
+      message,
+      on_site: onSite,
+      distance_miles: distanceMiles != null ? Number(distanceMiles.toFixed(2)) : null,
+      work_hour: row,
     });
   } catch (err) {
     console.error('clockOut error:', err);
@@ -115,12 +283,41 @@ async function workHoursStatus(req, res) {
   if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
 
   try {
-    const current = await pool.query(
-      `SELECT id, clock_in, clock_out FROM work_hours
-       WHERE user_id = $1 AND clock_out IS NULL
-       ORDER BY clock_in DESC LIMIT 1`,
-      [op.id]
-    );
+    let current;
+    try {
+      current = await pool.query(
+        `SELECT id, clock_in, clock_out,
+                clock_in_latitude, clock_in_longitude,
+                clock_out_latitude, clock_out_longitude
+         FROM work_hours
+         WHERE user_id = $1 AND clock_out IS NULL
+         ORDER BY clock_in DESC LIMIT 1`,
+        [op.id]
+      );
+    } catch (colErr) {
+      if (colErr.code === '42703') {
+        // Columns might not exist yet – attempt to add them, then retry without location
+        try {
+          await pool.query(
+            `ALTER TABLE work_hours
+               ADD COLUMN IF NOT EXISTS clock_in_latitude  NUMERIC(9,6),
+               ADD COLUMN IF NOT EXISTS clock_in_longitude NUMERIC(9,6),
+               ADD COLUMN IF NOT EXISTS clock_out_latitude  NUMERIC(9,6),
+               ADD COLUMN IF NOT EXISTS clock_out_longitude NUMERIC(9,6)`
+          );
+        } catch (alterErr) {
+          console.error('workHoursStatus alter work_hours (geolocation):', alterErr.message);
+        }
+        current = await pool.query(
+          `SELECT id, clock_in, clock_out FROM work_hours
+           WHERE user_id = $1 AND clock_out IS NULL
+           ORDER BY clock_in DESC LIMIT 1`,
+          [op.id]
+        );
+      } else {
+        throw colErr;
+      }
+    }
 
     const today = await pool.query(
       `SELECT
@@ -219,7 +416,9 @@ async function getCurrentProject(req, res) {
           await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS project_id INT');
           const retry = await pool.query('SELECT project_id FROM users WHERE id = $1', [op.id]);
           if (retry.rows.length > 0 && retry.rows[0].project_id != null) projectId = retry.rows[0].project_id;
-        } catch (_) {}
+        } catch (_) {
+          /* column may already exist or migration not applicable */
+        }
       }
     }
 
@@ -353,11 +552,23 @@ async function uploadDocument(req, res) {
 
 /**
  * GET /api/operatives/tasks
- * Returns tasks assigned to the operative.
+ * Returns tasks for the operative: legacy `tasks` rows + Task & Planning rows where
+ * `assigned_to` (TEXT[]) contains this user's name (case-insensitive, trimmed).
  */
 async function getTasks(req, res) {
   const op = getOperative(req);
   if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+
+  const companyId = op.company_id;
+  let userName = '';
+  try {
+    const ur = await pool.query('SELECT name FROM users WHERE id = $1', [op.id]);
+    if (ur.rows && ur.rows[0]) userName = String(ur.rows[0].name || '').trim();
+  } catch (e) {
+    console.error('getTasks user name:', e);
+  }
+
+  const merged = [];
 
   try {
     const result = await pool.query(
@@ -367,16 +578,344 @@ async function getTasks(req, res) {
        ORDER BY deadline ASC NULLS LAST, created_at DESC`,
       [op.id]
     );
-    return res.status(200).json({
-      success: true,
-      tasks: result.rows,
+    (result.rows || []).forEach((row) => {
+      merged.push({
+        source: 'legacy',
+        id: row.id,
+        title: row.name,
+        deadline: row.deadline,
+        status: row.status || 'pending',
+        priority: null,
+      });
     });
   } catch (err) {
-    if (err.code === '42P01') {
-      return res.status(200).json({ success: true, tasks: [] });
+    if (err.code !== '42P01') {
+      console.error('getTasks legacy:', err);
+      return res.status(500).json({ success: false, message: 'Failed to fetch tasks.' });
     }
-    console.error('getTasks error:', err);
-    return res.status(500).json({ success: false, message: 'Failed to fetch tasks.' });
+  }
+
+  if (userName && companyId != null) {
+    try {
+      const pr = await pool.query(
+        `SELECT ppt.id, ppt.title, ppt.deadline, ppt.status, ppt.priority, ppt.pickup_start_date, ppt.description
+         FROM planning_plan_tasks ppt
+         INNER JOIN planning_plans pp ON pp.id = ppt.plan_id
+         WHERE pp.company_id = $1
+           AND ppt.status IS DISTINCT FROM 'completed'
+           AND EXISTS (
+             SELECT 1 FROM unnest(ppt.assigned_to) AS a(x)
+             WHERE LOWER(TRIM(a.x)) = LOWER(TRIM($2::text))
+           )
+         ORDER BY ppt.deadline ASC NULLS LAST`,
+        [companyId, userName]
+      );
+      (pr.rows || []).forEach((row) => {
+        merged.push({
+          source: 'planning',
+          id: row.id,
+          title: row.title,
+          deadline: row.deadline,
+          status: row.status || 'not_started',
+          priority: row.priority || null,
+          pickup_start_date: row.pickup_start_date,
+          description: row.description,
+        });
+      });
+    } catch (err) {
+      if (err.code !== '42P01') {
+        console.error('getTasks planning:', err);
+      }
+    }
+  }
+
+  function deadlineSortKey(t) {
+    if (!t.deadline) return Number.MAX_SAFE_INTEGER;
+    const d = new Date(t.deadline);
+    return Number.isNaN(d.getTime()) ? Number.MAX_SAFE_INTEGER : d.getTime();
+  }
+  merged.sort((a, b) => deadlineSortKey(a) - deadlineSortKey(b));
+
+  return res.status(200).json({
+    success: true,
+    tasks: merged,
+  });
+}
+
+async function getOperativeDisplayName(userId) {
+  const ur = await pool.query('SELECT name FROM users WHERE id = $1', [userId]);
+  return ur.rows && ur.rows[0] ? String(ur.rows[0].name || '').trim() : '';
+}
+
+async function fetchPlanningTaskIfAssigned(op, taskId, userName) {
+  const r = await pool.query(
+    `SELECT ppt.id, ppt.title, ppt.description, ppt.deadline, ppt.status, ppt.priority,
+            ppt.pickup_start_date, ppt.notes, ppt.assigned_to
+     FROM planning_plan_tasks ppt
+     INNER JOIN planning_plans pp ON pp.id = ppt.plan_id
+     WHERE ppt.id = $1 AND pp.company_id = $2
+       AND EXISTS (
+         SELECT 1 FROM unnest(ppt.assigned_to) AS a(x)
+         WHERE LOWER(TRIM(a.x)) = LOWER(TRIM($3::text))
+       )`,
+    [taskId, op.company_id, userName]
+  );
+  return r.rows[0] || null;
+}
+
+async function fetchLegacyTaskIfOwned(op, taskId) {
+  const r = await pool.query(
+    `SELECT id, user_id, project_id, name, deadline, status, created_at
+     FROM tasks WHERE id = $1 AND user_id = $2`,
+    [taskId, op.id]
+  );
+  return r.rows[0] || null;
+}
+
+async function getTaskPhotosList(userId, source, taskId) {
+  const r = await pool.query(
+    `SELECT file_url FROM operative_task_photos
+     WHERE user_id = $1 AND task_source = $2 AND task_id = $3
+     ORDER BY created_at ASC`,
+    [userId, source, taskId]
+  );
+  return (r.rows || []).map((x) => x.file_url);
+}
+
+async function countTaskPhotos(userId, source, taskId) {
+  try {
+    const r = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM operative_task_photos
+       WHERE user_id = $1 AND task_source = $2 AND task_id = $3`,
+      [userId, source, taskId]
+    );
+    return r.rows[0] && r.rows[0].c != null ? Number(r.rows[0].c) : 0;
+  } catch (e) {
+    if (e.code === '42P01') return 0;
+    throw e;
+  }
+}
+
+function mapOperativeActionToStatus(source, action) {
+  const a = String(action || '')
+    .toLowerCase()
+    .trim();
+  if (a === 'decline' || a === 'refuse' || a === 'declined') return 'declined';
+  if (a === 'in_progress' || a === 'progress' || a === 'started') return 'in_progress';
+  if (a === 'complete' || a === 'completed') return 'completed';
+  return null;
+}
+
+/**
+ * GET /api/operatives/tasks/:taskId?source=legacy|planning
+ */
+async function getTaskDetail(req, res) {
+  const op = getOperative(req);
+  if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+  const taskId = parseInt(req.params.taskId, 10);
+  const source = (req.query.source || '').toLowerCase();
+  if (!Number.isInteger(taskId) || taskId < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid task id.' });
+  }
+  if (source !== 'legacy' && source !== 'planning') {
+    return res.status(400).json({
+      success: false,
+      message: 'Query parameter source=legacy|planning is required.',
+    });
+  }
+
+  try {
+    let photos = [];
+    if (source === 'legacy') {
+      const task = await fetchLegacyTaskIfOwned(op, taskId);
+      if (!task) return res.status(404).json({ success: false, message: 'Task not found.' });
+      try {
+        photos = await getTaskPhotosList(op.id, 'legacy', taskId);
+      } catch (e) {
+        if (e.code !== '42P01') throw e;
+      }
+      return res.status(200).json({
+        success: true,
+        task: {
+          source: 'legacy',
+          id: task.id,
+          title: task.name,
+          description: null,
+          deadline: task.deadline,
+          status: task.status || 'pending',
+          priority: null,
+          pickup_start_date: null,
+          notes: null,
+          assigned_to: null,
+          confirmation_photos: photos,
+        },
+      });
+    }
+
+    const userName = await getOperativeDisplayName(op.id);
+    const task = await fetchPlanningTaskIfAssigned(op, taskId, userName);
+    if (!task) return res.status(404).json({ success: false, message: 'Task not found.' });
+    try {
+      photos = await getTaskPhotosList(op.id, 'planning', taskId);
+    } catch (e) {
+      if (e.code !== '42P01') throw e;
+    }
+    return res.status(200).json({
+      success: true,
+      task: {
+        source: 'planning',
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        deadline: task.deadline,
+        status: task.status,
+        priority: task.priority,
+        pickup_start_date: task.pickup_start_date,
+        notes: task.notes,
+        assigned_to: task.assigned_to,
+        confirmation_photos: photos,
+      },
+    });
+  } catch (err) {
+    console.error('getTaskDetail error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load task.' });
+  }
+}
+
+/**
+ * PATCH /api/operatives/tasks/:taskId
+ * Body: { source: 'legacy'|'planning', action: 'decline'|'in_progress'|'complete' }
+ */
+async function updateTaskStatus(req, res) {
+  const op = getOperative(req);
+  if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+  const taskId = parseInt(req.params.taskId, 10);
+  const body = req.body || {};
+  const source = String(body.source || '').toLowerCase();
+  const newStatus = mapOperativeActionToStatus(source, body.action);
+
+  if (!Number.isInteger(taskId) || taskId < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid task id.' });
+  }
+  if (source !== 'legacy' && source !== 'planning') {
+    return res.status(400).json({ success: false, message: 'Body field source (legacy|planning) is required.' });
+  }
+  if (!newStatus) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid action. Use decline, in_progress, or complete.',
+    });
+  }
+
+  try {
+    if (source === 'legacy') {
+      const row = await fetchLegacyTaskIfOwned(op, taskId);
+      if (!row) return res.status(404).json({ success: false, message: 'Task not found.' });
+      const cur = String(row.status || '').toLowerCase();
+      if (cur === 'completed' || cur === 'declined') {
+        return res.status(400).json({ success: false, message: 'This task is already closed.' });
+      }
+      await pool.query('UPDATE tasks SET status = $1 WHERE id = $2 AND user_id = $3', [
+        newStatus,
+        taskId,
+        op.id,
+      ]);
+      return res.status(200).json({ success: true, status: newStatus });
+    }
+
+    const userName = await getOperativeDisplayName(op.id);
+    const row = await fetchPlanningTaskIfAssigned(op, taskId, userName);
+    if (!row) return res.status(404).json({ success: false, message: 'Task not found.' });
+    const cur = String(row.status || '').toLowerCase();
+    if (cur === 'completed' || cur === 'declined') {
+      return res.status(400).json({ success: false, message: 'This task is already closed.' });
+    }
+    try {
+      await pool.query('UPDATE planning_plan_tasks SET status = $1 WHERE id = $2', [newStatus, taskId]);
+    } catch (upErr) {
+      if (upErr.code === '23514') {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Cannot set status. If declining tasks, run DB script: scripts/operative_task_photos_and_declined.sql',
+        });
+      }
+      throw upErr;
+    }
+    return res.status(200).json({ success: true, status: newStatus });
+  } catch (err) {
+    console.error('updateTaskStatus error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update task.' });
+  }
+}
+
+/**
+ * POST /api/operatives/tasks/:taskId/photos (multipart: file, field source=legacy|planning)
+ */
+async function uploadTaskConfirmationPhoto(req, res) {
+  const op = getOperative(req);
+  if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'No file uploaded.' });
+  }
+  if (!/^image\//.test(req.file.mimetype || '')) {
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(400).json({ success: false, message: 'Only image files are allowed.' });
+  }
+
+  const taskId = parseInt(req.params.taskId, 10);
+  const source = String((req.body && req.body.source) || '').toLowerCase();
+  const fileUrl =
+    (req.body && req.body.file_url) || `/uploads/task-photos/${req.file.filename}`;
+
+  if (!Number.isInteger(taskId) || taskId < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid task id.' });
+  }
+  if (source !== 'legacy' && source !== 'planning') {
+    return res.status(400).json({ success: false, message: 'Form field source (legacy|planning) is required.' });
+  }
+
+  try {
+    if (source === 'legacy') {
+      const row = await fetchLegacyTaskIfOwned(op, taskId);
+      if (!row) return res.status(404).json({ success: false, message: 'Task not found.' });
+      if (String(row.status || '').toLowerCase() === 'declined') {
+        return res.status(400).json({ success: false, message: 'Cannot add photos to a declined task.' });
+      }
+    } else {
+      const userName = await getOperativeDisplayName(op.id);
+      const row = await fetchPlanningTaskIfAssigned(op, taskId, userName);
+      if (!row) return res.status(404).json({ success: false, message: 'Task not found.' });
+      if (String(row.status || '').toLowerCase() === 'declined') {
+        return res.status(400).json({ success: false, message: 'Cannot add photos to a declined task.' });
+      }
+    }
+
+    const n = await countTaskPhotos(op.id, source, taskId);
+    if (n >= MAX_TASK_CONFIRMATION_PHOTOS) {
+      return res.status(400).json({
+        success: false,
+        message: `Maximum ${MAX_TASK_CONFIRMATION_PHOTOS} confirmation photos per task.`,
+      });
+    }
+
+    await pool.query(
+      `INSERT INTO operative_task_photos (user_id, task_source, task_id, file_url) VALUES ($1, $2, $3, $4)`,
+      [op.id, source, taskId, fileUrl]
+    );
+    const photos = await getTaskPhotosList(op.id, source, taskId);
+    return res.status(201).json({ success: true, file_url: fileUrl, confirmation_photos: photos });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        success: false,
+        message: 'Photo storage is not set up. Run scripts/operative_task_photos_and_declined.sql',
+      });
+    }
+    console.error('uploadTaskConfirmationPhoto error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to save photo.' });
   }
 }
 
@@ -497,7 +1036,9 @@ async function createWorkLog(req, res) {
             projectId = u.project_id;
             workerName = (u.name && String(u.name).trim()) || u.email || 'Operative';
           }
-        } catch (_) {}
+        } catch (_) {
+          /* fallback query failed */
+        }
       }
       if (companyId == null) throw userErr;
     }
@@ -509,7 +1050,9 @@ async function createWorkLog(req, res) {
           [op.id]
         );
         if (paRow.rows.length > 0 && paRow.rows[0].project_id != null) projectId = paRow.rows[0].project_id;
-      } catch (_) {}
+      } catch (_) {
+        /* project_assignments lookup failed */
+      }
     }
 
     if (projectId == null) {
@@ -593,6 +1136,9 @@ module.exports = {
   reportIssue,
   uploadDocument,
   getTasks,
+  getTaskDetail,
+  updateTaskStatus,
+  uploadTaskConfirmationPhoto,
   getMyWorkLogs,
   workLogUpload,
   createWorkLog,

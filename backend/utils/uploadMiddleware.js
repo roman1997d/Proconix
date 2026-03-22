@@ -6,8 +6,9 @@ const uploadDir = path.resolve(__dirname, '../uploads');
 const issuesDir = path.join(uploadDir, 'issues');
 const documentsDir = path.join(uploadDir, 'documents');
 const worklogsDir = path.join(uploadDir, 'worklogs');
+const taskPhotosDir = path.join(uploadDir, 'task-photos');
 
-[uploadDir, issuesDir, documentsDir, worklogsDir].forEach((dir) => {
+[uploadDir, issuesDir, documentsDir, worklogsDir, taskPhotosDir].forEach((dir) => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
@@ -47,10 +48,28 @@ const uploadWorklogFile = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 }).single('file');
 
+const storageTaskPhotos = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, taskPhotosDir),
+  filename: (req, file, cb) => cb(null, safeFilename(file.originalname)),
+});
+
+const uploadTaskPhotoFile = multer({
+  storage: storageTaskPhotos,
+  limits: { fileSize: 8 * 1024 * 1024 },
+}).single('file');
+
+const UPLOAD_SUBPATH = {
+  issues: 'issues/',
+  documents: 'documents/',
+  worklogs: 'worklogs/',
+  'task-photos': 'task-photos/',
+};
+
 function injectFileUrl(type) {
   return (req, res, next) => {
     if (req.file) {
-      req.body.file_url = '/uploads/' + (type === 'issues' ? 'issues/' : type === 'documents' ? 'documents/' : 'worklogs/') + req.file.filename;
+      const sub = UPLOAD_SUBPATH[type] || 'worklogs/';
+      req.body.file_url = '/uploads/' + sub + req.file.filename;
     }
     next();
   };
@@ -60,5 +79,6 @@ module.exports = {
   uploadIssueFile,
   uploadDocumentFile,
   uploadWorklogFile,
+  uploadTaskPhotoFile,
   injectFileUrl,
 };

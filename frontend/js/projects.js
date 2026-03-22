@@ -42,6 +42,17 @@
     return isNaN(d.getTime()) ? val : d.toLocaleDateString();
   }
 
+  function daysUntil(val) {
+    if (!val) return null;
+    var end = new Date(val);
+    if (isNaN(end.getTime())) return null;
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    var diffMs = end.getTime() - today.getTime();
+    return Math.round(diffMs / (1000 * 60 * 60 * 24));
+  }
+
   function showToast(message, isError) {
     var el = document.getElementById('projects-toast');
     if (!el) return;
@@ -51,6 +62,52 @@
     setTimeout(function () {
       el.classList.add('d-none');
     }, 3500);
+  }
+
+  function getHiddenKey() {
+    var session = getSession();
+    var company = session && session.company_id != null ? session.company_id : 'company';
+    var manager = session && session.manager_id != null ? session.manager_id : 'manager';
+    return 'proconix_hidden_projects_' + company + '_' + manager;
+  }
+
+  function loadHiddenProjects() {
+    try {
+      var raw = localStorage.getItem(getHiddenKey());
+      if (!raw) return [];
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveHiddenProjects(ids) {
+    try {
+      localStorage.setItem(getHiddenKey(), JSON.stringify(ids || []));
+    } catch (_) {}
+  }
+
+  function getNotesKey(projectId) {
+    var session = getSession();
+    var company = session && session.company_id != null ? session.company_id : 'company';
+    var manager = session && session.manager_id != null ? session.manager_id : 'manager';
+    return 'proconix_project_notes_' + company + '_' + manager + '_' + projectId;
+  }
+
+  function loadProjectNotes(projectId) {
+    try {
+      var raw = localStorage.getItem(getNotesKey(projectId));
+      return raw || '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function saveProjectNotes(projectId, notes) {
+    try {
+      localStorage.setItem(getNotesKey(projectId), notes || '');
+    } catch (_) {}
   }
 
   function openModal(id) {
@@ -102,30 +159,48 @@
     var list = document.getElementById('projects-list');
     var empty = document.getElementById('projects-empty');
     if (!list) return;
-    if (!projects || projects.length === 0) {
+    var hiddenIds = new Set(loadHiddenProjects().map(function (id) { return String(id); }));
+    var visible = (projects || []).filter(function (p) { return !hiddenIds.has(String(p.id)); });
+    if (!visible || visible.length === 0) {
       list.innerHTML = '';
       if (empty) empty.classList.remove('d-none');
       return;
     }
     if (empty) empty.classList.add('d-none');
     var html = '';
-    for (var i = 0; i < projects.length; i++) {
-      var p = projects[i];
+    for (var i = 0; i < visible.length; i++) {
+      var p = visible[i];
       var name = escapeHtml(p.project_name || p.name || '—');
       var startDate = formatDate(p.start_date);
       var plannedEnd = formatDate(p.planned_end_date);
+      var days = daysUntil(p.planned_end_date);
+      var timelineHtml = '';
+      if (days != null) {
+        if (days > 0) {
+          timelineHtml = '<span class="projects-card-badge projects-card-badge-soon">' + days + ' days left</span>';
+        } else if (days === 0) {
+          timelineHtml = '<span class="projects-card-badge projects-card-badge-today">Ends today</span>';
+        } else {
+          timelineHtml = '<span class="projects-card-badge projects-card-badge-overdue">Ended ' + Math.abs(days) + ' days ago</span>';
+        }
+      }
       var active = p.active === true || p.active === 't';
       var statusLabel = active ? 'Active' : 'Inactive';
       var statusClass = active ? 'active' : 'inactive';
       html += '<div class="projects-card" data-id="' + p.id + '">';
       html += '<h3 class="projects-card-name">' + name + '</h3>';
-      html += '<p class="projects-card-meta"><span class="projects-card-dates">' + startDate + ' – ' + plannedEnd + '</span></p>';
+      html += '<p class="projects-card-meta"><span class="projects-card-dates">' + startDate + ' – ' + plannedEnd + '</span>';
+      if (timelineHtml) {
+        html += '<span class="projects-card-timeline">' + timelineHtml + '</span>';
+      }
+      html += '</p>';
       html += '<p class="projects-card-meta"><span class="projects-status-badge ' + statusClass + '">' + statusLabel + '</span></p>';
       html += '<div class="projects-card-actions">';
       html += '<button type="button" class="btn-projects-view" data-action="view" data-id="' + p.id + '"><i class="bi bi-eye"></i> View</button>';
       html += '<button type="button" class="btn-projects-edit" data-action="edit" data-id="' + p.id + '"><i class="bi bi-pencil"></i> Edit</button>';
       html += '<button type="button" class="btn-projects-deactivate' + (active ? '' : ' d-none') + '" data-action="deactivate" data-id="' + p.id + '" data-name="' + name + '"><i class="bi bi-pause-circle"></i> Deactivate</button>';
       html += '<button type="button" class="btn-projects-assign" data-action="assign" data-id="' + p.id + '"><i class="bi bi-person-plus"></i> Assign Operatives/Managers</button>';
+      html += '<button type="button" class="btn-projects-hide" data-action="hide" data-id="' + p.id + '"><i class="bi bi-eye-slash"></i> Hide</button>';
       html += '</div></div>';
     }
     list.innerHTML = html;
@@ -185,19 +260,55 @@
         }
         var p = data.project;
         var active = p.active === true || p.active === 't';
+        var days = daysUntil(p.planned_end_date);
+        var timelineHtml = '';
+        if (days != null) {
+          if (days > 0) timelineHtml = days + ' days left';
+          else if (days === 0) timelineHtml = 'Ends today';
+          else timelineHtml = 'Ended ' + Math.abs(days) + ' days ago';
+        }
         var html = '<div class="projects-details-section projects-details-info">';
         html += '<h4>Project</h4>';
         html += '<p><strong>' + escapeHtml(p.project_name || p.name) + '</strong></p>';
         html += '<p>Address: ' + escapeHtml(p.address || '—') + '</p>';
         if (p.description) html += '<p>' + escapeHtml(p.description) + '</p>';
         html += '<p>Start: ' + formatDate(p.start_date) + ' &nbsp; Planned end: ' + formatDate(p.planned_end_date) + '</p>';
+        if (timelineHtml) {
+          html += '<p>Timeline: ' + escapeHtml(timelineHtml) + '</p>';
+        }
         html += '<p>Number of floors: ' + (p.number_of_floors != null ? escapeHtml(String(p.number_of_floors)) : '—') + '</p>';
         html += '<p>Status: ' + (active ? 'Active' : 'Inactive') + '</p>';
         if (p.project_pass_key) html += '<p>Pass key: <code>' + escapeHtml(p.project_pass_key) + '</code></p>';
         if (p.created_by_who) html += '<p>Created by: ' + escapeHtml(p.created_by_who) + '</p>';
         if (p.deactivate_by_who) html += '<p>Deactivated by: ' + escapeHtml(p.deactivate_by_who) + '</p>';
         html += '</div>';
+
+        html += '<div class="projects-details-section projects-details-notes">';
+        html += '<h4>Manager notes</h4>';
+        html += '<p class="projects-details-notes-hint">Only you can see these notes on this device. Use them to track risks, decisions or follow-ups for this project.</p>';
+        html += '<textarea id="projects-notes-textarea" class="projects-notes-textarea" rows="4" placeholder="Add notes about this project..."></textarea>';
+        html += '<div class="projects-details-notes-actions"><button type="button" class="btn-projects-save-notes" id="projects-notes-save-btn"><i class="bi bi-journal-check"></i> Save notes</button><span id="projects-notes-status" class="projects-notes-status text-muted"></span></div>';
+        html += '</div>';
         content.innerHTML = html;
+        var notesArea = document.getElementById('projects-notes-textarea');
+        var statusEl = document.getElementById('projects-notes-status');
+        var saveBtn = document.getElementById('projects-notes-save-btn');
+        if (notesArea) {
+          notesArea.value = loadProjectNotes(projectId);
+        }
+        if (saveBtn && notesArea) {
+          saveBtn.addEventListener('click', function () {
+            saveProjectNotes(projectId, notesArea.value || '');
+            if (statusEl) {
+              statusEl.textContent = 'Saved just now';
+              setTimeout(function () {
+                if (statusEl.textContent === 'Saved just now') {
+                  statusEl.textContent = '';
+                }
+              }, 2500);
+            }
+          });
+        }
       })
       .catch(function () {
         content.innerHTML = '<p>Failed to load project.</p>';
@@ -284,6 +395,10 @@
     if (endEl) endEl.value = project.planned_end_date ? String(project.planned_end_date).slice(0, 10) : '';
     var floorsEl = el('projects-edit-floors');
     if (floorsEl) floorsEl.value = project.number_of_floors != null ? project.number_of_floors : '';
+    var latEl = el('projects-edit-latitude');
+    if (latEl) latEl.value = project.latitude != null ? project.latitude : '';
+    var lngEl = el('projects-edit-longitude');
+    if (lngEl) lngEl.value = project.longitude != null ? project.longitude : '';
     openModal('projects-modal-edit');
   }
 
@@ -321,6 +436,21 @@
     }
 
     loadProjects(headers);
+
+    var toggleHiddenBtn = content.querySelector('#projects-btn-toggle-hidden');
+    if (toggleHiddenBtn) {
+      toggleHiddenBtn.addEventListener('click', function () {
+        var hidden = loadHiddenProjects();
+        if (!hidden.length) {
+          showToast('No hidden projects.', false);
+          return;
+        }
+        // For now just clear hidden list and reload
+        saveHiddenProjects([]);
+        showToast('Hidden projects are now visible again.', false);
+        loadProjects(headers);
+      });
+    }
 
     var formAdd = el('projects-form-add');
     if (formAdd) formAdd.addEventListener('submit', function (e) {
@@ -374,6 +504,10 @@
       }
       var floorsEl = el('projects-edit-floors');
       var floors = floorsEl ? floorsEl.value.trim() : '';
+      var latEl = el('projects-edit-latitude');
+      var latVal = latEl ? latEl.value.trim() : '';
+      var lngEl = el('projects-edit-longitude');
+      var lngVal = lngEl ? lngEl.value.trim() : '';
       var payload = {
         project_name: name,
         address: (el('projects-edit-address') && el('projects-edit-address').value.trim()) || undefined,
@@ -381,6 +515,8 @@
         start_date: (el('projects-edit-start') && el('projects-edit-start').value) || undefined,
         planned_end_date: (el('projects-edit-planned-end') && el('projects-edit-planned-end').value) || undefined,
         number_of_floors: floors === '' ? undefined : parseInt(floors, 10),
+        latitude: latVal === '' ? undefined : parseFloat(latVal),
+        longitude: lngVal === '' ? undefined : parseFloat(lngVal),
       };
       if (!id) return;
       fetch('/api/projects/' + id + '/update', {
@@ -402,6 +538,28 @@
           showToast('Failed to update project.', true);
         });
     });
+
+    var useLocationBtn = el('projects-edit-use-location');
+    if (useLocationBtn && typeof navigator !== 'undefined' && navigator.geolocation) {
+      useLocationBtn.addEventListener('click', function () {
+        useLocationBtn.disabled = true;
+        navigator.geolocation.getCurrentPosition(
+          function (pos) {
+            var latEl = el('projects-edit-latitude');
+            var lngEl = el('projects-edit-longitude');
+            if (latEl) latEl.value = pos.coords.latitude.toFixed(6);
+            if (lngEl) lngEl.value = pos.coords.longitude.toFixed(6);
+            showToast('Location filled from your device.', false);
+            useLocationBtn.disabled = false;
+          },
+          function () {
+            showToast('Could not read current location.', true);
+            useLocationBtn.disabled = false;
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      });
+    }
 
     var btnDeactivateConfirm = el('projects-btn-deactivate-confirm');
     if (btnDeactivateConfirm) btnDeactivateConfirm.addEventListener('click', function () {
@@ -434,6 +592,16 @@
       var id = target.getAttribute('data-id');
       if (action === 'view' && id) {
         openDetailsModal(id, headers);
+        return;
+      }
+      if (action === 'hide' && id) {
+        var hidden = loadHiddenProjects();
+        if (hidden.indexOf(String(id)) === -1) {
+          hidden.push(String(id));
+          saveHiddenProjects(hidden);
+          showToast('Project hidden from the list. Use "Show hidden projects" to reset.', false);
+          refreshList();
+        }
         return;
       }
       if (action === 'edit' && id) {

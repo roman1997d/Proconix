@@ -9,6 +9,7 @@ node_modules/
 # Logs
 npm-debug.log*
 *.log
+logs/
 
 # Uploads (user files; keep folder)
 backend/uploads/*

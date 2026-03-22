@@ -25,11 +25,20 @@ const {
   reportIssue,
   uploadDocument,
   getTasks,
+  getTaskDetail,
+  updateTaskStatus,
+  uploadTaskConfirmationPhoto,
   getMyWorkLogs,
   workLogUpload,
   createWorkLog,
 } = require('../controllers/operativeDashboardController');
-const { uploadIssueFile, uploadDocumentFile, uploadWorklogFile, injectFileUrl } = require('../utils/uploadMiddleware');
+const {
+  uploadIssueFile,
+  uploadDocumentFile,
+  uploadWorklogFile,
+  uploadTaskPhotoFile,
+  injectFileUrl,
+} = require('../utils/uploadMiddleware');
 
 // ——— Manager-only (dashboard) ———
 router.get('/', requireManagerAuth, listOperatives);
@@ -50,6 +59,15 @@ router.get('/work-hours/status', requireOperativeAuth, workHoursStatus);
 router.get('/work-hours/weekly', requireOperativeAuth, workHoursWeekly);
 router.get('/project/current', requireOperativeAuth, getCurrentProject);
 router.get('/tasks', requireOperativeAuth, getTasks);
+router.get('/tasks/:taskId', requireOperativeAuth, getTaskDetail);
+router.patch('/tasks/:taskId', requireOperativeAuth, updateTaskStatus);
+router.post(
+  '/tasks/:taskId/photos',
+  requireOperativeAuth,
+  uploadTaskPhotoFile,
+  injectFileUrl('task-photos'),
+  uploadTaskConfirmationPhoto
+);
 
 router.post('/issues', requireOperativeAuth, uploadIssueFile, injectFileUrl('issues'), reportIssue);
 router.post('/uploads', requireOperativeAuth, uploadDocumentFile, injectFileUrl('documents'), uploadDocument);

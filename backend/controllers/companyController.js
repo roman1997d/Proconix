@@ -5,6 +5,7 @@
 
 const { pool } = require('../db/pool');
 const { createToken } = require('../utils/onboardingToken');
+const { getPlanBillingDefaults } = require('../utils/billingPlanDefaults');
 
 /**
  * Generates a security code: 3 uppercase letters + 3 digits (e.g. ABC123).
@@ -26,8 +27,17 @@ function generateSecurityToken() {
 /** Allowed industry types (must match frontend dropdown) */
 const ALLOWED_INDUSTRIES = ['Drylining', 'Plumbing', 'Electrical', 'Carpentry', 'Other'];
 
-/** Allowed subscription plans */
-const ALLOWED_PLANS = ['1 month', '3 months', '6 months', '12 months'];
+/** Allowed subscription plans (tiers from See Plans + legacy billing periods) */
+const ALLOWED_PLANS = [
+  'Free',
+  'Silver',
+  'Gold',
+  'Platinum',
+  '1 month',
+  '3 months',
+  '6 months',
+  '12 months',
+];
 
 /**
  * Validates and sanitizes company create payload.
@@ -104,24 +114,56 @@ async function createCompany(req, res) {
 
     const active = 'not_active';
     const security_token1 = generateSecurityToken();
+    const billing = getPlanBillingDefaults(subscription_plan);
 
-    const result = await pool.query(
-      `INSERT INTO companies (
-        name, industry_type, subscription_plan, active,
-        created_by, security_question1, security_token1, office_address
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id, name, industry_type, subscription_plan, active, created_at, created_by, office_address`,
-      [
-        name,
-        industry_type,
-        subscription_plan,
-        active,
-        created_by,
-        security_question1,
-        security_token1,
-        office_address,
-      ]
-    );
+    let result;
+    try {
+      result = await pool.query(
+        `INSERT INTO companies (
+          name, industry_type, subscription_plan, active,
+          created_by, security_question1, security_token1, office_address,
+          plan_purchased_at, plan_expires_at, payment_method, billing_status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        RETURNING id, name, industry_type, subscription_plan, active, created_at, created_by, office_address,
+          plan_purchased_at, plan_expires_at, payment_method, billing_status`,
+        [
+          name,
+          industry_type,
+          subscription_plan,
+          active,
+          created_by,
+          security_question1,
+          security_token1,
+          office_address,
+          billing.plan_purchased_at,
+          billing.plan_expires_at,
+          billing.payment_method,
+          billing.billing_status,
+        ]
+      );
+    } catch (insertErr) {
+      if (insertErr.code === '42703') {
+        result = await pool.query(
+          `INSERT INTO companies (
+            name, industry_type, subscription_plan, active,
+            created_by, security_question1, security_token1, office_address
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          RETURNING id, name, industry_type, subscription_plan, active, created_at, created_by, office_address`,
+          [
+            name,
+            industry_type,
+            subscription_plan,
+            active,
+            created_by,
+            security_question1,
+            security_token1,
+            office_address,
+          ]
+        );
+      } else {
+        throw insertErr;
+      }
+    }
 
     const row = result.rows[0];
     const onboarding_token = createToken(row.id);
@@ -151,6 +193,36 @@ async function createCompany(req, res) {
   }
 }
 
+/**
+ * GET /api/companies/me
+ * Returns all fields from `companies` for the logged-in manager's company_id.
+ */
+async function getCompanyMe(req, res) {
+  const op = req.manager;
+  if (!op || op.company_id == null) {
+    return res.status(401).json({ success: false, message: 'Unauthorized.' });
+  }
+
+  const companyId = op.company_id;
+
+  try {
+    const result = await pool.query('SELECT * FROM companies WHERE id = $1', [companyId]);
+    if (!result.rows || !result.rows.length) {
+      return res.status(404).json({ success: false, message: 'Company not found.' });
+    }
+
+    // Return all columns as-is (manager can see their own company).
+    return res.status(200).json({
+      success: true,
+      company: result.rows[0],
+    });
+  } catch (err) {
+    console.error('getCompanyMe error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load company.' });
+  }
+}
+
 module.exports = {
   createCompany,
+  getCompanyMe,
 };

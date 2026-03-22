@@ -98,6 +98,11 @@ ONBOARDING_SECRET=your-random-secret-string
    psql -U postgres -d ProconixDB -f scripts/setup_projects_and_assignments.sql
    psql -U postgres -d ProconixDB -f scripts/create_work_logs_table.sql
    psql -U postgres -d ProconixDB -f scripts/setup_qa_database.sql
+   psql -U postgres -d ProconixDB -f scripts/create_material_tables.sql
+   psql -U postgres -d ProconixDB -f scripts/create_material_consumption_table.sql
+   psql -U postgres -d ProconixDB -f scripts/create_work_hours_table.sql
+   psql -U postgres -d ProconixDB -f scripts/alter_work_hours_add_geolocation.sql
+   psql -U postgres -d ProconixDB -f scripts/alter_projects_add_location.sql
    ```
    (Ajustează user-ul și baza dacă nu folosești `postgres` / `ProconixDB`.)
 
@@ -216,6 +221,10 @@ psql -U postgres -d ProconixDB < proconix_backup_YYYYMMDD.sql
    ```
 6. **Verificare**: `curl https://your-domain.com/api/health` și test rapid în browser.
 
+- **PM2**: fișier `ecosystem.config.cjs` în rădăcina repo-ului (proces `proconix`, env din `.env`).
+- **Deploy VPS**: `scripts/deploy-to-vps.sh`, ghid `scripts/DEPLOY-VPS.md`.
+- **Audit**: `scripts/audit/` – verificări procese, ESLint, DB, dependențe, porturi; `scripts/audit/run-all-audit.sh`.
+
 ### Comenzi pentru update / restart
 
 ```bash
@@ -229,3 +238,5 @@ pm2 logs proconix --lines 50
 ---
 
 *Păstrează documentația actualizată la schimbări de env, scripturi sau infrastructură.*
+
+**Actualizat:** 16/03/2026

@@ -25,7 +25,8 @@ function generateProjectPassKey() {
 
 /**
  * POST /api/projects/create
- * Body: project_name, address?, start_date?, planned_end_date?, number_of_floors?, description?
+ * Body: project_name, address?, start_date?, planned_end_date?, number_of_floors?, description?,
+ *        latitude?, longitude?
  * Backend adds: company_id, created_by_who, project_pass_key.
  */
 async function create(req, res) {
@@ -45,6 +46,20 @@ async function create(req, res) {
     if (Number.isInteger(n) && n >= 0) numberOfFloors = n;
   }
   const description = (b.description && String(b.description).trim()) || null;
+  let latitude = null;
+  let longitude = null;
+  if (b.latitude != null && b.latitude !== '') {
+    const latNum = Number(b.latitude);
+    if (!Number.isNaN(latNum) && latNum >= -90 && latNum <= 90) {
+      latitude = latNum;
+    }
+  }
+  if (b.longitude != null && b.longitude !== '') {
+    const lngNum = Number(b.longitude);
+    if (!Number.isNaN(lngNum) && lngNum >= -180 && lngNum <= 180) {
+      longitude = lngNum;
+    }
+  }
 
   if (!projectName) {
     return res.status(400).json({ success: false, message: 'Project name is required.' });
@@ -59,11 +74,12 @@ async function create(req, res) {
     const result = await pool.query(
       `INSERT INTO projects (
         company_id, project_pass_key, created_by_who, project_name, address,
-        start_date, planned_end_date, number_of_floors, description, active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+        start_date, planned_end_date, number_of_floors, description, latitude, longitude, active
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)
       RETURNING id, company_id, project_pass_key, created_by_who, project_name, address,
-        start_date, planned_end_date, number_of_floors, description, active, created_at, deactivate_by_who`,
-      [companyId, projectPassKey, createdByWho, projectName, address, startDate, plannedEndDate, numberOfFloors, description]
+        start_date, planned_end_date, number_of_floors, description, latitude, longitude,
+        active, created_at, deactivate_by_who`,
+      [companyId, projectPassKey, createdByWho, projectName, address, startDate, plannedEndDate, numberOfFloors, description, latitude, longitude]
     );
     return res.status(201).json({ success: true, project: result.rows[0] });
   } catch (err) {
@@ -118,7 +134,8 @@ async function list(req, res) {
   try {
     const result = await pool.query(
       `SELECT id, company_id, project_pass_key, created_by_who, project_name, address,
-              start_date, planned_end_date, number_of_floors, description, active, created_at, deactivate_by_who
+              start_date, planned_end_date, number_of_floors, description, latitude, longitude,
+              active, created_at, deactivate_by_who
        FROM projects
        WHERE company_id = $1
        ORDER BY created_at DESC`,
@@ -144,6 +161,8 @@ async function list(req, res) {
           planned_end_date: null,
           number_of_floors: null,
           description: row.description,
+          latitude: null,
+          longitude: null,
           active: true,
           created_at: row.created_at,
           deactivate_by_who: null,
@@ -180,7 +199,8 @@ async function getOne(req, res) {
       try {
         result = await pool.query(
           `SELECT id, company_id, project_pass_key, created_by_who, project_name, address,
-                  start_date, planned_end_date, number_of_floors, description, active, created_at, deactivate_by_who
+                  start_date, planned_end_date, number_of_floors, description, latitude, longitude,
+                  active, created_at, deactivate_by_who
            FROM projects WHERE id = $1 AND company_id = $2`,
           [id, companyId]
         );
@@ -203,6 +223,8 @@ async function getOne(req, res) {
               planned_end_date: null,
               number_of_floors: null,
               description: row.description,
+              latitude: null,
+              longitude: null,
               active: true,
               created_at: row.created_at,
               deactivate_by_who: null,
@@ -229,7 +251,8 @@ async function getOne(req, res) {
       try {
         result = await pool.query(
           `SELECT id, company_id, project_pass_key, created_by_who, project_name, address,
-                  start_date, planned_end_date, number_of_floors, description, active, created_at, deactivate_by_who
+                  start_date, planned_end_date, number_of_floors, description, latitude, longitude,
+                  active, created_at, deactivate_by_who
            FROM projects WHERE id = $1`,
           [id]
         );
@@ -252,6 +275,8 @@ async function getOne(req, res) {
               planned_end_date: null,
               number_of_floors: null,
               description: row.description,
+              latitude: null,
+              longitude: null,
               active: true,
               created_at: row.created_at,
               deactivate_by_who: null,
@@ -274,7 +299,8 @@ async function getOne(req, res) {
 
 /**
  * PUT /api/projects/:id/update
- * Body: project_name?, address?, start_date?, planned_end_date?, number_of_floors?, description?
+ * Body: project_name?, address?, start_date?, planned_end_date?, number_of_floors?, description?,
+ *       latitude?, longitude?
  */
 async function update(req, res) {
   const companyId = getCompanyId(req);
@@ -298,6 +324,20 @@ async function update(req, res) {
     if (Number.isInteger(n) && n >= 0) numberOfFloors = n;
   }
   const description = b.description != null ? String(b.description).trim() : null;
+  let latitude = null;
+  let longitude = null;
+  if (b.latitude != null && b.latitude !== '') {
+    const latNum = Number(b.latitude);
+    if (!Number.isNaN(latNum) && latNum >= -90 && latNum <= 90) {
+      latitude = latNum;
+    }
+  }
+  if (b.longitude != null && b.longitude !== '') {
+    const lngNum = Number(b.longitude);
+    if (!Number.isNaN(lngNum) && lngNum >= -180 && lngNum <= 180) {
+      longitude = lngNum;
+    }
+  }
 
   if (!projectName) {
     return res.status(400).json({ success: false, message: 'Project name is required.' });
@@ -308,11 +348,14 @@ async function update(req, res) {
       `UPDATE projects
        SET project_name = $1, address = COALESCE($2, address), start_date = COALESCE($3, start_date),
            planned_end_date = COALESCE($4, planned_end_date), number_of_floors = COALESCE($5, number_of_floors),
-           description = COALESCE($6, description)
-       WHERE id = $7 AND company_id = $8
+           description = COALESCE($6, description),
+           latitude = COALESCE($7, latitude),
+           longitude = COALESCE($8, longitude)
+       WHERE id = $9 AND company_id = $10
        RETURNING id, company_id, project_pass_key, created_by_who, project_name, address,
-                 start_date, planned_end_date, number_of_floors, description, active, created_at, deactivate_by_who`,
-      [projectName, address || null, startDate, plannedEndDate, numberOfFloors, description, id, companyId]
+                 start_date, planned_end_date, number_of_floors, description, latitude, longitude,
+                 active, created_at, deactivate_by_who`,
+      [projectName, address || null, startDate, plannedEndDate, numberOfFloors, description, latitude, longitude, id, companyId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: ACCESS_DENIED_MESSAGE });

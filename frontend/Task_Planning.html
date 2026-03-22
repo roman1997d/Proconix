@@ -1,0 +1,2927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task &amp; Planning – Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <!-- Flatpickr for consistent date/time pickers across browsers -->
+  <link href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --tp-bg: #0b1620;
+      --tp-surface: #111827;
+      --tp-surface-alt: #0f172a;
+      --tp-border: #1f2937;
+      --tp-accent: #3b82f6;
+      --tp-accent-soft: rgba(59, 130, 246, 0.15);
+      --tp-text: #e5e7eb;
+      --tp-muted: #9ca3af;
+      --tp-danger: #f97373;
+      --tp-success: #4ade80;
+      --tp-warning: #facc15;
+      --tp-prio-low: #22c55e;
+      --tp-prio-medium: #3b82f6;
+      --tp-prio-high: #f97316;
+      --tp-prio-critical: #ef4444;
+      --tp-radius: 12px;
+      --tp-gap: 1.25rem;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 18px;
+      background: radial-gradient(circle at top left, #111827, #020617 55%, #000 90%);
+      color: var(--tp-text);
+    }
+
+    .tp-shell {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--tp-gap);
+    }
+
+    .tp-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .tp-title {
+      font-size: 1.6rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .tp-title-badge {
+      font-size: 0.75rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      color: var(--tp-muted);
+    }
+
+    .tp-header-subtitle {
+      font-size: 0.9rem;
+      color: var(--tp-muted);
+      max-width: 520px;
+    }
+
+    .tp-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 340px) minmax(0, 1.6fr);
+      gap: var(--tp-gap);
+      align-items: flex-start;
+    }
+
+    @media (max-width: 992px) {
+      body {
+        padding: 1rem;
+      }
+      .tp-layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    .tp-card {
+      background: radial-gradient(circle at top left, #111827, #020617 60%);
+      border-radius: var(--tp-radius);
+      border: 1px solid var(--tp-border);
+      padding: 1.1rem 1.2rem;
+      box-shadow:
+        0 18px 45px rgba(15, 23, 42, 0.7),
+        0 0 0 1px rgba(15, 23, 42, 0.9);
+    }
+
+    .tp-section-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .tp-chip {
+      font-size: 0.8rem;
+      padding: 0.1rem 0.5rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      color: var(--tp-muted);
+    }
+
+    .tp-plan-type-group {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.9rem;
+      flex-wrap: wrap;
+    }
+
+    .tp-plan-type-btn {
+      flex: 1 0 90px;
+      min-width: 90px;
+      border-radius: 999px;
+      border: 1px solid var(--tp-border);
+      padding: 0.4rem 0.7rem;
+      background: linear-gradient(135deg, #020617, #020617);
+      color: var(--tp-muted);
+      font-size: 0.82rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      cursor: pointer;
+      transition: all 0.16s ease-out;
+    }
+
+    .tp-plan-type-btn.active {
+      border-color: rgba(59, 130, 246, 0.9);
+      background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), #020617);
+      color: #e5e7eb;
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.4);
+    }
+
+    .tp-plan-type-btn i {
+      font-size: 0.9rem;
+    }
+
+    .tp-inline-fields {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 0.7rem;
+    }
+
+    .tp-field {
+      flex: 1 1 120px;
+      min-width: 0;
+    }
+
+    .tp-field label {
+      display: block;
+      font-size: 0.78rem;
+      color: var(--tp-muted);
+      margin-bottom: 0.2rem;
+    }
+
+    .tp-field input,
+    .tp-field select,
+    .tp-field textarea {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--tp-border);
+      padding: 0.4rem 0.6rem;
+      font-size: 0.86rem;
+      background: #020617;
+      color: var(--tp-text);
+      outline: none;
+    }
+
+    .tp-field textarea {
+      resize: vertical;
+      min-height: 60px;
+      max-height: 140px;
+    }
+
+    .tp-field input:focus,
+    .tp-field select:focus,
+    .tp-field textarea:focus {
+      border-color: var(--tp-accent);
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.6);
+    }
+
+    .tp-field-hint {
+      font-size: 0.72rem;
+      color: var(--tp-muted);
+      margin-top: 0.1rem;
+    }
+
+    .tp-pill-input {
+      display: flex;
+      gap: 0.2rem;
+      flex-wrap: wrap;
+      padding: 0.2rem;
+      border-radius: 999px;
+      border: 1px solid var(--tp-border);
+      background: #020617;
+    }
+
+    .tp-pill-input input {
+      border-radius: 999px;
+      border: none;
+      padding: 0.25rem 0.55rem;
+      min-width: 120px;
+      font-size: 0.82rem;
+      background: transparent;
+    }
+
+    .tp-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      border-radius: 999px;
+      padding: 0.18rem 0.45rem;
+      font-size: 0.76rem;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(55, 65, 81, 0.9);
+    }
+
+    .tp-pill button {
+      border: none;
+      background: transparent;
+      color: var(--tp-muted);
+      padding: 0;
+      cursor: pointer;
+      font-size: 0.85rem;
+      line-height: 1;
+    }
+
+    .tp-priority-select {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+    }
+
+    .tp-prio-pill {
+      flex: 1 0 70px;
+      border-radius: 999px;
+      border: 1px solid var(--tp-border);
+      padding: 0.25rem 0.6rem;
+      font-size: 0.78rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.3rem;
+      cursor: pointer;
+      color: var(--tp-muted);
+      background: #020617;
+      transition: all 0.15s ease-out;
+    }
+
+    .tp-prio-pill[data-value="low"].active {
+      border-color: var(--tp-prio-low);
+      color: #bbf7d0;
+      background: rgba(34, 197, 94, 0.12);
+    }
+
+    .tp-prio-pill[data-value="medium"].active {
+      border-color: var(--tp-prio-medium);
+      color: #bfdbfe;
+      background: rgba(59, 130, 246, 0.15);
+    }
+
+    .tp-prio-pill[data-value="high"].active {
+      border-color: var(--tp-prio-high);
+      color: #fed7aa;
+      background: rgba(249, 115, 22, 0.16);
+    }
+
+    .tp-prio-pill[data-value="critical"].active {
+      border-color: var(--tp-prio-critical);
+      color: #fecaca;
+      background: rgba(239, 68, 68, 0.18);
+    }
+
+    .tp-tag {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+    }
+
+    .tp-actions-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.7rem;
+      margin-top: 0.5rem;
+    }
+
+    .tp-btn-primary {
+      border-radius: 999px;
+      border: none;
+      padding: 0.45rem 1.1rem;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+      font-size: 0.86rem;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      cursor: pointer;
+      box-shadow: 0 12px 30px rgba(37, 99, 235, 0.45);
+    }
+
+    .tp-btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .tp-btn-ghost {
+      border-radius: 999px;
+      border: 1px dashed rgba(75, 85, 99, 0.9);
+      padding: 0.35rem 0.9rem;
+      font-size: 0.8rem;
+      color: var(--tp-muted);
+      background: rgba(15, 23, 42, 0.4);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      cursor: pointer;
+    }
+
+    .tp-error {
+      font-size: 0.78rem;
+      color: var(--tp-danger);
+      margin-top: 0.15rem;
+      display: none;
+    }
+
+    .tp-error.visible {
+      display: block;
+    }
+
+    .tp-calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.7rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.7rem;
+    }
+
+    .tp-calendar-tabs {
+      display: inline-flex;
+      gap: 0.25rem;
+      padding: 0.12rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--tp-border);
+    }
+
+    .tp-tab-btn {
+      border-radius: 999px;
+      border: none;
+      font-size: 0.82rem;
+      padding: 0.28rem 0.75rem;
+      background: transparent;
+      color: var(--tp-muted);
+      cursor: pointer;
+    }
+
+    .tp-tab-btn.active {
+      background: rgba(15, 23, 42, 0.9);
+      color: #e5e7eb;
+      box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.6);
+    }
+
+    .tp-filters-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .tp-filter {
+      min-width: 120px;
+    }
+
+    .tp-filter select {
+      border-radius: 999px;
+      border: 1px solid var(--tp-border);
+      padding: 0.25rem 0.7rem;
+      font-size: 0.8rem;
+      background: #020617;
+      color: var(--tp-muted);
+    }
+
+    .tp-calendar-body {
+      border-radius: 10px;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      background: radial-gradient(circle at top left, #020617, #020617);
+      padding: 0.5rem;
+      min-height: 260px;
+      overflow-x: auto;
+    }
+
+    /* Gantt */
+    .tp-gantt-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.76rem;
+      color: var(--tp-muted);
+      padding: 0 0.2rem 0.25rem;
+      border-bottom: 1px solid rgba(31, 41, 55, 0.9);
+      margin-bottom: 0.3rem;
+      min-width: 960px;
+    }
+
+    .tp-gantt-scale {
+      display: flex;
+      gap: 0.35rem;
+      flex: 1;
+      justify-content: flex-end;
+    }
+
+    .tp-gantt-scale span {
+      min-width: 26px;
+      text-align: center;
+    }
+
+    .tp-gantt-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-size: 0.78rem;
+      min-width: 960px;
+    }
+
+    .tp-gantt-row {
+      display: grid;
+      grid-template-columns: 120px minmax(0, 1fr);
+      gap: 0.45rem;
+      align-items: flex-start;
+    }
+
+    .tp-gantt-person {
+      color: #e5e7eb;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding-top: 0.2rem;
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      background: radial-gradient(circle at top left, #111827, #020617 60%);
+    }
+
+    .tp-gantt-track {
+      position: relative;
+      min-height: 22px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      padding: 0.1rem 0.2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+      overflow: hidden;
+    }
+
+    .tp-gantt-bar {
+      border-radius: 999px;
+      padding: 0.06rem 0.4rem;
+      font-size: 0.72rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      white-space: nowrap;
+    }
+
+    .tp-gantt-bar[data-priority="low"] {
+      background: rgba(34, 197, 94, 0.15);
+      color: #bbf7d0;
+      border: 1px solid rgba(34, 197, 94, 0.85);
+    }
+
+    .tp-gantt-bar[data-priority="medium"] {
+      background: rgba(59, 130, 246, 0.18);
+      color: #bfdbfe;
+      border: 1px solid rgba(59, 130, 246, 0.9);
+    }
+
+    .tp-gantt-bar[data-priority="high"] {
+      background: rgba(249, 115, 22, 0.2);
+      color: #fed7aa;
+      border: 1px solid rgba(249, 115, 22, 0.9);
+    }
+
+    .tp-gantt-bar[data-priority="critical"] {
+      background: rgba(239, 68, 68, 0.24);
+      color: #fecaca;
+      border: 1px solid rgba(239, 68, 68, 0.95);
+    }
+
+    /* Status circle inside each Gantt bar */
+    .tp-gantt-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .tp-gantt-status-dot[data-status="not_started"] {
+      background: #9ca3af;
+    }
+
+    .tp-gantt-status-dot[data-status="in_progress"] {
+      background: #facc15;
+    }
+
+    .tp-gantt-status-dot[data-status="paused"] {
+      background: #ef4444;
+    }
+
+    .tp-gantt-status-dot[data-status="completed"] {
+      background: #22c55e;
+    }
+
+    .tp-task-chip {
+      border-radius: 8px;
+      padding: 0.18rem 0.4rem;
+      font-size: 0.75rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      color: #e5e7eb;
+      cursor: pointer;
+      margin-bottom: 0.12rem;
+      border: 1px solid transparent;
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    .tp-task-chip[data-priority="low"] {
+      border-color: rgba(34, 197, 94, 0.8);
+      background: rgba(22, 163, 74, 0.2);
+    }
+
+    .tp-task-chip[data-priority="medium"] {
+      border-color: rgba(59, 130, 246, 0.8);
+      background: rgba(37, 99, 235, 0.2);
+    }
+
+    .tp-task-chip[data-priority="high"] {
+      border-color: rgba(249, 115, 22, 0.85);
+      background: rgba(194, 65, 12, 0.3);
+    }
+
+    .tp-task-chip[data-priority="critical"] {
+      border-color: rgba(239, 68, 68, 0.9);
+      background: rgba(185, 28, 28, 0.35);
+    }
+
+    .tp-status-pill {
+      border-radius: 999px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      padding: 0.05rem 0.45rem;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--tp-muted);
+    }
+
+    .tp-status-pill[data-status="not_started"] {
+      border-color: rgba(148, 163, 184, 0.9);
+    }
+
+    .tp-status-pill[data-status="in_progress"] {
+      border-color: rgba(59, 130, 246, 0.9);
+      color: #bfdbfe;
+    }
+
+    .tp-status-pill[data-status="completed"] {
+      border-color: rgba(34, 197, 94, 0.9);
+      color: #bbf7d0;
+    }
+
+    .tp-calendar-week-view {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 0.25rem;
+      font-size: 0.78rem;
+    }
+
+    .tp-week-day {
+      border-radius: 8px;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      padding: 0.3rem 0.35rem;
+      min-height: 70px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .tp-week-day-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.25rem;
+      margin-bottom: 0.1rem;
+    }
+
+    .tp-week-day-name {
+      font-size: 0.76rem;
+      color: var(--tp-muted);
+    }
+
+    .tp-week-day-date {
+      font-size: 0.76rem;
+    }
+
+    .tp-calendar-month-view {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 0.2rem;
+      font-size: 0.76rem;
+    }
+
+    .tp-month-day {
+      border-radius: 8px;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      padding: 0.25rem 0.3rem;
+      min-height: 55px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+
+    .tp-month-day-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .tp-month-day-number {
+      font-size: 0.82rem;
+    }
+
+    .tp-month-day-count {
+      font-size: 0.72rem;
+      color: var(--tp-muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.15rem;
+    }
+
+    .tp-empty-state {
+      font-size: 0.8rem;
+      color: var(--tp-muted);
+      text-align: center;
+      padding: 1rem 0.5rem;
+    }
+
+    .tp-toast {
+      position: fixed;
+      right: 1.2rem;
+      bottom: 1.2rem;
+      min-width: 220px;
+      max-width: 320px;
+      border-radius: 12px;
+      padding: 0.55rem 0.8rem;
+      font-size: 0.82rem;
+      background: rgba(15, 23, 42, 0.98);
+      color: var(--tp-text);
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.9);
+      display: none;
+      z-index: 40;
+    }
+
+    .tp-toast.visible {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.45rem;
+    }
+
+    .tp-toast-icon {
+      margin-top: 0.1rem;
+      font-size: 1rem;
+    }
+
+    .tp-toast.success .tp-toast-icon {
+      color: var(--tp-success);
+    }
+
+    .tp-toast.error .tp-toast-icon {
+      color: var(--tp-danger);
+    }
+
+    .tp-toast-title {
+      font-weight: 500;
+      margin-bottom: 0.05rem;
+    }
+
+    .tp-toast-close {
+      border: none;
+      background: transparent;
+      color: var(--tp-muted);
+      font-size: 1rem;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    .tp-badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--tp-accent);
+    }
+
+    .tp-small {
+      font-size: 0.9rem;
+      color: var(--tp-muted);
+    }
+
+    #tp-gantt-summary {
+      margin-top: 0.15rem;
+    }
+
+    /* Scrollbar styling for summary + Gantt */
+    #tp-gantt-summary tbody,
+    .tp-calendar-body {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148, 163, 184, 0.8) rgba(15, 23, 42, 0.9);
+    }
+
+    #tp-gantt-summary tbody::-webkit-scrollbar,
+    .tp-calendar-body::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+
+    #tp-gantt-summary tbody::-webkit-scrollbar-track,
+    .tp-calendar-body::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    #tp-gantt-summary tbody::-webkit-scrollbar-thumb,
+    .tp-calendar-body::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.8);
+      border-radius: 999px;
+    }
+
+    #tp-gantt-summary tbody::-webkit-scrollbar-thumb:hover,
+    .tp-calendar-body::-webkit-scrollbar-thumb:hover {
+      background: rgba(209, 213, 219, 0.9);
+    }
+
+    /* Send to attached people toggle - a bit bigger + clearer label */
+    #tp-send-to-assignees {
+      transform: scale(1.18);
+      transform-origin: left center;
+    }
+
+    label[for="tp-send-to-assignees"] {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--tp-text);
+    }
+
+    /* Modal dropdown (Assigned to) styling */
+    #tp-modal-assigned {
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      color: var(--tp-text);
+      border-radius: 10px;
+      padding: 0.35rem 0.55rem;
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    #tp-modal-assigned:focus {
+      border-color: rgba(59, 130, 246, 0.9);
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35);
+    }
+
+    #tp-modal-start-span,
+    #tp-modal-deadline {
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      color: var(--tp-text);
+      border-radius: 10px;
+      padding: 0.35rem 0.55rem;
+      font-size: 0.9rem;
+      outline: none;
+      width: 100%;
+    }
+
+    #tp-modal-start-span:focus,
+    #tp-modal-deadline:focus {
+      border-color: rgba(59, 130, 246, 0.9);
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35);
+    }
+
+    .tp-gantt-summary-table thead,
+    .tp-gantt-summary-table tbody,
+    .tp-gantt-summary-table tr {
+      display: table;
+      width: 100%;
+      table-layout: fixed;
+    }
+
+    .tp-gantt-summary-table thead {
+      display: table-header-group;
+    }
+
+    .tp-gantt-summary-table tbody {
+      display: block;
+      max-height: 3.4rem; /* ~2 rânduri vizibile */
+      overflow-y: auto;
+    }
+
+    .tp-gantt-summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.2rem;
+    }
+
+    .tp-gantt-summary-table th,
+    .tp-gantt-summary-table td {
+      padding: 0.15rem 0.35rem;
+      border: none;
+    }
+
+    .tp-gantt-summary-table thead th {
+      font-weight: 500;
+      color: var(--tp-muted);
+      border-bottom: 1px solid rgba(31, 41, 55, 0.9);
+    }
+
+    .tp-gantt-summary-table tbody tr:nth-child(odd) {
+      background: rgba(15, 23, 42, 0.6);
+    }
+
+    .tp-gantt-summary-table tbody tr:nth-child(even) {
+      background: rgba(15, 23, 42, 0.3);
+    }
+
+    .tp-gantt-summary-table td:last-child {
+      white-space: nowrap;
+    }
+
+    /* Make toggle label appear above the switch */
+    .form-switch label[for="tp-send-to-assignees"] {
+      display: block;
+      margin-bottom: 0.25rem;
+      line-height: 1.1;
+    }
+
+    /* Kanban board */
+    .tp-kanban {
+      margin-top: 1rem;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.75rem;
+    }
+
+    @media (max-width: 992px) {
+      .tp-kanban {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 640px) {
+      .tp-kanban {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    .tp-kanban-column {
+      background: radial-gradient(circle at top left, #111827, #020617 60%);
+      border-radius: 10px;
+      border: 1px solid var(--tp-border);
+      padding: 0.4rem 0.5rem;
+      min-height: 120px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .tp-kanban-column-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 0.15rem;
+    }
+
+    .tp-kanban-count {
+      font-size: 0.75rem;
+      color: var(--tp-muted);
+    }
+
+    .tp-kanban-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .tp-kanban-card {
+      border-radius: 8px;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      background: rgba(15, 23, 42, 0.95);
+      padding: 0.35rem 0.4rem;
+      font-size: 0.78rem;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .tp-kanban-card-title {
+      font-weight: 500;
+      color: #e5e7eb;
+    }
+
+    .tp-kanban-card-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.72rem;
+      color: var(--tp-muted);
+    }
+
+    .tp-kanban-assignees {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Task details modal */
+    .tp-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 60;
+    }
+
+    .tp-modal-backdrop.is-open {
+      display: flex;
+    }
+
+    .tp-modal {
+      background: #020617;
+      border-radius: 14px;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      max-width: 460px;
+      width: 100%;
+      padding: 1rem 1.15rem;
+      box-shadow:
+        0 22px 60px rgba(15, 23, 42, 0.95),
+        0 0 0 1px rgba(15, 23, 42, 0.9);
+    }
+
+    .tp-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .tp-modal-title {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .tp-modal-close {
+      border: none;
+      background: transparent;
+      color: var(--tp-muted);
+      font-size: 1.1rem;
+      cursor: pointer;
+    }
+
+    .tp-modal-body {
+      font-size: 0.85rem;
+      color: var(--tp-text);
+    }
+
+    .tp-modal-body dl {
+      margin: 0;
+    }
+
+    .tp-modal-body dt {
+      font-size: 0.78rem;
+      color: var(--tp-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-top: 0.4rem;
+    }
+
+    .tp-modal-body dd {
+      margin: 0.05rem 0 0.2rem;
+    }
+
+    .tp-status-label {
+      padding: 0.05rem 0.4rem;
+      border-radius: 999px;
+      font-size: 0.76rem;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+    }
+
+    .tp-status-label[data-status="not_started"] {
+      border-color: rgba(148, 163, 184, 0.9);
+      color: var(--tp-muted);
+    }
+
+    .tp-status-label[data-status="in_progress"] {
+      border-color: rgba(250, 204, 21, 0.9);
+      color: #facc15; /* yellow */
+    }
+
+    .tp-status-label[data-status="paused"] {
+      border-color: rgba(239, 68, 68, 0.9);
+      color: #fca5a5; /* red-ish */
+    }
+
+    .tp-status-label[data-status="completed"] {
+      border-color: rgba(34, 197, 94, 0.9);
+      color: #bbf7d0;
+    }
+
+    .tp-modal-actions {
+      margin-top: 0.75rem;
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.4rem;
+    }
+
+    .tp-btn-modal {
+      border-radius: 999px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--tp-muted);
+      font-size: 0.8rem;
+      padding: 0.25rem 0.7rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      cursor: pointer;
+    }
+
+    .tp-btn-modal-primary {
+      border-color: rgba(59, 130, 246, 0.9);
+      color: #e5e7eb;
+    }
+
+    .tp-btn-modal-danger {
+      border-color: rgba(239, 68, 68, 0.9);
+      color: #fecaca;
+    }
+
+    .tp-confirmation-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      margin-top: 0.15rem;
+    }
+
+    .tp-confirmation-thumb {
+      display: block;
+      width: 4.5rem;
+      height: 4.5rem;
+      border-radius: 0.35rem;
+      overflow: hidden;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      flex-shrink: 0;
+    }
+
+    .tp-confirmation-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  </style>
+</head>
+<body>
+  <div class="tp-shell">
+    <header class="tp-header">
+      <div>
+        <div class="tp-title">
+          <span><i class="bi bi-calendar3-event"></i> Planning</span>
+        </div>
+      </div>
+      <div class="tp-small d-none"></div>
+    </header>
+
+    <main class="tp-layout">
+      <!-- LEFT: Task configuration -->
+      <section class="tp-card">
+        <h2 class="tp-section-title">
+          Plan configuration
+          <span class="tp-chip">Simple fields · no modes</span>
+        </h2>
+
+        <form id="tp-task-form" autocomplete="off">
+          <div class="tp-field mb-2">
+            <label for="tp-task-title">Task name <span class="text-danger">*</span></label>
+            <input type="text" id="tp-task-title" placeholder="What should be done?">
+          </div>
+
+          <div class="tp-inline-fields mb-2" id="tp-deadline-row">
+            <div class="tp-field">
+              <label for="tp-start-span">Start date (pickup) <span class="text-danger">*</span></label>
+              <input type="date" id="tp-start-span">
+              <div class="tp-field-hint">Start of work for this task (used in Gantt).</div>
+            </div>
+            <div class="tp-field">
+              <label for="tp-deadline">Deadline (pickup date &amp; time) <span class="text-danger">*</span></label>
+              <input type="datetime-local" id="tp-deadline">
+              <div class="tp-field-hint" id="tp-deadline-hint">Finish moment for this task.</div>
+            </div>
+          </div>
+
+          <div class="tp-field mb-2">
+            <label>Assigned to</label>
+            <div class="d-flex gap-2 align-items-center mb-1">
+              <input
+                type="text"
+                id="tp-assigned-input"
+                class="form-control form-control-sm"
+                placeholder="Type a name"
+                list="tp-assigned-datalist"
+              >
+              <button type="button" class="tp-btn-ghost" id="tp-btn-add-assignee">
+                <i class="bi bi-plus-lg"></i> Add
+              </button>
+            </div>
+            <datalist id="tp-assigned-datalist"></datalist>
+            <div id="tp-assigned-selected" class="tp-pill-input mt-2" aria-live="polite"></div>
+            <div class="tp-field-hint">Add one or more people.</div>
+            <div class="form-switch mt-2">
+              <input class="form-check-input" type="checkbox" id="tp-send-to-assignees" checked>
+              <label class="form-check-label" for="tp-send-to-assignees">
+                Send this task to attached people
+              </label>
+            </div>
+          </div>
+
+          <div class="tp-inline-fields mb-2">
+            <div class="tp-field">
+              <label for="tp-task-desc">Task description</label>
+              <textarea id="tp-task-desc" placeholder="Short, clear description – max 2–3 sentences."></textarea>
+            </div>
+          </div>
+
+          <div class="tp-inline-fields mb-2">
+            <div class="tp-field">
+              <label>Priority</label>
+              <div class="tp-priority-select" id="tp-priority-select">
+                <button type="button" class="tp-prio-pill" data-value="low">
+                  <span class="tp-tag" style="background: var(--tp-prio-low);"></span>
+                  <span>Low</span>
+                </button>
+                <button type="button" class="tp-prio-pill active" data-value="medium">
+                  <span class="tp-tag" style="background: var(--tp-prio-medium);"></span>
+                  <span>Medium</span>
+                </button>
+                <button type="button" class="tp-prio-pill" data-value="high">
+                  <span class="tp-tag" style="background: var(--tp-prio-high);"></span>
+                  <span>High</span>
+                </button>
+                <button type="button" class="tp-prio-pill" data-value="critical">
+                  <span class="tp-tag" style="background: var(--tp-prio-critical);"></span>
+                  <span>Critical</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="tp-inline-fields mb-2">
+            <div class="tp-field">
+              <label for="tp-notes">Notes (optional)</label>
+              <textarea id="tp-notes" placeholder="Extra info for manager/operative."></textarea>
+            </div>
+          </div>
+
+          <div class="tp-actions-row">
+            <div>
+              <button type="button" class="tp-btn-ghost" id="tp-btn-clear-tasks">
+                <i class="bi bi-trash3"></i>
+                <span>Clear current plan</span>
+              </button>
+              <div class="tp-error" id="tp-task-error"></div>
+            </div>
+            <div>
+              <button type="button" class="tp-btn-primary" id="tp-btn-save-plan">
+                <i class="bi bi-check2-circle"></i>
+                <span>Save Task</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <!-- RIGHT: Calendar overview -->
+      <section class="tp-card">
+        <div class="tp-calendar-header">
+          <div>
+            <h2 class="tp-section-title">
+              Gantt chart overview
+              <span class="tp-chip" id="tp-current-plan-label">No plan saved yet</span>
+            </h2>
+            <div class="tp-small" id="tp-gantt-summary">
+              <!-- Filled dynamically with a compact table of assignees vs tasks -->
+            </div>
+          </div>
+          <div class="d-flex flex-column align-items-end gap-1">
+            <div class="tp-calendar-tabs" id="tp-calendar-tabs">
+              <button type="button" class="tp-tab-btn active" data-view="daily">Day</button>
+              <button type="button" class="tp-tab-btn" data-view="weekly">Week</button>
+              <button type="button" class="tp-tab-btn" data-view="monthly">Month</button>
+            </div>
+            <div class="tp-filters-row">
+              <div class="tp-filter">
+                <select id="tp-filter-person">
+                  <option value="">All people</option>
+                </select>
+              </div>
+              <div class="tp-filter">
+                <select id="tp-filter-priority">
+                  <option value="">All priorities</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+              <div class="tp-filter">
+                <select id="tp-filter-status">
+                  <option value="">All statuses</option>
+                  <option value="not_started">Not started</option>
+                  <option value="in_progress">In progress</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tp-calendar-body" id="tp-calendar-body">
+          <div class="tp-empty-state">
+            Create at least one task and press <strong>Save Task</strong>. Tasks will appear here in the calendar,
+            grouped by hour, day or month – with colours for priority and simple status.
+          </div>
+        </div>
+
+        <!-- Simple Kanban board under Gantt -->
+        <div class="tp-kanban" id="tp-kanban-board">
+          <!-- Filled dynamically -->
+        </div>
+      </section>
+    </main>
+
+    <div class="tp-toast" id="tp-toast" role="status" aria-live="polite">
+      <span class="tp-toast-icon" id="tp-toast-icon">●</span>
+      <div>
+        <div class="tp-toast-title" id="tp-toast-title"></div>
+        <div id="tp-toast-text"></div>
+      </div>
+      <button type="button" class="tp-toast-close" id="tp-toast-close" aria-label="Close notification">&times;</button>
+    </div>
+  </div>
+
+  <!-- Task details modal (frontend only) -->
+  <div class="tp-modal-backdrop" id="tp-task-modal" aria-hidden="true">
+    <div class="tp-modal" role="dialog" aria-modal="true" aria-labelledby="tp-task-modal-title">
+      <div class="tp-modal-header">
+        <h3 class="tp-modal-title" id="tp-task-modal-title">Task details</h3>
+        <button type="button" class="tp-modal-close" id="tp-task-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="tp-modal-body" id="tp-task-modal-body">
+        <!-- filled dynamically -->
+      </div>
+      <div class="tp-modal-actions">
+        <button type="button" class="tp-btn-modal tp-btn-modal-primary" id="tp-task-mark-progress">
+          <i class="bi bi-play-circle"></i> Mark in progress
+        </button>
+        <button type="button" class="tp-btn-modal tp-btn-modal-primary" id="tp-task-mark-paused">
+          <i class="bi bi-pause-circle"></i> Pause
+        </button>
+        <button type="button" class="tp-btn-modal tp-btn-modal-primary" id="tp-task-mark-complete">
+          <i class="bi bi-check2-circle"></i> Mark as complete
+        </button>
+        <button type="button" class="tp-btn-modal tp-btn-modal-danger" id="tp-task-delete">
+          <i class="bi bi-trash3"></i> Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var planState = {
+        startDate: null,
+        endDate: null,
+        tasks: []
+      };
+
+      var STORAGE_KEY = 'proconix_planning_demo';
+
+      // Backend preparation:
+      // - keep false to maintain current frontend-only behavior.
+      // - when backend endpoints exist, set true and update PLANNING_API endpoints as needed.
+      var USE_BACKEND = true;
+      var PLANNING_API = {
+        createPlan: '/api/planning/plans',
+        upsertPlanTasks: '/api/planning/plan-tasks',
+        updatePlanTask: '/api/planning/plan-tasks', // expects /:id suffix
+        deletePlanTask: '/api/planning/plan-tasks'  // expects /:id suffix
+      };
+      var currentPlanId = null;
+
+      function getManagerSession() {
+        var SESSION_KEY_LOCAL = 'proconix_manager_session';
+        try {
+          var raw = localStorage.getItem(SESSION_KEY_LOCAL) || sessionStorage.getItem(SESSION_KEY_LOCAL);
+          return raw ? JSON.parse(raw) : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function getSessionHeaders() {
+        var session = getManagerSession();
+        if (!session || session.manager_id == null || !session.email) return {};
+        return {
+          'X-Manager-Id': String(session.manager_id),
+          'X-Manager-Email': session.email,
+          'Content-Type': 'application/json'
+        };
+      }
+
+      function fetchJson(url, opts) {
+        var options = opts || {};
+        options.headers = Object.assign({}, getSessionHeaders(), options.headers || {});
+        return fetch(url, options).then(function (res) {
+          var isJson = (res.headers.get('Content-Type') || '').indexOf('application/json') !== -1;
+          if (!isJson) {
+            return res.text().then(function (text) {
+              return { status: res.status, data: { message: text } };
+            });
+          }
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        });
+      }
+
+      // Map current local model to backend DB model (Plan + PlanTasks).
+      // Note: backend expects concrete endpoints + exact field names; adjust mapping if needed.
+      function derivePlanTypeFromRange(startDateStr, endDateStr) {
+        if (!startDateStr || !endDateStr) return 'daily';
+        if (startDateStr === endDateStr) return 'daily';
+        // if up to 7 days => weekly, otherwise monthly
+        // (heuristic for preparation; UI currently doesn't choose plan type explicitly)
+        try {
+          var s = new Date(startDateStr + 'T00:00');
+          var e = new Date(endDateStr + 'T00:00');
+          var diffDays = Math.round((e.getTime() - s.getTime()) / (24 * 60 * 60 * 1000));
+          if (diffDays <= 6) return 'weekly';
+        } catch (_) {}
+        return 'monthly';
+      }
+
+      function toBackendPlanPayload() {
+        var type = derivePlanTypeFromRange(planState.startDate, planState.endDate);
+        var session = getManagerSession();
+        return {
+          type: type, // daily | weekly | monthly
+          start_date: planState.startDate,
+          end_date: planState.endDate,
+          created_by: session ? session.manager_id : null
+        };
+      }
+
+      function toBackendTaskPayload(task) {
+        // Backend expects:
+        // - assigned_to (TEXT[])
+        // - deadline (ISO TIMESTAMPTZ)
+        // - pickup_start_date (YYYY-MM-DD)
+        // - status, send_to_assignees
+        return {
+          title: task.title,
+          description: task.description,
+          // Backend requires non-empty TEXT[]; store a visible placeholder.
+          assigned_to: (Array.isArray(task.assignedTo) && task.assignedTo.length) ? task.assignedTo : ['Unassigned'],
+          priority: task.priority || 'medium',
+          deadline: task.deadline,
+          pickup_start_date: task.startSpanDate || task.date,
+          notes: task.notes || null,
+          status: task.status || 'not_started',
+          send_to_assignees: task.sendToAssignees === undefined ? true : !!task.sendToAssignees
+        };
+      }
+
+      function mapBackendTaskToUiTask(t) {
+        var deadlineDt = t.deadline ? new Date(t.deadline) : null;
+        var dateValid = deadlineDt && !isNaN(deadlineDt.getTime());
+        var dateStr = dateValid ? fmtDate(deadlineDt) : null;
+        var timeStr = dateValid ? fmtTime(deadlineDt) : null;
+
+        var pickupDtRaw = t.pickup_start_date ? String(t.pickup_start_date) : null;
+        // pickup_start_date is DATE (YYYY-MM-DD) in DB -> normalize safely.
+        var pickupYmd = dbYmdToYmd(pickupDtRaw);
+        var startSpanStr = pickupYmd ? pickupYmd : (dateStr || null);
+
+        return {
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          assignedTo: Array.isArray(t.assigned_to) ? t.assigned_to : [],
+          priority: t.priority || 'medium',
+          deadline: deadlineDt ? deadlineDt.toISOString() : null,
+          date: dateStr,
+          startSpanDate: startSpanStr,
+          time: timeStr,
+          sendToAssignees: t.send_to_assignees === undefined ? true : !!t.send_to_assignees,
+          notes: t.notes || null,
+          status: t.status || 'not_started'
+        };
+      }
+
+      function loadPlanFromBackendLatest() {
+        // Loads the newest plan for this manager company.
+        return fetchJson('/api/planning/list', { method: 'GET' }).then(function (res) {
+          if (res.status < 200 || res.status >= 300) {
+            throw new Error((res.data && res.data.message) || 'Failed to load plans.');
+          }
+          var plans = res.data && Array.isArray(res.data.plans) ? res.data.plans : [];
+          if (!plans.length) {
+            currentPlanId = null;
+            planState.startDate = null;
+            planState.endDate = null;
+            planState.tasks = [];
+            currentPlanLabel.textContent = 'No plan saved yet';
+            return null;
+          }
+          var p0 = plans[0];
+          currentPlanId = p0.id;
+          planState.startDate = dbYmdToYmd(p0.start_date) || null;
+          planState.endDate = dbYmdToYmd(p0.end_date) || null;
+          planState.tasks = (p0.tasks || []).map(mapBackendTaskToUiTask);
+
+          currentPlanLabel.textContent =
+            'Plan · ' + (planState.startDate ? fmtDateLabel(parseYmdLocalToDate(planState.startDate)) : '—') +
+            (planState.startDate !== planState.endDate && planState.endDate ? ' – ' + fmtDateLabel(parseYmdLocalToDate(planState.endDate)) : '');
+          return p0;
+        });
+      }
+
+      function syncPlanToBackend() {
+        if (!USE_BACKEND) return Promise.resolve(null);
+        if (!planState.tasks.length) return Promise.resolve(null);
+
+        // Ensure planState.startDate/endDate are derived.
+        derivePlanRangeFromTasks();
+
+        var payloadPlan = toBackendPlanPayload();
+        var payloadTasks = planState.tasks.map(function (t) { return toBackendTaskPayload(t); });
+
+        function doUpsertWithPlanId(planId) {
+          return fetchJson(PLANNING_API.upsertPlanTasks, {
+            method: 'POST',
+            body: JSON.stringify({ plan_id: planId, tasks: payloadTasks })
+          }).then(function (resTasks) {
+            if (resTasks.status < 200 || resTasks.status >= 300) {
+              throw new Error((resTasks.data && resTasks.data.message) || 'Tasks upsert failed');
+            }
+            return resTasks;
+          });
+        }
+
+        var flow;
+        if (currentPlanId) {
+          flow = Promise.resolve(currentPlanId);
+        } else {
+          flow = fetchJson(PLANNING_API.createPlan, {
+            method: 'POST',
+            body: JSON.stringify(payloadPlan)
+          }).then(function (resPlan) {
+            if (resPlan.status < 200 || resPlan.status >= 300) {
+              throw new Error((resPlan.data && resPlan.data.message) || 'Plan create failed');
+            }
+            var planId = (resPlan.data && (resPlan.data.plan_id || resPlan.data.id)) || null;
+            if (!planId) throw new Error('plan_id missing in backend response');
+            currentPlanId = planId;
+            return planId;
+          });
+        }
+
+        return flow
+          .then(function (planId) { return doUpsertWithPlanId(planId); })
+          .then(function () { return loadPlanFromBackendLatest(); })
+          .catch(function (err) {
+            showToast('Backend error', (err && err.message) ? err.message : 'Failed to sync.', 'error');
+            throw err;
+          });
+      }
+
+      function backendPatchTask(taskId, payload) {
+        var idStr = taskId == null ? '' : String(taskId);
+        if (!USE_BACKEND || !currentPlanId || !idStr.match(/^\d+$/)) return Promise.resolve({ skipped: true });
+        return fetchJson(PLANNING_API.updatePlanTask + '/' + taskId, {
+          method: 'PATCH',
+          body: JSON.stringify(payload || {})
+        }).then(function (res) {
+          if (res.status < 200 || res.status >= 300) {
+            throw new Error((res.data && res.data.message) ? res.data.message : 'Failed to patch task.');
+          }
+          return res.data || null;
+        });
+      }
+
+      function backendDeleteTask(taskId) {
+        var idStr = taskId == null ? '' : String(taskId);
+        if (!USE_BACKEND || !currentPlanId || !idStr.match(/^\d+$/)) return Promise.resolve({ skipped: true });
+        return fetchJson(PLANNING_API.deletePlanTask + '/' + taskId, {
+          method: 'DELETE'
+        }).then(function (res) {
+          if (res.status < 200 || res.status >= 300) {
+            throw new Error((res.data && res.data.message) ? res.data.message : 'Failed to delete task.');
+          }
+          return res.data || null;
+        });
+      }
+
+      var el = function (id) { return document.getElementById(id); };
+
+      var taskForm = el('tp-task-form');
+      var errorEl = el('tp-task-error');
+      var prioritySelect = el('tp-priority-select');
+      var deadlineInput = el('tp-deadline');
+      var deadlineHint = el('tp-deadline-hint');
+      var startSpanInput = el('tp-start-span');
+      var sendToAssigneesInput = el('tp-send-to-assignees');
+      var assignedSelect = null;
+      var assignedInput = el('tp-assigned-input');
+      var assignedSelectedWrap = el('tp-assigned-selected');
+      var btnAddAssignee = el('tp-btn-add-assignee');
+      var selectedAssignees = [];
+      var operativesFromDb = [];
+      var btnAddTask = el('tp-btn-add-task');
+      var btnSavePlan = el('tp-btn-save-plan');
+      var btnClearPlan = el('tp-btn-clear-tasks');
+      var currentPlanLabel = el('tp-current-plan-label');
+      var calendarTabs = el('tp-calendar-tabs');
+      var calendarBody = el('tp-calendar-body');
+      var filterPerson = el('tp-filter-person');
+      var filterPriority = el('tp-filter-priority');
+      var filterStatus = el('tp-filter-status');
+
+      var toastEl = el('tp-toast');
+      var toastIcon = el('tp-toast-icon');
+      var toastTitle = el('tp-toast-title');
+      var toastText = el('tp-toast-text');
+      var toastClose = el('tp-toast-close');
+
+      var taskModal = el('tp-task-modal');
+      var taskModalBody = el('tp-task-modal-body');
+      var taskModalClose = el('tp-task-modal-close');
+      var taskMarkProgressBtn = el('tp-task-mark-progress');
+      var taskMarkPausedBtn = el('tp-task-mark-paused');
+      var taskMarkCompleteBtn = el('tp-task-mark-complete');
+      var taskDeleteBtn = el('tp-task-delete');
+
+      var currentTaskId = null;
+
+      // Flatpickr – same date/time picker in all modern/older browsers
+      if (window.flatpickr) {
+        if (startSpanInput) {
+          window.flatpickr(startSpanInput, {
+            dateFormat: 'Y-m-d'
+          });
+        }
+        if (deadlineInput) {
+          window.flatpickr(deadlineInput, {
+            enableTime: true,
+            dateFormat: 'Y-m-d H:i'
+          });
+        }
+      }
+
+      function showToast(title, text, type) {
+        if (!toastEl) return;
+        toastTitle.textContent = title || '';
+        toastText.textContent = text || '';
+        toastEl.classList.remove('success', 'error');
+        toastEl.classList.add(type === 'error' ? 'error' : 'success');
+        toastIcon.textContent = type === 'error' ? '!' : '●';
+        toastEl.classList.add('visible');
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(hideToast, 3500);
+      }
+
+      function hideToast() {
+        if (toastEl) toastEl.classList.remove('visible');
+      }
+
+      if (toastClose) {
+        toastClose.addEventListener('click', hideToast);
+      }
+
+      function fmtDate(d) {
+        // Use LOCAL date (not UTC) so days match user expectation
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+      }
+
+      function parseYmdLocalToDate(value) {
+        // Accept "YYYY-MM-DD" or Date. Return a valid Date at local midnight, or null.
+        if (value == null) return null;
+        if (value instanceof Date) {
+          if (isNaN(value.getTime())) return null;
+          return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+        }
+        var s = String(value);
+        if (!s) return null;
+        s = s.slice(0, 10);
+        var m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        var y = parseInt(m[1], 10);
+        var mo = parseInt(m[2], 10);
+        var d = parseInt(m[3], 10);
+        var dt = new Date(y, mo - 1, d, 0, 0, 0, 0);
+        return isNaN(dt.getTime()) ? null : dt;
+      }
+
+      function dbYmdToYmd(value) {
+        // Normalize DB DATE to "YYYY-MM-DD" or null.
+        var dt = parseYmdLocalToDate(value);
+        return dt ? fmtDate(dt) : null;
+      }
+
+      function fmtTime(d) {
+        return d.toTimeString().slice(0, 5);
+      }
+
+      function fmtDateLabel(d) {
+        return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+      }
+
+      function fmtDateDMY(d) {
+        var dd = String(d.getDate()).padStart(2, '0');
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        var yy = String(d.getFullYear()).slice(-2);
+        return dd + '/' + mm + '/' + yy;
+      }
+
+      function fmtYmdToDMY(ymd) {
+        if (!ymd) return '—';
+        var s = String(ymd);
+        // If it's already ISO with time, take the date part for YYYY-MM-DD formatting.
+        if (s.indexOf('T') !== -1) s = s.slice(0, 10);
+        var dt = /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + 'T00:00') : new Date(s);
+        if (!dt || isNaN(dt.getTime())) return '—';
+        return fmtDateDMY(dt);
+      }
+
+      function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      function fmtMonthYear(d) {
+        return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      }
+
+      function parseLocalDateTime(value) {
+        if (!value) return null;
+        // Accept both "YYYY-MM-DDTHH:MM" (native) and "YYYY-MM-DD HH:MM" (flatpickr)
+        var normalized = value.replace(' ', 'T');
+        var parts = normalized.split('T');
+        if (parts.length !== 2) return null;
+        var dateParts = parts[0].split('-').map(Number);
+        var timeParts = parts[1].split(':').map(Number);
+        if (dateParts.length < 3 || timeParts.length < 2) return null;
+        return new Date(dateParts[0], dateParts[1] - 1, dateParts[2], timeParts[0], timeParts[1]);
+      }
+
+      function saveToStorage() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(planState));
+        } catch (_) {}
+      }
+
+      function derivePlanRangeFromTasks() {
+        // Derive range from tasks so the Gantt can render even before "Save plan".
+        // We use: startDate = min(startSpanDate or date), endDate = max(date)
+        var minStart = null;
+        var maxEnd = null;
+        planState.tasks.forEach(function (t) {
+          var s = t.startSpanDate || t.date;
+          var e = t.date;
+          if (!minStart || s < minStart) minStart = s;
+          if (!maxEnd || e > maxEnd) maxEnd = e;
+        });
+        planState.startDate = minStart;
+        planState.endDate = maxEnd;
+      }
+
+      function loadFromStorage() {
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+          var s = JSON.parse(raw);
+          if (!s || !Array.isArray(s.tasks)) return;
+          planState = s;
+          // Backward compatibility: older localStorage may not include startDate/endDate.
+          if (planState.tasks && planState.tasks.length && !planState.startDate) {
+            derivePlanRangeFromTasks();
+          }
+        } catch (_) {}
+      }
+
+      // no explicit period pickers anymore; plan range is derived from tasks
+
+      function getAssignees() {
+        return selectedAssignees.slice();
+      }
+
+      function updateAssigneeDatalist() {
+        var dl = document.getElementById('tp-assigned-datalist');
+        if (!dl) return;
+        var seen = {};
+        (operativesFromDb || []).forEach(function (name) {
+          if (!name) return;
+          seen[name] = true;
+        });
+        planState.tasks.forEach(function (t) {
+          (t.assignedTo || []).forEach(function (name) {
+            if (!name) return;
+            seen[name] = true;
+          });
+        });
+        selectedAssignees.forEach(function (name) {
+          if (name) seen[name] = true;
+        });
+        if (assignedInput && assignedInput.value) {
+          var cur = String(assignedInput.value).trim();
+          if (cur) seen[cur] = true;
+        }
+        var keys = Object.keys(seen).sort();
+        dl.innerHTML = '';
+        keys.forEach(function (name) {
+          var opt = document.createElement('option');
+          opt.value = name;
+          dl.appendChild(opt);
+        });
+      }
+
+      function loadOperativesFromDbForAssignees() {
+        // Uses manager session headers so this works inside manager dashboard.
+        // If session is missing or backend fails, we keep frontend-only behavior.
+        var headers = getSessionHeaders();
+        if (!headers || !headers['X-Manager-Id'] || !headers['X-Manager-Email']) return Promise.resolve();
+
+        return fetchJson('/api/operatives', { method: 'GET' })
+          .then(function (res) {
+            if (res.status < 200 || res.status >= 300) return null;
+            if (!res.data || !Array.isArray(res.data.operatives)) return null;
+
+            operativesFromDb = res.data.operatives
+              .filter(function (o) { return o && o.name; })
+              .filter(function (o) { return o.active === true || o.active === 'true' || o.active === 1; })
+              .map(function (o) { return String(o.name).trim(); })
+              .filter(function (n) { return !!n; });
+
+            return null;
+          })
+          .catch(function () {
+            // silent fallback to local behavior
+            operativesFromDb = [];
+            return null;
+          });
+      }
+
+      function renderAssignedSelectedPills() {
+        if (!assignedSelectedWrap) return;
+        assignedSelectedWrap.innerHTML = '';
+        selectedAssignees.forEach(function (name) {
+          var pill = document.createElement('span');
+          pill.className = 'tp-pill';
+
+          var spanName = document.createElement('span');
+          spanName.textContent = name;
+          pill.appendChild(spanName);
+
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.innerHTML = '&times;';
+          btn.addEventListener('click', function () {
+            selectedAssignees = selectedAssignees.filter(function (x) { return x !== name; });
+            renderAssignedSelectedPills();
+            updateAssigneeDatalist();
+          });
+          pill.appendChild(btn);
+
+          assignedSelectedWrap.appendChild(pill);
+        });
+      }
+
+      function addAssigneeFromInput() {
+        if (!assignedInput) return;
+        var name = String(assignedInput.value || '').trim();
+        if (!name) return;
+        if (selectedAssignees.indexOf(name) !== -1) {
+          assignedInput.value = '';
+          return;
+        }
+        selectedAssignees.push(name);
+        renderAssignedSelectedPills();
+        updateAssigneeDatalist();
+        assignedInput.value = '';
+      }
+
+      function getSelectedPriority() {
+        var btns = prioritySelect.querySelectorAll('.tp-prio-pill');
+        for (var i = 0; i < btns.length; i++) {
+          if (btns[i].classList.contains('active')) return btns[i].getAttribute('data-value') || 'medium';
+        }
+        return 'medium';
+      }
+
+      if (prioritySelect) {
+        prioritySelect.addEventListener('click', function (e) {
+          var btn = e.target.closest('.tp-prio-pill');
+          if (!btn) return;
+          var all = prioritySelect.querySelectorAll('.tp-prio-pill');
+          for (var i = 0; i < all.length; i++) all[i].classList.remove('active');
+          btn.classList.add('active');
+        });
+      }
+
+      function setError(msg) {
+        if (!errorEl) return;
+        errorEl.textContent = msg || '';
+        errorEl.classList.toggle('visible', !!msg);
+      }
+
+      function buildTaskFromForm() {
+        var title = (el('tp-task-title').value || '').trim();
+        var desc = (el('tp-task-desc').value || '').trim();
+        var assignees = getAssignees();
+        var deadlineVal = deadlineInput.value;
+        var startSpanVal = startSpanInput && startSpanInput.value;
+        var sendToAssignees = !!(sendToAssigneesInput && sendToAssigneesInput.checked);
+        var notes = (el('tp-notes').value || '').trim();
+
+        if (!title) {
+          setError('Title is required.');
+          return null;
+        }
+        if (!assignees.length) {
+          // Allow empty assignees (task will be saved as "Unassigned" in backend).
+        }
+        if (!deadlineVal) {
+          setError('Deadline is required.');
+          return null;
+        }
+        if (!startSpanVal) {
+          setError('Start date (pickup) is required.');
+          return null;
+        }
+        var deadline = parseLocalDateTime(deadlineVal);
+        if (!deadline || isNaN(deadline.getTime())) {
+          setError('Invalid deadline.');
+          return null;
+        }
+
+        var dStr = fmtDate(deadline);
+        setError('');
+
+        var priority = getSelectedPriority() || 'medium';
+
+        var startSpanDate = dStr;
+        var s = new Date(startSpanVal + 'T00:00');
+        if (!isNaN(s.getTime())) {
+          var sStr = fmtDate(s);
+          if (sStr > dStr) {
+            setError('Start date (pickup) cannot be after deadline.');
+            return null;
+          }
+          startSpanDate = sStr;
+        } else {
+          setError('Invalid start date (pickup).');
+          return null;
+        }
+        var id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+
+        return {
+          id: id,
+          title: title,
+          description: desc,
+          assignedTo: assignees,
+          priority: priority,
+          deadline: deadline.toISOString(),
+          date: dStr,
+          startSpanDate: startSpanDate,
+          time: fmtTime(deadline),
+          sendToAssignees: sendToAssignees,
+          notes: notes || null,
+          status: 'not_started'
+        };
+      }
+
+      function clearTaskFields() {
+        el('tp-task-title').value = '';
+        el('tp-task-desc').value = '';
+        if (sendToAssigneesInput) sendToAssigneesInput.checked = true;
+        el('tp-notes').value = '';
+        selectedAssignees = [];
+        if (assignedInput) assignedInput.value = '';
+        renderAssignedSelectedPills();
+        updateAssigneeDatalist();
+      }
+
+      function addTaskToPlan() {
+        var task = buildTaskFromForm();
+        if (!task) return;
+        planState.tasks.push(task);
+        derivePlanRangeFromTasks();
+        clearTaskFields();
+        updateFiltersOptions();
+        updateAssigneeDatalist();
+        renderCalendar();
+        showToast('Task added', 'Press "Save Task" to sync this task.', 'success');
+      }
+
+      function savePlan() {
+        if (!planState.tasks.length) {
+          setError('Add at least one task before saving.');
+          return;
+        }
+        derivePlanRangeFromTasks();
+        updateFiltersOptions();
+        syncPlanToBackend().then(function () {
+          updateFiltersOptions();
+          updateAssigneeDatalist();
+          renderAssignedSelectedPills();
+          renderCalendar();
+          showToast('Plan saved to database', 'Tasks are now synced with backend.', 'success');
+        }).catch(function (err) {
+          showToast('Backend error', (err && err.message) ? err.message : 'Failed to save to database.', 'error');
+        });
+      }
+
+      function saveTaskFromForm() {
+        var task = buildTaskFromForm();
+        if (!task) return;
+
+        planState.tasks.push(task);
+        derivePlanRangeFromTasks();
+
+        syncPlanToBackend().then(function () {
+          // Reloaded from backend inside syncPlanToBackend, so IDs are now stable.
+          clearTaskFields();
+          updateFiltersOptions();
+          updateAssigneeDatalist();
+          renderAssignedSelectedPills();
+          renderCalendar();
+          showToast('Task saved to database', 'Task has been synced with backend.', 'success');
+        }).catch(function (err) {
+          showToast('Backend error', (err && err.message) ? err.message : 'Failed to save task.', 'error');
+        });
+      }
+
+      function clearCurrentPlan() {
+        var tasksToDelete = planState.tasks.slice();
+        if (USE_BACKEND && currentPlanId && tasksToDelete.length) {
+          Promise.all(tasksToDelete.map(function (t) { return backendDeleteTask(t.id); }))
+            .then(function () {
+              planState.tasks = [];
+              planState.startDate = null;
+              planState.endDate = null;
+              currentPlanLabel.textContent = 'No plan saved yet';
+              updateFiltersOptions();
+              renderCalendar();
+              showToast('Plan cleared', 'Tasks removed from database.', 'success');
+            })
+            .catch(function (err) {
+              showToast('Backend error', (err && err.message) ? err.message : 'Failed to clear plan.', 'error');
+            });
+          return;
+        }
+
+        planState.tasks = [];
+        planState.startDate = null;
+        planState.endDate = null;
+        currentPlanLabel.textContent = 'No plan saved yet';
+        updateFiltersOptions();
+        renderCalendar();
+        showToast('Plan cleared', 'Cleared from current draft.', 'success');
+      }
+
+      function applyFilters(tasks) {
+        var person = filterPerson.value;
+        var prio = filterPriority.value;
+        var status = filterStatus.value;
+        return tasks.filter(function (t) {
+          if (person && (!t.assignedTo || t.assignedTo.indexOf(person) === -1)) return false;
+          if (prio && t.priority !== prio) return false;
+          if (status && t.status !== status) return false;
+          return true;
+        });
+      }
+
+      function isInSpan(t, dateStr) {
+        var start = t.startSpanDate || t.date;
+        var end = t.date;
+        return dateStr >= start && dateStr <= end;
+      }
+
+      /** Sort tasks: first by Start date (pickup), then by Deadline time – matches form fields. */
+      function sortTasksForGantt(tasks) {
+        return tasks.slice().sort(function (a, b) {
+          var aStart = a.startSpanDate || a.date || '';
+          var bStart = b.startSpanDate || b.date || '';
+          if (aStart !== bStart) return aStart.localeCompare(bStart);
+          return (a.time || '').localeCompare(b.time || '');
+        });
+      }
+
+      function updateGanttSummary() {
+        var elSummary = document.getElementById('tp-gantt-summary');
+        if (!elSummary) return;
+        if (!planState.tasks.length) {
+          elSummary.innerHTML = '';
+          return;
+        }
+
+        var perPerson = {};
+        var latestDeadlinePerPerson = {};
+        planState.tasks.forEach(function (t) {
+          var people = t.assignedTo && t.assignedTo.length ? t.assignedTo : ['Unassigned'];
+          var day = t.date || '';
+          people.forEach(function (name) {
+            if (!perPerson[name]) perPerson[name] = 0;
+            perPerson[name] += 1;
+            // track latest finish date per person
+            if (day) {
+              if (!latestDeadlinePerPerson[name] || day > latestDeadlinePerPerson[name]) {
+                latestDeadlinePerPerson[name] = day;
+              }
+            }
+          });
+        });
+
+        var persons = Object.keys(perPerson);
+        persons.sort();
+
+        var rows = persons.map(function (name) {
+          var finishDate = latestDeadlinePerPerson[name];
+          var finishLabel = '—';
+          if (finishDate) {
+            var finishObj = new Date(finishDate + 'T00:00');
+            finishLabel = fmtDateDMY(finishObj);
+          }
+          return (
+            '<tr>' +
+            '<td>' + name + '</td>' +
+            '<td class="text-end">' + perPerson[name] + '</td>' +
+            '<td>' + finishLabel + '</td>' +
+            '</tr>'
+          );
+        });
+
+        elSummary.innerHTML =
+          '<table class="tp-gantt-summary-table tp-small">' +
+          '<thead><tr><th>Assignee</th><th class="text-end">Tasks</th><th>Will finish work on</th></tr></thead>' +
+          '<tbody>' + rows.join('') + '</tbody>' +
+          '</table>';
+      }
+
+      function renderKanban() {
+        var board = document.getElementById('tp-kanban-board');
+        if (!board) return;
+        if (!planState.tasks.length) {
+          board.innerHTML = '';
+          return;
+        }
+
+        var all = applyFilters(planState.tasks);
+        if (!all.length) {
+          board.innerHTML = '';
+          return;
+        }
+
+        var groups = {
+          not_started: [],
+          in_progress: [],
+          paused: [],
+          completed: []
+        };
+
+        all.forEach(function (t) {
+          var s = t.status || 'not_started';
+          if (!groups[s]) groups[s] = [];
+          groups[s].push(t);
+        });
+
+        var order = ['not_started', 'in_progress', 'paused', 'completed'];
+        var titles = {
+          not_started: 'Not started',
+          in_progress: 'In progress',
+          paused: 'Paused',
+          completed: 'Completed'
+        };
+
+        var html = '';
+        order.forEach(function (statusKey) {
+          var list = sortTasksForGantt(groups[statusKey] || []);
+          html += '<div class="tp-kanban-column" data-kanban-status="' + statusKey + '">';
+          html += '<div class="tp-kanban-column-header">';
+          html += '<span>' + titles[statusKey] + '</span>';
+          html += '<span class="tp-kanban-count">' + list.length + '</span>';
+          html += '</div>';
+          html += '<div class="tp-kanban-list">';
+          if (!list.length) {
+            html += '<div class="tp-small text-muted">No tasks.</div>';
+          } else {
+            list.forEach(function (t) {
+              var assignees = (t.assignedTo || []).join(', ') || 'Unassigned';
+              var startLabel = fmtYmdToDMY(t.startSpanDate);
+              var endLabel = fmtYmdToDMY(t.date);
+              var timeLabel = t.time || '';
+              html += '<div class="tp-kanban-card" data-task-id="' + t.id + '">';
+              html += '<div class="tp-kanban-card-title">' + (t.title || 'Task') + '</div>';
+              html += '<div class="tp-kanban-card-meta">';
+              html += '<span class="tp-kanban-assignees">' + assignees + '</span>';
+              html += '<span>' +
+                'Start: ' + startLabel +
+                ' · End: ' + endLabel + (timeLabel ? ' ' + timeLabel : '') +
+                '</span>';
+              html += '</div>';
+              html += '</div>';
+            });
+          }
+          html += '</div></div>';
+        });
+
+        board.innerHTML = html;
+      }
+
+      function updateFiltersOptions() {
+        var seen = {};
+        var options = ['<option value="">All people</option>'];
+        planState.tasks.forEach(function (t) {
+          (t.assignedTo || []).forEach(function (name) {
+            if (!seen[name]) {
+              seen[name] = true;
+              options.push('<option value="' + name + '">' + name + '</option>');
+            }
+          });
+        });
+        filterPerson.innerHTML = options.join('');
+        // Ensure we don't keep an old selected value that might not exist after refresh.
+        filterPerson.value = '';
+      }
+
+      function changeTaskStatus(id, newStatus) {
+        var t = planState.tasks.find(function (x) { return String(x.id) === String(id); });
+        if (!t) return;
+        var prev = t.status;
+        t.status = newStatus;
+        renderCalendar();
+        if (USE_BACKEND) {
+          backendPatchTask(id, { status: newStatus }).then(function (r) {
+            if (r && r.skipped) {
+              showToast('Status updated', 'Save Task to sync this change to the database.', 'success');
+              return;
+            }
+            showToast('Status updated', 'Task is now marked as ' + newStatus.replace('_', ' ') + '.', 'success');
+          }).catch(function (err) {
+            t.status = prev;
+            renderCalendar();
+            showToast('Backend error', (err && err.message) ? err.message : 'Failed to update status.', 'error');
+          });
+        } else {
+          showToast('Status updated', 'Task is now marked as ' + newStatus.replace('_', ' ') + '.', 'success');
+        }
+      }
+
+      calendarBody.addEventListener('change', function (e) {
+        var sel = e.target.closest('select[data-task-status]');
+        if (!sel) return;
+        var id = sel.getAttribute('data-task-status');
+        var status = sel.value;
+        if (!id || !status) return;
+        changeTaskStatus(id, status);
+      });
+
+      function openTaskModal(taskId) {
+        if (!taskModal || !taskModalBody) return;
+        var t = planState.tasks.find(function (x) { return String(x.id) === String(taskId); });
+        if (!t) return;
+        currentTaskId = taskId;
+        var people = (t.assignedTo || []).join(', ') || '—';
+        var selectedPerson = (t.assignedTo && t.assignedTo.length) ? t.assignedTo[0] : '';
+        var allPeopleSet = {};
+        planState.tasks.forEach(function (x) {
+          (x.assignedTo || []).forEach(function (name) {
+            allPeopleSet[name] = true;
+          });
+        });
+        // Also allow choosing any operative from DB.
+        (operativesFromDb || []).forEach(function (name) {
+          if (!name) return;
+          allPeopleSet[name] = true;
+        });
+        if (selectedPerson) allPeopleSet[selectedPerson] = true;
+        var allPeople = Object.keys(allPeopleSet).sort();
+        var assignedSelectHtml =
+          '<select id="tp-modal-assigned" class="form-select form-select-sm" style="width: 100%;">' +
+          allPeople.map(function (name) {
+            var isSel = name === selectedPerson;
+            return '<option value="' + escapeHtml(name) + '"' + (isSel ? ' selected' : '') + '>' + escapeHtml(name) + '</option>';
+          }).join('') +
+          '</select>';
+        var sendOk = t.sendToAssignees === true;
+        var prio = (t.priority || 'medium');
+        var status = t.status || 'not_started';
+        var startVal = t.startSpanDate || '';
+        var deadlineDateVal = t.date || '';
+        var deadlineTimeVal = t.time || '00:00';
+        var deadlineVal = deadlineDateVal ? (deadlineDateVal + 'T' + deadlineTimeVal) : '';
+        var sendHtml = '';
+        if (sendOk) {
+          sendHtml =
+            '<div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">' +
+            '<div><span class="tp-status-label" data-status="completed">Sent</span> to: ' + people + '</div>' +
+            '<button type="button" class="tp-btn-modal tp-btn-modal-danger" data-modal-remove-send="1">' +
+            '<i class="bi bi-x-circle"></i> Remove from attached people' +
+            '</button>' +
+            '</div>';
+        } else {
+          sendHtml =
+            '<button type="button" class="tp-btn-modal tp-btn-modal-primary" data-modal-send-to-attached="1">' +
+            '<i class="bi bi-send"></i> Send task to: ' + people + '</button>';
+        }
+        var photosSection = '';
+        if (status === 'completed' && USE_BACKEND) {
+          photosSection =
+            '<dt>Confirmation photos</dt><dd id="tp-modal-confirmation-photos"><span class="text-muted">Loading…</span></dd>';
+        }
+        taskModalBody.innerHTML =
+          '<dl>' +
+          '<dt>Task</dt><dd>' + (t.title || '—') + '</dd>' +
+          '<dt>Assigned to</dt><dd>' + assignedSelectHtml + '</dd>' +
+          '<dt>Delivery</dt><dd>' + sendHtml + '</dd>' +
+          '<dt>Priority</dt><dd>' +
+          '<div class="tp-priority-select">' +
+          '<button type="button" class="tp-prio-pill ' + (prio === 'low' ? 'active' : '') + '" data-modal-priority="low">' +
+          '<span class="tp-tag" style="background: var(--tp-prio-low);"></span><span>Low</span>' +
+          '</button>' +
+          '<button type="button" class="tp-prio-pill ' + (prio === 'medium' ? 'active' : '') + '" data-modal-priority="medium">' +
+          '<span class="tp-tag" style="background: var(--tp-prio-medium);"></span><span>Medium</span>' +
+          '</button>' +
+          '<button type="button" class="tp-prio-pill ' + (prio === 'high' ? 'active' : '') + '" data-modal-priority="high">' +
+          '<span class="tp-tag" style="background: var(--tp-prio-high);"></span><span>High</span>' +
+          '</button>' +
+          '<button type="button" class="tp-prio-pill ' + (prio === 'critical' ? 'active' : '') + '" data-modal-priority="critical">' +
+          '<span class="tp-tag" style="background: var(--tp-prio-critical);"></span><span>Critical</span>' +
+          '</button>' +
+          '</div>' +
+          '</dd>' +
+          '<dt>Status</dt><dd><span class="tp-status-label" data-status="' + status + '">' + status.replace('_', ' ') + '</span></dd>' +
+          '<dt>Start date</dt><dd>' +
+          '<input type="date" id="tp-modal-start-span" class="form-control form-control-sm" value="' + escapeHtml(startVal) + '">' +
+          '</dd>' +
+          '<dt>Deadline</dt><dd>' +
+          '<input type="datetime-local" id="tp-modal-deadline" class="form-control form-control-sm" value="' + escapeHtml(deadlineVal) + '">' +
+          '</dd>' +
+          '<dt>Description</dt><dd>' + (t.description || '—') + '</dd>' +
+          '<dt>Notes</dt><dd>' + (t.notes || '—') + '</dd>' +
+          photosSection +
+          '</dl>';
+        taskModal.classList.add('is-open');
+        taskModal.setAttribute('aria-hidden', 'false');
+
+        // Apply flatpickr on modal inputs for consistent cross-browser UI
+        if (window.flatpickr) {
+          var mStart = document.getElementById('tp-modal-start-span');
+          if (mStart) {
+            window.flatpickr(mStart, { dateFormat: 'Y-m-d' });
+          }
+          var mDeadline = document.getElementById('tp-modal-deadline');
+          if (mDeadline) {
+            window.flatpickr(mDeadline, { enableTime: true, dateFormat: 'Y-m-d H:i' });
+          }
+        }
+
+        if (status === 'completed' && USE_BACKEND) {
+          fetchJson('/api/planning/plan-tasks/' + encodeURIComponent(taskId) + '/confirmation-photos')
+            .then(function (r) {
+              var wrap = document.getElementById('tp-modal-confirmation-photos');
+              if (!wrap) return;
+              if (r.status !== 200 || !r.data || !r.data.success) {
+                wrap.innerHTML = '<span class="text-muted">Could not load photos.</span>';
+                return;
+              }
+              var photos = r.data.photos || [];
+              if (!photos.length) {
+                wrap.innerHTML = '<span class="text-muted">No confirmation photos uploaded.</span>';
+                return;
+              }
+              wrap.innerHTML =
+                '<div class="tp-confirmation-grid">' +
+                photos
+                  .map(function (p) {
+                    var url = p.file_url || '';
+                    if (!url) return '';
+                    return (
+                      '<a href="' +
+                      escapeHtml(url) +
+                      '" target="_blank" rel="noopener" class="tp-confirmation-thumb" title="' +
+                      escapeHtml(p.user_name || 'Operative') +
+                      '">' +
+                      '<img src="' +
+                      escapeHtml(url) +
+                      '" alt="Confirmation photo">' +
+                      '</a>'
+                    );
+                  })
+                  .join('') +
+                '</div>';
+            })
+            .catch(function () {
+              var wrap = document.getElementById('tp-modal-confirmation-photos');
+              if (wrap) wrap.innerHTML = '<span class="text-muted">Could not load photos.</span>';
+            });
+        }
+      }
+
+      function closeTaskModal() {
+        if (!taskModal) return;
+        taskModal.classList.remove('is-open');
+        taskModal.setAttribute('aria-hidden', 'true');
+        currentTaskId = null;
+      }
+
+      if (taskModalClose) {
+        taskModalClose.addEventListener('click', function () {
+          closeTaskModal();
+        });
+      }
+      if (taskModal) {
+        taskModal.addEventListener('click', function (e) {
+          if (e.target === taskModal) closeTaskModal();
+        });
+      }
+
+      // Change priority from modal
+      if (taskModalBody) {
+        taskModalBody.addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-modal-priority]');
+          if (!btn || !currentTaskId) return;
+          var value = btn.getAttribute('data-modal-priority');
+          var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
+          if (!t) return;
+          var prev = t.priority;
+          t.priority = value;
+          renderCalendar();
+          openTaskModal(currentTaskId);
+          if (USE_BACKEND) {
+            backendPatchTask(currentTaskId, { priority: value }).then(function (r) {
+              if (r && r.skipped) {
+                showToast('Priority updated', 'Save Task to sync this change.', 'success');
+                return;
+              }
+              showToast('Priority updated', 'Task priority is now ' + value + '.', 'success');
+            }).catch(function (err) {
+              t.priority = prev;
+              renderCalendar();
+              openTaskModal(currentTaskId);
+              showToast('Backend error', (err && err.message) ? err.message : 'Failed to update priority.', 'error');
+            });
+          } else {
+            showToast('Priority updated', 'Task priority is now ' + value + '.', 'success');
+          }
+        });
+      }
+
+      // Send task to attached people (frontend only)
+      if (taskModalBody) {
+        taskModalBody.addEventListener('click', function (e) {
+          var sendBtn = e.target.closest('[data-modal-send-to-attached]');
+          if (!sendBtn || !currentTaskId) return;
+          var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
+          if (!t) return;
+          var prev = t.sendToAssignees;
+          t.sendToAssignees = true;
+          renderCalendar();
+          openTaskModal(currentTaskId);
+          if (USE_BACKEND) {
+            backendPatchTask(currentTaskId, { send_to_assignees: true }).then(function (r) {
+              if (r && r.skipped) {
+                showToast('Task sent', 'Save Task to sync this change.', 'success');
+                return;
+              }
+              showToast('Task sent', 'Task was sent to attached people.', 'success');
+            }).catch(function (err) {
+              t.sendToAssignees = prev;
+              renderCalendar();
+              openTaskModal(currentTaskId);
+              showToast('Backend error', (err && err.message) ? err.message : 'Failed to update delivery.', 'error');
+            });
+          } else {
+            showToast('Task sent', 'Task was sent to attached people.', 'success');
+          }
+        });
+      }
+
+      // Remove task from attached people (frontend only)
+      if (taskModalBody) {
+        taskModalBody.addEventListener('click', function (e) {
+          var remBtn = e.target.closest('[data-modal-remove-send]');
+          if (!remBtn || !currentTaskId) return;
+          var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
+          if (!t) return;
+          var prev = t.sendToAssignees;
+          t.sendToAssignees = false;
+          renderCalendar();
+          openTaskModal(currentTaskId);
+          if (USE_BACKEND) {
+            backendPatchTask(currentTaskId, { send_to_assignees: false }).then(function (r) {
+              if (r && r.skipped) {
+                showToast('Removed', 'Save Task to sync this change.', 'success');
+                return;
+              }
+              showToast('Removed', 'Task was removed from attached people.', 'success');
+            }).catch(function (err) {
+              t.sendToAssignees = prev;
+              renderCalendar();
+              openTaskModal(currentTaskId);
+              showToast('Backend error', (err && err.message) ? err.message : 'Failed to update delivery.', 'error');
+            });
+          } else {
+            showToast('Removed', 'Task was removed from attached people.', 'success');
+          }
+        });
+      }
+
+      // Edit assigned person from modal
+      if (taskModalBody) {
+        taskModalBody.addEventListener('change', function (e) {
+          var sel = e.target.closest('#tp-modal-assigned');
+          if (!sel || !currentTaskId) return;
+          var value = sel.value;
+          if (!value) return;
+          var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
+          if (!t) return;
+          var prev = (t.assignedTo || []).slice();
+          t.assignedTo = [value];
+          renderCalendar();
+          openTaskModal(currentTaskId);
+          if (USE_BACKEND) {
+            backendPatchTask(currentTaskId, { assigned_to: [value] }).then(function (r) {
+              if (r && r.skipped) {
+                showToast('Assigned to updated', 'Save Task to sync this change.', 'success');
+                return;
+              }
+              showToast('Assigned to updated', 'Task assigned to: ' + value + '.', 'success');
+            }).catch(function (err) {
+              t.assignedTo = prev;
+              renderCalendar();
+              openTaskModal(currentTaskId);
+              showToast('Backend error', (err && err.message) ? err.message : 'Failed to update assignment.', 'error');
+            });
+          } else {
+            showToast('Assigned to updated', 'Task assigned to: ' + value + '.', 'success');
+          }
+        });
+      }
+
+      // Edit Start date + Deadline from modal
+      if (taskModalBody) {
+        taskModalBody.addEventListener('change', function (e) {
+          if (!currentTaskId) return;
+          var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
+          if (!t) return;
+
+          var target = e.target;
+          if (!target || !target.id) return;
+
+          if (target.id === 'tp-modal-start-span') {
+            var newStart = target.value;
+            if (!newStart) return;
+            // ensure start <= deadline date
+            if (t.date && newStart > t.date) {
+              target.value = t.date;
+              newStart = t.date;
+            }
+            var prevStart = t.startSpanDate;
+            t.startSpanDate = newStart;
+            renderCalendar();
+            openTaskModal(currentTaskId);
+            if (USE_BACKEND) {
+              backendPatchTask(currentTaskId, { pickup_start_date: newStart }).then(function (r) {
+                if (r && r.skipped) {
+                  showToast('Start date updated', 'Save Task to sync this change.', 'success');
+                  return;
+                }
+                showToast('Start date updated', 'Gantt start date changed.', 'success');
+              }).catch(function (err) {
+                t.startSpanDate = prevStart;
+                renderCalendar();
+                openTaskModal(currentTaskId);
+                showToast('Backend error', (err && err.message) ? err.message : 'Failed to update start date.', 'error');
+              });
+            } else {
+              showToast('Start date updated', 'Gantt start date changed.', 'success');
+            }
+            return;
+          }
+
+          if (target.id === 'tp-modal-deadline') {
+            var raw = target.value;
+            var dt = parseLocalDateTime(raw);
+            if (!dt || isNaN(dt.getTime())) {
+              showToast('Invalid deadline', 'Please pick a valid deadline.', 'error');
+              return;
+            }
+            var newD = fmtDate(dt);
+            var newTime = fmtTime(dt);
+
+            var prev = {
+              date: t.date,
+              time: t.time,
+              deadline: t.deadline,
+              startSpanDate: t.startSpanDate
+            };
+            t.date = newD;
+            t.time = newTime;
+            t.deadline = dt.toISOString();
+
+            // ensure startSpanDate <= deadline date
+            if (t.startSpanDate && t.startSpanDate > t.date) {
+              t.startSpanDate = t.date;
+            }
+            renderCalendar();
+            openTaskModal(currentTaskId);
+            if (USE_BACKEND) {
+              backendPatchTask(currentTaskId, {
+                deadline: t.deadline,
+                pickup_start_date: t.startSpanDate
+              }).then(function (r) {
+                if (r && r.skipped) {
+                  showToast('Deadline updated', 'Save Task to sync this change.', 'success');
+                  return;
+                }
+                showToast('Deadline updated', 'Task deadline changed.', 'success');
+              }).catch(function (err) {
+                t.date = prev.date;
+                t.time = prev.time;
+                t.deadline = prev.deadline;
+                t.startSpanDate = prev.startSpanDate;
+                renderCalendar();
+                openTaskModal(currentTaskId);
+                showToast('Backend error', (err && err.message) ? err.message : 'Failed to update deadline.', 'error');
+              });
+            } else {
+              showToast('Deadline updated', 'Task deadline changed.', 'success');
+            }
+          }
+        });
+      }
+
+      function updateTaskStatusFromModal(newStatus) {
+        if (!currentTaskId) return;
+        var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
+        if (!t) return;
+        var prev = t.status;
+        t.status = newStatus;
+        renderCalendar();
+        openTaskModal(currentTaskId);
+        if (USE_BACKEND) {
+          backendPatchTask(currentTaskId, { status: newStatus }).then(function (r) {
+            if (r && r.skipped) {
+              showToast('Status updated', 'Save Task to sync this change to the database.', 'success');
+              return;
+            }
+            showToast('Status updated', 'Task is now ' + newStatus.replace('_', ' ') + '.', 'success');
+          }).catch(function (err) {
+            t.status = prev;
+            renderCalendar();
+            openTaskModal(currentTaskId);
+            showToast('Backend error', (err && err.message) ? err.message : 'Failed to update status.', 'error');
+          });
+        } else {
+          showToast('Status updated', 'Task is now ' + newStatus.replace('_', ' ') + '.', 'success');
+        }
+      }
+
+      if (taskMarkProgressBtn) {
+        taskMarkProgressBtn.addEventListener('click', function () {
+          updateTaskStatusFromModal('in_progress');
+        });
+      }
+
+      if (taskMarkPausedBtn) {
+        taskMarkPausedBtn.addEventListener('click', function () {
+          updateTaskStatusFromModal('paused');
+        });
+      }
+
+      if (taskMarkCompleteBtn) {
+        taskMarkCompleteBtn.addEventListener('click', function () {
+          updateTaskStatusFromModal('completed');
+        });
+      }
+
+      if (taskDeleteBtn) {
+        taskDeleteBtn.addEventListener('click', function () {
+          if (!currentTaskId) return;
+          var idx = planState.tasks.findIndex(function (x) { return String(x.id) === String(currentTaskId); });
+          if (idx === -1) return;
+          var removed = planState.tasks[idx];
+          planState.tasks.splice(idx, 1);
+          renderCalendar();
+          updateFiltersOptions();
+          if (USE_BACKEND) {
+            backendDeleteTask(currentTaskId).then(function (r) {
+              closeTaskModal();
+              if (r && r.skipped) {
+                showToast('Task deleted', 'Removed from draft (not synced yet).', 'success');
+                return;
+              }
+              showToast('Task deleted', 'Task removed from database.', 'success');
+            }).catch(function (err) {
+              planState.tasks.splice(idx, 0, removed);
+              renderCalendar();
+              updateFiltersOptions();
+              openTaskModal(currentTaskId);
+              showToast('Backend error', (err && err.message) ? err.message : 'Failed to delete task.', 'error');
+            });
+          } else {
+            closeTaskModal();
+            showToast('Task deleted', 'This task was removed from local plan.', 'success');
+          }
+        });
+      }
+
+      function renderDayView(tasks) {
+        if (!planState.startDate) {
+          calendarBody.innerHTML = '<div class="tp-empty-state">Select a plan period and save it first.</div>';
+          return;
+        }
+        var dayDate = parseYmdLocalToDate(planState.startDate);
+        if (!dayDate) {
+          calendarBody.innerHTML = '<div class="tp-empty-state">Invalid plan start date.</div>';
+          return;
+        }
+        var filtered = applyFilters(tasks.filter(function (t) { return isInSpan(t, planState.startDate); }));
+        if (!filtered.length) {
+          calendarBody.innerHTML = '<div class="tp-empty-state">No tasks for ' + fmtDateLabel(dayDate) + ' with current filters.</div>';
+          return;
+        }
+
+        // Gantt by person for a single day
+        var byPerson = {};
+        filtered.forEach(function (t) {
+          (t.assignedTo || ['—']).forEach(function (name) {
+            if (!byPerson[name]) byPerson[name] = [];
+            byPerson[name].push(t);
+          });
+        });
+
+        var html = '<div class="tp-gantt-header">' +
+          '<span>' + fmtDateLabel(dayDate) + ' – per person</span>' +
+          '<div class="tp-gantt-scale"><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span></div>' +
+          '</div><div class="tp-gantt-body">';
+
+        Object.keys(byPerson).forEach(function (name) {
+          html += '<div class="tp-gantt-row">';
+          html += '<div class="tp-gantt-person">' + name + '</div>';
+          html += '<div class="tp-gantt-track">';
+          sortTasksForGantt(byPerson[name]).forEach(function (t) {
+            html += '<span class="tp-gantt-bar" data-task-id="' + t.id + '" data-priority="' + (t.priority || 'medium') + '">' +
+              '<span class="tp-gantt-status-dot" data-status="' + (t.status || 'not_started') + '"></span>' +
+              '<span>' + t.time + '</span>' +
+              '<span>' + t.title + '</span>' +
+              '</span>';
+          });
+          html += '</div></div>';
+        });
+
+        html += '</div>';
+        calendarBody.innerHTML = html;
+      }
+
+      function renderTaskChip(t) {
+        var pr = t.priority || 'medium';
+        var title = t.title;
+        var names = (t.assignedTo || []).join(', ');
+        var statusLabel = t.status === 'completed' ? 'Done' : (t.status === 'in_progress' ? 'In progress' : 'Not started');
+        return '' +
+          '<div class="tp-task-chip" data-priority="' + pr + '">' +
+          '<span class="tp-tag"></span>' +
+          '<span>' + title + '</span>' +
+          '<span class="tp-small">· ' + names + '</span>' +
+          '<span class="tp-status-pill" data-status="' + t.status + '">' + statusLabel + '</span>' +
+          '<select data-task-status="' + t.id + '" class="tp-small ms-auto" style="background: transparent; border: none; color: var(--tp-muted);">' +
+          '<option value="not_started"' + (t.status === 'not_started' ? ' selected' : '') + '>Not started</option>' +
+          '<option value="in_progress"' + (t.status === 'in_progress' ? ' selected' : '') + '>In progress</option>' +
+          '<option value="completed"' + (t.status === 'completed' ? ' selected' : '') + '>Completed</option>' +
+          '</select>' +
+          '</div>';
+      }
+
+      function renderWeekView(tasks) {
+        if (!planState.startDate) {
+          calendarBody.innerHTML = '<div class="tp-empty-state">Select a weekly plan period and save it first.</div>';
+          return;
+        }
+        var start = parseYmdLocalToDate(planState.startDate);
+        if (!start) {
+          calendarBody.innerHTML = '<div class="tp-empty-state">Invalid plan start date.</div>';
+          return;
+        }
+        var days = [];
+        for (var i = 0; i < 7; i++) {
+          var d = new Date(start);
+          d.setDate(start.getDate() + i);
+          days.push(d);
+        }
+        var html = '<div class="tp-gantt-header">' +
+          '<span>Week view – per day</span>' +
+          '<div class="tp-gantt-scale"><span>Mon</span><span>Wed</span><span>Fri</span><span>Sun</span></div>' +
+          '</div><div class="tp-gantt-body">';
+
+        days.forEach(function (d) {
+          var dStr = fmtDate(d);
+          var dayTasks = applyFilters(tasks.filter(function (t) { return isInSpan(t, dStr); }));
+          html += '<div class="tp-gantt-row">';
+          html += '<div class="tp-gantt-person">' +
+            d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }) +
+            '</div>';
+          html += '<div class="tp-gantt-track">';
+          if (!dayTasks.length) {
+            html += '<span class="tp-small text-muted ms-1">No tasks</span>';
+          } else {
+            dayTasks = sortTasksForGantt(dayTasks);
+            dayTasks.forEach(function (t) {
+              html += '<span class="tp-gantt-bar" data-task-id="' + t.id + '" data-priority="' + (t.priority || 'medium') + '">' +
+                '<span class="tp-gantt-status-dot" data-status="' + (t.status || 'not_started') + '"></span>' +
+                '<span>' + t.time + '</span>' +
+                '<span>' + t.title + '</span>' +
+                '</span>';
+            });
+          }
+          html += '</div></div>';
+        });
+
+        html += '</div>';
+        calendarBody.innerHTML = html;
+      }
+
+      function renderMonthView(tasks) {
+        if (!planState.startDate) {
+          calendarBody.innerHTML = '<div class="tp-empty-state">Select a monthly plan period and save it first.</div>';
+          return;
+        }
+        var start = parseYmdLocalToDate(planState.startDate);
+        if (!start) {
+          calendarBody.innerHTML = '<div class="tp-empty-state">Invalid plan start date.</div>';
+          return;
+        }
+        var label = fmtMonthYear(start);
+        var first = new Date(start.getFullYear(), start.getMonth(), 1);
+        var last = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+        var daysInMonth = last.getDate();
+
+        var html = '<div class="tp-gantt-header">' +
+          '<span>' + label + ' – per day</span>' +
+          '<div class="tp-gantt-scale"><span>1</span><span>10</span><span>20</span><span>' + daysInMonth + '</span></div>' +
+          '</div><div class="tp-gantt-body">';
+
+        for (var d = 1; d <= daysInMonth; d++) {
+          var current = new Date(start.getFullYear(), start.getMonth(), d);
+          var dStr = fmtDate(current);
+          var dayTasks = applyFilters(tasks.filter(function (t) { return isInSpan(t, dStr); }));
+          html += '<div class="tp-gantt-row">';
+          html += '<div class="tp-gantt-person">' + current.getDate() + ' ' + current.toLocaleDateString(undefined, { month: 'short' }) + '</div>';
+          html += '<div class="tp-gantt-track">';
+          if (!dayTasks.length) {
+            html += '<span class="tp-small text-muted ms-1">No tasks</span>';
+          } else {
+            dayTasks = sortTasksForGantt(dayTasks);
+            dayTasks.forEach(function (t) {
+              html += '<span class="tp-gantt-bar" data-task-id="' + t.id + '" data-priority="' + (t.priority || 'medium') + '">' +
+                '<span class="tp-gantt-status-dot" data-status="' + (t.status || 'not_started') + '"></span>' +
+                '<span>' + t.time + '</span>' +
+                '<span>' + t.title + '</span>' +
+                '</span>';
+            });
+          }
+          html += '</div></div>';
+        }
+
+        html += '</div>';
+        calendarBody.innerHTML = html;
+      }
+
+      function renderCalendar() {
+        if (!planState.tasks.length) {
+          calendarBody.innerHTML = '<div class="tp-empty-state">No tasks in this plan yet. Add tasks and click Save Task to see them in the calendar.</div>';
+          updateGanttSummary();
+          renderKanban();
+          return;
+        }
+        var view = calendarTabs.querySelector('.tp-tab-btn.active').getAttribute('data-view') || 'daily';
+        if (view === 'daily') renderDayView(planState.tasks);
+        else if (view === 'weekly') renderWeekView(planState.tasks);
+        else renderMonthView(planState.tasks);
+        updateGanttSummary();
+        renderKanban();
+      }
+
+      if (btnAddAssignee) btnAddAssignee.addEventListener('click', addAssigneeFromInput);
+      if (btnSavePlan) btnSavePlan.addEventListener('click', saveTaskFromForm);
+      if (btnClearPlan) btnClearPlan.addEventListener('click', clearCurrentPlan);
+
+      if (calendarTabs) {
+        calendarTabs.addEventListener('click', function (e) {
+          var btn = e.target.closest('.tp-tab-btn');
+          if (!btn) return;
+          var all = calendarTabs.querySelectorAll('.tp-tab-btn');
+          for (var i = 0; i < all.length; i++) all[i].classList.remove('active');
+          btn.classList.add('active');
+          renderCalendar();
+        });
+      }
+
+      // Open modal when clicking a bar in Gantt
+      if (calendarBody) {
+        calendarBody.addEventListener('click', function (e) {
+          var bar = e.target.closest('.tp-gantt-bar');
+          if (!bar) return;
+          var id = bar.getAttribute('data-task-id');
+          if (!id) return;
+          openTaskModal(id);
+        });
+      }
+
+      // Open modal when clicking a card in Kanban
+      var kanbanBoard = document.getElementById('tp-kanban-board');
+      if (kanbanBoard) {
+        kanbanBoard.addEventListener('click', function (e) {
+          var card = e.target.closest('.tp-kanban-card');
+          if (!card) return;
+          var id = card.getAttribute('data-task-id');
+          if (!id) return;
+          openTaskModal(id);
+        });
+      }
+
+      if (filterPerson) filterPerson.addEventListener('change', renderCalendar);
+      if (filterPriority) filterPriority.addEventListener('change', renderCalendar);
+      if (filterStatus) filterStatus.addEventListener('change', renderCalendar);
+
+      // Initial load: use backend as source of truth.
+      loadPlanFromBackendLatest().then(function () {
+        updateFiltersOptions();
+        updateAssigneeDatalist();
+        renderAssignedSelectedPills();
+        renderCalendar();
+
+        // Populate assignees from DB (manager company) for "Assigned to *".
+        // This is async so UI renders immediately even if backend is slow.
+        return loadOperativesFromDbForAssignees().then(function () {
+          updateAssigneeDatalist();
+        });
+      }).catch(function () {
+        showToast('Backend not available', 'Planning data could not be loaded.', 'error');
+        updateFiltersOptions();
+        updateAssigneeDatalist();
+        renderAssignedSelectedPills();
+        renderCalendar();
+      });
+    })();
+  </script>
+</body>
+</html>
+
