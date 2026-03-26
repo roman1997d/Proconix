@@ -12,9 +12,9 @@
   <div id="op-deactivated-block" class="op-deactivated-block d-none" aria-live="polite">
     <div class="op-deactivated-card">
       <div class="op-deactivated-icon"><i class="bi bi-person-x"></i></div>
-      <h1 class="op-deactivated-title">Contul tău a fost dezactivat</h1>
-      <p class="op-deactivated-text">Nu ai acces la dashboard. Contactează managerul.</p>
-      <button type="button" class="op-btn op-btn-primary" id="op-deactivated-logout">Înapoi la login</button>
+      <h1 class="op-deactivated-title">Your account has been deactivated</h1>
+      <p class="op-deactivated-text">You no longer have access to this dashboard. Contact your manager.</p>
+      <button type="button" class="op-btn op-btn-primary" id="op-deactivated-logout">Back to login</button>
     </div>
   </div>
 
@@ -146,69 +146,85 @@
               <input type="text" id="op-wl-project" readonly placeholder="Your assigned project">
               <span class="op-field-hint">Assigned to you – cannot be changed</span>
             </div>
-            <div class="op-field-row">
-              <div class="op-field">
-                <label for="op-wl-block">Block</label>
-                <input type="text" id="op-wl-block" placeholder="A">
-              </div>
-              <div class="op-field">
-                <label for="op-wl-floor">Floor</label>
-                <input type="text" id="op-wl-floor" placeholder="1">
-              </div>
-            </div>
-            <div class="op-field-row">
-              <div class="op-field">
-                <label for="op-wl-apartment">Apartment / Unit</label>
-                <input type="text" id="op-wl-apartment" placeholder="101">
-              </div>
-              <div class="op-field">
-                <label for="op-wl-zone">Zone</label>
-                <input type="text" id="op-wl-zone" placeholder="North">
-              </div>
-            </div>
             <div class="op-field">
               <label for="op-wl-work-type">Work type</label>
               <select id="op-wl-work-type">
                 <option value="">Select…</option>
-                <option value="Plastering">Plastering</option>
-                <option value="Drylining">Drylining</option>
-                <option value="Painting">Painting</option>
-                <option value="Electricity">Electricity</option>
-                <option value="Plumbing">Plumbing</option>
-                <option value="Carpentry">Carpentry</option>
-                <option value="Other">Other</option>
               </select>
             </div>
             <div class="op-field-row">
               <div class="op-field">
-                <label for="op-wl-quantity">Quantity</label>
-                <input type="number" id="op-wl-quantity" min="0" step="any" placeholder="0">
+                <label for="op-wl-total-before-tax">Total before tax (£)</label>
+                <input type="number" id="op-wl-total-before-tax" min="0" step="0.01" placeholder="0.00">
               </div>
               <div class="op-field">
-                <label for="op-wl-unit-price">Unit price (£)</label>
-                <input type="number" id="op-wl-unit-price" min="0" step="0.01" placeholder="0.00">
-              </div>
-              <div class="op-field">
-                <label for="op-wl-total">Total (£)</label>
-                <input type="number" id="op-wl-total" min="0" step="0.01" placeholder="0.00">
+                <label for="op-wl-total-after-tax">Total after tax (£)</label>
+                <input type="number" id="op-wl-total-after-tax" readonly placeholder="0.00">
               </div>
             </div>
             <div class="op-field">
-              <label for="op-wl-description">Description of work</label>
-              <textarea id="op-wl-description" rows="3" placeholder="What was done"></textarea>
+              <label for="op-wl-description">Describe your jobs <span class="op-required">*</span></label>
+              <textarea id="op-wl-description" rows="3" placeholder="What was done" required></textarea>
             </div>
             <div class="op-field">
-              <label for="op-wl-photos">Photos (optional, max 5)</label>
-              <input type="file" id="op-wl-photos" accept="image/*" multiple>
-              <div id="op-wl-photo-list" class="op-wl-file-list"></div>
+              <label class="op-field-label">Choose workflow</label>
+              <div class="op-wl-flow-buttons">
+                <button type="button" class="op-btn op-btn-secondary op-wl-flow-btn" id="op-btn-flow-price-work">Price Work</button>
+                <button type="button" class="op-btn op-btn-secondary op-wl-flow-btn" id="op-btn-flow-time-sheet">Time Sheet</button>
+              </div>
             </div>
-            <div class="op-field">
-              <label for="op-wl-document">Invoice / document (PDF or Excel)</label>
-              <input type="file" id="op-wl-document" accept=".pdf,.xlsx,.xls">
+            <div class="op-field" id="op-wl-price-upload-wrap">
+              <label for="op-wl-document">Price Work file (PDF / Excel / image)</label>
+              <input type="file" id="op-wl-document" accept=".pdf,.xlsx,.xls,image/*">
               <div id="op-wl-document-name" class="op-wl-file-name d-none"></div>
+              <a id="op-wl-generated-pdf-link" class="op-wl-file-name d-none" href="#" target="_blank" rel="noopener">Download generated report</a>
+              <input type="hidden" id="op-wl-invoice-path">
+            </div>
+            <div class="op-field d-none" id="op-wl-timesheet-wrap">
+              <button type="button" class="op-btn op-btn-secondary op-btn-sm op-wl-report-btn" id="op-btn-create-work-report">
+                Open Time Sheet Jobs Builder
+              </button>
             </div>
             <div id="op-worklog-feedback" class="op-feedback d-none"></div>
             <button type="submit" class="op-btn op-btn-primary">Submit for manager review</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Generate Work Report -->
+  <div class="op-modal op-modal-worklog" id="op-modal-work-report" aria-hidden="true" role="dialog">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog op-modal-dialog-worklog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3>Time Sheet Jobs Builder</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <form id="op-form-work-report">
+            <div class="op-field">
+              <label for="op-wr-notes">Extra notes / manager comments</label>
+              <textarea id="op-wr-notes" rows="3" placeholder="Optional notes"></textarea>
+            </div>
+            <div class="op-field-row">
+              <div class="op-field">
+                <label for="op-wr-period-from">For period of time (from) <span class="op-required">*</span></label>
+                <input type="date" id="op-wr-period-from" required>
+              </div>
+              <div class="op-field">
+                <label for="op-wr-period-to">For period of time (to) <span class="op-required">*</span></label>
+                <input type="date" id="op-wr-period-to" required>
+              </div>
+            </div>
+            <div id="op-wr-jobs"></div>
+            <div class="op-field">
+              <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-wr-add-job">Add another job</button>
+            </div>
+
+            <div id="op-work-report-feedback" class="op-feedback d-none"></div>
+            <button type="submit" class="op-btn op-btn-primary">Generate Time Sheet Report</button>
           </form>
         </div>
       </div>
@@ -277,6 +293,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="js/operative_dashboard.js"></script>
 </body>
 </html>

@@ -65,6 +65,9 @@ Ce trebuie să funcționeze și cum se verifică, pe fluxuri principale.
 | Scenariu | Pași | Rezultat așteptat |
 |----------|------|--------------------|
 | Acces cu passkey | Work Logs → introducere passkey → Access | Dacă passkey corect: conținutul se afișează; GET /api/worklogs, /api/worklogs/workers |
+| Ștergere definitivă work log | Manager → Job Details → Delete permanently → confirmare | DELETE /api/worklogs/:id — rând șters; fișiere `/uploads/...` asociate eliminate (dacă există) |
+| Arhivare operativ | Operativ → My work entries → Archive | POST /api/operatives/work-log/:id/archive — dispare din lista operativului; manager vede badge „Operative archived” |
+| PDF pontaj | Operativ → Time Sheet → Generate (backend activ) | POST /api/operatives/timesheet/generate → PDF în uploads; rezumat cu perioadă dd/mm/yy și Total (before tax) |
 | Listă și filtre | Selectare worker, dată from/to, proiect, status, search | Lista se filtrează conform parametrilor |
 | Detalii job | Click pe un job | GET /api/worklogs/:id; modal cu detalii |
 | Editare job | În modal → Edit → modificare quantity/unit price/total → Save | PATCH /api/worklogs/:id 200; edit_history actualizat |

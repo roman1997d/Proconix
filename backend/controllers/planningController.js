@@ -201,7 +201,9 @@ async function upsertPlanTasks(req, res) {
     console.error('upsertPlanTasks error:', err);
     try {
       await pool.query('ROLLBACK');
-    } catch (_) {}
+    } catch (_) {
+      // Ignore rollback errors
+    }
     return res.status(500).json({ success: false, message: 'Failed to upsert plan tasks.' });
   }
 }

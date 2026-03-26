@@ -145,6 +145,12 @@
       badge.className = statusClass(job.status);
       badge.textContent = statusLabel(job.status);
       statusCell.appendChild(badge);
+      if (job.operativeArchived) {
+        var oa = document.createElement('span');
+        oa.className = 'worklogs-badge-operative-archived';
+        oa.textContent = 'Operative archived';
+        statusCell.appendChild(oa);
+      }
       if (job.workWasEdited) {
         var ed = document.createElement('span');
         ed.className = 'worklogs-badge-edited';
@@ -195,12 +201,39 @@
     html += '<dt>Total</dt><dd>£' + total + '</dd>';
     html += '<dt>Description</dt><dd>' + (job.description || '—') + '</dd>';
     html += '<dt>Submitted</dt><dd>' + submitted + '</dd>';
+    if (job.operativeArchived) {
+      html += '<dt>Note</dt><dd>Operative archived this entry (hidden in operative dashboard).</dd>';
+    }
     html += '</dl>';
     html += '<div class="worklogs-details-invoice">';
-    html += '<p class="worklogs-invoice-text">Lucrătorul a încărcat un invoice file.</p>';
-    html += '<button type="button" class="btn-worklogs btn-worklogs-primary worklogs-btn-download-invoice" data-job-id="' + (job.jobId || '') + '"><i class="bi bi-download"></i> Descarcă file</button>';
+    var invoicePath = job.invoiceFilePath || job.invoice_file_path || '';
+    if (invoicePath) {
+      html += '<p class="worklogs-invoice-text">The worker uploaded an invoice file.</p>';
+      html += '<button type="button" class="btn-worklogs btn-worklogs-primary worklogs-btn-download-invoice" data-job-id="' + (job.jobId || '') + '" data-invoice-path="' + invoicePath + '"><i class="bi bi-download"></i> Download file</button>';
+    } else {
+      html += '<p class="worklogs-invoice-text">No invoice file uploaded yet.</p>';
+      html += '<button type="button" class="btn-worklogs btn-worklogs-primary worklogs-btn-download-invoice" disabled><i class="bi bi-download"></i> Download file</button>';
+    }
     html += '</div>';
-    if (job.photoUrls && job.photoUrls.length) {
+    if (job.timesheetJobs && Array.isArray(job.timesheetJobs) && job.timesheetJobs.length) {
+      html += '<dt>Photos</dt><dd>';
+      job.timesheetJobs.forEach(function (tj, tjIdx) {
+        var photos = tj && Array.isArray(tj.photos) ? tj.photos : [];
+        if (!photos.length) return;
+        html +=
+          '<div style="margin-top:10px;">' +
+          '<div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:6px;">Job ' +
+          (tjIdx + 1) +
+          '</div>' +
+          '<div class="worklogs-details-photos">';
+        photos.forEach(function (url, idx) {
+          html +=
+            '<img src="' + url + '" alt="Photo ' + (idx + 1) + '" data-url="' + url + '" class="worklogs-photo-thumb">';
+        });
+        html += '</div></div>';
+      });
+      html += '</dd>';
+    } else if (job.photoUrls && job.photoUrls.length) {
       html += '<dt>Photos</dt><dd><div class="worklogs-details-photos">';
       job.photoUrls.forEach(function (url, idx) {
         html += '<img src="' + url + '" alt="Photo ' + (idx + 1) + '" data-url="' + url + '" class="worklogs-photo-thumb">';
@@ -222,18 +255,16 @@
       });
     });
 
-    // Descarcă file – simulated download
+    // Download file
     content.querySelectorAll('.worklogs-btn-download-invoice').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var jobId = (job && job.jobId) || btn.getAttribute('data-job-id') || 'job';
-        var filename = 'invoice-' + jobId + '.pdf';
-        var text = 'Invoice for job ' + jobId + '\n\nGenerated from Work Logs.';
-        var blob = new Blob([text], { type: 'application/pdf' });
+        var invoicePath = btn.getAttribute('data-invoice-path') || (job && job.invoiceFilePath) || '';
+        if (!invoicePath) return;
+        var filename = String(invoicePath).split('/').pop() || 'invoice.pdf';
         var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
+        a.href = invoicePath;
         a.download = filename;
         a.click();
-        URL.revokeObjectURL(a.href);
       });
     });
   }
@@ -480,6 +511,30 @@
             alert('Job ' + (jobId || id) + ' rejected. Worker will be notified.');
           })
           .catch(function () { alert('Failed to reject job.'); });
+      });
+
+      var detailsDelete = document.getElementById('worklogs-details-btn-delete');
+      if (detailsDelete) detailsDelete.addEventListener('click', function () {
+        var content = document.getElementById('worklogs-details-content');
+        var id = content && content.dataset.id;
+        var jobId = content && content.dataset.jobId;
+        if (!id || !headers) return;
+        var msg = 'Delete this work log entry permanently?\n\n' +
+          'Job: ' + (jobId || id) + '\n\n' +
+          'This will remove the database record and delete all related files on the server (photos, PDF / invoice). This cannot be undone.';
+        if (!window.confirm(msg)) return;
+        fetch('/api/worklogs/' + id, { method: 'DELETE', headers: headers })
+          .then(function (res) { return res.json().then(function (body) { return { ok: res.ok, body: body }; }); })
+          .then(function (r) {
+            if (!r.ok || !r.body || !r.body.success) {
+              var errMsg = (r.body && r.body.message) ? r.body.message : 'Delete failed.';
+              alert(errMsg);
+              return;
+            }
+            document.getElementById('worklogs-modal-details').classList.remove('is-open');
+            refreshAllFromApi();
+          })
+          .catch(function () { alert('Failed to delete job.'); });
       });
 
       // Edit modal: Save (API)

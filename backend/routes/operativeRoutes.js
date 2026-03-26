@@ -31,7 +31,10 @@ const {
   getMyWorkLogs,
   workLogUpload,
   createWorkLog,
+  archiveMyWorkLog,
 } = require('../controllers/operativeDashboardController');
+
+const { generateTimesheetPdf, generateWorkReportPdf } = require('../controllers/pdfKitReportsController');
 const {
   uploadIssueFile,
   uploadDocumentFile,
@@ -75,5 +78,10 @@ router.post('/uploads', requireOperativeAuth, uploadDocumentFile, injectFileUrl(
 router.get('/work-log', requireOperativeAuth, getMyWorkLogs);
 router.post('/work-log/upload', requireOperativeAuth, uploadWorklogFile, workLogUpload);
 router.post('/work-log', requireOperativeAuth, createWorkLog);
+router.post('/work-log/:id/archive', requireOperativeAuth, archiveMyWorkLog);
+
+// PDF generation (backend: PDFKit)
+router.post('/timesheet/generate', requireOperativeAuth, generateTimesheetPdf);
+router.post('/work-report/generate', requireOperativeAuth, generateWorkReportPdf);
 
 module.exports = router;

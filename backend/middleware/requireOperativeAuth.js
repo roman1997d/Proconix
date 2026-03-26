@@ -6,7 +6,7 @@
 const { getSession } = require('../utils/operativeSessionStore');
 const { pool } = require('../db/pool');
 
-const DEACTIVATED_MESSAGE = 'Contul tău a fost dezactivat.';
+const DEACTIVATED_MESSAGE = 'Your account has been deactivated.';
 
 async function requireOperativeAuth(req, res, next) {
   const token =

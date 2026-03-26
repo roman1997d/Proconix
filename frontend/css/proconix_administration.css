@@ -379,6 +379,11 @@
   tab-size: 4;
 }
 
+.px-admin-sys-live-log {
+  height: 18rem;
+  max-height: 50vh;
+}
+
 /* System & health — mini chart */
 .px-admin-sys-chart-canvas {
   display: block;

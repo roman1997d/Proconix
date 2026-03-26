@@ -45,7 +45,7 @@
             clearSession();
             return Promise.reject(new Error(data.message || 'Session expired'));
           }
-          if (res.status === 403 && (data.code === 'account_deactivated' || (data.message && data.message.indexOf('dezactivat') !== -1))) {
+          if (res.status === 403 && (data.code === 'account_deactivated' || (data.message && /deactivated|dezactivat/i.test(data.message)))) {
             showDeactivatedBlock();
             return Promise.reject(new Error(data.message || 'Account deactivated'));
           }
@@ -720,11 +720,12 @@
   var modalWorklog = document.getElementById('op-modal-worklog');
   var formWorklog = document.getElementById('op-form-worklog');
   var worklogListEl = document.getElementById('op-worklog-list');
-  var photoListEl = document.getElementById('op-wl-photo-list');
-  var photosInputEl = document.getElementById('op-wl-photos');
   var documentInputEl = document.getElementById('op-wl-document');
   var documentNameEl = document.getElementById('op-wl-document-name');
-  var MAX_PHOTOS = 5;
+  var generatedPdfLinkEl = document.getElementById('op-wl-generated-pdf-link');
+  var invoicePathEl = document.getElementById('op-wl-invoice-path');
+  var modalWorkReport = document.getElementById('op-modal-work-report');
+  var formWorkReport = document.getElementById('op-form-work-report');
 
   function loadWorklogList() {
     if (!worklogListEl) return;
@@ -765,50 +766,103 @@
     worklogListEl.innerHTML = entries.slice(0, 20).map(function (e) {
       var loc = [e.project, e.block, e.floor, e.apartment, e.zone].filter(Boolean).join(' / ') || '—';
       var submitted = e.submittedAt ? formatDate(e.submittedAt) : '—';
+      var invoicePath = e.invoiceFilePath || e.invoice_file_path || '';
+      var clickableAttr = invoicePath ? ' data-op-invoice-path="' + escapeHtml(invoicePath) + '"' : '';
       return (
-        '<div class="op-worklog-item">' +
+        '<div class="op-worklog-item"' + clickableAttr + ' data-op-entry-id="' + escapeHtml(String(e.id != null ? e.id : '')) + '">' +
         '<div class="op-worklog-item-head">' +
         '<span class="op-worklog-item-id">' + escapeHtml(e.workType || 'Work') + ' – ' + escapeHtml(loc) + '</span>' +
         '<span class="op-worklog-item-status">' + escapeHtml(e.status || 'Pending') + '</span>' +
         '</div>' +
-        '<div class="op-worklog-item-meta">' + (e.jobId ? escapeHtml(e.jobId) + ' · ' : '') + escapeHtml(submitted) + ' · £' + (e.total != null ? Number(e.total).toFixed(2) : '0') + '</div>' +
+        '<div class="op-worklog-item-meta">' +
+        (e.jobId ? escapeHtml(e.jobId) + ' · ' : '') +
+        escapeHtml(submitted) +
+        ' · £' +
+        (e.total != null ? Number(e.total).toFixed(2) : '0') +
+        '</div>' +
+        '<div class="op-worklog-item-actions">' +
+        '<button type="button" class="op-btn op-btn-danger-outline op-btn-xs op-worklog-archive" data-entry-id="' +
+        escapeHtml(String(e.id != null ? e.id : '')) +
+        '">Archive</button>' +
+        '</div>' +
         '</div>'
       );
     }).join('');
   }
 
-  function renderPhotoList() {
-    if (!photoListEl || !photosInputEl) return;
-    var files = photosInputEl.files;
-    photoListEl.innerHTML = '';
-    for (var i = 0; i < Math.min(files.length, MAX_PHOTOS); i++) {
-      var name = files[i].name;
-      var div = document.createElement('div');
-      div.className = 'op-wl-file-item';
-      div.innerHTML = '<span>' + escapeHtml(name) + '</span><button type="button" data-index="' + i + '">Remove</button>';
-      photoListEl.appendChild(div);
-      div.querySelector('button').addEventListener('click', function () {
-        var idx = parseInt(this.getAttribute('data-index'), 10);
-        removeFileFromInput(photosInputEl, idx);
-        renderPhotoList();
-      });
-    }
-    if (files.length > MAX_PHOTOS && photoListEl) {
-      var warn = document.createElement('div');
-      warn.className = 'op-wl-file-item';
-      warn.style.color = 'var(--op-danger)';
-      warn.textContent = 'Only first ' + MAX_PHOTOS + ' photos will be used.';
-      photoListEl.appendChild(warn);
-    }
+  if (worklogListEl) {
+    worklogListEl.addEventListener('click', function (e) {
+      var archiveBtn = e.target.closest('.op-worklog-archive');
+      if (archiveBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        var entryId = archiveBtn.getAttribute('data-entry-id');
+        if (!entryId) return;
+        archiveBtn.disabled = true;
+        api('/work-log/' + encodeURIComponent(entryId) + '/archive', { method: 'POST' })
+          .then(function (r) {
+            if (r.data && r.data.success) {
+              loadWorklogList();
+              return;
+            }
+            archiveBtn.disabled = false;
+          })
+          .catch(function () {
+            archiveBtn.disabled = false;
+          });
+        return;
+      }
+      var item = e.target.closest('.op-worklog-item');
+      if (!item) return;
+      var p = item.getAttribute('data-op-invoice-path');
+      if (!p) return;
+      window.open(p, '_blank', 'noopener');
+    });
   }
 
-  function removeFileFromInput(input, index) {
-    if (!input || !input.files) return;
-    var dt = new DataTransfer();
-    for (var i = 0; i < input.files.length; i++) {
-      if (i !== index) dt.items.add(input.files[i]);
-    }
-    input.files = dt.files;
+  var activeWorklogFlow = 'price';
+  var fallbackWorkTypes = ['Plastering', 'Drylining', 'Fixing', 'Painting', 'Electricity', 'Plumbing', 'Carpentry', 'Other'];
+
+  function setWorklogFlow(flow) {
+    activeWorklogFlow = flow === 'timesheet' ? 'timesheet' : 'price';
+    var priceWrap = document.getElementById('op-wl-price-upload-wrap');
+    var tsWrap = document.getElementById('op-wl-timesheet-wrap');
+    var btnPrice = document.getElementById('op-btn-flow-price-work');
+    var btnTs = document.getElementById('op-btn-flow-time-sheet');
+    if (priceWrap) priceWrap.classList.toggle('d-none', activeWorklogFlow !== 'price');
+    if (tsWrap) tsWrap.classList.toggle('d-none', activeWorklogFlow !== 'timesheet');
+    if (btnPrice) btnPrice.classList.toggle('op-btn-primary', activeWorklogFlow === 'price');
+    if (btnTs) btnTs.classList.toggle('op-btn-primary', activeWorklogFlow === 'timesheet');
+  }
+
+  function renderWorkTypes(list) {
+    var sel = document.getElementById('op-wl-work-type');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Select…</option>';
+    (list || []).forEach(function (t) {
+      var opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = t;
+      sel.appendChild(opt);
+    });
+  }
+
+  function loadWorkTypes() {
+    return api('/work-types')
+      .then(function (r) {
+        var arr = (r.data && (r.data.workTypes || r.data.work_types || r.data.items)) || [];
+        arr = Array.isArray(arr) ? arr : [];
+        var normalized = arr
+          .map(function (x) {
+            return typeof x === 'string' ? x : x && (x.name || x.label || x.value);
+          })
+          .filter(Boolean);
+        if (!normalized.length) normalized = fallbackWorkTypes;
+        renderWorkTypes(normalized);
+      })
+      .catch(function () {
+        renderWorkTypes(fallbackWorkTypes);
+      });
   }
 
   function renderDocumentName() {
@@ -816,27 +870,559 @@
     if (documentInputEl.files && documentInputEl.files[0]) {
       documentNameEl.textContent = documentInputEl.files[0].name;
       documentNameEl.classList.remove('d-none');
+      if (generatedPdfLinkEl) {
+        generatedPdfLinkEl.classList.add('d-none');
+        generatedPdfLinkEl.removeAttribute('href');
+      }
     } else {
       documentNameEl.textContent = '';
       documentNameEl.classList.add('d-none');
     }
   }
 
-  if (photosInputEl) {
-    photosInputEl.addEventListener('change', function () {
-      if (this.files && this.files.length > MAX_PHOTOS) {
-        var dt = new DataTransfer();
-        for (var i = 0; i < MAX_PHOTOS; i++) dt.items.add(this.files[i]);
-        this.files = dt.files;
-      }
-      renderPhotoList();
+  if (documentInputEl) {
+    documentInputEl.addEventListener('change', function () {
+      if (invoicePathEl) invoicePathEl.value = '';
+      renderDocumentName();
     });
   }
-  if (documentInputEl) {
-    documentInputEl.addEventListener('change', renderDocumentName);
+
+  function addTimesheetJobItem() {
+    var wrap = document.getElementById('op-wr-jobs');
+    if (!wrap) return;
+    var idx = wrap.querySelectorAll('.op-wr-job-card').length + 1;
+    var card = document.createElement('div');
+    card.className = 'op-wr-job-card';
+    card.__photoFiles = [];
+    var MAX_JOB_PHOTOS = 15;
+    card.innerHTML =
+      '<div class="op-wr-job-title">Job #' + idx + '</div>' +
+      '<div class="op-field"><label>Location</label><input type="text" class="op-wr-job-location" placeholder="Block A / Floor 1 / Zone North"></div>' +
+      '<div class="op-field"><label>Description</label><textarea rows="2" class="op-wr-job-description" placeholder="Describe this job"></textarea></div>' +
+      '<div class="op-field-row">' +
+      '<div class="op-field"><label>Duration</label><input type="number" min="0" step="0.25" class="op-wr-job-duration" placeholder="0"></div>' +
+      '<div class="op-field"><label>Unit</label><select class="op-wr-job-unit"><option value="hours">Hours</option><option value="days">Days</option></select></div>' +
+      '</div>' +
+      '<div class="op-field-row">' +
+      '<div class="op-field"><label>Job stage</label><select class="op-wr-job-stage"><option value="ongoing">Ongoing</option><option value="complete">Complete</option></select></div>' +
+      '<div class="op-field op-wr-progress-wrap"><label>Progress %</label><input type="number" class="op-wr-job-progress" min="0" max="100" step="1" value="0"></div>' +
+      '</div>' +
+      '<div class="op-field"><label>Photos</label>' +
+      '<input type="file" class="op-wr-job-photos-input" accept="image/*" multiple style="display:none">' +
+      '<div class="op-wr-job-add-photo-row">' +
+      '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-wr-job-add-more">Add more pictures</button>' +
+      '<span class="op-wr-job-photo-count">0 / ' +
+      String(MAX_JOB_PHOTOS) +
+      '</span>' +
+      '</div>' +
+      '<div class="op-wr-job-photos-preview"></div>' +
+      '</div>' +
+      '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-wr-remove-job">Remove job</button>';
+    wrap.appendChild(card);
+    var stageEl = card.querySelector('.op-wr-job-stage');
+    var progressWrap = card.querySelector('.op-wr-progress-wrap');
+    stageEl.addEventListener('change', function () {
+      progressWrap.classList.toggle('d-none', stageEl.value !== 'ongoing');
+    });
+
+    var photosInput = card.querySelector('.op-wr-job-photos-input');
+    var btnAddMore = card.querySelector('.op-wr-job-add-more');
+    var countEl = card.querySelector('.op-wr-job-photo-count');
+    var previewEl = card.querySelector('.op-wr-job-photos-preview');
+
+    function renderPhotoPreview() {
+      if (!previewEl) return;
+      previewEl.innerHTML = '';
+      (card.__photoFiles || []).forEach(function (f) {
+        var img = document.createElement('img');
+        img.src = URL.createObjectURL(f);
+        img.alt = f.name;
+        previewEl.appendChild(img);
+      });
+      if (countEl) {
+        countEl.textContent = String((card.__photoFiles || []).length) + ' / ' + String(MAX_JOB_PHOTOS);
+      }
+    }
+
+    if (btnAddMore && photosInput) {
+      btnAddMore.addEventListener('click', function () {
+        photosInput.click();
+      });
+      photosInput.addEventListener('change', function () {
+        var incoming = Array.from(this.files || []);
+        if (incoming.length === 0) return;
+        var remaining = MAX_JOB_PHOTOS - (card.__photoFiles || []).length;
+        if (remaining <= 0) {
+          this.value = '';
+          renderPhotoPreview();
+          return;
+        }
+        incoming = incoming.slice(0, remaining);
+        card.__photoFiles = (card.__photoFiles || []).concat(incoming);
+        this.value = '';
+        renderPhotoPreview();
+      });
+    }
+
+    card.querySelector('.op-wr-remove-job').addEventListener('click', function () {
+      card.remove();
+    });
+    renderPhotoPreview();
+  }
+
+  function openWorkReportModal() {
+    var jobsWrap = document.getElementById('op-wr-jobs');
+    if (jobsWrap) jobsWrap.innerHTML = '';
+    addTimesheetJobItem();
+    var notesEl = document.getElementById('op-wr-notes');
+    if (notesEl) notesEl.value = '';
+    var fromEl = document.getElementById('op-wr-period-from');
+    var toEl = document.getElementById('op-wr-period-to');
+    var today = new Date();
+    var d =
+      today.getFullYear() +
+      '-' +
+      String(today.getMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(today.getDate()).padStart(2, '0');
+    if (fromEl) fromEl.value = d;
+    if (toEl) toEl.value = d;
+    hideFeedback(document.getElementById('op-work-report-feedback'));
+    openModal(modalWorkReport);
+  }
+
+  function readFileAsDataURL(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        resolve(reader.result);
+      };
+      reader.onerror = function () {
+        reject(new Error('Cannot read image file.'));
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function generateAndUploadWorkReport() {
+    var feedback = document.getElementById('op-work-report-feedback');
+
+    var jobCards = Array.from(document.querySelectorAll('#op-wr-jobs .op-wr-job-card'));
+    var jobs = jobCards.map(function (card) {
+      var durVal = parseFloat(card.querySelector('.op-wr-job-duration').value);
+      var durUnit = card.querySelector('.op-wr-job-unit').value || 'hours';
+      var totalHours = !isNaN(durVal) ? (durUnit === 'days' ? durVal * 8 : durVal) : 0;
+      var photos = card.__photoFiles || [];
+      return {
+        location: (card.querySelector('.op-wr-job-location').value || '').trim() || null,
+        description: (card.querySelector('.op-wr-job-description').value || '').trim() || null,
+        duration: !isNaN(durVal) ? durVal : null,
+        duration_unit: durUnit,
+        totalHours: totalHours,
+        stage: card.querySelector('.op-wr-job-stage').value || 'ongoing',
+        progress_pct: parseInt(card.querySelector('.op-wr-job-progress').value || '0', 10),
+        photoFiles: photos,
+        photoPaths: [],
+        photoDataUrls: [],
+      };
+    });
+
+    if (!jobs.length) {
+      showFeedback(feedback, 'Add at least one job item.', true);
+      return Promise.reject(new Error('No jobs'));
+    }
+
+    var beforeTax = parseFloat(document.getElementById('op-wl-total-before-tax').value);
+    var afterTax = parseFloat(document.getElementById('op-wl-total-after-tax').value);
+    var workType = (document.getElementById('op-wl-work-type').value || '').trim() || null;
+    var description = (document.getElementById('op-wl-description').value || '').trim() || null;
+    var notes = (document.getElementById('op-wr-notes').value || '').trim() || null;
+    var periodFromEl = document.getElementById('op-wr-period-from');
+    var periodToEl = document.getElementById('op-wr-period-to');
+    var periodFrom = periodFromEl ? (periodFromEl.value || '').trim() : '';
+    var periodTo = periodToEl ? (periodToEl.value || '').trim() : '';
+    if (!periodFrom || !periodTo) {
+      showFeedback(feedback, 'Please select work period dates (from/to).', true);
+      return Promise.reject(new Error('Missing period dates'));
+    }
+
+    var worker = getOperativeName();
+    var projectInput = document.getElementById('op-wl-project');
+    var projectName = (currentWorklogProject && (currentWorklogProject.name || currentWorklogProject.project_name)) || (projectInput && projectInput.value) || '—';
+
+    var fileDate = new Date().toISOString().slice(0, 10);
+    var pdfFileName = 'work_report_' + fileDate + '.pdf';
+
+    function uploadPdfBlob(blob, filename) {
+      var fd = new FormData();
+      var file = new File([blob], filename, { type: 'application/pdf' });
+      fd.append('file', file);
+      return api('/work-log/upload', { method: 'POST', body: fd }).then(function (up) {
+        if (!up.data || !up.data.success || !up.data.path) {
+          throw new Error((up.data && up.data.message) || 'Report upload failed.');
+        }
+        if (invoicePathEl) invoicePathEl.value = up.data.path;
+        if (documentInputEl) documentInputEl.value = '';
+        if (documentNameEl) {
+          documentNameEl.textContent = filename + ' (generated)';
+          documentNameEl.classList.remove('d-none');
+        }
+        if (generatedPdfLinkEl) {
+          generatedPdfLinkEl.href = up.data.path;
+          generatedPdfLinkEl.classList.remove('d-none');
+        }
+        closeModal(modalWorkReport);
+        showFeedback(document.getElementById('op-worklog-feedback'), 'PDF report attached to this entry.', false);
+        return up;
+      });
+    }
+
+    function readAllJobPhotos() {
+      return Promise.all(
+        jobs.map(function (job) {
+          return Promise.all(
+            (job.photoFiles || []).map(function (f) {
+              return readFileAsDataURL(f);
+            })
+          ).then(function (dataUrls) {
+            job.photoDataUrls = dataUrls || [];
+          });
+        })
+      );
+    }
+
+    function uploadWorklogFile(file) {
+      var fd = new FormData();
+      fd.append('file', file);
+      return api('/work-log/upload', { method: 'POST', body: fd }).then(function (r) {
+        if (r && r.data && r.data.success && r.data.path) return r.data.path;
+        throw new Error((r && r.data && r.data.message) || 'Upload failed');
+      });
+    }
+
+    function uploadJobPhotosToServer() {
+      return Promise.all(
+        jobs.map(function (job) {
+          var files = job.photoFiles || [];
+          return Promise.all(files.map(function (f) { return uploadWorklogFile(f); }))
+            .then(function (paths) {
+              job.photoPaths = paths || [];
+              return job.photoPaths;
+            });
+        })
+      ).then(function () {
+        pendingWorklogPhotoUrls = jobs.reduce(function (acc, j) {
+          return acc.concat(j.photoPaths || []);
+        }, []);
+        pendingWorklogTimesheetJobs = jobs.map(function (j) {
+          return {
+            location: j.location || null,
+            description: j.description || null,
+            duration: j.duration,
+            duration_unit: j.duration_unit,
+            stage: j.stage,
+            progress_pct: j.progress_pct,
+            photos: j.photoPaths || [],
+          };
+        });
+        return pendingWorklogPhotoUrls;
+      });
+    }
+
+    function imageSizeFit(maxW, maxH, w, h) {
+      if (!w || !h) return { w: maxW, h: maxH };
+      var ratio = Math.min(maxW / w, maxH / h);
+      return { w: w * ratio, h: h * ratio };
+    }
+
+    function loadImageDimensions(dataUrl) {
+      return new Promise(function (resolve, reject) {
+        var img = new Image();
+        img.onload = function () {
+          resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+        };
+        img.onerror = function () {
+          reject(new Error('Could not decode image.'));
+        };
+        img.src = dataUrl;
+      });
+    }
+
+    function generateTimesheetPdfClientSide() {
+      var jsPdfLib = window.jspdf && window.jspdf.jsPDF;
+      if (!jsPdfLib) return Promise.reject(new Error('PDF engine is not loaded.'));
+
+      var totalDaysAll = 0;
+      var totalHoursAll = 0;
+      jobs.forEach(function (j) {
+        if (!j) return;
+        var d = j.duration;
+        var u = (j.duration_unit || 'hours').toLowerCase();
+        if (d == null || isNaN(Number(d))) return;
+        if (u === 'days') totalDaysAll += Number(d);
+        else totalHoursAll += Number(d);
+      });
+
+      var fmtNumber = function (n) {
+        if (n == null || isNaN(Number(n))) return '0';
+        var x = Number(n);
+        var isInt = Math.abs(x - Math.round(x)) < 1e-9;
+        if (isInt) return String(Math.round(x));
+        return (Math.round(x * 100) / 100).toFixed(2).replace(/\.?0+$/, '');
+      };
+      var pluralize = function (val, unit) {
+        var n = Number(val);
+        if (isNaN(n)) return unit;
+        if (Math.abs(n - 1) < 1e-9) return unit.replace(/s$/i, '');
+        return unit;
+      };
+      var totalTimeText = '—';
+      if (totalDaysAll > 0 && totalHoursAll > 0) {
+        totalTimeText =
+          fmtNumber(totalDaysAll) + ' ' + pluralize(totalDaysAll, 'days') + ' and ' + fmtNumber(totalHoursAll) + ' ' + pluralize(totalHoursAll, 'hours');
+      } else if (totalDaysAll > 0) {
+        totalTimeText = fmtNumber(totalDaysAll) + ' ' + pluralize(totalDaysAll, 'days');
+      } else if (totalHoursAll > 0) {
+        totalTimeText = fmtNumber(totalHoursAll) + ' ' + pluralize(totalHoursAll, 'hours');
+      }
+
+      var periodFromEl = document.getElementById('op-wr-period-from');
+      var periodToEl = document.getElementById('op-wr-period-to');
+      var periodFrom = periodFromEl ? (periodFromEl.value || '').trim() : '';
+      var periodTo = periodToEl ? (periodToEl.value || '').trim() : '';
+      if (!periodTo) periodTo = periodFrom;
+      var htmlDateToDMYY = function (d) {
+        if (!d) return '';
+        var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d).trim());
+        if (m) return m[3] + '/' + m[2] + '/' + m[1].slice(-2);
+        return String(d);
+      };
+      var pf = htmlDateToDMYY(periodFrom);
+      var pt = htmlDateToDMYY(periodTo);
+      var periodRange = pf && pt && pf !== pt ? pf + ' to ' + pt : (pf || pt || '');
+
+      return readAllJobPhotos().then(function () {
+        var doc = new jsPdfLib({ orientation: 'p', unit: 'mm', format: 'a4' });
+        var pageW = doc.internal.pageSize.getWidth();
+        var pageH = doc.internal.pageSize.getHeight();
+        var margin = 12;
+
+        var logoDataUrl = '';
+        try {
+          logoDataUrl = window.PROCONIX_COMPANY_LOGO || localStorage.getItem('proconix_company_logo') || '';
+        } catch (e) {}
+        if (logoDataUrl && /^data:image\//i.test(logoDataUrl)) {
+          try {
+            doc.addImage(logoDataUrl, 'PNG', margin, 8, 20, 12);
+          } catch (e) {}
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.text('Proconix Time Sheet Report', margin + 24, 16);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text('Generated by Proconix', pageW - margin, 16, { align: 'right' });
+
+        doc.setFontSize(11);
+        doc.text('Operative: ' + worker, margin, 26);
+        doc.text('Project: ' + projectName, margin, 33);
+        doc.text('Work type: ' + (workType || '—'), margin, 40);
+        if (periodRange) doc.text('For period of time: ' + periodRange, margin, 47);
+        doc.text('Total (before tax): £' + (isNaN(beforeTax) ? '0.00' : beforeTax.toFixed(2)), margin, periodRange ? 54 : 47);
+        doc.text('Total time: ' + totalTimeText, margin, periodRange ? 61 : 54);
+        return Promise.all(
+          jobs.map(function (j) {
+            return Promise.all((j.photoDataUrls || []).map(loadImageDimensions))
+              .then(function (dims) {
+                j.photoDims = dims || [];
+              })
+              .catch(function () {
+                j.photoDims = [];
+              });
+          })
+        ).then(function () {
+          // Page 1: summary, Page 2+: jobs + photos grouped per job (no mixing)
+          doc.addPage();
+          var y = 20;
+          doc.setFont('helvetica', 'bold');
+          doc.text('Job list', margin, y);
+          y += 5;
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(10);
+
+          var slotW = (pageW - margin * 2 - 6) / 2;
+          var slotH = (pageH - margin * 2 - 36 - 6) / 2;
+          var slotGap = 6;
+          var photoGapY = 8;
+
+          var drawJobPhotos = function (job, jobIdx, startY) {
+            var photos = job.photoDataUrls || [];
+            var dims = job.photoDims || [];
+            if (!photos.length) return startY;
+
+            var photoTop = startY + 2;
+            if (photoTop + 2 * slotH + slotGap > pageH - 12) {
+              doc.addPage();
+              photoTop = 20;
+            }
+
+            for (var pi = 0; pi < photos.length; pi++) {
+              if (pi > 0 && pi % 4 === 0) {
+                doc.addPage();
+                photoTop = 20;
+              }
+              var idxInPage = pi % 4; // 0..3
+              var col = idxInPage % 2; // 0..1
+              var row = Math.floor(idxInPage / 2); // 0..1
+              var x = margin + col * (slotW + slotGap);
+              var yy = photoTop + row * (slotH + slotGap);
+              var d = dims[pi] || null;
+              var fit = imageSizeFit(slotW, slotH, d && d.width, d && d.height);
+              var dx = x + (slotW - fit.w) / 2;
+              var dy = yy + (slotH - fit.h) / 2;
+              var fmt = /data:image\/png/i.test(photos[pi]) ? 'PNG' : 'JPEG';
+              doc.rect(x, yy, slotW, slotH);
+              try {
+                doc.addImage(photos[pi], fmt, dx, dy, fit.w, fit.h);
+              } catch (e) {}
+            }
+
+            // Set y after the last placed photo on the last page
+            var lastIdx = (photos.length - 1) % 4;
+            var lastRow = Math.floor(lastIdx / 2);
+            var endY = photoTop + lastRow * (slotH + slotGap) + slotH + photoGapY;
+            return endY;
+          };
+
+          jobs.forEach(function (j, idx) {
+            if (y > pageH - 40) {
+              doc.addPage();
+              y = 20;
+            }
+            var stageText = j.stage === 'ongoing' ? 'Ongoing (' + j.progress_pct + '%)' : 'Complete';
+            var line =
+              (idx + 1) +
+              '. ' +
+              (j.location || '—') +
+              ' · ' +
+              (j.duration != null ? String(j.duration) + ' ' + (j.duration_unit || 'hours') : '—') +
+              ' · ' +
+              stageText;
+            doc.text(line, margin, y);
+            y += 6;
+
+            if (j.description) {
+              var parts = doc.splitTextToSize(j.description, pageW - margin * 2);
+              doc.text(parts, margin, y);
+              y += parts.length * 5 + 2;
+            }
+
+            y += 2;
+            y = drawJobPhotos(j, idx, y);
+            y += 2;
+          });
+
+          if (notes) {
+            // Notes after jobs (separate section)
+            if (y > pageH - 40) {
+              doc.addPage();
+              y = 20;
+            }
+            doc.setFont('helvetica', 'bold');
+            doc.text('Extra notes', margin, y + 2);
+            y += 7;
+            doc.setFont('helvetica', 'normal');
+            var nLines = doc.splitTextToSize(notes, pageW - margin * 2);
+            doc.text(nLines, margin, y);
+            y += nLines.length * 5 + 2;
+          }
+
+          // Footer on all pages
+          var pages = doc.getNumberOfPages();
+          for (var pn = 1; pn <= pages; pn++) {
+            doc.setPage(pn);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.text('Generated by Proconix Work Reports', pageW / 2, pageH - 12, { align: 'center' });
+            doc.text('WEB : proconix.uk', pageW / 2, pageH - 6, { align: 'center' });
+          }
+
+          return doc.output('blob');
+        });
+      });
+    }
+
+    showFeedback(feedback, 'Preparing Time Sheet report…', false);
+
+    // Upload photos to server first, then pass server paths to backend.
+    return uploadJobPhotosToServer().then(function () {
+      // Prefer backend endpoint; otherwise fallback to client-side generation.
+      var payloadJobsMeta = jobs.map(function (j) {
+        return {
+          location: j.location,
+          description: j.description,
+          duration: j.duration,
+          duration_unit: j.duration_unit,
+          totalHours: j.totalHours,
+          stage: j.stage,
+          progress_pct: j.progress_pct,
+          photos: j.photoPaths || [],
+        };
+      });
+
+      var payloadMeta = {
+        jobs: payloadJobsMeta,
+        total_before_tax: isNaN(beforeTax) ? 0 : beforeTax,
+        total_after_tax: isNaN(afterTax) ? 0 : afterTax,
+        work_type: workType,
+        notes: notes,
+        description: description,
+        period_from: periodFrom,
+        period_to: periodTo,
+        workerName: worker,
+        project: projectName,
+        logoDataUrl:
+          (typeof window !== 'undefined' &&
+            (window.PROCONIX_COMPANY_LOGO || localStorage.getItem('proconix_company_logo'))) ||
+          null,
+      };
+
+      return api('/timesheet/generate', { method: 'POST', body: JSON.stringify(payloadMeta) })
+        .then(function (r) {
+          var pdfPath = r && r.data && (r.data.pdfPath || r.data.pdfUrl || r.data.path);
+          if (r && r.data && r.data.success && pdfPath) {
+            if (invoicePathEl) invoicePathEl.value = pdfPath;
+            if (documentInputEl) documentInputEl.value = '';
+            if (documentNameEl) {
+              documentNameEl.textContent = pdfFileName + ' (generated)';
+              documentNameEl.classList.remove('d-none');
+            }
+            if (generatedPdfLinkEl) {
+              generatedPdfLinkEl.href = pdfPath;
+              generatedPdfLinkEl.classList.remove('d-none');
+            }
+            closeModal(modalWorkReport);
+            showFeedback(document.getElementById('op-worklog-feedback'), 'Time Sheet report attached to this entry.', false);
+            return null;
+          }
+          // Backend returned an error payload; fallback to frontend generation.
+          return generateTimesheetPdfClientSide().then(function (blob) {
+            return uploadPdfBlob(blob, pdfFileName);
+          });
+        })
+        .catch(function () {
+          // Network/backend error (including "endpoint not found")
+          return generateTimesheetPdfClientSide().then(function (blob) {
+            return uploadPdfBlob(blob, pdfFileName);
+          });
+        });
+    });
   }
 
   var currentWorklogProject = null;
+  var pendingWorklogPhotoUrls = [];
+  var pendingWorklogTimesheetJobs = [];
 
   function openWorklogModal() {
     document.getElementById('op-wl-worker').value = getOperativeName();
@@ -845,15 +1431,22 @@
       projectInput.value = 'Loading…';
       currentWorklogProject = null;
     }
-    ['op-wl-block', 'op-wl-floor', 'op-wl-apartment', 'op-wl-zone', 'op-wl-quantity', 'op-wl-unit-price', 'op-wl-total', 'op-wl-description'].forEach(function (id) {
+    ['op-wl-total-before-tax', 'op-wl-total-after-tax', 'op-wl-description'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.value = '';
     });
     var wt = document.getElementById('op-wl-work-type');
     if (wt) wt.value = '';
-    if (photosInputEl) photosInputEl.value = '';
     if (documentInputEl) documentInputEl.value = '';
-    renderPhotoList();
+    if (invoicePathEl) invoicePathEl.value = '';
+    pendingWorklogPhotoUrls = [];
+    pendingWorklogTimesheetJobs = [];
+    if (generatedPdfLinkEl) {
+      generatedPdfLinkEl.classList.add('d-none');
+      generatedPdfLinkEl.removeAttribute('href');
+    }
+    setWorklogFlow('price');
+    loadWorkTypes();
     renderDocumentName();
     if (documentNameEl) documentNameEl.classList.add('d-none');
     hideFeedback(document.getElementById('op-worklog-feedback'));
@@ -886,17 +1479,17 @@
       });
   }
 
-  var qtyEl = document.getElementById('op-wl-quantity');
-  var unitEl = document.getElementById('op-wl-unit-price');
-  var totalEl = document.getElementById('op-wl-total');
-  if (qtyEl && unitEl && totalEl) {
-    function calcTotal() {
-      var q = parseFloat(qtyEl.value);
-      var u = parseFloat(unitEl.value);
-      if (!isNaN(q) && !isNaN(u)) totalEl.value = (q * u).toFixed(2);
-    }
-    qtyEl.addEventListener('blur', calcTotal);
-    unitEl.addEventListener('blur', calcTotal);
+  var totalBeforeEl = document.getElementById('op-wl-total-before-tax');
+  var totalAfterEl = document.getElementById('op-wl-total-after-tax');
+  if (totalBeforeEl && totalAfterEl) {
+    totalBeforeEl.addEventListener('input', function () {
+      var before = parseFloat(totalBeforeEl.value);
+      if (isNaN(before)) {
+        totalAfterEl.value = '';
+        return;
+      }
+      totalAfterEl.value = (before * 0.8).toFixed(2);
+    });
   }
 
   if (formWorklog) {
@@ -913,13 +1506,15 @@
         showFeedback(feedback, 'Please select work type.', true);
         return;
       }
-      var quantity = parseFloat(document.getElementById('op-wl-quantity').value);
-      var unitPrice = parseFloat(document.getElementById('op-wl-unit-price').value);
-      var total = parseFloat(document.getElementById('op-wl-total').value);
-      if (isNaN(quantity)) quantity = null;
-      if (isNaN(unitPrice)) unitPrice = null;
-      if (isNaN(total) && quantity != null && unitPrice != null) total = quantity * unitPrice;
-      else if (isNaN(total)) total = null;
+      var description = (document.getElementById('op-wl-description').value || '').trim();
+      if (!description) {
+        showFeedback(feedback, 'Description is required.', true);
+        return;
+      }
+      var totalBeforeTax = parseFloat(document.getElementById('op-wl-total-before-tax').value);
+      var totalAfterTax = parseFloat(document.getElementById('op-wl-total-after-tax').value);
+      if (isNaN(totalBeforeTax)) totalBeforeTax = null;
+      if (isNaN(totalAfterTax)) totalAfterTax = null;
 
       var submitBtn = formWorklog.querySelector('button[type="submit"]');
       if (submitBtn) submitBtn.disabled = true;
@@ -934,14 +1529,12 @@
         });
       }
 
-      var photoPaths = [];
       var docPath = null;
-      var photos = photosInputEl && photosInputEl.files ? Array.from(photosInputEl.files).slice(0, MAX_PHOTOS) : [];
       var docFile = documentInputEl && documentInputEl.files && documentInputEl.files[0] ? documentInputEl.files[0] : null;
 
-      Promise.all(photos.map(uploadFile))
-        .then(function (paths) {
-          photoPaths = paths;
+      Promise.resolve()
+        .then(function () {
+          if (invoicePathEl && invoicePathEl.value) return invoicePathEl.value;
           if (docFile) return uploadFile(docFile);
           return null;
         })
@@ -950,16 +1543,19 @@
           return api('/work-log', {
             method: 'POST',
             body: JSON.stringify({
-              block: (document.getElementById('op-wl-block').value || '').trim() || null,
-              floor: (document.getElementById('op-wl-floor').value || '').trim() || null,
-              apartment: (document.getElementById('op-wl-apartment').value || '').trim() || null,
-              zone: (document.getElementById('op-wl-zone').value || '').trim() || null,
+              block: null,
+              floor: null,
+              apartment: null,
+              zone: null,
               workType: workType,
-              quantity: quantity,
-              unitPrice: unitPrice,
-              total: total,
-              description: (document.getElementById('op-wl-description').value || '').trim() || null,
-              photoUrls: photoPaths,
+              quantity: null,
+              unitPrice: null,
+              total: totalBeforeTax,
+              totalBeforeTax: totalBeforeTax,
+              totalAfterTax: totalAfterTax,
+              description: description,
+              photoUrls: pendingWorklogPhotoUrls || [],
+              timesheetJobs: pendingWorklogTimesheetJobs || [],
               invoiceFilePath: docPath,
             }),
           });
@@ -968,6 +1564,8 @@
           if (r.data.success) {
             showFeedback(feedback, r.data.message || 'Submitted. Manager will see this in Work Logs.', false);
             loadWorklogList();
+            pendingWorklogPhotoUrls = [];
+            pendingWorklogTimesheetJobs = [];
             setTimeout(function () {
               closeModal(modalWorklog);
               hideFeedback(feedback);
@@ -982,6 +1580,35 @@
           showFeedback(feedback, err.message || 'Submit failed.', true);
           if (submitBtn) submitBtn.disabled = false;
         });
+    });
+  }
+
+  var btnCreateWorkReport = document.getElementById('op-btn-create-work-report');
+  if (btnCreateWorkReport) {
+    btnCreateWorkReport.addEventListener('click', openWorkReportModal);
+  }
+  var btnAddJob = document.getElementById('op-wr-add-job');
+  if (btnAddJob) {
+    btnAddJob.addEventListener('click', function () {
+      addTimesheetJobItem();
+    });
+  }
+  var btnFlowPrice = document.getElementById('op-btn-flow-price-work');
+  var btnFlowTimesheet = document.getElementById('op-btn-flow-time-sheet');
+  if (btnFlowPrice) {
+    btnFlowPrice.addEventListener('click', function () {
+      setWorklogFlow('price');
+    });
+  }
+  if (btnFlowTimesheet) {
+    btnFlowTimesheet.addEventListener('click', function () {
+      setWorklogFlow('timesheet');
+    });
+  }
+  if (formWorkReport) {
+    formWorkReport.addEventListener('submit', function (e) {
+      e.preventDefault();
+      generateAndUploadWorkReport().catch(function () {});
     });
   }
 

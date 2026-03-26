@@ -209,6 +209,15 @@
   background: var(--status-red);
   color: #fff;
 }
+.btn-worklogs-delete {
+  background: #7f1d1d;
+  color: #fff;
+  border: 1px solid #5c1515;
+}
+.btn-worklogs-delete:hover:not(:disabled) {
+  background: #991b1b;
+  color: #fff;
+}
 .btn-worklogs-archive {
   background: var(--text-muted);
   color: var(--bg-main);
@@ -290,6 +299,15 @@
   padding: 2px 8px;
   background: #ff9800;
   color: #1a1a1a;
+  border-radius: 10px;
+  margin-left: 6px;
+}
+
+.worklogs-badge-operative-archived {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
   border-radius: 10px;
   margin-left: 6px;
 }

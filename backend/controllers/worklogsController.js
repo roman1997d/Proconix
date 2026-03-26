@@ -1,9 +1,74 @@
 /**
- * Work Logs API: list, get one, update, approve, reject, archive.
+ * Work Logs API: list, get one, update, approve, reject, archive, remove (hard delete).
  * Manager-only; scoped by company_id.
  */
 
+const fs = require('fs');
+const path = require('path');
 const { pool } = require('../db/pool');
+
+const UPLOADS_ROOT = path.resolve(path.join(__dirname, '..', 'uploads'));
+
+function isSafeUploadsPublicPath(u) {
+  if (!u || typeof u !== 'string') return false;
+  var s = u.trim();
+  if (!s.startsWith('/uploads/')) return false;
+  if (s.includes('..')) return false;
+  return true;
+}
+
+function toAbsoluteUploadPath(u) {
+  if (!isSafeUploadsPublicPath(u)) return null;
+  var rel = u.trim().replace(/^\/uploads\//, '');
+  if (!rel || rel.includes('..')) return null;
+  var abs = path.resolve(path.join(UPLOADS_ROOT, rel));
+  var root = UPLOADS_ROOT;
+  if (abs !== root && !abs.startsWith(root + path.sep)) return null;
+  return abs;
+}
+
+function addUploadPathToSet(set, u) {
+  var abs = toAbsoluteUploadPath(u);
+  if (abs) set.add(abs);
+}
+
+function collectPathsFromTimesheetJobs(jobs, set) {
+  if (!Array.isArray(jobs)) return;
+  jobs.forEach(function (job) {
+    if (!job || typeof job !== 'object') return;
+    ['photos', 'photoPaths', 'photo_urls'].forEach(function (key) {
+      var arr = job[key];
+      if (!Array.isArray(arr)) return;
+      arr.forEach(function (item) {
+        if (typeof item === 'string') addUploadPathToSet(set, item);
+      });
+    });
+  });
+}
+
+function collectWorkLogFilePaths(row) {
+  var set = new Set();
+  if (!row) return [];
+  if (row.invoice_file_path && typeof row.invoice_file_path === 'string') {
+    addUploadPathToSet(set, row.invoice_file_path);
+  }
+  var photos = parseJsonField(row.photo_urls, []);
+  if (Array.isArray(photos)) {
+    photos.forEach(function (p) {
+      if (typeof p === 'string') addUploadPathToSet(set, p);
+    });
+  }
+  collectPathsFromTimesheetJobs(parseJsonField(row.timesheet_jobs, []), set);
+  return Array.from(set);
+}
+
+function unlinkQuietly(absPath) {
+  return new Promise(function (resolve) {
+    fs.unlink(absPath, function () {
+      resolve();
+    });
+  });
+}
 
 const VALID_STATUSES = ['pending', 'edited', 'waiting_worker', 'approved', 'rejected', 'completed'];
 
@@ -52,10 +117,13 @@ function rowToJob(row) {
     status: row.status,
     description: row.description,
     photoUrls: parseJsonField(row.photo_urls, []),
+    timesheetJobs: parseJsonField(row.timesheet_jobs, []),
     submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : null,
     editHistory: parseJsonField(row.edit_history, []),
     workWasEdited: Boolean(row.work_was_edited),
     invoiceFilePath: row.invoice_file_path,
+    operativeArchived: Boolean(row.operative_archived),
+    operativeArchivedAt: row.operative_archived_at ? new Date(row.operative_archived_at).toISOString() : null,
     archived: Boolean(row.archived),
   };
 }
@@ -80,7 +148,9 @@ async function list(req, res) {
     let query = `
       SELECT id, company_id, job_display_id, worker_name, project, block, floor, apartment, zone,
              work_type, quantity, unit_price, total, status, description, submitted_at,
-             work_was_edited, edit_history, photo_urls, invoice_file_path, archived
+             work_was_edited, edit_history, photo_urls, timesheet_jobs, invoice_file_path,
+             operative_archived, operative_archived_at,
+             archived
       FROM work_logs
       WHERE company_id = $1 AND archived = false
     `;
@@ -125,9 +195,21 @@ async function list(req, res) {
 
     query += ` ORDER BY submitted_at DESC`;
 
-    const result = await pool.query(query, params);
-    const jobs = result.rows.map(rowToJob);
-    return res.json({ success: true, jobs });
+    try {
+      const result = await pool.query(query, params);
+      const jobs = result.rows.map(rowToJob);
+      return res.json({ success: true, jobs });
+    } catch (err) {
+      if (err && err.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(err.message || '')) {
+        // Fallback for installations before the migration was applied.
+        let fallbackQuery = query.replace(', timesheet_jobs', '').replace(', operative_archived, operative_archived_at', '');
+        const result2 = await pool.query(fallbackQuery, params);
+        const jobs2 = result2.rows.map(rowToJob);
+        // timesheetJobs/operativeArchived will be empty because columns aren't selected.
+        return res.json({ success: true, jobs: jobs2 });
+      }
+      throw err;
+    }
   } catch (err) {
     if (err.code === '42P01') {
       return res.status(200).json({ success: true, jobs: [] });
@@ -178,7 +260,9 @@ async function getOne(req, res) {
     const result = await pool.query(
       `SELECT id, company_id, job_display_id, worker_name, project, block, floor, apartment, zone,
               work_type, quantity, unit_price, total, status, description, submitted_at,
-              work_was_edited, edit_history, photo_urls, invoice_file_path, archived
+              work_was_edited, edit_history, photo_urls, timesheet_jobs, invoice_file_path,
+              operative_archived, operative_archived_at,
+              archived
        FROM work_logs WHERE id = $1 AND company_id = $2`,
       [id, companyId]
     );
@@ -188,6 +272,18 @@ async function getOne(req, res) {
     return res.json({ success: true, job: rowToJob(result.rows[0]) });
   } catch (err) {
     if (err.code === '42P01') return res.status(404).json({ success: false, message: 'Job not found.' });
+    if (err && err.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(err.message || '')) {
+      // Fallback before migration.
+      const result2 = await pool.query(
+        `SELECT id, company_id, job_display_id, worker_name, project, block, floor, apartment, zone,
+                work_type, quantity, unit_price, total, status, description, submitted_at,
+                work_was_edited, edit_history, photo_urls, invoice_file_path, archived
+         FROM work_logs WHERE id = $1 AND company_id = $2`,
+        [id, companyId]
+      );
+      if (result2.rows.length === 0) return res.status(404).json({ success: false, message: 'Job not found.' });
+      return res.json({ success: true, job: rowToJob(result2.rows[0]) });
+    }
     console.error('worklogsController getOne:', err);
     return res.status(500).json({ success: false, message: 'Failed to get job.' });
   }
@@ -343,6 +439,57 @@ async function archive(req, res) {
 }
 
 /**
+ * DELETE /api/worklogs/:id
+ * Removes the row and deletes uploaded files (invoice PDF, photos) under /uploads/ only.
+ */
+async function remove(req, res) {
+  const companyId = getCompanyId(req);
+  if (companyId == null) return res.status(403).json({ success: false, message: 'Access denied.' });
+
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ success: false, message: 'Invalid job id.' });
+
+  try {
+    let selectSql = `
+      SELECT id, company_id, photo_urls, timesheet_jobs, invoice_file_path
+      FROM work_logs
+      WHERE id = $1 AND company_id = $2
+    `;
+    let result;
+    try {
+      result = await pool.query(selectSql, [id, companyId]);
+    } catch (err) {
+      if (err && err.code === '42703' && /timesheet_jobs/i.test(err.message || '')) {
+        selectSql = `
+          SELECT id, company_id, photo_urls, invoice_file_path
+          FROM work_logs
+          WHERE id = $1 AND company_id = $2
+        `;
+        result = await pool.query(selectSql, [id, companyId]);
+      } else {
+        throw err;
+      }
+    }
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Job not found.' });
+    }
+
+    const row = result.rows[0];
+    const paths = collectWorkLogFilePaths(row);
+    await Promise.all(paths.map(unlinkQuietly));
+
+    const del = await pool.query('DELETE FROM work_logs WHERE id = $1 AND company_id = $2 RETURNING id', [id, companyId]);
+    if (del.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Job not found.' });
+    }
+    return res.json({ success: true, deletedId: id, filesRemoved: paths.length });
+  } catch (err) {
+    console.error('worklogsController remove:', err);
+    return res.status(500).json({ success: false, message: 'Failed to delete job.' });
+  }
+}
+
+/**
  * POST /api/worklogs/archive-bulk - body: { jobIds: number[] }
  */
 async function archiveBulk(req, res) {
@@ -425,6 +572,7 @@ module.exports = {
   approve,
   reject,
   archive,
+  remove,
   archiveBulk,
   create,
 };

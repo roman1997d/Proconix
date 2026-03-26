@@ -606,6 +606,7 @@ function getWorkLogsHtml() {
               <button type="button" class="btn-worklogs btn-worklogs-edit" id="worklogs-details-btn-edit"><i class="bi bi-pencil"></i> Edit</button>
               <button type="button" class="btn-worklogs btn-worklogs-approve" id="worklogs-details-btn-approve"><i class="bi bi-check-circle"></i> Approve</button>
               <button type="button" class="btn-worklogs btn-worklogs-reject" id="worklogs-details-btn-reject"><i class="bi bi-x-circle"></i> Reject</button>
+              <button type="button" class="btn-worklogs btn-worklogs-delete" id="worklogs-details-btn-delete" title="Permanently delete this entry and all uploaded files"><i class="bi bi-trash"></i> Delete permanently</button>
             </div>
           </div>
         </div>

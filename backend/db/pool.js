@@ -30,7 +30,7 @@ async function testConnection() {
     const client = await pool.connect();
     await client.query('SELECT 1');
     client.release();
-    return { ok: true, message: 'Conexiune reușită.' };
+    return { ok: true, message: 'Connection successful.' };
   } catch (err) {
     return { ok: false, error: err.message };
   }

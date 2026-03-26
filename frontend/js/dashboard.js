@@ -28,6 +28,7 @@
     'worklogs': 'Work Logs',
     'quality-assurance': 'Quality Assurance',
     'task-planning': 'Task & Planning',
+    'site-snags': 'Site Snags',
     'profile-settings': 'Profile Settings',
     'my-company-settings': 'My Company Settings'
   };
@@ -152,6 +153,35 @@
       contentEl.innerHTML = '<iframe src="manage_material.html" class="dashboard-qa-iframe" title="Material Management"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
+      if (pushState !== false) history.pushState({ module: module }, '', '#');
+      return;
+    }
+
+    if (module === 'site-snags') {
+      contentEl.classList.add('dashboard-content-fade-out');
+      setActiveItem(module);
+      updateHeaderTitle(module);
+      contentEl.innerHTML =
+        '<iframe id="iframe-site-snags" src="Site_Snags.html" class="dashboard-qa-iframe" title="Site Snags"></iframe>';
+      contentEl.classList.remove('dashboard-content-fade-out');
+      contentEl.classList.add('dashboard-content-fade-in');
+      var snIframe = document.getElementById('iframe-site-snags');
+      if (snIframe) {
+        snIframe.addEventListener('load', function onSiteSnagsFrameLoad() {
+          snIframe.removeEventListener('load', onSiteSnagsFrameLoad);
+          var session = getSession();
+          try {
+            if (session && snIframe.contentWindow) {
+              snIframe.contentWindow.postMessage(
+                { type: 'proconix_site_snags_session', session: session },
+                window.location.origin
+              );
+            }
+          } catch (err) {
+            /* ignore */
+          }
+        });
+      }
       if (pushState !== false) history.pushState({ module: module }, '', '#');
       return;
     }

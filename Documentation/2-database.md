@@ -226,11 +226,16 @@ erDiagram
 | work_was_edited | BOOLEAN | | FALSE |
 | edit_history | JSONB | | '[]' |
 | photo_urls | JSONB | | '[]' |
+| timesheet_jobs | JSONB | opțional (migrare) | '[]' — joburi pontaj structurate: `location`, `description`, `duration`, `duration_unit`, `stage`, `progress_pct`, **`photos`** (array de URL-uri `/uploads/...`) |
 | invoice_file_path | VARCHAR(500) | | |
-| archived | BOOLEAN | | FALSE |
+| operative_archived | BOOLEAN | opțional (migrare) | FALSE — ascunde intrarea în dashboard operativ; manager vede în continuare |
+| operative_archived_at | TIMESTAMPTZ | opțional | setat la arhivare operativ |
+| archived | BOOLEAN | | FALSE — arhivare manager (Work Logs) |
 | created_at, updated_at | TIMESTAMPTZ | | NOW() |
 
-**Indexuri**: company_id, submitted_by_user_id, status, submitted_at, archived, (company_id, job_display_id).
+**Indexuri**: company_id, submitted_by_user_id, status, submitted_at, archived, **operative_archived** (dacă există coloana), (company_id, job_display_id).
+
+**Migrări**: `scripts/alter_work_logs_add_timesheet_jobs.sql`, `scripts/alter_work_logs_add_operative_archived.sql`. Coloanele sunt incluse și în `scripts/create_work_logs_table.sql` pentru baze noi.
 
 ---
 

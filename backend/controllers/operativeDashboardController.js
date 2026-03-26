@@ -861,7 +861,9 @@ async function uploadTaskConfirmationPhoto(req, res) {
   if (!/^image\//.test(req.file.mimetype || '')) {
     try {
       fs.unlinkSync(req.file.path);
-    } catch (_) {}
+    } catch (_) {
+      // Ignore unlink failures
+    }
     return res.status(400).json({ success: false, message: 'Only image files are allowed.' });
   }
 
@@ -937,6 +939,10 @@ function rowToWorkLogEntry(row) {
     quantity: row.quantity != null ? Number(row.quantity) : null,
     unitPrice: row.unit_price != null ? Number(row.unit_price) : null,
     total: row.total != null ? Number(row.total) : null,
+    invoiceFilePath: row.invoice_file_path || null,
+    timesheetJobs: row.timesheet_jobs || [],
+    operativeArchived: Boolean(row.operative_archived),
+    operativeArchivedAt: row.operative_archived_at ? new Date(row.operative_archived_at).toISOString() : null,
     status: row.status || 'pending',
     submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : null,
   };
@@ -947,23 +953,82 @@ async function getMyWorkLogs(req, res) {
   if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
 
   try {
-    const result = await pool.query(
-      `SELECT id, job_display_id, worker_name, project, block, floor, apartment, zone,
-              work_type, quantity, unit_price, total, status, submitted_at
-       FROM work_logs
-       WHERE submitted_by_user_id = $1
-       ORDER BY submitted_at DESC
-       LIMIT 100`,
-      [op.id]
-    );
-    const entries = result.rows.map(rowToWorkLogEntry);
-    return res.status(200).json({ success: true, entries });
+    try {
+      const result = await pool.query(
+        `SELECT id, job_display_id, worker_name, project, block, floor, apartment, zone,
+                work_type, quantity, unit_price, total, invoice_file_path, timesheet_jobs,
+                operative_archived, operative_archived_at,
+                status, submitted_at
+         FROM work_logs
+         WHERE submitted_by_user_id = $1
+           AND COALESCE(operative_archived, false) = false
+         ORDER BY submitted_at DESC
+         LIMIT 100`,
+        [op.id]
+      );
+      const entries = result.rows.map(rowToWorkLogEntry);
+      return res.status(200).json({ success: true, entries });
+    } catch (err) {
+      if (err && err.code === '42703' && /timesheet_jobs|operative_archived/i.test(err.message || '')) {
+        const result2 = await pool.query(
+          `SELECT id, job_display_id, worker_name, project, block, floor, apartment, zone,
+                  work_type, quantity, unit_price, total, invoice_file_path, status, submitted_at
+           FROM work_logs
+           WHERE submitted_by_user_id = $1
+           ORDER BY submitted_at DESC
+           LIMIT 100`,
+          [op.id]
+        );
+        const entries2 = result2.rows.map(rowToWorkLogEntry);
+        return res.status(200).json({ success: true, entries: entries2 });
+      }
+      throw err;
+    }
   } catch (err) {
     if (err.code === '42P01') {
       return res.status(200).json({ success: true, entries: [] });
     }
     console.error('getMyWorkLogs error:', err);
     return res.status(500).json({ success: false, message: 'Failed to load work entries.' });
+  }
+}
+
+/**
+ * POST /api/operatives/work-log/:id/archive
+ * Operative-only: hides the entry from "My work entries" for that operative.
+ * Does NOT affect manager access (work_logs.archived).
+ */
+async function archiveMyWorkLog(req, res) {
+  const op = getOperative(req);
+  if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ success: false, message: 'Invalid work log id.' });
+
+  try {
+    try {
+      const r = await pool.query(
+        `UPDATE work_logs
+         SET operative_archived = true,
+             operative_archived_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $1 AND submitted_by_user_id = $2
+         RETURNING id`,
+        [id, op.id]
+      );
+      if (!r.rows.length) return res.status(404).json({ success: false, message: 'Work entry not found.' });
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      if (err && err.code === '42703' && /operative_archived/i.test(err.message || '')) {
+        return res.status(503).json({
+          success: false,
+          message: 'Archive feature is not set up. Run scripts/alter_work_logs_add_operative_archived.sql',
+        });
+      }
+      throw err;
+    }
+  } catch (err) {
+    console.error('archiveMyWorkLog error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to archive work entry.' });
   }
 }
 
@@ -1087,28 +1152,62 @@ async function createWorkLog(req, res) {
     const total = b.total != null ? parseFloat(b.total) : (quantity != null && unitPrice != null ? quantity * unitPrice : null);
     const photoUrls = Array.isArray(b.photoUrls) ? b.photoUrls : (b.photo_urls ? (Array.isArray(b.photo_urls) ? b.photo_urls : []) : []);
     const invoiceFilePath = (b.invoiceFilePath && String(b.invoiceFilePath).trim()) || (b.invoice_file_path && String(b.invoice_file_path).trim()) || null;
+    const timesheetJobsRaw = Array.isArray(b.timesheetJobs)
+      ? b.timesheetJobs
+      : b.timesheet_jobs && Array.isArray(b.timesheet_jobs)
+        ? b.timesheet_jobs
+        : [];
+    const timesheetJobs = timesheetJobsRaw || [];
 
     const jobDisplayId = await nextJobDisplayId(companyId);
 
-    await pool.query(
-      `INSERT INTO work_logs (
-        company_id, submitted_by_user_id, project_id, job_display_id, worker_name, project,
-        block, floor, apartment, zone, work_type, quantity, unit_price, total,
-        status, description, photo_urls, invoice_file_path
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', $15, $16, $17)`,
-      [
-        companyId, op.id, projectId, jobDisplayId, workerName, projectName,
-        (b.block && String(b.block).trim()) || null,
-        (b.floor != null ? String(b.floor) : null) || null,
-        (b.apartment && String(b.apartment).trim()) || null,
-        (b.zone && String(b.zone).trim()) || null,
-        workType,
-        quantity, unitPrice, total,
-        (b.description && String(b.description).trim()) || null,
-        JSON.stringify(photoUrls),
-        invoiceFilePath,
-      ]
-    );
+    try {
+      await pool.query(
+        `INSERT INTO work_logs (
+          company_id, submitted_by_user_id, project_id, job_display_id, worker_name, project,
+          block, floor, apartment, zone, work_type, quantity, unit_price, total,
+          status, description, photo_urls, timesheet_jobs, invoice_file_path
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', $15, $16, $17, $18)`,
+        [
+          companyId, op.id, projectId, jobDisplayId, workerName, projectName,
+          (b.block && String(b.block).trim()) || null,
+          (b.floor != null ? String(b.floor) : null) || null,
+          (b.apartment && String(b.apartment).trim()) || null,
+          (b.zone && String(b.zone).trim()) || null,
+          workType,
+          quantity, unitPrice, total,
+          (b.description && String(b.description).trim()) || null,
+          JSON.stringify(photoUrls),
+          JSON.stringify(timesheetJobs),
+          invoiceFilePath,
+        ]
+      );
+    } catch (err) {
+      // Backward-compat if the DB migration hasn't been applied yet.
+      if (err && err.code === '42703' && /timesheet_jobs/i.test(err.message || '')) {
+        await pool.query(
+          `INSERT INTO work_logs (
+            company_id, submitted_by_user_id, project_id, job_display_id, worker_name, project,
+            block, floor, apartment, zone, work_type, quantity, unit_price, total,
+            status, description, photo_urls, invoice_file_path
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', $15, $16, $17)`,
+          [
+            companyId, op.id, projectId, jobDisplayId, workerName, projectName,
+            (b.block && String(b.block).trim()) || null,
+            (b.floor != null ? String(b.floor) : null) || null,
+            (b.apartment && String(b.apartment).trim()) || null,
+            (b.zone && String(b.zone).trim()) || null,
+            workType,
+            quantity, unitPrice, total,
+            (b.description && String(b.description).trim()) || null,
+            JSON.stringify(photoUrls),
+            invoiceFilePath,
+          ]
+        );
+      } else {
+        throw err;
+      }
+    }
 
     return res.status(201).json({
       success: true,
@@ -1142,4 +1241,5 @@ module.exports = {
   getMyWorkLogs,
   workLogUpload,
   createWorkLog,
+  archiveMyWorkLog,
 };

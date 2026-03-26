@@ -97,6 +97,9 @@ ONBOARDING_SECRET=your-random-secret-string
    psql -U postgres -d ProconixDB -f scripts/create_users_table.sql
    psql -U postgres -d ProconixDB -f scripts/setup_projects_and_assignments.sql
    psql -U postgres -d ProconixDB -f scripts/create_work_logs_table.sql
+   # Pentru baze create înainte de adăugarea coloanelor pontaj/arhivare operativ:
+   # psql -U postgres -d ProconixDB -f scripts/alter_work_logs_add_timesheet_jobs.sql
+   # psql -U postgres -d ProconixDB -f scripts/alter_work_logs_add_operative_archived.sql
    psql -U postgres -d ProconixDB -f scripts/setup_qa_database.sql
    psql -U postgres -d ProconixDB -f scripts/create_material_tables.sql
    psql -U postgres -d ProconixDB -f scripts/create_material_consumption_table.sql

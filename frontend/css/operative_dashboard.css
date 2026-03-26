@@ -418,6 +418,21 @@
   border: 1px solid var(--op-card-border);
   font-size: 0.9rem;
 }
+.op-worklog-item[data-op-invoice-path] {
+  cursor: pointer;
+}
+
+.op-worklog-item-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.op-btn.op-btn-xs {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  border-radius: 10px;
+}
 .op-worklog-item-head {
   display: flex;
   justify-content: space-between;
@@ -636,6 +651,88 @@
   min-height: 40px;
   padding: 0 12px;
   font-size: 0.9rem;
+}
+.op-wl-report-btn {
+  margin-top: 10px;
+  width: 100%;
+}
+.op-wl-flow-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.op-wl-flow-btn {
+  min-height: 48px;
+}
+.op-field-label {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+  color: var(--op-text-muted);
+}
+.op-wr-session-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto auto;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: end;
+}
+.op-wr-session-total {
+  min-width: 86px;
+  font-size: 0.85rem;
+  color: var(--op-text-muted);
+  padding-bottom: 10px;
+}
+.op-wr-photo-preview {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+.op-wr-photo-preview img {
+  width: 100%;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--op-card-border);
+}
+.op-wr-job-card {
+  border: 1px solid var(--op-card-border);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 12px;
+  background: rgba(0, 0, 0, 0.2);
+}
+.op-wr-job-title {
+  font-size: 0.9rem;
+  color: var(--op-text-muted);
+  margin-bottom: 8px;
+}
+.op-wr-job-photos-preview {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+.op-wr-job-photos-preview img {
+  width: 100%;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--op-card-border);
+}
+.op-wr-job-add-photo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+.op-wr-job-photo-count {
+  font-size: 0.85rem;
+  color: var(--op-text-muted);
+  white-space: nowrap;
 }
 .op-btn-secondary {
   background: rgba(255, 255, 255, 0.15);

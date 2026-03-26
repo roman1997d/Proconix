@@ -1,0 +1,1 @@
+-- Deprecated: use create_site_snags_tables.sql (relational Site Snags + drops site_snags_state).

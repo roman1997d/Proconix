@@ -1,0 +1,3814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Site Snags – Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --ss-bg: #1a1d23;
+      --ss-card: #242830;
+      --ss-border: #353a45;
+      --ss-text: #e8eaef;
+      --ss-muted: #8b92a3;
+      --ss-accent: #1be5c6;
+      --ss-accent-dim: rgba(27, 229, 198, 0.15);
+      --ss-pin: #ff6b6b;
+      --ss-pin-active: #ffd43b;
+    }
+    body.site-snags {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--ss-bg);
+      color: var(--ss-text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .ss-header {
+      background: linear-gradient(180deg, #12141a 0%, var(--ss-bg) 100%);
+      border-bottom: 1px solid var(--ss-border);
+      padding: 0.75rem 1rem;
+    }
+    .ss-header h1 { font-size: 1.15rem; font-weight: 600; margin: 0; }
+    .ss-badge-live {
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 999px;
+      background: var(--ss-accent-dim);
+      color: var(--ss-accent);
+    }
+    .ss-toolbar {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .ss-toolbar .form-select,
+    .ss-toolbar .form-control {
+      background: var(--ss-card);
+      border-color: var(--ss-border);
+      color: var(--ss-text);
+      max-width: 200px;
+    }
+    .ss-main {
+      display: grid;
+      grid-template-columns: 1fr min(380px, 38vw);
+      gap: 0;
+      min-height: calc(100vh - 120px);
+    }
+    @media (max-width: 991px) {
+      .ss-main { grid-template-columns: 1fr; }
+    }
+    .ss-canvas-col {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--ss-border);
+      min-height: 420px;
+    }
+    .ss-canvas-toolbar {
+      padding: 0.5rem 0.75rem;
+      background: #16181e;
+      border-bottom: 1px solid var(--ss-border);
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+    .ss-viewport {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      background: #0d0f12;
+      cursor: grab;
+      touch-action: none;
+    }
+    .ss-viewport.panning { cursor: grabbing; }
+    .ss-viewport.add-pin { cursor: crosshair; }
+    .ss-stage {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform-origin: center center;
+      will-change: transform;
+    }
+    .ss-inner {
+      position: relative;
+      display: inline-block;
+      line-height: 0;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+    }
+    .ss-inner img {
+      display: block;
+      max-width: none;
+      user-select: none;
+      pointer-events: none;
+    }
+    .ss-pins-layer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 3;
+    }
+    .ss-highlight-canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .ss-measure-canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .ss-inner.ss-inner--measure-tool .ss-measure-canvas {
+      pointer-events: auto;
+      cursor: crosshair;
+    }
+    .ss-inner.ss-inner--measure-tool .ss-pins-layer {
+      pointer-events: none;
+    }
+    .ss-inner.ss-inner--highlight-tool .ss-highlight-canvas {
+      pointer-events: auto;
+      cursor: crosshair;
+    }
+    .ss-inner.ss-inner--highlight-tool .ss-measure-canvas {
+      pointer-events: none;
+    }
+    .ss-inner.ss-inner--highlight-tool .ss-pins-layer {
+      pointer-events: none;
+    }
+    #btnMeasureDistance.active,
+    #btnMeasureArea.active,
+    #btnHighlightCircle.active,
+    #btnHighlightMarker.active,
+    #btnHighlightFlag.active,
+    #btnSnapshotZone.active {
+      box-shadow: 0 0 0 2px var(--ss-accent);
+      color: var(--ss-accent);
+    }
+    .ss-measure-row {
+      background: #1a1d23;
+      border: 1px solid var(--ss-border);
+      border-radius: 8px;
+      padding: 0.45rem 0.5rem;
+      margin-bottom: 0.35rem;
+      font-size: 0.78rem;
+    }
+    .ss-measure-row .form-control,
+    .ss-measure-row .form-select {
+      background: #12141a;
+      border-color: var(--ss-border);
+      color: var(--ss-text);
+      font-size: 0.75rem;
+      padding: 0.2rem 0.35rem;
+    }
+    #drawingScaleMm {
+      background: #12141a;
+      border-color: var(--ss-border);
+      color: var(--ss-text);
+    }
+    .ss-pin {
+      position: absolute;
+      width: 28px;
+      height: 28px;
+      margin-left: -14px;
+      margin-top: -28px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      background: var(--ss-pin);
+      border: 2px solid #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      pointer-events: auto;
+      cursor: pointer;
+      z-index: 2;
+      transition: transform 0.15s ease, background 0.15s;
+    }
+    .ss-pin:hover { transform: rotate(-45deg) scale(1.08); }
+    .ss-pin.status-in_progress { background: #4dabf7; }
+    .ss-pin.status-completed { background: #69db7c; }
+    .ss-pin.status-verified { background: #a78bfa; }
+    .ss-pin.status-closed { background: #868e96; }
+    .ss-pin.selected { box-shadow: 0 0 0 3px var(--ss-accent); background: var(--ss-pin-active); }
+    .ss-side {
+      background: var(--ss-card);
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 120px);
+    }
+    @media (max-width: 991px) {
+      .ss-side { max-height: none; }
+    }
+    .ss-side-header {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--ss-border);
+    }
+    .ss-filters {
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--ss-border);
+      font-size: 0.8rem;
+    }
+    .ss-filters .form-select,
+    .ss-filters .form-control {
+      background: #1a1d23;
+      border-color: var(--ss-border);
+      color: var(--ss-text);
+      font-size: 0.8rem;
+      padding: 0.25rem 0.5rem;
+    }
+    .ss-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem;
+    }
+    .ss-snag-card {
+      background: #1a1d23;
+      border: 1px solid var(--ss-border);
+      border-radius: 10px;
+      padding: 0.65rem 0.75rem;
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .ss-snag-card:hover { border-color: var(--ss-accent); }
+    .ss-snag-card.active { border-color: var(--ss-accent); box-shadow: 0 0 0 1px var(--ss-accent-dim); }
+    .ss-status-pill {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .ss-empty-drawing {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ss-muted);
+      text-align: center;
+      padding: 2rem;
+    }
+    .modal-content { background: var(--ss-card); color: var(--ss-text); border-color: var(--ss-border); }
+    .modal-header { border-bottom-color: var(--ss-border); }
+    .modal-footer { border-top-color: var(--ss-border); }
+    .form-control, .form-select {
+      background: #1a1d23;
+      border-color: var(--ss-border);
+      color: var(--ss-text);
+    }
+    .form-control:focus, .form-select:focus {
+      background: #1a1d23;
+      border-color: var(--ss-accent);
+      color: var(--ss-text);
+      box-shadow: 0 0 0 0.2rem var(--ss-accent-dim);
+    }
+    .btn-ss-accent {
+      background: var(--ss-accent);
+      border: none;
+      color: #0a0c0f;
+      font-weight: 600;
+    }
+    .btn-ss-accent:hover { background: #4df0d9; color: #0a0c0f; }
+    #btnAddPin.active {
+      box-shadow: 0 0 0 2px var(--ss-accent);
+      color: var(--ss-accent);
+    }
+    #ssPrintRoot { display: none; }
+    @media print {
+      body * { visibility: hidden; }
+      #ssPrintRoot, #ssPrintRoot * { visibility: visible; }
+      #ssPrintRoot {
+        display: block;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        min-height: 100vh;
+        background: #fff;
+        color: #111;
+        padding: 1rem;
+      }
+      body.site-snags { background: #fff !important; }
+    }
+  </style>
+</head>
+<body class="site-snags">
+  <header class="ss-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div class="d-flex align-items-center gap-3">
+      <h1><i class="bi bi-pin-map-fill text-info me-2"></i>Site Snags</h1>
+      <span class="ss-badge-live" id="ssSyncBadge" title="Local storage; server sync when opened from Manager Dashboard with DB table installed">Sync: local</span>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="dashboard_manager.html" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left"></i> Dashboard</a>
+      <button type="button" class="btn btn-outline-light btn-sm" id="btnSyncData" title="Save locally and push to server when a manager session is present">
+        <i class="bi bi-cloud-arrow-up"></i> Sync Data
+      </button>
+      <button type="button" class="btn btn-outline-light btn-sm" id="btnHelp" title="About storage and API">
+        <i class="bi bi-info-circle"></i> About
+      </button>
+    </div>
+  </header>
+
+  <div class="ss-toolbar d-flex align-items-center px-2 py-2 border-bottom border-secondary border-opacity-25">
+    <label class="text-secondary small me-1">Project</label>
+    <select class="form-select form-select-sm" id="filterProject" aria-label="Project"></select>
+    <label class="text-secondary small ms-2 me-1">Drawings</label>
+    <select class="form-select form-select-sm" id="selectLocation" aria-label="Drawings for selected project" disabled></select>
+    <button type="button" class="btn btn-sm btn-outline-info ms-2" id="btnOpenNewDrawingModal">
+      <i class="bi bi-plus-lg"></i> New drawing
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalCategories" title="Preset + custom categories">
+      <i class="bi bi-tags"></i> Categories
+    </button>
+    <div class="ms-auto d-flex flex-wrap gap-1">
+      <button type="button" class="btn btn-sm btn-outline-warning" id="btnAddPin" title="Or double-click on the drawing to start, then click to place">
+        <i class="bi bi-geo-alt-fill"></i> Place pin
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-info" id="btnMeasureDistance" title="Click two points on the drawing">
+        <i class="bi bi-rulers"></i> Distance
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-info" id="btnMeasureArea" title="Click corners, then Finish area">
+        <i class="bi bi-pentagon"></i> Area
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-success d-none" id="btnFinishArea">Finish area</button>
+      <button type="button" class="btn btn-sm btn-outline-danger" id="btnClearMeasurements" title="Clear all measurements on this drawing">
+        <i class="bi bi-eraser"></i> Clear measures
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="btnUndoMeasure" title="Remove last measurement on this drawing"><i class="bi bi-arrow-counterclockwise"></i> Undo measure</button>
+      <button type="button" class="btn btn-sm btn-outline-warning" id="btnHighlightCircle" title="Click center, then edge for radius"><i class="bi bi-circle"></i></button>
+      <button type="button" class="btn btn-sm btn-outline-warning" id="btnHighlightMarker" title="Freeform zone: corners + double-click to finish"><i class="bi bi-brush"></i></button>
+      <button type="button" class="btn btn-sm btn-outline-warning" id="btnHighlightFlag" title="Place a flag note on the drawing"><i class="bi bi-flag-fill"></i></button>
+      <select class="form-select form-select-sm" id="markerColorPreset" title="Marker zone color" style="width:auto;max-width:28vw;min-width:5.5rem;">
+        <option value="orange">Marker: orange</option>
+        <option value="yellow">Marker: yellow</option>
+        <option value="red">Marker: red</option>
+      </select>
+      <button type="button" class="btn btn-sm btn-outline-success d-none" id="btnFinishMarker">Finish marker</button>
+      <button type="button" class="btn btn-sm btn-outline-danger" id="btnClearHighlights" title="Remove all highlights on this drawing"><i class="bi bi-highlighter"></i> Clear highlights</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="btnUndoHighlight" title="Remove last highlight on this drawing"><i class="bi bi-arrow-counterclockwise"></i> Undo highlight</button>
+      <button type="button" class="btn btn-sm btn-outline-light" id="btnZoomOut"><i class="bi bi-dash-lg"></i></button>
+      <button type="button" class="btn btn-sm btn-outline-light" id="btnZoomIn"><i class="bi bi-plus-lg"></i></button>
+      <button type="button" class="btn btn-sm btn-outline-light" id="btnResetView">Reset view</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="btnExportSnapshot" title="PNG: drawing + highlights + pins + measurements">
+        <i class="bi bi-image"></i> Snapshot
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSnapshotZone" title="Drag a rectangle on the drawing; releases a PNG of that region (same layers as full snapshot)">
+        <i class="bi bi-crop"></i> Zone snapshot
+      </button>
+      <button type="button" class="btn btn-sm btn-ss-accent" id="btnPrintReport">
+        <i class="bi bi-file-earmark-pdf"></i> Print / PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="ss-main">
+    <div class="ss-canvas-col">
+      <div class="ss-canvas-toolbar d-flex align-items-center">
+        <span class="text-secondary small me-2" id="locationMeta">No drawing loaded</span>
+        <span class="text-muted small ms-auto" id="hintPan">Drag to pan · Wheel to zoom</span>
+      </div>
+      <div class="ss-viewport" id="viewport">
+        <div class="ss-empty-drawing" id="emptyDrawing">
+          <div>
+            <i class="bi bi-image fs-1 d-block mb-2 opacity-50"></i>
+            Select a drawing or create one (upload PNG/JPG). Data is kept in <strong>localStorage</strong> and synced to the server when you use Site Snags from the Manager Dashboard (after <code>create_site_snags_state.sql</code> is applied).
+          </div>
+        </div>
+        <div class="ss-stage" id="stage" style="display:none;">
+          <div class="ss-inner" id="inner">
+            <img id="drawingImg" alt="Site drawing" />
+            <canvas class="ss-highlight-canvas" id="highlightCanvas" aria-hidden="true"></canvas>
+            <canvas class="ss-measure-canvas" id="measureCanvas" aria-hidden="true"></canvas>
+            <div class="ss-pins-layer" id="pinsLayer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="ss-side">
+      <div class="ss-side-header">
+        <strong>Snags list</strong>
+        <span class="text-muted small ms-1" id="snagCount">- Total 0</span>
+      </div>
+      <div class="ss-filters">
+        <div class="row g-1">
+          <div class="col-6">
+            <select class="form-select" id="fStatus" aria-label="Filter status">
+              <option value="">All statuses</option>
+              <option value="open">Open</option>
+              <option value="in_progress">In progress</option>
+              <option value="completed">Completed</option>
+              <option value="verified">Verified</option>
+              <option value="closed">Closed</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <select class="form-select" id="fCategory" aria-label="Filter category"></select>
+          </div>
+          <div class="col-6">
+            <input type="text" class="form-control" id="fAssignee" placeholder="Assignee contains…">
+          </div>
+          <div class="col-6">
+            <input type="text" class="form-control" id="fSearch" placeholder="Search title…">
+          </div>
+        </div>
+        <div class="mt-2">
+          <button type="button" class="btn btn-sm btn-outline-light w-100" id="btnToggleArchived">
+            <i class="bi bi-archive me-1"></i> See Archive snags
+          </button>
+        </div>
+      </div>
+      <div class="px-2 py-2 border-bottom border-secondary border-opacity-25" style="max-height: 220px; overflow-y: auto;">
+        <div class="small fw-semibold text-secondary mb-1">Highlights &amp; flags (this drawing)</div>
+        <div id="highlightList"><p class="text-muted small mb-0">None yet.</p></div>
+      </div>
+      <div class="px-2 py-2 border-bottom border-secondary border-opacity-25" style="max-height: 280px; overflow-y: auto;">
+        <div class="small fw-semibold text-secondary mb-1">Measurements (this drawing)</div>
+        <div class="small text-muted mb-2" id="drawingScaleWrap">
+          <span class="text-secondary">Scale:</span> 1 px =
+          <input type="number" class="form-control form-control-sm d-inline-block align-middle mx-1" id="drawingScaleMm" min="0.0001" step="any" style="width:5.5rem;" title="mm per pixel on this drawing" disabled />
+          <span class="text-secondary">mm</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1" id="btnSaveDrawingScale" disabled>Save</button>
+        </div>
+        <div id="measurementList"><p class="text-muted small mb-0">None yet.</p></div>
+      </div>
+      <div class="ss-list" id="snagList"></div>
+      <div class="p-2 border-top border-secondary border-opacity-25 small text-muted">
+        <div><strong>Mock planning link</strong></div>
+        <div id="mockTasksPreview">No auto-tasks yet.</div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Print report (only visible when printing) -->
+  <div id="ssPrintRoot"></div>
+
+  <!-- Modal: New location / drawing -->
+  <div class="modal fade" id="modalNewLocation" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">New drawing (block / floor)</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label">Project</label>
+            <select class="form-select" id="nlProject"></select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Drawing name</label>
+            <input type="text" class="form-control" id="nlName" placeholder="e.g. Level 2 – GA">
+          </div>
+          <div class="row">
+            <div class="col-6 mb-2">
+              <label class="form-label">Block</label>
+              <input type="text" class="form-control" id="nlBlock" placeholder="A">
+            </div>
+            <div class="col-6 mb-2">
+              <label class="form-label">Floor</label>
+              <input type="text" class="form-control" id="nlFloor" placeholder="2">
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Scale (optional)</label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-dark text-light border-secondary">1 px =</span>
+              <input type="number" class="form-control bg-dark text-light border-secondary" id="nlPixelsToMm" min="0.0001" step="any" value="1" placeholder="mm">
+              <span class="input-group-text bg-dark text-light border-secondary">mm</span>
+            </div>
+            <div class="form-text text-secondary">Used to suggest real lengths/areas; you can override each measurement after placing it.</div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Drawing file (PNG / JPG)</label>
+            <input type="file" class="form-control" id="nlFile" accept="image/png,image/jpeg,image/jpg,image/webp">
+            <div class="form-text text-secondary">PDF is not rendered on canvas in this frontend-only build; export sheets as image.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-ss-accent" id="nlSave">Save drawing</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Snag detail -->
+  <div class="modal fade" id="modalSnag" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="snagModalTitle">Snag</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-secondary mb-2"><a href="#" id="linkManageCat" class="link-info">Manage categories</a></p>
+          <input type="hidden" id="snagId">
+          <input type="hidden" id="snagNx">
+          <input type="hidden" id="snagNy">
+          <div class="row g-2">
+            <div class="col-md-8">
+              <label class="form-label">Title</label>
+              <input type="text" class="form-control" id="snagTitle" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Status</label>
+              <select class="form-select" id="snagStatus">
+                <option value="open">Open</option>
+                <option value="in_progress">In progress</option>
+                <option value="completed">Completed</option>
+                <option value="verified">Verified</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Description</label>
+              <textarea class="form-control" id="snagDesc" rows="3"></textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Category</label>
+              <select class="form-select" id="snagCategory"></select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Who fixes (assignee)</label>
+              <select class="form-select" id="snagAssignee" aria-label="Assignee">
+                <option value="">— Unassigned —</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Target date</label>
+              <input type="date" class="form-control" id="snagTarget">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Mock planning task ID</label>
+              <input type="text" class="form-control" id="snagMockTask" readonly>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Photos – before</label>
+              <input type="file" class="form-control" id="snagPhotosBefore" accept="image/*" multiple>
+              <div class="d-flex flex-wrap gap-1 mt-1" id="previewBefore"></div>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Photos – after</label>
+              <input type="file" class="form-control" id="snagPhotosAfter" accept="image/*" multiple>
+              <div class="d-flex flex-wrap gap-1 mt-1" id="previewAfter"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-danger me-2" id="snagDelete" style="display:none;">Delete</button>
+          <button type="button" class="btn btn-outline-secondary me-2" id="snagArchive" style="display:none;">Archive</button>
+          <button type="button" class="btn btn-outline-success me-2" id="snagUnarchive" style="display:none;">Unarchive</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-ss-accent" id="snagSave">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Highlight flag / note -->
+  <div class="modal fade" id="modalHighlightFlag" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="flagModalTitle">Site flag / note</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="flagHighlightId">
+          <input type="hidden" id="flagNormX">
+          <input type="hidden" id="flagNormY">
+          <div class="mb-2">
+            <label class="form-label">Note</label>
+            <textarea class="form-control" id="flagText" rows="2" maxlength="500" placeholder="Short note…"></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Assignee (optional)</label>
+            <select class="form-select" id="flagAssignee" aria-label="Flag assignee">
+              <option value="">— None —</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Status</label>
+            <select class="form-select" id="flagStatus">
+              <option value="open">Open</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer d-flex flex-wrap">
+          <button type="button" class="btn btn-outline-danger me-auto" id="flagDelete" style="display:none;">Delete</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-ss-accent" id="flagSave">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Categories -->
+  <div class="modal fade" id="modalCategories" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Categories</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-secondary">Preset categories and custom ones are stored locally. You can remove presets from your list; existing snags keep their saved category text.</p>
+          <ul class="list-group list-group-flush" id="categoryList"></ul>
+          <div class="input-group mt-3">
+            <input type="text" class="form-control" id="newCategoryName" placeholder="New category name">
+            <button class="btn btn-ss-accent" type="button" id="addCategoryBtn">Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="ssToast" class="toast text-bg-dark border-secondary" role="status">
+      <div class="toast-body" id="ssToastBody"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+(function () {
+  'use strict';
+
+  var STORAGE_KEY = 'proconix_site_snags_v1';
+  var PRESET_CATEGORIES = [
+    'Crack', 'Damaged board', 'MF not level', 'Jointing defect', 'Taping defect',
+    'Water damage', 'Fire stopping', 'Air test failure', 'Other'
+  ];
+
+  var state = {
+    projects: [],
+    people: [],
+    locations: [],
+    snags: [],
+    mockTasks: [],
+    customCategories: [],
+    removedPresetCategories: [],
+    showArchived: false,
+    measurementsByLocation: {},
+    highlightsByLocation: {}
+  };
+
+  var view = {
+    scale: 1,
+    panX: 0,
+    panY: 0,
+    addPinMode: false,
+    activeTool: null,
+    measureDraft: { distanceP1: null, areaPoints: [], cursorNorm: null },
+    highlightDraft: { circleCenter: null, markerPoints: [], cursorNorm: null, snapRect: null }
+  };
+  var panning = false;
+  var snapZoneDragging = false;
+  var lastPan = { x: 0, y: 0 };
+  var selectedSnagId = null;
+  var pendingPhotosBefore = [];
+  var pendingPhotosAfter = [];
+  var pollTimer = null;
+  /** Set by dashboard parent via postMessage when storage is not visible inside the iframe. */
+  var managerSessionFromParent = null;
+
+  function uid() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return 'id-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+  }
+
+  function applyWorkspaceFromApi(data) {
+    if (!data || !data.success) return false;
+    state.projects = (data.projects || []).map(function (p) {
+      return { id: String(p.id), name: p.name || ('Project ' + p.id) };
+    });
+    state.people = data.people || [];
+    state.showArchived = !!data.showArchived;
+    state.locations = data.locations || [];
+    state.snags = (data.snags || []).map(function (s) {
+      var o = Object.assign({}, s);
+      if (o.assigneeUserId != null) o.assigneeUserId = Number(o.assigneeUserId);
+      else o.assigneeUserId = null;
+      if (o.assigneeManagerId != null) o.assigneeManagerId = Number(o.assigneeManagerId);
+      else o.assigneeManagerId = null;
+      return o;
+    });
+    state.measurementsByLocation = data.measurementsByLocation && typeof data.measurementsByLocation === 'object'
+      ? data.measurementsByLocation
+      : {};
+    state.highlightsByLocation = data.highlightsByLocation && typeof data.highlightsByLocation === 'object'
+      ? data.highlightsByLocation
+      : {};
+    state.customCategories = data.customCategories || [];
+    state.removedPresetCategories = Array.isArray(data.removedPresetCategories)
+      ? data.removedPresetCategories.filter(function (x) { return typeof x === 'string' && x; })
+      : [];
+    state.mockTasks = data.mockTasks || [];
+    return true;
+  }
+
+  function applyLegacyEnvelope(data) {
+    if (!data || data.version !== 1) return false;
+    state.projects = data.projects || [];
+    state.people = [];
+    state.locations = data.locations || [];
+    state.snags = data.snags || [];
+    state.mockTasks = data.mockTasks || [];
+    state.customCategories = data.customCategories || [];
+    state.removedPresetCategories = Array.isArray(data.removedPresetCategories)
+      ? data.removedPresetCategories.filter(function (x) { return typeof x === 'string' && x; })
+      : [];
+    state.showArchived = !!data.showArchived;
+    state.measurementsByLocation = data.measurementsByLocation && typeof data.measurementsByLocation === 'object'
+      ? data.measurementsByLocation
+      : {};
+    state.highlightsByLocation = data.highlightsByLocation && typeof data.highlightsByLocation === 'object'
+      ? data.highlightsByLocation
+      : {};
+    return true;
+  }
+
+  function buildLegacyLocalPayload() {
+    return {
+      version: 1,
+      projects: state.projects,
+      locations: state.locations,
+      snags: state.snags,
+      mockTasks: state.mockTasks,
+      customCategories: state.customCategories,
+      removedPresetCategories: state.removedPresetCategories || [],
+      showArchived: !!state.showArchived,
+      measurementsByLocation: state.measurementsByLocation || {},
+      highlightsByLocation: state.highlightsByLocation || {}
+    };
+  }
+
+  function normalizeTargetDateToYmd(v) {
+    if (v == null || v === '') return '';
+    var s = String(v).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return '';
+    return (
+      d.getFullYear() +
+      '-' +
+      String(d.getMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(d.getDate()).padStart(2, '0')
+    );
+  }
+
+  function buildWorkspacePutPayload() {
+    return {
+      showArchived: !!state.showArchived,
+      locations: state.locations,
+      snags: state.snags.map(function (s) {
+        return {
+          id: s.id,
+          locationId: s.locationId,
+          nx: s.nx,
+          ny: s.ny,
+          title: s.title,
+          description: s.description,
+          status: s.status,
+          category: s.category,
+          assigneeUserId: s.assigneeUserId != null ? Number(s.assigneeUserId) : null,
+          assigneeManagerId: s.assigneeManagerId != null ? Number(s.assigneeManagerId) : null,
+          assignee: s.assignee || '',
+          targetDate: normalizeTargetDateToYmd(s.targetDate),
+          mockPlanningTaskId: s.mockPlanningTaskId,
+          archived: !!s.archived,
+          photosBefore: s.photosBefore || [],
+          photosAfter: s.photosAfter || [],
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt
+        };
+      }),
+      measurementsByLocation: state.measurementsByLocation || {},
+      highlightsByLocation: state.highlightsByLocation || {},
+      customCategories: state.customCategories || [],
+      removedPresetCategories: state.removedPresetCategories || []
+    };
+  }
+
+  function siteSnagsUsesDb() {
+    return siteSnagsApiEnabled();
+  }
+
+  function persistLocalSnapshot() {
+    if (siteSnagsUsesDb()) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(buildLegacyLocalPayload()));
+    } catch (e) {
+      toast('Could not save to browser storage (quota exceeded?).');
+    }
+  }
+
+  var siteSnagsBackendTimer = null;
+  var siteSnagsBackendLastError = null;
+
+  function getManagerSessionPayload() {
+    if (managerSessionFromParent && managerSessionFromParent.manager_id != null && managerSessionFromParent.email) {
+      return managerSessionFromParent;
+    }
+    try {
+      var key = 'proconix_manager_session';
+      var raw = localStorage.getItem(key) || sessionStorage.getItem(key);
+      if (!raw) return null;
+      var s = JSON.parse(raw);
+      if (!s || s.manager_id == null || !s.email) return null;
+      return s;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getManagerSessionHeaders() {
+    var s = getManagerSessionPayload();
+    if (!s) return null;
+    return {
+      'Content-Type': 'application/json',
+      'X-Manager-Id': String(s.manager_id),
+      'X-Manager-Email': String(s.email).trim()
+    };
+  }
+
+  function siteSnagsApiEnabled() {
+    if (window.SITE_SNAGS_CONFIG && window.SITE_SNAGS_CONFIG.useBackend === false) return false;
+    return !!getManagerSessionHeaders();
+  }
+
+  function siteSnagsApiUrl(path) {
+    var base = (window.SITE_SNAGS_CONFIG && window.SITE_SNAGS_CONFIG.apiBase) || '';
+    base = String(base).replace(/\/$/, '');
+    return base + path;
+  }
+
+  function updateSiteSnagsSyncBadge() {
+    var badge = document.getElementById('ssSyncBadge');
+    if (!badge) return;
+    badge.classList.remove('text-warning');
+    if (!siteSnagsApiEnabled()) {
+      badge.textContent = 'Sync: local';
+      badge.title =
+        'No manager session found (same tab as Dashboard). Tip: at login check “Keep me signed in” so session is in localStorage, or open Site Snags only from the dashboard sidebar while logged in.';
+      return;
+    }
+    if (siteSnagsBackendLastError) {
+      badge.textContent = 'Sync: server error';
+      badge.title = siteSnagsBackendLastError;
+      badge.classList.add('text-warning');
+      return;
+    }
+    badge.textContent = 'Sync: server · ' + new Date().toLocaleTimeString();
+    badge.title = 'Projects and assignees load from the database; workspace saves here (debounced ~1.2s).';
+  }
+
+  function scheduleSiteSnagsBackendPush() {
+    if (!siteSnagsApiEnabled()) return;
+    if (siteSnagsBackendTimer) clearTimeout(siteSnagsBackendTimer);
+    siteSnagsBackendTimer = setTimeout(function () {
+      flushSiteSnagsBackendPush();
+    }, 1200);
+  }
+
+  function flushSiteSnagsBackendPush() {
+    siteSnagsBackendTimer = null;
+    var h = getManagerSessionHeaders();
+    if (!h) return Promise.resolve();
+    var url = siteSnagsApiUrl('/api/site-snags/workspace');
+    return fetch(url, {
+      method: 'PUT',
+      headers: h,
+      body: JSON.stringify(buildWorkspacePutPayload()),
+      credentials: 'same-origin'
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { res: res, data: data };
+        }).catch(function () {
+          return { res: res, data: {} };
+        });
+      })
+      .then(function (out) {
+        if (out.res.ok && out.data && out.data.success) {
+          siteSnagsBackendLastError = null;
+          updateSiteSnagsSyncBadge();
+          return;
+        }
+        siteSnagsBackendLastError = (out.data && out.data.message) || ('HTTP ' + out.res.status);
+        updateSiteSnagsSyncBadge();
+        if (out.res.status === 401) return;
+        if (out.res.status === 503 && out.data && out.data.code === 'site_snags_tables_missing') {
+          toast('Site Snags: run scripts/create_site_snags_tables.sql on the database.');
+        }
+      })
+      .catch(function () {
+        siteSnagsBackendLastError = 'Network error';
+        updateSiteSnagsSyncBadge();
+      });
+  }
+
+  function hydrateSiteSnagsFromServer() {
+    var h = getManagerSessionHeaders();
+    if (!h || (window.SITE_SNAGS_CONFIG && window.SITE_SNAGS_CONFIG.useBackend === false)) {
+      updateSiteSnagsSyncBadge();
+      return Promise.resolve(false);
+    }
+    var url = siteSnagsApiUrl('/api/site-snags/workspace');
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Manager-Id': h['X-Manager-Id'],
+        'X-Manager-Email': h['X-Manager-Email']
+      },
+      credentials: 'same-origin'
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { res: res, data: data };
+        }).catch(function () {
+          return { res: res, data: {} };
+        });
+      })
+      .then(function (out) {
+        if (!out.res.ok) {
+          if (out.res.status === 503 && out.data && out.data.code === 'site_snags_tables_missing') {
+            siteSnagsBackendLastError = out.data.message || 'Tables missing';
+          } else if (out.res.status === 401) {
+            siteSnagsBackendLastError = null;
+          } else {
+            siteSnagsBackendLastError = (out.data && out.data.message) || ('HTTP ' + out.res.status);
+          }
+          updateSiteSnagsSyncBadge();
+          return false;
+        }
+        if (!out.data || !out.data.success) {
+          updateSiteSnagsSyncBadge();
+          return false;
+        }
+        applyWorkspaceFromApi(out.data);
+        siteSnagsBackendLastError = null;
+        updateSiteSnagsSyncBadge();
+        return true;
+      })
+      .catch(function () {
+        siteSnagsBackendLastError = 'Could not reach server';
+        updateSiteSnagsSyncBadge();
+        return false;
+      });
+  }
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        defaultSeed();
+        return;
+      }
+      var data = JSON.parse(raw);
+      if (!data || data.version !== 1) {
+        defaultSeed();
+        return;
+      }
+      applyLegacyEnvelope(data);
+    } catch (e) {
+      defaultSeed();
+    }
+  }
+
+  function defaultSeed() {
+    state.projects = [
+      { id: uid(), name: 'Demo Site – Block A' },
+      { id: uid(), name: 'Demo Site – Block B' }
+    ];
+    state.people = [];
+    state.locations = [];
+    state.snags = [];
+    state.mockTasks = [];
+    state.customCategories = [];
+    state.removedPresetCategories = [];
+    state.showArchived = false;
+    state.measurementsByLocation = {};
+    state.highlightsByLocation = {};
+    persistLocalSnapshot();
+  }
+
+  function saveState() {
+    if (siteSnagsUsesDb()) {
+      scheduleSiteSnagsBackendPush();
+      return;
+    }
+    persistLocalSnapshot();
+  }
+
+  function allCategories() {
+    var set = {};
+    var removed = state.removedPresetCategories || [];
+    PRESET_CATEGORIES.forEach(function (c) {
+      if (removed.indexOf(c) === -1) set[c] = true;
+    });
+    state.customCategories.forEach(function (c) { if (c) set[c.trim()] = true; });
+    return Object.keys(set).sort();
+  }
+
+  function updateArchivedToggleButton() {
+    var btn = document.getElementById('btnToggleArchived');
+    if (!btn) return;
+    btn.innerHTML = state.showArchived
+      ? '<i class="bi bi-archive me-1"></i> Hide Archive snags'
+      : '<i class="bi bi-archive me-1"></i> See Archive snags';
+  }
+
+  function toast(msg) {
+    var el = document.getElementById('ssToast');
+    var body = document.getElementById('ssToastBody');
+    if (!el || !body) return;
+    body.textContent = msg;
+    var t = bootstrap.Toast.getOrCreateInstance(el, { delay: 2800 });
+    t.show();
+  }
+
+  function getLocationId() {
+    return document.getElementById('selectLocation').value || '';
+  }
+
+  function getSelectedProjectId() {
+    var el = document.getElementById('filterProject');
+    return el && el.value ? el.value : '';
+  }
+
+  function requireProjectThenDrawing() {
+    if (!getSelectedProjectId()) {
+      toast('Select a project first.');
+      return false;
+    }
+    if (!getLocationId()) {
+      toast('Select a drawing first.');
+      return false;
+    }
+    return true;
+  }
+
+  function currentLocation() {
+    var id = getLocationId();
+    return state.locations.find(function (l) { return l.id === id; });
+  }
+
+  /**
+   * @param {object} [options]
+   * @param {boolean} [options.ignoreStatusFilter] if true, status dropdown is ignored (for active total count)
+   */
+  function filteredSnags(options) {
+    options = options || {};
+    var ignoreStatus = !!options.ignoreStatusFilter;
+    var locId = getLocationId();
+    var st = ignoreStatus ? '' : document.getElementById('fStatus').value;
+    var cat = document.getElementById('fCategory').value;
+    var asg = (document.getElementById('fAssignee').value || '').toLowerCase();
+    var q = (document.getElementById('fSearch').value || '').toLowerCase();
+    var proj = document.getElementById('filterProject').value;
+
+    return state.snags.filter(function (s) {
+      // By default we hide archived snags; toggle can show them.
+      if (s.archived && !state.showArchived) return false;
+      if (!proj) return false;
+      var loc = state.locations.find(function (l) { return l.id === s.locationId; });
+      if (!loc) return false;
+      if (String(loc.projectId) !== String(proj)) return false;
+      if (locId && s.locationId !== locId) return false;
+      if (st && s.status !== st) return false;
+      if (cat && s.category !== cat) return false;
+      if (asg && (s.assignee || '').toLowerCase().indexOf(asg) === -1) return false;
+      if (q && (s.title || '').toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    });
+  }
+
+  function countSnagsExcludingClosedCompleted() {
+    return filteredSnags({ ignoreStatusFilter: true }).filter(function (s) {
+      return s.status !== 'closed' && s.status !== 'completed';
+    }).length;
+  }
+
+  function resizeImageDataUrl(file, maxSide, cb) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var w = img.naturalWidth;
+        var h = img.naturalHeight;
+        var scale = Math.min(1, maxSide / Math.max(w, h));
+        var cw = Math.round(w * scale);
+        var ch = Math.round(h * scale);
+        var c = document.createElement('canvas');
+        c.width = cw;
+        c.height = ch;
+        var ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, cw, ch);
+        cb(c.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function readFilesAsDataUrls(inputEl, maxEach, done) {
+    var files = inputEl.files;
+    if (!files || !files.length) return done([]);
+    var out = [];
+    var left = Math.min(files.length, maxEach);
+    var i = 0;
+    function next() {
+      if (i >= left) return done(out);
+      resizeImageDataUrl(files[i], 900, function (url) {
+        out.push(url);
+        i++;
+        next();
+      });
+    }
+    next();
+  }
+
+  function ensureMockTaskForSnag(snag) {
+    if (snag.mockPlanningTaskId) return snag.mockPlanningTaskId;
+    var maxNum = 0;
+    (state.mockTasks || []).forEach(function (t) {
+      var m = /^PLAN-SNAG-(\d+)$/.exec(String(t.id || ''));
+      if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+    });
+    var tid = 'PLAN-SNAG-' + String(maxNum + 1).padStart(4, '0');
+    state.mockTasks.push({
+      id: tid,
+      snagId: snag.id,
+      title: 'Resolve: ' + (snag.title || 'Snag'),
+      status: snag.status === 'closed' ? 'closed' : snag.status === 'verified' ? 'verified' : 'active',
+      createdAt: new Date().toISOString()
+    });
+    snag.mockPlanningTaskId = tid;
+    return tid;
+  }
+
+  /** Every snag gets a planning link so Task & Planning and the sidebar can list them all. */
+  function syncMockPlanningLinksForAllSnags() {
+    if (!state.snags || !state.snags.length) {
+      state.mockTasks = [];
+      return;
+    }
+    var snagIds = {};
+    state.snags.forEach(function (s) {
+      snagIds[s.id] = true;
+    });
+    var kept = (state.mockTasks || []).filter(function (t) {
+      return t.snagId && snagIds[t.snagId];
+    });
+    var maxNum = 0;
+    kept.forEach(function (t) {
+      var m = /^PLAN-SNAG-(\d+)$/.exec(String(t.id || ''));
+      if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+    });
+    function pickTaskForSnag(s) {
+      var byMockId = null;
+      if (s.mockPlanningTaskId) {
+        for (var i = 0; i < kept.length; i++) {
+          if (kept[i].id === s.mockPlanningTaskId && kept[i].snagId === s.id) {
+            byMockId = kept[i];
+            break;
+          }
+        }
+      }
+      if (byMockId) return byMockId;
+      for (var j = 0; j < kept.length; j++) {
+        if (kept[j].snagId === s.id) return kept[j];
+      }
+      return null;
+    }
+    var next = [];
+    var changed = false;
+    state.snags.forEach(function (s) {
+      var t = pickTaskForSnag(s);
+      if (!t) {
+        maxNum++;
+        var tid = 'PLAN-SNAG-' + String(maxNum).padStart(4, '0');
+        var seen = {};
+        kept.forEach(function (x) { seen[x.id] = true; });
+        next.forEach(function (x) { seen[x.id] = true; });
+        while (seen[tid]) {
+          maxNum++;
+          tid = 'PLAN-SNAG-' + String(maxNum).padStart(4, '0');
+        }
+        t = {
+          id: tid,
+          snagId: s.id,
+          title: 'Resolve: ' + (s.title || 'Snag'),
+          status: s.status === 'closed' ? 'closed' : s.status === 'verified' ? 'verified' : 'active',
+          createdAt: s.createdAt || new Date().toISOString()
+        };
+        changed = true;
+      } else {
+        var newTitle = 'Resolve: ' + (s.title || 'Snag');
+        var newSt = s.status === 'closed' ? 'closed' : s.status === 'verified' ? 'verified' : 'active';
+        t.title = newTitle;
+        t.status = newSt;
+        if (s.mockPlanningTaskId !== t.id) changed = true;
+      }
+      if (s.mockPlanningTaskId !== t.id) {
+        s.mockPlanningTaskId = t.id;
+        changed = true;
+      }
+      next.push(t);
+    });
+    state.mockTasks = next;
+    if (changed) saveState();
+  }
+
+  function fillProjectSelects() {
+    var fp = document.getElementById('filterProject');
+    var nl = document.getElementById('nlProject');
+    var prevFp = fp ? fp.value : '';
+    fp.innerHTML = '<option value="">— Select project —</option>';
+    nl.innerHTML = '';
+    state.projects.forEach(function (p) {
+      fp.appendChild(new Option(p.name, p.id));
+      nl.appendChild(new Option(p.name, p.id));
+    });
+    if (!state.projects.length) {
+      fp.innerHTML =
+        '<option value="">' +
+        (siteSnagsUsesDb() ? 'No projects — create in Dashboard → My Projects' : 'Add a project in data…') +
+        '</option>';
+    } else if (prevFp && Array.prototype.some.call(fp.options, function (o) { return o.value === prevFp; })) {
+      fp.value = prevFp;
+    }
+  }
+
+  function fillPeopleAssigneeSelects() {
+    var snagSel = document.getElementById('snagAssignee');
+    var flagSel = document.getElementById('flagAssignee');
+    function fill(sel, emptyLabel) {
+      if (!sel) return;
+      sel.innerHTML = '<option value="">' + emptyLabel + '</option>';
+      (state.people || []).forEach(function (p) {
+        var label = p.label + (p.email ? ' · ' + p.email : '');
+        sel.appendChild(new Option(label, p.kind + ':' + p.id));
+      });
+    }
+    fill(snagSel, '— Unassigned —');
+    fill(flagSel, '— None —');
+  }
+
+  function assigneeSelectValueFromTarget(t) {
+    if (!t) return '';
+    if (t.assigneeUserId != null && t.assigneeUserId !== '') return 'user:' + t.assigneeUserId;
+    if (t.assigneeManagerId != null && t.assigneeManagerId !== '') return 'manager:' + t.assigneeManagerId;
+    return '';
+  }
+
+  function applyAssigneeSelectToTarget(selValue, target) {
+    target.assigneeUserId = null;
+    target.assigneeManagerId = null;
+    target.assignee = '';
+    if (!selValue) return;
+    var idx = selValue.indexOf(':');
+    if (idx < 0) return;
+    var kind = selValue.slice(0, idx);
+    var idNum = parseInt(selValue.slice(idx + 1), 10);
+    if (!Number.isInteger(idNum)) return;
+    if (kind === 'user') target.assigneeUserId = idNum;
+    else if (kind === 'manager') target.assigneeManagerId = idNum;
+    var pers = (state.people || []).find(function (p) {
+      return p.kind === kind && Number(p.id) === idNum;
+    });
+    target.assignee = pers ? pers.label : '';
+  }
+
+  function fillLocationSelect() {
+    var sel = document.getElementById('selectLocation');
+    if (!sel) return;
+    var proj = document.getElementById('filterProject').value;
+    var prev = sel.value;
+    sel.innerHTML = '';
+    if (!proj) {
+      sel.disabled = true;
+      sel.appendChild(new Option('— Select a project first —', ''));
+      sel.value = '';
+      return;
+    }
+    sel.disabled = false;
+    sel.appendChild(new Option('— Select drawing —', ''));
+    state.locations.forEach(function (l) {
+      if (String(l.projectId) !== String(proj)) return;
+      var label = (l.name || 'Drawing') + ' · Block ' + (l.block || '—') + ' · Fl. ' + (l.floor || '—');
+      sel.appendChild(new Option(label, l.id));
+    });
+    if (prev) {
+      var ok = Array.prototype.some.call(sel.options, function (o) { return o.value === prev; });
+      if (ok) sel.value = prev;
+    }
+  }
+
+  function fillCategoryFilters() {
+    var fc = document.getElementById('fCategory');
+    var sc = document.getElementById('snagCategory');
+    var opts = '<option value="">All categories</option>';
+    allCategories().forEach(function (c) {
+      opts += '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>';
+    });
+    fc.innerHTML = opts;
+    sc.innerHTML = '';
+    allCategories().forEach(function (c) {
+      sc.appendChild(new Option(c, c));
+    });
+  }
+
+  function escapeHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  }
+
+  function ensureMeasurementsBucket(locId) {
+    if (!state.measurementsByLocation[locId]) state.measurementsByLocation[locId] = [];
+    return state.measurementsByLocation[locId];
+  }
+
+  function ensureHighlightsBucket(locId) {
+    if (!state.highlightsByLocation[locId]) state.highlightsByLocation[locId] = [];
+    return state.highlightsByLocation[locId];
+  }
+
+  function getMarkerColors(preset) {
+    if (preset === 'yellow') return { fill: 'rgba(250, 204, 21, 0.4)', stroke: '#ca8a04' };
+    if (preset === 'red') return { fill: 'rgba(239, 68, 68, 0.35)', stroke: '#b91c1c' };
+    return { fill: 'rgba(249, 115, 22, 0.38)', stroke: '#c2410c' };
+  }
+
+  function drawFlagGlyphOnContext(ctx, x, y, W, resolved) {
+    var s = Math.max(12, Math.min(W, ctx.canvas.height) / 55);
+    ctx.beginPath();
+    ctx.fillStyle = resolved ? '#22c55e' : '#f59e0b';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = Math.max(1.5, s / 8);
+    ctx.moveTo(x, y - s);
+    ctx.lineTo(x + s * 0.95, y - s * 0.3);
+    ctx.lineTo(x, y + s * 0.25);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  /**
+   * @param {object} draft { circleCenter, markerPoints, cursorNorm }
+   */
+  function drawHighlightsOnContext(ctx, W, H, list, draft, activeTool) {
+    list = list || [];
+    draft = draft || {};
+    var lineW = Math.max(2, W / 350);
+    list.forEach(function (h) {
+      if (!h || !h.type) return;
+      if (h.type === 'circle') {
+        var cx = h.cx * W;
+        var cy = h.cy * H;
+        var r = h.radiusPx != null ? h.radiusPx : 24;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(45, 212, 191, 0.18)';
+        ctx.fill();
+        ctx.strokeStyle = h.strokeColor || '#2dd4bf';
+        ctx.lineWidth = Math.max(3, W / 280);
+        ctx.stroke();
+        if (h.label) {
+          var fs = Math.max(11, Math.round(W / 85));
+          ctx.font = 'bold ' + fs + 'px Inter,system-ui,sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          var ly = cy - r - 6;
+          ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+          ctx.lineWidth = 3;
+          ctx.strokeText(h.label, cx, ly);
+          ctx.fillStyle = '#fff';
+          ctx.fillText(h.label, cx, ly);
+        }
+      } else if (h.type === 'marker' && h.points && h.points.length >= 3) {
+        var cols = getMarkerColors(h.colorPreset);
+        ctx.beginPath();
+        h.points.forEach(function (p, i) {
+          var px = p.x * W;
+          var py = p.y * H;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        ctx.closePath();
+        ctx.fillStyle = h.fillColor || cols.fill;
+        ctx.fill();
+        ctx.strokeStyle = h.strokeColor || cols.stroke;
+        ctx.lineWidth = lineW;
+        ctx.stroke();
+      } else if (h.type === 'flag') {
+        var fxx = h.nx * W;
+        var fyy = h.ny * H;
+        drawFlagGlyphOnContext(ctx, fxx, fyy, W, h.status === 'resolved');
+        if (h.text) {
+          var fts = Math.max(10, Math.round(W / 90));
+          ctx.font = '600 ' + fts + 'px Inter,system-ui,sans-serif';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          ctx.fillStyle = 'rgba(0,0,0,0.85)';
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.lineWidth = 2;
+          var tx = Math.min(fxx + 12, W - 120);
+          var ty = fyy - 8;
+          ctx.strokeText(String(h.text).slice(0, 48), tx, ty);
+          ctx.fillText(String(h.text).slice(0, 48), tx, ty);
+        }
+      }
+    });
+
+    if (draft.circleCenter && draft.cursorNorm && activeTool === 'circle') {
+      var cxc = draft.circleCenter.x * W;
+      var cyc = draft.circleCenter.y * H;
+      var rr = Math.hypot(draft.cursorNorm.x * W - cxc, draft.cursorNorm.y * H - cyc);
+      ctx.save();
+      ctx.setLineDash([7, 5]);
+      ctx.beginPath();
+      ctx.arc(cxc, cyc, rr, 0, Math.PI * 2);
+      ctx.strokeStyle = '#facc15';
+      ctx.lineWidth = lineW;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (draft.markerPoints && draft.markerPoints.length && activeTool === 'marker') {
+      var colsD = getMarkerColors(document.getElementById('markerColorPreset') && document.getElementById('markerColorPreset').value);
+      ctx.beginPath();
+      draft.markerPoints.forEach(function (p, i) {
+        var px = p.x * W;
+        var py = p.y * H;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      if (draft.cursorNorm) {
+        ctx.lineTo(draft.cursorNorm.x * W, draft.cursorNorm.y * H);
+      }
+      ctx.strokeStyle = colsD.stroke;
+      ctx.lineWidth = lineW;
+      ctx.stroke();
+    }
+
+    if (draft.snapRect && activeTool === 'snapzone') {
+      var sx1 = Math.min(draft.snapRect.x1, draft.snapRect.x2) * W;
+      var sy1 = Math.min(draft.snapRect.y1, draft.snapRect.y2) * H;
+      var sx2 = Math.max(draft.snapRect.x1, draft.snapRect.x2) * W;
+      var sy2 = Math.max(draft.snapRect.y1, draft.snapRect.y2) * H;
+      ctx.save();
+      ctx.setLineDash([10, 6]);
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = Math.max(2, W / 380);
+      ctx.strokeRect(sx1, sy1, Math.max(0, sx2 - sx1), Math.max(0, sy2 - sy1));
+      ctx.restore();
+    }
+  }
+
+  function highlightOverlapsCrop(h, left, top, side, W, H) {
+    var r = { l: left, t: top, r: left + side, b: top + side };
+    if (h.type === 'circle') {
+      var cx = h.cx * W;
+      var cy = h.cy * H;
+      var rad = h.radiusPx != null ? h.radiusPx : 24;
+      var nx = Math.max(r.l, Math.min(cx, r.r));
+      var ny = Math.max(r.t, Math.min(cy, r.b));
+      return Math.hypot(cx - nx, cy - ny) <= rad;
+    }
+    if (h.type === 'marker' && h.points && h.points.length >= 3) {
+      var minx = 1;
+      var miny = 1;
+      var maxx = 0;
+      var maxy = 0;
+      h.points.forEach(function (p) {
+        minx = Math.min(minx, p.x);
+        miny = Math.min(miny, p.y);
+        maxx = Math.max(maxx, p.x);
+        maxy = Math.max(maxy, p.y);
+      });
+      var pL = minx * W;
+      var pT = miny * H;
+      var pR = maxx * W;
+      var pB = maxy * H;
+      return !(pR < r.l || pL > r.r || pB < r.t || pT > r.b);
+    }
+    if (h.type === 'flag') {
+      var fx = h.nx * W;
+      var fy = h.ny * H;
+      var pad = Math.max(24, side * 0.06);
+      return fx >= r.l - pad && fx <= r.r + pad && fy >= r.t - pad && fy <= r.b + pad;
+    }
+    return false;
+  }
+
+  function drawHighlightsOnCrop(ctx, out, highlights, left, top, side, W, H, px, py) {
+    highlights.forEach(function (h) {
+      if (!highlightOverlapsCrop(h, left, top, side, W, H)) return;
+      if (h.type === 'circle') {
+        var cx = ((h.cx * W - left) / side) * out;
+        var cy = ((h.cy * H - top) / side) * out;
+        var rr = (h.radiusPx != null ? h.radiusPx : 24) * (out / side);
+        ctx.beginPath();
+        ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(45, 212, 191, 0.2)';
+        ctx.fill();
+        ctx.strokeStyle = h.strokeColor || '#2dd4bf';
+        ctx.lineWidth = Math.max(2, out / 200);
+        ctx.stroke();
+        if (h.label) {
+          ctx.font = 'bold ' + Math.max(10, out / 42) + 'px Inter,sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#111';
+          ctx.fillText(h.label, cx, cy - rr - 4);
+        }
+      } else if (h.type === 'marker' && h.points && h.points.length >= 3) {
+        var cols = getMarkerColors(h.colorPreset);
+        ctx.beginPath();
+        h.points.forEach(function (p, i) {
+          var x = ((p.x * W - left) / side) * out;
+          var y = ((p.y * H - top) / side) * out;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.closePath();
+        ctx.fillStyle = h.fillColor || cols.fill;
+        ctx.fill();
+        ctx.strokeStyle = h.strokeColor || cols.stroke;
+        ctx.lineWidth = Math.max(2, out / 220);
+        ctx.stroke();
+      } else if (h.type === 'flag') {
+        var fx = ((h.nx * W - left) / side) * out;
+        var fy = ((h.ny * H - top) / side) * out;
+        drawFlagGlyphOnContext(ctx, fx, fy, out, h.status === 'resolved');
+        if (h.text) {
+          ctx.font = Math.max(9, out / 48) + 'px Inter,sans-serif';
+          ctx.fillStyle = '#111';
+          ctx.textAlign = 'left';
+          var lines = String(h.text).split(/\n/).slice(0, 2);
+          lines.forEach(function (ln, i) {
+            ctx.fillText(ln.slice(0, 42), fx + 8, fy + 18 + i * 12);
+          });
+        }
+      }
+    });
+  }
+
+  function renderHighlightCanvas() {
+    var canvas = document.getElementById('highlightCanvas');
+    var img = document.getElementById('drawingImg');
+    if (!canvas || !img || !img.naturalWidth) return;
+    var W = img.naturalWidth;
+    var H = img.naturalHeight;
+    canvas.width = W;
+    canvas.height = H;
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    var locId = getLocationId();
+    if (!locId) return;
+    var list = state.highlightsByLocation[locId] || [];
+    drawHighlightsOnContext(ctx, W, H, list, {
+      circleCenter: view.highlightDraft.circleCenter,
+      markerPoints: view.highlightDraft.markerPoints,
+      cursorNorm: view.highlightDraft.cursorNorm,
+      snapRect: view.highlightDraft.snapRect
+    }, view.activeTool);
+  }
+
+  function hitTestFlagNorm(norm, locId) {
+    var list = state.highlightsByLocation[locId] || [];
+    var inner = document.getElementById('inner');
+    if (!inner || !norm) return null;
+    var rect = inner.getBoundingClientRect();
+    var cx = norm.x * rect.width;
+    var cy = norm.y * rect.height;
+    var hitR = 28;
+    for (var i = list.length - 1; i >= 0; i--) {
+      var h = list[i];
+      if (h.type !== 'flag') continue;
+      var px = h.nx * rect.width;
+      var py = h.ny * rect.height;
+      if (Math.hypot(cx - px, cy - py) <= hitR) return h;
+    }
+    return null;
+  }
+
+  function openFlagModal(existing, norm) {
+    var modalEl = document.getElementById('modalHighlightFlag');
+    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    fillPeopleAssigneeSelects();
+    document.getElementById('flagModalTitle').textContent = existing ? 'Edit flag / note' : 'New flag / note';
+    document.getElementById('flagHighlightId').value = existing ? existing.id : '';
+    document.getElementById('flagNormX').value = existing ? existing.nx : (norm ? norm.x : '');
+    document.getElementById('flagNormY').value = existing ? existing.ny : (norm ? norm.y : '');
+    document.getElementById('flagText').value = existing ? (existing.text || '') : '';
+    document.getElementById('flagAssignee').value = existing ? assigneeSelectValueFromTarget(existing) : '';
+    document.getElementById('flagStatus').value = existing && existing.status === 'resolved' ? 'resolved' : 'open';
+    var del = document.getElementById('flagDelete');
+    if (del) del.style.display = existing ? 'block' : 'none';
+    modal.show();
+  }
+
+  function saveFlagFromModal() {
+    var locId = getLocationId();
+    if (!locId) return;
+    var id = document.getElementById('flagHighlightId').value;
+    var nx = parseFloat(document.getElementById('flagNormX').value);
+    var ny = parseFloat(document.getElementById('flagNormY').value);
+    var text = (document.getElementById('flagText').value || '').trim();
+    var assigneeVal = document.getElementById('flagAssignee').value || '';
+    var status = document.getElementById('flagStatus').value === 'resolved' ? 'resolved' : 'open';
+    if (!isFinite(nx) || !isFinite(ny)) return;
+    var bucket = ensureHighlightsBucket(locId);
+    if (id) {
+      var h = bucket.find(function (x) { return x.id === id; });
+      if (h) {
+        h.text = text;
+        applyAssigneeSelectToTarget(assigneeVal, h);
+        h.status = status;
+      }
+    } else {
+      var nu = { id: uid(), type: 'flag', nx: nx, ny: ny, text: text, status: status };
+      applyAssigneeSelectToTarget(assigneeVal, nu);
+      bucket.push(nu);
+    }
+    saveState();
+    renderHighlightCanvas();
+    renderHighlightList();
+    var flagModalEl = document.getElementById('modalHighlightFlag');
+    var flagMi = flagModalEl ? bootstrap.Modal.getInstance(flagModalEl) : null;
+    if (flagMi) flagMi.hide();
+    toast('Flag saved.');
+  }
+
+  function deleteFlagFromModal() {
+    var id = document.getElementById('flagHighlightId').value;
+    var locId = getLocationId();
+    if (!id || !locId) return;
+    state.highlightsByLocation[locId] = (state.highlightsByLocation[locId] || []).filter(function (x) { return x.id !== id; });
+    saveState();
+    renderHighlightCanvas();
+    renderHighlightList();
+    var flagModalEl2 = document.getElementById('modalHighlightFlag');
+    var flagMi2 = flagModalEl2 ? bootstrap.Modal.getInstance(flagModalEl2) : null;
+    if (flagMi2) flagMi2.hide();
+    toast('Flag removed.');
+  }
+
+  function renderHighlightList() {
+    var el = document.getElementById('highlightList');
+    if (!el) return;
+    var locId = getLocationId();
+    var list = locId ? (state.highlightsByLocation[locId] || []) : [];
+    if (!list.length) {
+      el.innerHTML = '<p class="text-muted small mb-0">None yet.</p>';
+      return;
+    }
+    el.innerHTML = list.map(function (h, idx) {
+      var mid = escapeHtml(h.id);
+      var summary = '';
+      if (h.type === 'circle') summary = 'Circle' + (h.label ? ' · ' + escapeHtml(h.label) : '');
+      else if (h.type === 'marker') summary = 'Marker zone (' + (h.points ? h.points.length : 0) + ' pts)';
+      else if (h.type === 'flag') summary = 'Flag · ' + escapeHtml((h.text || '').slice(0, 40) || '(no text)');
+      else summary = escapeHtml(h.type || '?');
+      return (
+        '<div class="ss-measure-row d-flex justify-content-between align-items-center gap-1">' +
+        '<span class="small">#' + (idx + 1) + ' · ' + summary + '</span>' +
+        '<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" data-highlight-del="' + mid + '">Del</button>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function deleteHighlightById(hid) {
+    var locId = getLocationId();
+    if (!locId || !hid) return;
+    state.highlightsByLocation[locId] = (state.highlightsByLocation[locId] || []).filter(function (x) { return x.id !== hid; });
+    saveState();
+    renderHighlightCanvas();
+    renderHighlightList();
+  }
+
+  function clearAllHighlightsForDrawing() {
+    var locId = getLocationId();
+    if (!locId) {
+      toast('Select a drawing first.');
+      return;
+    }
+    if (!window.confirm('Remove all highlights (circles, markers, flags) on this drawing?')) return;
+    state.highlightsByLocation[locId] = [];
+    view.highlightDraft = { circleCenter: null, markerPoints: [], cursorNorm: null, snapRect: null };
+    saveState();
+    renderHighlightCanvas();
+    renderHighlightList();
+    updateMeasureToolbar();
+    toast('Highlights cleared.');
+  }
+
+  function undoLastHighlight() {
+    var locId = getLocationId();
+    if (!locId) {
+      toast('Select a drawing first.');
+      return;
+    }
+    var arr = state.highlightsByLocation[locId];
+    if (!arr || !arr.length) {
+      toast('No highlights to undo.');
+      return;
+    }
+    arr.pop();
+    saveState();
+    renderHighlightCanvas();
+    renderHighlightList();
+    toast('Last highlight removed.');
+  }
+
+  function finishMarkerOnDoubleClick(e) {
+    if (view.activeTool !== 'marker') return;
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    var pts = view.highlightDraft.markerPoints || [];
+    if (pts.length < 3) {
+      toast('Place at least 3 corners, then double-click to finish the marker.');
+      return;
+    }
+    if (pts.length >= 5) {
+      view.highlightDraft.markerPoints.pop();
+      view.highlightDraft.markerPoints.pop();
+    }
+    finishCurrentMarkerPolygon();
+  }
+
+  function finishCurrentMarkerPolygon() {
+    var locId = getLocationId();
+    if (!locId || view.activeTool !== 'marker') return;
+    var pts = view.highlightDraft.markerPoints || [];
+    if (pts.length < 3) {
+      toast('Need at least 3 points for a marker zone.');
+      return;
+    }
+    var preset = document.getElementById('markerColorPreset') ? document.getElementById('markerColorPreset').value : 'orange';
+    var cols = getMarkerColors(preset);
+    var copy = pts.map(function (p) { return { x: p.x, y: p.y }; });
+    ensureHighlightsBucket(locId).push({
+      id: uid(),
+      type: 'marker',
+      points: copy,
+      colorPreset: preset,
+      fillColor: cols.fill,
+      strokeColor: cols.stroke
+    });
+    view.highlightDraft.markerPoints = [];
+    view.highlightDraft.cursorNorm = null;
+    saveState();
+    renderHighlightCanvas();
+    renderHighlightList();
+    updateMeasureToolbar();
+    toast('Marker zone saved.');
+  }
+
+  function onHighlightCanvasClick(e) {
+    e.stopPropagation();
+    var locId = getLocationId();
+    if (!locId) return;
+    var t = view.activeTool;
+    if (t !== 'circle' && t !== 'marker' && t !== 'flag') return;
+    var norm = normFromEventOnInner(e);
+    if (!norm) return;
+    norm = snapNormToNearestPin(norm, locId);
+    var img = document.getElementById('drawingImg');
+    var W = img.naturalWidth;
+    var H = img.naturalHeight;
+
+    if (t === 'flag') {
+      var hit = hitTestFlagNorm(norm, locId);
+      if (hit) {
+        openFlagModal(hit, null);
+        return;
+      }
+      openFlagModal(null, norm);
+      return;
+    }
+
+    if (t === 'circle') {
+      if (!view.highlightDraft.circleCenter) {
+        view.highlightDraft.circleCenter = { x: norm.x, y: norm.y };
+        renderHighlightCanvas();
+        toast('Click to set radius.');
+        return;
+      }
+      var c = view.highlightDraft.circleCenter;
+      var rPx = Math.round(Math.hypot((norm.x - c.x) * W, (norm.y - c.y) * H));
+      if (rPx < 4) {
+        toast('Radius too small.');
+        return;
+      }
+      ensureHighlightsBucket(locId).push({
+        id: uid(),
+        type: 'circle',
+        cx: c.x,
+        cy: c.y,
+        radiusPx: rPx,
+        strokeColor: '#2dd4bf'
+      });
+      view.highlightDraft.circleCenter = null;
+      view.highlightDraft.cursorNorm = null;
+      saveState();
+      renderHighlightCanvas();
+      renderHighlightList();
+      toast('Circle highlight saved.');
+      return;
+    }
+
+    if (t === 'marker') {
+      if (!view.highlightDraft.markerPoints) view.highlightDraft.markerPoints = [];
+      view.highlightDraft.markerPoints.push({ x: norm.x, y: norm.y });
+      updateMeasureToolbar();
+      renderHighlightCanvas();
+      toast('Marker point ' + view.highlightDraft.markerPoints.length + ' placed.');
+    }
+  }
+
+  function getLocationPixelsToMm(loc) {
+    if (!loc || loc.pixelsToMm == null || loc.pixelsToMm === '') return 1;
+    var v = Number(loc.pixelsToMm);
+    if (!isFinite(v) || v <= 0) return 1;
+    return v;
+  }
+
+  function pxLengthToMm(lengthPx, pixelsToMm) {
+    return lengthPx * pixelsToMm;
+  }
+
+  function pxAreaToMm2(areaPx2, pixelsToMm) {
+    return areaPx2 * pixelsToMm * pixelsToMm;
+  }
+
+  function formatMeasureNumber(n, maxDec) {
+    maxDec = maxDec == null ? 2 : maxDec;
+    if (!isFinite(n)) return '0';
+    var s = n.toFixed(maxDec);
+    if (s.indexOf('.') >= 0) s = s.replace(/\.?0+$/, '');
+    return s || '0';
+  }
+
+  function distanceLabelFromMeasurement(m, pixelsToMm) {
+    var lenPx = m.lengthPx != null ? m.lengthPx : 0;
+    var unit = m.unit || 'px';
+    if (unit === 'px') return lenPx + ' px';
+    var mm = m.lengthMm != null && isFinite(Number(m.lengthMm))
+      ? Number(m.lengthMm)
+      : pxLengthToMm(lenPx, pixelsToMm);
+    if (unit === 'mm') return formatMeasureNumber(mm, 2) + ' mm';
+    if (unit === 'cm') return formatMeasureNumber(mm / 10, 3) + ' cm';
+    if (unit === 'm') return formatMeasureNumber(mm / 1000, 4) + ' m';
+    return lenPx + ' px';
+  }
+
+  function areaLabelFromMeasurement(m, pixelsToMm) {
+    var apx = m.areaPx2 != null ? m.areaPx2 : 0;
+    var unit = m.areaUnit || 'px²';
+    if (unit === 'px²') return apx + ' px²';
+    var mm2 = m.areaMm2 != null && isFinite(Number(m.areaMm2))
+      ? Number(m.areaMm2)
+      : pxAreaToMm2(apx, pixelsToMm);
+    if (unit === 'mm²') return formatMeasureNumber(mm2, 2) + ' mm²';
+    if (unit === 'cm²') return formatMeasureNumber(mm2 / 100, 3) + ' cm²';
+    if (unit === 'm²') return formatMeasureNumber(mm2 / 1e6, 4) + ' m²';
+    return apx + ' px²';
+  }
+
+  function parseDistanceInputToMm(valueStr, unit, lengthPx, pixelsToMm) {
+    var v = parseFloat(String(valueStr).replace(',', '.'));
+    var fallback = pxLengthToMm(lengthPx, pixelsToMm);
+    if (!isFinite(v)) return fallback;
+    if (unit === 'px') return v * pixelsToMm;
+    if (unit === 'mm') return v;
+    if (unit === 'cm') return v * 10;
+    if (unit === 'm') return v * 1000;
+    return fallback;
+  }
+
+  function parseAreaInputToMm2(valueStr, unit, areaPx2, pixelsToMm) {
+    var v = parseFloat(String(valueStr).replace(',', '.'));
+    var fallback = pxAreaToMm2(areaPx2, pixelsToMm);
+    if (!isFinite(v)) return fallback;
+    if (unit === 'px²') return v * pixelsToMm * pixelsToMm;
+    if (unit === 'mm²') return v;
+    if (unit === 'cm²') return v * 100;
+    if (unit === 'm²') return v * 1e6;
+    return fallback;
+  }
+
+  function displayValueForDistanceInput(m, unit) {
+    var lenPx = m.lengthPx != null ? m.lengthPx : 0;
+    var mm = m.lengthMm != null && isFinite(Number(m.lengthMm)) ? Number(m.lengthMm) : 0;
+    if (unit === 'px') return String(lenPx);
+    if (unit === 'mm') return formatMeasureNumber(mm, 2);
+    if (unit === 'cm') return formatMeasureNumber(mm / 10, 3);
+    if (unit === 'm') return formatMeasureNumber(mm / 1000, 4);
+    return String(lenPx);
+  }
+
+  function displayValueForAreaInput(m, unit) {
+    var apx = m.areaPx2 != null ? m.areaPx2 : 0;
+    var mm2 = m.areaMm2 != null && isFinite(Number(m.areaMm2)) ? Number(m.areaMm2) : 0;
+    if (unit === 'px²') return String(apx);
+    if (unit === 'mm²') return formatMeasureNumber(mm2, 2);
+    if (unit === 'cm²') return formatMeasureNumber(mm2 / 100, 3);
+    if (unit === 'm²') return formatMeasureNumber(mm2 / 1e6, 4);
+    return String(apx);
+  }
+
+  function normalizeMeasurementsForLocation(loc) {
+    if (!loc || !loc.id) return;
+    var list = state.measurementsByLocation[loc.id];
+    if (!list || !list.length) return;
+    var pxToMm = getLocationPixelsToMm(loc);
+    var changed = false;
+    list.forEach(function (m) {
+      if (m.type === 'distance') {
+        if (m.lengthMm == null && m.lengthPx != null) {
+          m.lengthMm = pxLengthToMm(m.lengthPx, pxToMm);
+          changed = true;
+        }
+        if (!m.unit) {
+          m.unit = 'px';
+          changed = true;
+        }
+      } else if (m.type === 'area') {
+        if (m.areaMm2 == null && m.areaPx2 != null) {
+          m.areaMm2 = pxAreaToMm2(m.areaPx2, pxToMm);
+          changed = true;
+        }
+        if (!m.areaUnit) {
+          m.areaUnit = 'px²';
+          changed = true;
+        }
+      }
+    });
+    if (changed) saveState();
+  }
+
+  function syncDrawingScaleUI() {
+    var inp = document.getElementById('drawingScaleMm');
+    var btn = document.getElementById('btnSaveDrawingScale');
+    var loc = currentLocation();
+    if (!inp || !btn) return;
+    if (!loc) {
+      inp.disabled = true;
+      btn.disabled = true;
+      inp.value = '';
+      return;
+    }
+    inp.disabled = false;
+    btn.disabled = false;
+    inp.value = String(getLocationPixelsToMm(loc));
+  }
+
+  function findMeasurementById(locId, measureId) {
+    var list = state.measurementsByLocation[locId];
+    if (!list) return null;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === measureId) return list[i];
+    }
+    return null;
+  }
+
+  function distanceLengthPx(x1, y1, x2, y2, W, H) {
+    return Math.round(Math.hypot((x2 - x1) * W, (y2 - y1) * H));
+  }
+
+  function polygonAreaPx2(points, W, H) {
+    if (!points || points.length < 3) return 0;
+    var a = 0;
+    for (var i = 0; i < points.length; i++) {
+      var j = (i + 1) % points.length;
+      var xi = points[i].x * W;
+      var yi = points[i].y * H;
+      var xj = points[j].x * W;
+      var yj = points[j].y * H;
+      a += xi * yj - xj * yi;
+    }
+    return Math.round(Math.abs(a / 2));
+  }
+
+  function polygonCentroid(points, W, H) {
+    var sx = 0;
+    var sy = 0;
+    points.forEach(function (p) {
+      sx += p.x * W;
+      sy += p.y * H;
+    });
+    return { x: sx / points.length, y: sy / points.length };
+  }
+
+  function drawMeasureLabel(ctx, x, y, text) {
+    var fontSize = Math.max(12, Math.round(ctx.canvas.width / 80));
+    ctx.save();
+    ctx.font = 'bold ' + fontSize + 'px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    var tw = ctx.measureText(text).width + 8;
+    var th = fontSize + 6;
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(x - tw / 2, y - th, tw, th);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(text, x, y - 4);
+    ctx.restore();
+  }
+
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {object} [draft] { activeTool, distanceP1, areaPoints, cursorNorm }
+   * @param {number} [pixelsToMm] scale for labels (default 1)
+   */
+  function drawMeasurementsOnContext(ctx, W, H, list, draft, pixelsToMm) {
+    list = list || [];
+    draft = draft || {};
+    pixelsToMm = pixelsToMm != null && isFinite(Number(pixelsToMm)) && Number(pixelsToMm) > 0 ? Number(pixelsToMm) : 1;
+    var distColor = '#2dd4bf';
+    var areaFill = 'rgba(250, 204, 21, 0.35)';
+    var areaStroke = '#facc15';
+    var lineW = Math.max(2, W / 400);
+
+    list.forEach(function (m) {
+      if (!m) return;
+      if (m.type === 'distance') {
+        var xa = m.x1 * W;
+        var ya = m.y1 * H;
+        var xb = m.x2 * W;
+        var yb = m.y2 * H;
+        ctx.strokeStyle = distColor;
+        ctx.lineWidth = lineW;
+        ctx.beginPath();
+        ctx.moveTo(xa, ya);
+        ctx.lineTo(xb, yb);
+        ctx.stroke();
+        var mx = (xa + xb) / 2;
+        var my = (ya + yb) / 2;
+        drawMeasureLabel(ctx, mx, my - 6, distanceLabelFromMeasurement(m, pixelsToMm));
+      } else if (m.type === 'area' && m.points && m.points.length >= 3) {
+        ctx.beginPath();
+        m.points.forEach(function (p, i) {
+          var px = p.x * W;
+          var py = p.y * H;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        ctx.closePath();
+        ctx.fillStyle = areaFill;
+        ctx.fill();
+        ctx.strokeStyle = areaStroke;
+        ctx.lineWidth = lineW;
+        ctx.stroke();
+        var c = polygonCentroid(m.points, W, H);
+        drawMeasureLabel(ctx, c.x, c.y - 6, areaLabelFromMeasurement(m, pixelsToMm));
+      }
+    });
+
+    if (draft.activeTool === 'distance' && draft.distanceP1 && draft.cursorNorm) {
+      var p1 = draft.distanceP1;
+      var xa = p1.x * W;
+      var ya = p1.y * H;
+      var xb = draft.cursorNorm.x * W;
+      var yb = draft.cursorNorm.y * H;
+      ctx.save();
+      ctx.setLineDash([8, 6]);
+      ctx.strokeStyle = distColor;
+      ctx.lineWidth = lineW;
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(xa, ya);
+      ctx.lineTo(xb, yb);
+      ctx.stroke();
+      ctx.restore();
+      var dpx = Math.round(Math.hypot(xb - xa, yb - ya));
+      drawMeasureLabel(ctx, (xa + xb) / 2, (ya + yb) / 2 - 6, dpx + ' px');
+    }
+
+    if (draft.activeTool === 'area' && draft.areaPoints && draft.areaPoints.length) {
+      ctx.strokeStyle = areaStroke;
+      ctx.lineWidth = lineW;
+      ctx.beginPath();
+      draft.areaPoints.forEach(function (p, i) {
+        var px = p.x * W;
+        var py = p.y * H;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      if (draft.cursorNorm) {
+        ctx.lineTo(draft.cursorNorm.x * W, draft.cursorNorm.y * H);
+      }
+      ctx.stroke();
+    }
+  }
+
+  function syncPointerLayersClass() {
+    var inner = document.getElementById('inner');
+    if (!inner) return;
+    var m = view.activeTool === 'distance' || view.activeTool === 'area';
+    var h = view.activeTool === 'circle' || view.activeTool === 'marker' || view.activeTool === 'flag' || view.activeTool === 'snapzone';
+    inner.classList.toggle('ss-inner--measure-tool', m);
+    inner.classList.toggle('ss-inner--highlight-tool', h);
+  }
+
+  function isBlockingPanZoom() {
+    if (view.addPinMode) return true;
+    var t = view.activeTool;
+    return t === 'distance' || t === 'area' || t === 'circle' || t === 'marker' || t === 'flag' || t === 'snapzone';
+  }
+
+  function updateMeasureToolbar() {
+    var fd = document.getElementById('btnFinishArea');
+    if (fd) {
+      var ap = view.measureDraft.areaPoints || [];
+      var show = view.activeTool === 'area' && ap.length >= 3;
+      fd.classList.toggle('d-none', !show);
+    }
+    var fm = document.getElementById('btnFinishMarker');
+    if (fm) {
+      var mp = view.highlightDraft.markerPoints || [];
+      var showM = view.activeTool === 'marker' && mp.length >= 3;
+      fm.classList.toggle('d-none', !showM);
+    }
+    var bd = document.getElementById('btnMeasureDistance');
+    if (bd) bd.classList.toggle('active', view.activeTool === 'distance');
+    var ba = document.getElementById('btnMeasureArea');
+    if (ba) ba.classList.toggle('active', view.activeTool === 'area');
+    var bc = document.getElementById('btnHighlightCircle');
+    if (bc) bc.classList.toggle('active', view.activeTool === 'circle');
+    var bm = document.getElementById('btnHighlightMarker');
+    if (bm) bm.classList.toggle('active', view.activeTool === 'marker');
+    var bf = document.getElementById('btnHighlightFlag');
+    if (bf) bf.classList.toggle('active', view.activeTool === 'flag');
+    var bz = document.getElementById('btnSnapshotZone');
+    if (bz) bz.classList.toggle('active', view.activeTool === 'snapzone');
+    var bp = document.getElementById('btnAddPin');
+    if (bp) bp.classList.toggle('active', view.addPinMode);
+  }
+
+  function exitMeasureMode() {
+    view.activeTool = null;
+    view.measureDraft = { distanceP1: null, areaPoints: [], cursorNorm: null };
+    view.highlightDraft = { circleCenter: null, markerPoints: [], cursorNorm: null, snapRect: null };
+    snapZoneDragging = false;
+    syncPointerLayersClass();
+    updateMeasureToolbar();
+    var hint = document.getElementById('hintPan');
+    if (hint) hint.textContent = 'Drag to pan · Wheel to zoom';
+    renderMeasurementCanvas();
+    renderHighlightCanvas();
+  }
+
+  function setMeasureTool(tool) {
+    if (tool == null || tool === view.activeTool) {
+      exitMeasureMode();
+      return;
+    }
+    view.activeTool = tool;
+    view.measureDraft = { distanceP1: null, areaPoints: [], cursorNorm: null };
+    view.highlightDraft = { circleCenter: null, markerPoints: [], cursorNorm: null, snapRect: null };
+    if (tool) {
+      view.addPinMode = false;
+      var vp = document.getElementById('viewport');
+      if (vp) vp.classList.remove('add-pin');
+      var bp = document.getElementById('btnAddPin');
+      if (bp) bp.classList.remove('active');
+    }
+    syncPointerLayersClass();
+    updateMeasureToolbar();
+    var hint = document.getElementById('hintPan');
+    if (hint) {
+      hint.textContent = tool
+        ? 'Measure: snap to pins · Area: double-click to finish · Pan/zoom disabled while tool is on'
+        : 'Drag to pan · Wheel to zoom';
+    }
+    renderMeasurementCanvas();
+    renderHighlightCanvas();
+  }
+
+  function setHighlightTool(tool) {
+    if (tool == null || tool === view.activeTool) {
+      exitMeasureMode();
+      return;
+    }
+    view.activeTool = tool;
+    view.measureDraft = { distanceP1: null, areaPoints: [], cursorNorm: null };
+    view.highlightDraft = { circleCenter: null, markerPoints: [], cursorNorm: null, snapRect: null };
+    if (tool) {
+      view.addPinMode = false;
+      var vp = document.getElementById('viewport');
+      if (vp) vp.classList.remove('add-pin');
+      var bp = document.getElementById('btnAddPin');
+      if (bp) bp.classList.remove('active');
+    }
+    syncPointerLayersClass();
+    updateMeasureToolbar();
+    var hint = document.getElementById('hintPan');
+    if (hint) {
+      if (tool === 'circle') {
+        hint.textContent = 'Circle: click center, then edge for radius · Snap to pins · No pan/zoom';
+      } else if (tool === 'marker') {
+        hint.textContent = 'Marker: click corners, double-click or Finish to close zone · No pan/zoom';
+      } else if (tool === 'flag') {
+        hint.textContent = 'Flag: click drawing to place note (or click existing flag to edit) · No pan/zoom';
+      } else if (tool === 'snapzone') {
+        hint.textContent = 'Zone snapshot: click-drag a rectangle, release to download PNG · No pan/zoom';
+      } else {
+        hint.textContent = 'Drag to pan · Wheel to zoom';
+      }
+    }
+    renderMeasurementCanvas();
+    renderHighlightCanvas();
+  }
+
+  function normFromEventOnInner(e) {
+    var inner = document.getElementById('inner');
+    var img = document.getElementById('drawingImg');
+    if (!inner || !img.naturalWidth) return null;
+    var rect = inner.getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var y = e.clientY - rect.top;
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
+    return { x: x / rect.width, y: y / rect.height };
+  }
+
+  /** Screen-space radius (px on the drawing box) to snap measure points to snag pins. */
+  var SNAP_PIN_RADIUS_PX = 40;
+
+  /**
+   * If norm is within SNAP_PIN_RADIUS_PX of a visible pin on this drawing, return pin nx/ny.
+   */
+  function snapNormToNearestPin(norm, locId) {
+    if (!norm || !locId) return norm;
+    var inner = document.getElementById('inner');
+    if (!inner) return norm;
+    var rect = inner.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return norm;
+    var cx = norm.x * rect.width;
+    var cy = norm.y * rect.height;
+    var best = null;
+    var bestD = Infinity;
+    state.snags.forEach(function (s) {
+      if (s.locationId !== locId) return;
+      if (s.archived && !state.showArchived) return;
+      var px = s.nx * rect.width;
+      var py = s.ny * rect.height;
+      var d = Math.hypot(cx - px, cy - py);
+      if (d < bestD && d <= SNAP_PIN_RADIUS_PX) {
+        bestD = d;
+        best = { x: s.nx, y: s.ny };
+      }
+    });
+    return best || norm;
+  }
+
+  function renderMeasurementCanvas() {
+    var canvas = document.getElementById('measureCanvas');
+    var img = document.getElementById('drawingImg');
+    if (!canvas || !img || !img.naturalWidth) return;
+    var W = img.naturalWidth;
+    var H = img.naturalHeight;
+    canvas.width = W;
+    canvas.height = H;
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    var locId = getLocationId();
+    if (!locId) return;
+    var list = state.measurementsByLocation[locId] || [];
+    var loc = currentLocation();
+    var pxToMm = getLocationPixelsToMm(loc);
+    drawMeasurementsOnContext(ctx, W, H, list, {
+      activeTool: view.activeTool,
+      distanceP1: view.measureDraft.distanceP1,
+      areaPoints: view.measureDraft.areaPoints,
+      cursorNorm: view.measureDraft.cursorNorm
+    }, pxToMm);
+  }
+
+  function renderMeasurementList() {
+    var el = document.getElementById('measurementList');
+    if (!el) return;
+    var locId = getLocationId();
+    var loc = currentLocation();
+    var pxToMm = getLocationPixelsToMm(loc);
+    var list = locId ? (state.measurementsByLocation[locId] || []) : [];
+    if (!list.length) {
+      el.innerHTML = '<p class="text-muted small mb-0">None yet.</p>';
+      return;
+    }
+    el.innerHTML = list.map(function (m, idx) {
+      var mid = escapeHtml(m.id);
+      if (m.type === 'distance') {
+        var u = m.unit || 'px';
+        var val = displayValueForDistanceInput(m, u);
+        var canvasLbl = distanceLabelFromMeasurement(m, pxToMm);
+        return (
+          '<div class="ss-measure-row" data-measure-row="' + mid + '">' +
+          '<div class="d-flex justify-content-between align-items-start gap-1 mb-1">' +
+          '<span>#' + (idx + 1) + ' · distance · <strong>' + escapeHtml(canvasLbl) + '</strong></span>' +
+          '<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 flex-shrink-0" data-measure-del="' + mid + '">Del</button>' +
+          '</div>' +
+          '<div class="text-muted" style="font-size:0.7rem;">Geom: ' + escapeHtml(String(m.lengthPx != null ? m.lengthPx : '?')) + ' px</div>' +
+          '<div class="d-flex flex-wrap align-items-center gap-1 mt-1">' +
+          '<input type="text" class="form-control form-control-sm" style="width:4.5rem;min-width:0;" data-measure-inp value="' + escapeHtml(val) + '" inputmode="decimal" />' +
+          '<select class="form-select form-select-sm" style="width:auto;min-width:5rem;" data-measure-unit-sel>' +
+          '<option value="px"' + (u === 'px' ? ' selected' : '') + '>px</option>' +
+          '<option value="mm"' + (u === 'mm' ? ' selected' : '') + '>mm</option>' +
+          '<option value="cm"' + (u === 'cm' ? ' selected' : '') + '>cm</option>' +
+          '<option value="m"' + (u === 'm' ? ' selected' : '') + '>m</option>' +
+          '</select>' +
+          '<button type="button" class="btn btn-sm btn-ss-accent py-0 px-2" data-measure-apply="' + mid + '">Apply</button>' +
+          '</div></div>'
+        );
+      }
+      if (m.type === 'area') {
+        var au = m.areaUnit || 'px²';
+        var aval = displayValueForAreaInput(m, au);
+        var areaLbl = areaLabelFromMeasurement(m, pxToMm);
+        return (
+          '<div class="ss-measure-row" data-measure-row="' + mid + '">' +
+          '<div class="d-flex justify-content-between align-items-start gap-1 mb-1">' +
+          '<span>#' + (idx + 1) + ' · area · <strong>' + escapeHtml(areaLbl) + '</strong></span>' +
+          '<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1 flex-shrink-0" data-measure-del="' + mid + '">Del</button>' +
+          '</div>' +
+          '<div class="text-muted" style="font-size:0.7rem;">Geom: ' + escapeHtml(String(m.areaPx2 != null ? m.areaPx2 : '?')) + ' px²</div>' +
+          '<div class="d-flex flex-wrap align-items-center gap-1 mt-1">' +
+          '<input type="text" class="form-control form-control-sm" style="width:4.5rem;min-width:0;" data-measure-inp value="' + escapeHtml(aval) + '" inputmode="decimal" />' +
+          '<select class="form-select form-select-sm" style="width:auto;min-width:5rem;" data-measure-unit-sel>' +
+          '<option value="px²"' + (au === 'px²' ? ' selected' : '') + '>px²</option>' +
+          '<option value="mm²"' + (au === 'mm²' ? ' selected' : '') + '>mm²</option>' +
+          '<option value="cm²"' + (au === 'cm²' ? ' selected' : '') + '>cm²</option>' +
+          '<option value="m²"' + (au === 'm²' ? ' selected' : '') + '>m²</option>' +
+          '</select>' +
+          '<button type="button" class="btn btn-sm btn-ss-accent py-0 px-2" data-measure-apply="' + mid + '">Apply</button>' +
+          '</div></div>'
+        );
+      }
+      return (
+        '<div class="ss-measure-row d-flex justify-content-between align-items-center gap-1">' +
+        '<span>#' + (idx + 1) + ' · ' + escapeHtml(m.type || '?') + '</span>' +
+        '<button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" data-measure-del="' + mid + '">Del</button>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function applyMeasurementFromUI(measureId) {
+    var locId = getLocationId();
+    var loc = currentLocation();
+    if (!locId || !loc) return;
+    var m = findMeasurementById(locId, measureId);
+    if (!m) return;
+    var row = null;
+    var rows = document.querySelectorAll('[data-measure-row]');
+    for (var ri = 0; ri < rows.length; ri++) {
+      if (rows[ri].getAttribute('data-measure-row') === measureId) {
+        row = rows[ri];
+        break;
+      }
+    }
+    if (!row) return;
+    var inp = row.querySelector('[data-measure-inp]');
+    var sel = row.querySelector('[data-measure-unit-sel]');
+    if (!inp || !sel) return;
+    var pxToMm = getLocationPixelsToMm(loc);
+    if (m.type === 'distance') {
+      m.lengthMm = parseDistanceInputToMm(inp.value, sel.value, m.lengthPx, pxToMm);
+      m.unit = sel.value;
+    } else if (m.type === 'area') {
+      m.areaMm2 = parseAreaInputToMm2(inp.value, sel.value, m.areaPx2, pxToMm);
+      m.areaUnit = sel.value;
+    }
+    saveState();
+    renderMeasurementCanvas();
+    renderMeasurementList();
+    toast('Label updated for report & canvas.');
+  }
+
+  function deleteMeasurement(measureId) {
+    var locId = getLocationId();
+    if (!locId || !measureId) return;
+    var arr = state.measurementsByLocation[locId];
+    if (!arr) return;
+    state.measurementsByLocation[locId] = arr.filter(function (m) { return m.id !== measureId; });
+    saveState();
+    renderMeasurementCanvas();
+    renderMeasurementList();
+  }
+
+  function clearAllMeasurementsForDrawing() {
+    var locId = getLocationId();
+    if (!locId) {
+      toast('Select a drawing first.');
+      return;
+    }
+    if (!window.confirm('Clear all measurements on this drawing? Pins are not removed.')) return;
+    state.measurementsByLocation[locId] = [];
+    view.measureDraft = { distanceP1: null, areaPoints: [], cursorNorm: null };
+    saveState();
+    renderMeasurementCanvas();
+    renderMeasurementList();
+    updateMeasureToolbar();
+    toast('Measurements cleared.');
+  }
+
+  function undoLastMeasurement() {
+    var locId = getLocationId();
+    if (!locId) {
+      toast('Select a drawing first.');
+      return;
+    }
+    var arr = state.measurementsByLocation[locId];
+    if (!arr || !arr.length) {
+      toast('No measurements to undo.');
+      return;
+    }
+    arr.pop();
+    saveState();
+    renderMeasurementCanvas();
+    renderMeasurementList();
+    toast('Last measurement removed.');
+  }
+
+  function finishCurrentAreaPolygon() {
+    var locId = getLocationId();
+    if (!locId || view.activeTool !== 'area') return;
+    var pts = view.measureDraft.areaPoints || [];
+    if (pts.length < 3) {
+      toast('Need at least 3 points for an area.');
+      return;
+    }
+    var img = document.getElementById('drawingImg');
+    var W = img.naturalWidth;
+    var H = img.naturalHeight;
+    var area = polygonAreaPx2(pts, W, H);
+    var copy = pts.map(function (p) { return { x: p.x, y: p.y }; });
+    var locA = currentLocation();
+    var ptmA = getLocationPixelsToMm(locA);
+    ensureMeasurementsBucket(locId).push({
+      id: uid(),
+      type: 'area',
+      points: copy,
+      areaPx2: area,
+      areaMm2: pxAreaToMm2(area, ptmA),
+      areaUnit: 'px²'
+    });
+    view.measureDraft.areaPoints = [];
+    view.measureDraft.cursorNorm = null;
+    saveState();
+    renderMeasurementCanvas();
+    renderMeasurementList();
+    updateMeasureToolbar();
+    toast('Area saved: ' + area + ' px²');
+  }
+
+  /**
+   * Two quick clicks (double-click) each add a vertex via click handler.
+   * Before closing, drop those two verts so the polygon stays what you had before the double-click.
+   */
+  function finishAreaOnDoubleClick(e) {
+    if (view.activeTool !== 'area') return;
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    var pts = view.measureDraft.areaPoints || [];
+    if (pts.length < 3) {
+      toast('Place at least 3 corners, then double-click to finish the area.');
+      return;
+    }
+    if (pts.length >= 5) {
+      view.measureDraft.areaPoints.pop();
+      view.measureDraft.areaPoints.pop();
+    }
+    finishCurrentAreaPolygon();
+  }
+
+  function onMeasureCanvasClick(e) {
+    e.stopPropagation();
+    if (view.activeTool !== 'distance' && view.activeTool !== 'area') return;
+    var locId = getLocationId();
+    if (!locId) return;
+    var norm = normFromEventOnInner(e);
+    if (!norm) return;
+    norm = snapNormToNearestPin(norm, locId);
+    var img = document.getElementById('drawingImg');
+    var W = img.naturalWidth;
+    var H = img.naturalHeight;
+
+    if (view.activeTool === 'distance') {
+      if (!view.measureDraft.distanceP1) {
+        view.measureDraft.distanceP1 = norm;
+        renderMeasurementCanvas();
+        toast('Click second point to finish distance.');
+        return;
+      }
+      var p1 = view.measureDraft.distanceP1;
+      var len = distanceLengthPx(p1.x, p1.y, norm.x, norm.y, W, H);
+      var locDraw = currentLocation();
+      var ptm = getLocationPixelsToMm(locDraw);
+      ensureMeasurementsBucket(locId).push({
+        id: uid(),
+        type: 'distance',
+        x1: p1.x,
+        y1: p1.y,
+        x2: norm.x,
+        y2: norm.y,
+        lengthPx: len,
+        lengthMm: pxLengthToMm(len, ptm),
+        unit: 'px'
+      });
+      view.measureDraft.distanceP1 = null;
+      view.measureDraft.cursorNorm = null;
+      saveState();
+      renderMeasurementCanvas();
+      renderMeasurementList();
+      toast('Distance: ' + len + ' px');
+      return;
+    }
+
+    if (view.activeTool === 'area') {
+      if (!view.measureDraft.areaPoints) view.measureDraft.areaPoints = [];
+      view.measureDraft.areaPoints.push({ x: norm.x, y: norm.y });
+      updateMeasureToolbar();
+      renderMeasurementCanvas();
+      toast('Vertex ' + view.measureDraft.areaPoints.length + ' placed.');
+    }
+  }
+
+  function updateStageTransform() {
+    var stage = document.getElementById('stage');
+    if (!stage) return;
+    stage.style.transform = 'translate(calc(-50% + ' + view.panX + 'px), calc(-50% + ' + view.panY + 'px)) scale(' + view.scale + ')';
+  }
+
+  function showDrawing(loc) {
+    var empty = document.getElementById('emptyDrawing');
+    var stage = document.getElementById('stage');
+    var img = document.getElementById('drawingImg');
+    var meta = document.getElementById('locationMeta');
+    if (!loc || !loc.imageDataUrl) {
+      empty.style.display = 'flex';
+      stage.style.display = 'none';
+      meta.textContent = 'No drawing loaded';
+      syncDrawingScaleUI();
+      renderMeasurementList();
+      var mc = document.getElementById('measureCanvas');
+      if (mc && mc.getContext) {
+        var z = mc.getContext('2d');
+        if (z && mc.width) z.clearRect(0, 0, mc.width, mc.height);
+      }
+      var hc = document.getElementById('highlightCanvas');
+      if (hc && hc.getContext) {
+        var zh = hc.getContext('2d');
+        if (zh && hc.width) zh.clearRect(0, 0, hc.width, hc.height);
+      }
+      renderHighlightList();
+      return;
+    }
+    empty.style.display = 'none';
+    stage.style.display = 'block';
+    img.onload = function () {
+      var inner = document.getElementById('inner');
+      inner.style.width = img.naturalWidth + 'px';
+      inner.style.height = img.naturalHeight + 'px';
+      view.scale = 1;
+      view.panX = 0;
+      view.panY = 0;
+      updateStageTransform();
+      renderPins();
+      normalizeMeasurementsForLocation(loc);
+      syncDrawingScaleUI();
+      syncPointerLayersClass();
+      updateMeasureToolbar();
+      renderMeasurementCanvas();
+      renderMeasurementList();
+      renderHighlightCanvas();
+      renderHighlightList();
+    };
+    img.src = loc.imageDataUrl;
+    meta.textContent = loc.name + ' · Block ' + loc.block + ' · Floor ' + loc.floor;
+  }
+
+  function renderPins() {
+    var layer = document.getElementById('pinsLayer');
+    if (!layer) return;
+    layer.innerHTML = '';
+    var locId = getLocationId();
+    if (!locId) return;
+    state.snags
+      .filter(function (s) {
+        if (s.archived && !state.showArchived) return false;
+        return s.locationId === locId;
+      })
+      .forEach(function (s) {
+      var pin = document.createElement('button');
+      pin.type = 'button';
+      pin.className = 'ss-pin status-' + s.status + (selectedSnagId === s.id ? ' selected' : '');
+      pin.style.left = (s.nx * 100) + '%';
+      pin.style.top = (s.ny * 100) + '%';
+      pin.title = s.title;
+      pin.setAttribute('aria-label', 'Snag: ' + s.title);
+      pin.addEventListener('click', function (e) {
+        e.stopPropagation();
+        openSnagModal(s.id);
+      });
+      layer.appendChild(pin);
+    });
+  }
+
+  function renderSnagList() {
+    var list = document.getElementById('snagList');
+    var count = document.getElementById('snagCount');
+    var rows = filteredSnags();
+    var totalActive = countSnagsExcludingClosedCompleted();
+    if (count) count.textContent = '- Total ' + totalActive;
+    list.innerHTML = '';
+    if (!rows.length) {
+      list.innerHTML = '<p class="text-secondary small p-2">No snags match filters.</p>';
+      return;
+    }
+    rows.sort(function (a, b) { return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt); });
+    rows.forEach(function (s) {
+      var loc = state.locations.find(function (l) { return l.id === s.locationId; });
+      var card = document.createElement('div');
+      card.className = 'ss-snag-card' + (selectedSnagId === s.id ? ' active' : '');
+      card.innerHTML =
+        '<div class="d-flex justify-content-between align-items-start gap-2">' +
+          '<div class="fw-semibold">' + escapeHtml(s.title) + '</div>' +
+          '<span class="ss-status-pill bg-dark text-white">' + escapeHtml(s.status.replace('_', ' ')) + '</span>' +
+        '</div>' +
+        '<div class="small text-secondary mt-1">' + escapeHtml(s.category) + (loc ? ' · ' + escapeHtml(loc.block + '/' + loc.floor) : '') + '</div>' +
+        (s.assignee ? '<div class="small mt-1"><i class="bi bi-person"></i> ' + escapeHtml(s.assignee) + '</div>' : '');
+      card.addEventListener('click', function () {
+        selectedSnagId = s.id;
+        renderPins();
+        renderSnagList();
+        openSnagModal(s.id);
+      });
+      list.appendChild(card);
+    });
+  }
+
+  function renderMockTasks() {
+    var el = document.getElementById('mockTasksPreview');
+    if (!state.mockTasks.length) {
+      el.textContent = 'No auto-tasks yet.';
+      return;
+    }
+    el.innerHTML = state.mockTasks.slice(-6).reverse().map(function (t) {
+      return '<div>· <code>' + escapeHtml(t.id) + '</code> — ' + escapeHtml(t.title) +
+        ' <span class="text-muted">(' + escapeHtml(t.status) + ')</span></div>';
+    }).join('');
+  }
+
+  function openSnagModal(snagId) {
+    var snag = snagId ? state.snags.find(function (s) { return s.id === snagId; }) : null;
+    var modalEl = document.getElementById('modalSnag');
+    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    fillPeopleAssigneeSelects();
+    document.getElementById('snagModalTitle').textContent = snag ? 'Edit snag' : 'New snag';
+    document.getElementById('snagDelete').style.display = snag ? 'block' : 'none';
+    var archiveBtn = document.getElementById('snagArchive');
+    var unarchiveBtn = document.getElementById('snagUnarchive');
+    if (archiveBtn) {
+      archiveBtn.style.display = (snag && !snag.archived) ? 'block' : 'none';
+    }
+    if (unarchiveBtn) {
+      unarchiveBtn.style.display = (snag && snag.archived) ? 'block' : 'none';
+    }
+    pendingPhotosBefore = [];
+    pendingPhotosAfter = [];
+    document.getElementById('previewBefore').innerHTML = '';
+    document.getElementById('previewAfter').innerHTML = '';
+    document.getElementById('snagPhotosBefore').value = '';
+    document.getElementById('snagPhotosAfter').value = '';
+
+    if (snag) {
+      document.getElementById('snagId').value = snag.id;
+      document.getElementById('snagNx').value = snag.nx;
+      document.getElementById('snagNy').value = snag.ny;
+      document.getElementById('snagTitle').value = snag.title;
+      document.getElementById('snagDesc').value = snag.description || '';
+      document.getElementById('snagCategory').value = snag.category || 'Other';
+      document.getElementById('snagAssignee').value = assigneeSelectValueFromTarget(snag);
+      document.getElementById('snagTarget').value = normalizeTargetDateToYmd(snag.targetDate) || '';
+      document.getElementById('snagStatus').value = snag.status;
+      document.getElementById('snagMockTask').value = snag.mockPlanningTaskId || '';
+      (snag.photosBefore || []).forEach(function (url) {
+        addPreviewThumb('previewBefore', url);
+      });
+      (snag.photosAfter || []).forEach(function (url) {
+        addPreviewThumb('previewAfter', url);
+      });
+    } else {
+      document.getElementById('snagId').value = '';
+      document.getElementById('snagTitle').value = '';
+      document.getElementById('snagDesc').value = '';
+      document.getElementById('snagCategory').value = 'Other';
+      document.getElementById('snagAssignee').value = '';
+      document.getElementById('snagTarget').value = '';
+      document.getElementById('snagStatus').value = 'open';
+      document.getElementById('snagMockTask').value = '';
+    }
+    modal.show();
+  }
+
+  function addPreviewThumb(containerId, url) {
+    var wrap = document.getElementById(containerId);
+    var img = document.createElement('img');
+    img.src = url;
+    img.style.height = '48px';
+    img.style.borderRadius = '4px';
+    img.style.border = '1px solid #444';
+    wrap.appendChild(img);
+  }
+
+  function hideSnagModal() {
+    var m = bootstrap.Modal.getInstance(document.getElementById('modalSnag'));
+    if (m) m.hide();
+  }
+
+  function saveSnagFromModal() {
+    var id = document.getElementById('snagId').value;
+    var locId = getLocationId();
+    if (!locId) {
+      toast('Select a drawing first.');
+      return;
+    }
+    var title = (document.getElementById('snagTitle').value || '').trim();
+    if (!title) {
+      toast('Title is required.');
+      return;
+    }
+    var nx = parseFloat(document.getElementById('snagNx').value);
+    var ny = parseFloat(document.getElementById('snagNy').value);
+    if (id) {
+      var snag = state.snags.find(function (s) { return s.id === id; });
+      if (!snag) return;
+      snag.title = title;
+      snag.description = document.getElementById('snagDesc').value;
+      snag.category = document.getElementById('snagCategory').value;
+      applyAssigneeSelectToTarget(document.getElementById('snagAssignee').value, snag);
+      snag.targetDate = normalizeTargetDateToYmd(document.getElementById('snagTarget').value);
+      snag.status = document.getElementById('snagStatus').value;
+      snag.updatedAt = new Date().toISOString();
+      readFilesAsDataUrls(document.getElementById('snagPhotosBefore'), 4, function (arr) {
+        if (arr.length) snag.photosBefore = (snag.photosBefore || []).concat(arr).slice(-6);
+        readFilesAsDataUrls(document.getElementById('snagPhotosAfter'), 4, function (arr2) {
+          if (arr2.length) snag.photosAfter = (snag.photosAfter || []).concat(arr2).slice(-6);
+          syncMockTaskStatus(snag);
+          saveState();
+          renderPins();
+          renderSnagList();
+          renderMockTasks();
+          hideSnagModal();
+          toast(siteSnagsUsesDb() ? 'Snag saved.' : 'Snag saved (local).');
+        });
+      });
+    } else {
+      var newSnag = {
+        id: uid(),
+        locationId: locId,
+        nx: isNaN(nx) ? 0.5 : nx,
+        ny: isNaN(ny) ? 0.5 : ny,
+        title: title,
+        description: document.getElementById('snagDesc').value,
+        category: document.getElementById('snagCategory').value,
+        assignee: '',
+        assigneeUserId: null,
+        assigneeManagerId: null,
+        targetDate: normalizeTargetDateToYmd(document.getElementById('snagTarget').value),
+        status: document.getElementById('snagStatus').value,
+        archived: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        photosBefore: [],
+        photosAfter: [],
+        mockPlanningTaskId: null
+      };
+      applyAssigneeSelectToTarget(document.getElementById('snagAssignee').value, newSnag);
+      ensureMockTaskForSnag(newSnag);
+      readFilesAsDataUrls(document.getElementById('snagPhotosBefore'), 4, function (arr) {
+        newSnag.photosBefore = arr;
+        readFilesAsDataUrls(document.getElementById('snagPhotosAfter'), 4, function (arr2) {
+          newSnag.photosAfter = arr2;
+          state.snags.push(newSnag);
+          saveState();
+          selectedSnagId = newSnag.id;
+          renderPins();
+          renderSnagList();
+          renderMockTasks();
+          hideSnagModal();
+          toast('Snag created + mock planning task ID assigned.');
+        });
+      });
+    }
+  }
+
+  function syncMockTaskStatus(snag) {
+    var t = state.mockTasks.find(function (x) { return x.id === snag.mockPlanningTaskId; });
+    if (!t) return;
+    if (snag.status === 'closed') t.status = 'closed';
+    else if (snag.status === 'verified') t.status = 'verified';
+    else t.status = 'active';
+  }
+
+  function deleteSnag() {
+    var id = document.getElementById('snagId').value;
+    if (!id) return;
+    state.snags = state.snags.filter(function (s) { return s.id !== id; });
+    state.mockTasks = state.mockTasks.filter(function (t) { return t.snagId !== id; });
+    selectedSnagId = null;
+    saveState();
+    renderPins();
+    renderSnagList();
+    renderMockTasks();
+    hideSnagModal();
+    toast('Snag deleted.');
+  }
+
+  function archiveSnag() {
+    var id = document.getElementById('snagId').value;
+    if (!id) return;
+    var snag = state.snags.find(function (s) { return s.id === id; });
+    if (!snag) return;
+    snag.archived = true;
+    // Keep it consistent with workflow: archived implies final/closed.
+    snag.status = 'closed';
+    snag.updatedAt = new Date().toISOString();
+    syncMockTaskStatus(snag);
+    saveState();
+    selectedSnagId = null;
+    renderPins();
+    renderSnagList();
+    renderMockTasks();
+    hideSnagModal();
+    toast('Snag archived.');
+  }
+
+  function unarchiveSnag() {
+    var id = document.getElementById('snagId').value;
+    if (!id) return;
+    var snag = state.snags.find(function (s) { return s.id === id; });
+    if (!snag) return;
+    snag.archived = false;
+    snag.updatedAt = new Date().toISOString();
+    syncMockTaskStatus(snag);
+    saveState();
+    selectedSnagId = null;
+    renderPins();
+    renderSnagList();
+    renderMockTasks();
+    hideSnagModal();
+    toast('Snag removed from archive (saved).');
+  }
+
+  /**
+   * Crop drawing around snag pin (normalized nx/ny), draw pin marker; for print report.
+   * Uses imgEl only when snag belongs to current drawing (loc.id === snag.locationId).
+   */
+  function buildPinCropSnapshotDataUrl(imgEl, snag, pinNumberStr) {
+    if (!imgEl || !snag || imgEl.naturalWidth <= 0 || !imgEl.complete) return '';
+    var W = imgEl.naturalWidth;
+    var H = imgEl.naturalHeight;
+    var px = snag.nx * W;
+    var py = snag.ny * H;
+    var minDim = Math.min(W, H);
+    var side = Math.round(minDim * 0.22);
+    side = Math.max(100, Math.min(side, minDim));
+    if (side > W) side = W;
+    if (side > H) side = H;
+    var left = Math.round(px - side / 2);
+    var top = Math.round(py - side / 2);
+    if (left < 0) left = 0;
+    if (top < 0) top = 0;
+    if (left + side > W) left = W - side;
+    if (top + side > H) top = H - side;
+    if (left < 0) left = 0;
+    if (top < 0) top = 0;
+
+    var out = 420;
+    var c = document.createElement('canvas');
+    c.width = out;
+    c.height = out;
+    var ctx = c.getContext('2d');
+    try {
+      ctx.drawImage(imgEl, left, top, side, side, 0, 0, out, out);
+    } catch (e) {
+      return '';
+    }
+    var cx = ((px - left) / side) * out;
+    var cy = ((py - top) / side) * out;
+    var pinR = Math.max(10, Math.round(out * 0.038));
+    var pinLift = Math.max(6, Math.round(out * 0.022));
+    var pinY = cy - pinLift;
+
+    ctx.fillStyle = '#ff6b6b';
+    ctx.beginPath();
+    ctx.arc(cx, pinY, pinR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = Math.max(2, Math.round(out / 180));
+    ctx.stroke();
+
+    var label = pinNumberStr != null ? String(pinNumberStr) : '';
+    if (label) {
+      ctx.font = 'bold ' + Math.max(14, Math.round(out * 0.045)) + 'px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(label, cx, pinY);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, cx, pinY);
+    }
+
+    var highsCrop = state.highlightsByLocation[snag.locationId] || [];
+    drawHighlightsOnCrop(ctx, out, highsCrop, left, top, side, W, H, px, py);
+
+    try {
+      return c.toDataURL('image/png');
+    } catch (e2) {
+      return '';
+    }
+  }
+
+  function buildSnapshotCompositeCanvas(loc, img) {
+    var w = img.naturalWidth;
+    var h = img.naturalHeight;
+    var c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    var ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    var highs = state.highlightsByLocation[loc.id] || [];
+    drawHighlightsOnContext(ctx, w, h, highs, null, null);
+    state.snags.filter(function (s) { return s.locationId === loc.id; }).forEach(function (s) {
+      var x = s.nx * w;
+      var y = s.ny * h;
+      ctx.fillStyle = '#ff6b6b';
+      ctx.beginPath();
+      ctx.arc(x, y - 8, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+    var measures = state.measurementsByLocation[loc.id] || [];
+    drawMeasurementsOnContext(ctx, w, h, measures, null, getLocationPixelsToMm(loc));
+    return c;
+  }
+
+  function exportSnapshot() {
+    if (!requireProjectThenDrawing()) return;
+    var img = document.getElementById('drawingImg');
+    var loc = currentLocation();
+    if (!loc || !img.complete || !img.naturalWidth) {
+      toast('Load a drawing first.');
+      return;
+    }
+    var c = buildSnapshotCompositeCanvas(loc, img);
+    c.toBlob(function (blob) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'site-snags-snapshot.png';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast('Snapshot downloaded.');
+    });
+  }
+
+  function finishSnapZoneDrag() {
+    if (!snapZoneDragging || view.activeTool !== 'snapzone') return;
+    snapZoneDragging = false;
+    var sr = view.highlightDraft.snapRect;
+    view.highlightDraft.snapRect = null;
+    renderHighlightCanvas();
+    if (!sr || !isFinite(sr.x1) || !isFinite(sr.y1) || !isFinite(sr.x2) || !isFinite(sr.y2)) return;
+    var img = document.getElementById('drawingImg');
+    var loc = currentLocation();
+    if (!loc || !img || !img.complete || !img.naturalWidth) {
+      toast('Load a drawing first.');
+      exitMeasureMode();
+      return;
+    }
+    var W = img.naturalWidth;
+    var H = img.naturalHeight;
+    var nx1 = Math.min(sr.x1, sr.x2);
+    var ny1 = Math.min(sr.y1, sr.y2);
+    var nx2 = Math.max(sr.x1, sr.x2);
+    var ny2 = Math.max(sr.y1, sr.y2);
+    var x1 = Math.floor(Math.max(0, Math.min(W - 1, nx1 * W)));
+    var y1 = Math.floor(Math.max(0, Math.min(H - 1, ny1 * H)));
+    var x2 = Math.ceil(Math.max(x1 + 1, Math.min(W, nx2 * W)));
+    var y2 = Math.ceil(Math.max(y1 + 1, Math.min(H, ny2 * H)));
+    var cw = x2 - x1;
+    var ch = y2 - y1;
+    if (cw < 8 || ch < 8) {
+      toast('Region too small — drag a larger rectangle.');
+      return;
+    }
+    var full = buildSnapshotCompositeCanvas(loc, img);
+    var out = document.createElement('canvas');
+    out.width = cw;
+    out.height = ch;
+    out.getContext('2d').drawImage(full, x1, y1, cw, ch, 0, 0, cw, ch);
+    out.toBlob(function (blob) {
+      if (!blob) {
+        toast('Could not create image.');
+        return;
+      }
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'site-snags-zone-' + cw + 'x' + ch + '.png';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast('Zone snapshot downloaded.');
+      exitMeasureMode();
+    });
+  }
+
+  function printReport() {
+    if (!getSelectedProjectId()) {
+      toast('Select a project first.');
+      return;
+    }
+    var loc = currentLocation();
+    var rows = filteredSnags().filter(function (s) { return !loc || s.locationId === loc.id; });
+    var locLabel = loc ? (loc.name + ' — Block ' + loc.block + ' — Floor ' + loc.floor) : 'All filtered snags';
+
+    // Create a snapshot of the drawing (with pins) for the report header.
+    var snapshotDataUrl = '';
+    var img = document.getElementById('drawingImg');
+    if (loc && img && img.complete && img.naturalWidth) {
+      try {
+        var w = img.naturalWidth;
+        var h = img.naturalHeight;
+        var c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        var ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        var highsRep = state.highlightsByLocation[loc.id] || [];
+        drawHighlightsOnContext(ctx, w, h, highsRep, null, null);
+        rows.forEach(function (s, idx) {
+          var x = s.nx * w;
+          var y = s.ny * h;
+          ctx.fillStyle = '#ff6b6b';
+          ctx.beginPath();
+          ctx.arc(x, y - 8, 12, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Pin number overlay (matches the report row order)
+          var pinNum = String(idx + 1);
+          ctx.font = 'bold 16px Inter, system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#ffffff';
+          ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+          ctx.lineWidth = 3;
+          ctx.strokeText(pinNum, x, y - 8);
+          ctx.fillText(pinNum, x, y - 8);
+        });
+        var measuresRep = state.measurementsByLocation[loc.id] || [];
+        drawMeasurementsOnContext(ctx, w, h, measuresRep, null, getLocationPixelsToMm(loc));
+        snapshotDataUrl = c.toDataURL('image/png');
+      } catch (e) {
+        snapshotDataUrl = '';
+      }
+    }
+
+    var nextMap = {
+      open: 'In progress',
+      in_progress: 'Completed',
+      completed: 'Verified',
+      verified: 'Closed',
+      closed: 'Closed'
+    };
+
+    var companyName = 'Akmer Construction';
+    var authorName = 'Andrew McKelly - Project Manager';
+    var generatedAt = new Date().toLocaleString();
+
+    var firstPage =
+      '<div style=\"min-height:100vh;display:flex;flex-direction:column;page-break-after:always;\">' +
+      '<div style=\"padding-bottom:8px;\">' +
+      '<div style=\"font-size:22px;font-weight:800;color:#111;\">' + escapeHtml(companyName) + '</div>' +
+      '<div style=\"margin-top:4px;font-size:13px;font-weight:700;color:#333;\">Snag List Powered by Proconix</div>' +
+      '</div>' +
+      '<div style=\"flex:1;\">' +
+      '<div style=\"font-weight:600;margin-bottom:6px;\">Drawing / scope:</div>' +
+      '<div style=\"color:#222;margin-bottom:12px;\">' + escapeHtml(locLabel) + '</div>';
+
+    if (snapshotDataUrl) {
+      firstPage += '<div style=\"margin:10px 0 0 0;display:flex;flex-direction:column;height:100%;\">' +
+        '<div style=\"font-weight:600;margin-bottom:6px;\">Drawing snapshot (pins, highlights, measurements)</div>' +
+        '<div style=\"font-size:11px;color:#444;margin-bottom:6px;\"><strong>Legend:</strong> Turquoise ring = circle highlight · Orange/yellow/red fill = marker zone · Flag = site note (green = resolved)</div>' +
+        '<img src=\"' + snapshotDataUrl + '\" style=\"width:100%;max-width:100%;height:78vh;object-fit:contain;border:1px solid #d7d7d7;border-radius:6px;\" alt=\"Drawing snapshot with pins\"/>' +
+        '</div>';
+    } else {
+      firstPage += '<div style=\"color:#666;font-size:12px;\">No drawing snapshot available.</div>';
+    }
+
+    firstPage += '</div>' +
+      '<div style=\"text-align:right;font-size:12px;color:#111;margin-top:8px;\">' +
+      '<div style=\"font-weight:600;\">' + escapeHtml(authorName) + '</div>' +
+      '<div>Generated: ' + escapeHtml(generatedAt) + '</div>' +
+      '</div>' +
+      '</div>';
+
+    var secondPage =
+      '<div style=\"padding-top:10px;page-break-before:always;\">' +
+        '<div style=\"font-weight:700;margin-bottom:8px;\">Snags</div>';
+
+    rows.forEach(function (s, idx) {
+      var sLoc = state.locations.find(function (l) { return l.id === s.locationId; });
+      var beforeUrl = (s.photosBefore && s.photosBefore.length) ? s.photosBefore[0] : '';
+      var next = nextMap[s.status] || '';
+      var statusNice = escapeHtml(s.status ? String(s.status).replace(/_/g, ' ') : '');
+      var desc = s.description ? escapeHtml(s.description) : '';
+      var pinCropUrl = '';
+      if (loc && img && img.complete && img.naturalWidth && s.locationId === loc.id) {
+        pinCropUrl = buildPinCropSnapshotDataUrl(img, s, String(idx + 1));
+      }
+
+      secondPage += '<div style="border:1px solid #d7d7d7;border-radius:8px;padding:10px 12px;margin:12px 0;page-break-inside:avoid;">' +
+        '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">' +
+        '<div>' +
+        '<div style="font-size:15px;font-weight:700;">' + escapeHtml(s.title) + '</div>' +
+        '<div style="color:#444;margin-top:4px;">' +
+        '<span style="font-weight:600;">Status:</span> ' + statusNice + (next ? ' · Next: ' + escapeHtml(next) : '') + '<br/>' +
+        '<span style="font-weight:600;">Category:</span> ' + escapeHtml(s.category || '') + '<br/>' +
+        '<span style="font-weight:600;">Assignee:</span> ' + escapeHtml(s.assignee || '') + '<br/>' +
+        '<span style="font-weight:600;">Target:</span> ' + escapeHtml(s.targetDate || '') + '<br/>' +
+        '</div>' +
+        '</div>' +
+        '<div style="min-width:220px;color:#444;">' +
+        '<div><span style="font-weight:600;">Location:</span></div>' +
+        '<div>' + escapeHtml(sLoc ? (sLoc.name + ' · Block ' + sLoc.block + ' · Floor ' + sLoc.floor) : locLabel) + '</div>' +
+        '<div style="margin-top:6px;"><span style="font-weight:600;">Pin:</span> ' + (idx + 1) + '</div>' +
+        (s.mockPlanningTaskId ? '<div style="margin-top:6px;"><span style="font-weight:600;">Mock planning task:</span> ' + escapeHtml(s.mockPlanningTaskId) + '</div>' : '') +
+        '</div>' +
+        '</div>' +
+        (desc ? '<div style="margin-top:8px;"><span style="font-weight:600;">Description:</span> ' + desc + '</div>' : '') +
+        '<div style="margin-top:12px;">' +
+        '<div style="font-weight:600;margin-bottom:8px;">Before photo &amp; pin area</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;">' +
+        '<div style="flex:1;min-width:200px;">' +
+        '<div style="font-weight:600;margin-bottom:6px;font-size:12px;color:#444;">Before photo' + (s.photosBefore && s.photosBefore.length ? ' (1 of ' + escapeHtml(String(s.photosBefore.length)) + ')' : '') + '</div>' +
+        (beforeUrl ? '<img src="' + beforeUrl + '" style="max-width:260px;width:100%;border:1px solid #d7d7d7;border-radius:6px;" alt="Before photo"/>' : '<div style="color:#666;font-size:12px;">No before photo</div>') +
+        '</div>' +
+        '<div style="flex:1;min-width:200px;">' +
+        '<div style="font-weight:600;margin-bottom:6px;font-size:12px;color:#444;">Drawing zoom (around pin ' + (idx + 1) + ')</div>' +
+        (pinCropUrl
+          ? '<img src="' + pinCropUrl + '" style="max-width:260px;width:100%;border:1px solid #d7d7d7;border-radius:6px;" alt="Pin area snapshot"/>'
+          : '<div style="color:#666;font-size:12px;">Select this drawing in the toolbar to generate pin zoom, or snag is from another sheet.</div>') +
+        '</div>' +
+        '</div>' +
+        '</div>' +
+        '</div>';
+    });
+    secondPage += '</div>';
+
+    var html = firstPage + secondPage;
+
+    var root = document.getElementById('ssPrintRoot');
+    if (!root) return;
+    root.innerHTML = html;
+
+    // Keep print DOM intact until the browser finishes rendering the print/PDF.
+    // (Some browsers capture asynchronously; clearing immediately can remove images.)
+    var cleanup = function () { root.innerHTML = ''; };
+    window.onafterprint = cleanup;
+
+    // Also wait for any images to load before triggering print (data URLs can still be async).
+    var imgs = root.querySelectorAll('img');
+    if (!imgs || imgs.length === 0) {
+      window.print();
+      return;
+    }
+
+    var remaining = imgs.length;
+    var done = false;
+    function finishIfReady() {
+      if (done) return;
+      if (remaining <= 0) {
+        done = true;
+        window.print();
+      }
+    }
+
+    Array.prototype.forEach.call(imgs, function (imgEl) {
+      if (imgEl.complete && imgEl.naturalWidth > 0) {
+        remaining--;
+        finishIfReady();
+        return;
+      }
+      imgEl.onload = function () {
+        remaining--;
+        finishIfReady();
+      };
+      imgEl.onerror = function () {
+        remaining--;
+        finishIfReady();
+      };
+    });
+
+    // Safety timeout: if some image never loads, still print.
+    setTimeout(function () {
+      remaining = 0;
+      finishIfReady();
+    }, 2500);
+  }
+
+  function onViewportClick(e) {
+    if (!view.addPinMode) return;
+    var inner = document.getElementById('inner');
+    var img = document.getElementById('drawingImg');
+    if (!inner || !img.naturalWidth) return;
+    var rect = inner.getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var y = e.clientY - rect.top;
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
+    var nx = x / rect.width;
+    var ny = y / rect.height;
+    view.addPinMode = false;
+    document.getElementById('viewport').classList.remove('add-pin');
+    document.getElementById('btnAddPin').classList.remove('active');
+    document.getElementById('snagId').value = '';
+    document.getElementById('snagNx').value = nx;
+    document.getElementById('snagNy').value = ny;
+    openSnagModal(null);
+    var modalTitle = document.getElementById('snagModalTitle');
+    modalTitle.textContent = 'New snag (pin placed)';
+    document.getElementById('snagDelete').style.display = 'none';
+    var ua = document.getElementById('snagUnarchive');
+    if (ua) ua.style.display = 'none';
+  }
+
+  function renderCategoryList() {
+    var ul = document.getElementById('categoryList');
+    ul.innerHTML = '';
+    allCategories().forEach(function (c) {
+      var li = document.createElement('li');
+      li.className = 'list-group-item bg-transparent text-light border-secondary d-flex justify-content-between align-items-center gap-2';
+      var left = document.createElement('div');
+      left.className = 'd-flex align-items-center gap-2 flex-wrap';
+      var nameEl = document.createElement('span');
+      nameEl.textContent = c;
+      left.appendChild(nameEl);
+      if (PRESET_CATEGORIES.indexOf(c) !== -1) {
+        var badge = document.createElement('span');
+        badge.className = 'badge bg-secondary';
+        badge.textContent = 'preset';
+        left.appendChild(badge);
+      }
+      li.appendChild(left);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-sm btn-outline-danger';
+      btn.textContent = 'Remove';
+      btn.addEventListener('click', function () {
+        if (PRESET_CATEGORIES.indexOf(c) !== -1) {
+          if (state.removedPresetCategories.indexOf(c) === -1) {
+            state.removedPresetCategories.push(c);
+          }
+        } else {
+          state.customCategories = state.customCategories.filter(function (x) { return x !== c; });
+        }
+        saveState();
+        fillCategoryFilters();
+        renderCategoryList();
+        toast('Category removed from list.');
+      });
+      li.appendChild(btn);
+      ul.appendChild(li);
+    });
+  }
+
+  function syncDataNow() {
+    try {
+      persistLocalSnapshot();
+      var badge = document.getElementById('ssSyncBadge');
+      if (siteSnagsApiEnabled()) {
+        if (siteSnagsBackendTimer) clearTimeout(siteSnagsBackendTimer);
+        siteSnagsBackendTimer = null;
+        flushSiteSnagsBackendPush().then(function () {
+          if (badge && !siteSnagsBackendLastError) badge.textContent = 'Sync: server · ' + new Date().toLocaleTimeString();
+          toast(siteSnagsBackendLastError ? ('Server: ' + siteSnagsBackendLastError) : 'Workspace saved on the server.');
+        });
+        return;
+      }
+      if (badge) badge.textContent = 'Sync: saved · ' + new Date().toLocaleTimeString();
+      toast('Saved to browser storage. Open Site Snags from the Manager Dashboard to sync to the server.');
+    } catch (err) {
+      toast('Sync failed — check browser storage permissions.');
+    }
+  }
+
+  function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(function () {
+      if (siteSnagsApiEnabled()) {
+        updateSiteSnagsSyncBadge();
+        return;
+      }
+      var badge = document.getElementById('ssSyncBadge');
+      if (badge) badge.textContent = 'Sync: polled · ' + new Date().toLocaleTimeString();
+      toast('Reminder: without a manager session, data stays in this browser only.');
+    }, 30000);
+  }
+
+  function bind() {
+    if (bind.__done) return;
+    bind.__done = true;
+    document.getElementById('filterProject').addEventListener('change', function () {
+      exitMeasureMode();
+      fillLocationSelect();
+      showDrawing(currentLocation());
+      renderPins();
+      renderSnagList();
+      renderMeasurementList();
+      renderHighlightList();
+      syncDrawingScaleUI();
+      renderHighlightCanvas();
+    });
+    document.getElementById('selectLocation').addEventListener('change', function () {
+      selectedSnagId = null;
+      exitMeasureMode();
+      showDrawing(currentLocation());
+      renderPins();
+      renderSnagList();
+      renderMeasurementList();
+      renderHighlightList();
+      syncDrawingScaleUI();
+      renderHighlightCanvas();
+    });
+    ['fStatus', 'fCategory', 'fAssignee', 'fSearch'].forEach(function (id) {
+      document.getElementById(id).addEventListener('input', renderSnagList);
+      document.getElementById(id).addEventListener('change', renderSnagList);
+    });
+
+    var btnToggleArchived = document.getElementById('btnToggleArchived');
+    if (btnToggleArchived) {
+      btnToggleArchived.addEventListener('click', function () {
+        state.showArchived = !state.showArchived;
+        updateArchivedToggleButton();
+        saveState();
+        selectedSnagId = null;
+        renderPins();
+        renderSnagList();
+      });
+    }
+
+    document.getElementById('btnAddPin').addEventListener('click', function () {
+      if (!requireProjectThenDrawing()) return;
+      view.addPinMode = !view.addPinMode;
+      if (view.addPinMode) exitMeasureMode();
+      document.getElementById('viewport').classList.toggle('add-pin', view.addPinMode);
+      document.getElementById('btnAddPin').classList.toggle('active', view.addPinMode);
+      updateMeasureToolbar();
+      toast(view.addPinMode ? 'Click on the drawing to place a pin.' : 'Pin mode off.');
+    });
+
+    document.getElementById('btnZoomIn').addEventListener('click', function () {
+      if (isBlockingPanZoom()) return;
+      view.scale = Math.min(4, view.scale * 1.15);
+      updateStageTransform();
+    });
+    document.getElementById('btnZoomOut').addEventListener('click', function () {
+      if (isBlockingPanZoom()) return;
+      view.scale = Math.max(0.25, view.scale / 1.15);
+      updateStageTransform();
+    });
+    document.getElementById('btnResetView').addEventListener('click', function () {
+      view.scale = 1;
+      view.panX = 0;
+      view.panY = 0;
+      updateStageTransform();
+    });
+
+    var vp = document.getElementById('viewport');
+    vp.addEventListener('wheel', function (e) {
+      if (isBlockingPanZoom()) {
+        e.preventDefault();
+        return;
+      }
+      e.preventDefault();
+      var delta = e.deltaY > 0 ? 0.9 : 1.1;
+      view.scale = Math.max(0.25, Math.min(4, view.scale * delta));
+      updateStageTransform();
+    }, { passive: false });
+
+    vp.addEventListener('mousedown', function (e) {
+      if (isBlockingPanZoom()) return;
+      if (e.target.closest('.ss-pin')) return;
+      if (view.addPinMode) return;
+      panning = true;
+      lastPan = { x: e.clientX, y: e.clientY };
+      vp.classList.add('panning');
+    });
+    window.addEventListener('mousemove', function (e) {
+      if (!panning) return;
+      view.panX += e.clientX - lastPan.x;
+      view.panY += e.clientY - lastPan.y;
+      lastPan = { x: e.clientX, y: e.clientY };
+      updateStageTransform();
+    });
+    window.addEventListener('mouseup', function () {
+      panning = false;
+      vp.classList.remove('panning');
+    });
+
+    vp.addEventListener('click', onViewportClick);
+
+    vp.addEventListener('dblclick', function (e) {
+      if (e.target.closest('.ss-pin')) return;
+      if (view.addPinMode) return;
+      if (!requireProjectThenDrawing()) return;
+      var stage = document.getElementById('stage');
+      var inner = document.getElementById('inner');
+      var img = document.getElementById('drawingImg');
+      if (!stage || !inner || !img || !img.naturalWidth || stage.style.display === 'none') return;
+      var rect = inner.getBoundingClientRect();
+      var x = e.clientX - rect.left;
+      var y = e.clientY - rect.top;
+      if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
+      e.preventDefault();
+      exitMeasureMode();
+      view.addPinMode = true;
+      document.getElementById('viewport').classList.add('add-pin');
+      document.getElementById('btnAddPin').classList.add('active');
+      updateMeasureToolbar();
+      toast('Pin mode: click on the drawing to place a snag.');
+    });
+
+    document.getElementById('nlSave').addEventListener('click', function () {
+      var pid = document.getElementById('nlProject').value;
+      var name = (document.getElementById('nlName').value || '').trim();
+      var block = (document.getElementById('nlBlock').value || '').trim();
+      var floor = (document.getElementById('nlFloor').value || '').trim();
+      var file = document.getElementById('nlFile').files[0];
+      if (!pid || !name) {
+        toast('Project and drawing name are required.');
+        return;
+      }
+      if (!file) {
+        toast('Please choose an image file.');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var ptmNew = parseFloat(document.getElementById('nlPixelsToMm').value);
+        if (!isFinite(ptmNew) || ptmNew <= 0) ptmNew = 1;
+        var loc = {
+          id: uid(),
+          projectId: pid,
+          name: name,
+          block: block || '—',
+          floor: floor || '—',
+          imageDataUrl: reader.result,
+          pixelsToMm: ptmNew
+        };
+        state.locations.push(loc);
+        saveState();
+        document.getElementById('filterProject').value = pid;
+        fillLocationSelect();
+        document.getElementById('selectLocation').value = loc.id;
+        showDrawing(loc);
+        renderPins();
+        renderSnagList();
+        var nm = bootstrap.Modal.getInstance(document.getElementById('modalNewLocation'));
+        if (nm) nm.hide();
+        document.getElementById('nlName').value = '';
+        document.getElementById('nlBlock').value = '';
+        document.getElementById('nlFloor').value = '';
+        document.getElementById('nlFile').value = '';
+        document.getElementById('nlPixelsToMm').value = '1';
+        toast('Drawing saved.');
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('snagSave').addEventListener('click', saveSnagFromModal);
+    document.getElementById('snagDelete').addEventListener('click', deleteSnag);
+    var archiveBtnBind = document.getElementById('snagArchive');
+    if (archiveBtnBind) archiveBtnBind.addEventListener('click', archiveSnag);
+    var unarchiveBtnBind = document.getElementById('snagUnarchive');
+    if (unarchiveBtnBind) unarchiveBtnBind.addEventListener('click', unarchiveSnag);
+
+    document.getElementById('btnExportSnapshot').addEventListener('click', exportSnapshot);
+    document.getElementById('btnPrintReport').addEventListener('click', printReport);
+
+    document.getElementById('btnMeasureDistance').addEventListener('click', function () {
+      if (!requireProjectThenDrawing()) return;
+      setMeasureTool(view.activeTool === 'distance' ? null : 'distance');
+      if (view.activeTool === 'distance') toast('Distance tool: click two points on the drawing.');
+    });
+    document.getElementById('btnMeasureArea').addEventListener('click', function () {
+      if (!requireProjectThenDrawing()) return;
+      setMeasureTool(view.activeTool === 'area' ? null : 'area');
+      if (view.activeTool === 'area') toast('Area: click each corner, then double-click to finish (or use Finish).');
+    });
+    var btnFinish = document.getElementById('btnFinishArea');
+    if (btnFinish) btnFinish.addEventListener('click', finishCurrentAreaPolygon);
+    document.getElementById('btnClearMeasurements').addEventListener('click', clearAllMeasurementsForDrawing);
+    document.getElementById('btnUndoMeasure').addEventListener('click', undoLastMeasurement);
+    document.getElementById('btnClearHighlights').addEventListener('click', clearAllHighlightsForDrawing);
+    document.getElementById('btnUndoHighlight').addEventListener('click', undoLastHighlight);
+
+    document.getElementById('btnHighlightCircle').addEventListener('click', function () {
+      if (!requireProjectThenDrawing()) return;
+      setHighlightTool(view.activeTool === 'circle' ? null : 'circle');
+    });
+    document.getElementById('btnHighlightMarker').addEventListener('click', function () {
+      if (!requireProjectThenDrawing()) return;
+      setHighlightTool(view.activeTool === 'marker' ? null : 'marker');
+    });
+    document.getElementById('btnHighlightFlag').addEventListener('click', function () {
+      if (!requireProjectThenDrawing()) return;
+      setHighlightTool(view.activeTool === 'flag' ? null : 'flag');
+    });
+    var btnSnapZone = document.getElementById('btnSnapshotZone');
+    if (btnSnapZone) {
+      btnSnapZone.addEventListener('click', function () {
+        if (!requireProjectThenDrawing()) return;
+        setHighlightTool(view.activeTool === 'snapzone' ? null : 'snapzone');
+      });
+    }
+
+    var btnFinishMarker = document.getElementById('btnFinishMarker');
+    if (btnFinishMarker) btnFinishMarker.addEventListener('click', finishCurrentMarkerPolygon);
+
+    var markerColorPreset = document.getElementById('markerColorPreset');
+    if (markerColorPreset) {
+      markerColorPreset.addEventListener('change', function () {
+        renderHighlightCanvas();
+      });
+    }
+
+    document.getElementById('flagSave').addEventListener('click', saveFlagFromModal);
+    document.getElementById('flagDelete').addEventListener('click', deleteFlagFromModal);
+
+    var highlightListEl = document.getElementById('highlightList');
+    if (highlightListEl) {
+      highlightListEl.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('[data-highlight-del]') : null;
+        if (!btn) return;
+        e.preventDefault();
+        deleteHighlightById(btn.getAttribute('data-highlight-del'));
+      });
+    }
+
+    var measureCanvas = document.getElementById('measureCanvas');
+    if (measureCanvas) {
+      measureCanvas.addEventListener('click', onMeasureCanvasClick);
+      measureCanvas.addEventListener('dblclick', function (e) {
+        if (view.activeTool !== 'area') return;
+        finishAreaOnDoubleClick(e);
+      });
+      measureCanvas.addEventListener('mousemove', function (e) {
+        if (view.activeTool !== 'distance' && view.activeTool !== 'area') return;
+        var lid = getLocationId();
+        var raw = normFromEventOnInner(e);
+        view.measureDraft.cursorNorm = raw && lid ? snapNormToNearestPin(raw, lid) : raw;
+        renderMeasurementCanvas();
+      });
+      measureCanvas.addEventListener('mouseleave', function () {
+        view.measureDraft.cursorNorm = null;
+        renderMeasurementCanvas();
+      });
+    }
+
+    var highlightCanvas = document.getElementById('highlightCanvas');
+    if (highlightCanvas) {
+      highlightCanvas.addEventListener('mousedown', function (e) {
+        if (view.activeTool !== 'snapzone') return;
+        e.preventDefault();
+        e.stopPropagation();
+        var norm = normFromEventOnInner(e);
+        if (!norm) return;
+        snapZoneDragging = true;
+        view.highlightDraft.snapRect = { x1: norm.x, y1: norm.y, x2: norm.x, y2: norm.y };
+        renderHighlightCanvas();
+      });
+      highlightCanvas.addEventListener('click', onHighlightCanvasClick);
+      highlightCanvas.addEventListener('dblclick', function (e) {
+        if (view.activeTool !== 'marker') return;
+        finishMarkerOnDoubleClick(e);
+      });
+      highlightCanvas.addEventListener('mousemove', function (e) {
+        if (view.activeTool === 'snapzone' && snapZoneDragging) {
+          var n2 = normFromEventOnInner(e);
+          if (n2 && view.highlightDraft.snapRect) {
+            view.highlightDraft.snapRect.x2 = n2.x;
+            view.highlightDraft.snapRect.y2 = n2.y;
+            renderHighlightCanvas();
+          }
+          return;
+        }
+        if (view.activeTool !== 'circle' && view.activeTool !== 'marker') return;
+        var lid = getLocationId();
+        var raw = normFromEventOnInner(e);
+        view.highlightDraft.cursorNorm = raw && lid ? snapNormToNearestPin(raw, lid) : raw;
+        renderHighlightCanvas();
+      });
+      highlightCanvas.addEventListener('mouseleave', function () {
+        view.highlightDraft.cursorNorm = null;
+        renderHighlightCanvas();
+      });
+    }
+
+    document.addEventListener('mouseup', function () {
+      finishSnapZoneDrag();
+    });
+
+    var measListEl = document.getElementById('measurementList');
+    if (measListEl) {
+      measListEl.addEventListener('change', function (e) {
+        var sel = e.target && e.target.closest ? e.target.closest('[data-measure-unit-sel]') : null;
+        if (!sel) return;
+        var row = sel.closest('[data-measure-row]');
+        if (!row) return;
+        var mid = row.getAttribute('data-measure-row');
+        var locId = getLocationId();
+        var m = findMeasurementById(locId, mid);
+        if (!m) return;
+        var inp = row.querySelector('[data-measure-inp]');
+        if (!inp) return;
+        var nu = sel.value;
+        if (m.type === 'distance') inp.value = displayValueForDistanceInput(m, nu);
+        else if (m.type === 'area') inp.value = displayValueForAreaInput(m, nu);
+      });
+      measListEl.addEventListener('click', function (e) {
+        var app = e.target && e.target.closest ? e.target.closest('[data-measure-apply]') : null;
+        if (app) {
+          e.preventDefault();
+          applyMeasurementFromUI(app.getAttribute('data-measure-apply'));
+          return;
+        }
+        var btn = e.target && e.target.closest ? e.target.closest('[data-measure-del]') : null;
+        if (!btn) return;
+        e.preventDefault();
+        deleteMeasurement(btn.getAttribute('data-measure-del'));
+      });
+    }
+
+    var btnScale = document.getElementById('btnSaveDrawingScale');
+    if (btnScale) {
+      btnScale.addEventListener('click', function () {
+        var loc = currentLocation();
+        if (!loc) return;
+        var inp = document.getElementById('drawingScaleMm');
+        if (!inp) return;
+        var v = parseFloat(String(inp.value).replace(',', '.'));
+        if (!isFinite(v) || v <= 0) {
+          toast('Enter a positive scale (mm per pixel).');
+          return;
+        }
+        loc.pixelsToMm = v;
+        saveState();
+        normalizeMeasurementsForLocation(loc);
+        renderMeasurementCanvas();
+        renderMeasurementList();
+        toast('Drawing scale saved.');
+      });
+    }
+
+    document.getElementById('btnSyncData').addEventListener('click', syncDataNow);
+
+    document.getElementById('btnHelp').addEventListener('click', function () {
+      alert(
+        'Site Snags\n\n' +
+          '• Manager session: GET/PUT /api/site-snags/workspace — projects and assignees come from PostgreSQL.\n' +
+          '• DB setup: scripts/create_site_snags_tables.sql (drawings, snags, measurements, highlights, categories).\n' +
+          '• Without manager session: data uses local key ' +
+          STORAGE_KEY +
+          ' only.\n' +
+          '• Optional: SITE_SNAGS_CONFIG.useBackend = false to force local-only even with a session.\n' +
+          '• PDF: Print / PDF → Save as PDF in the browser.'
+      );
+    });
+
+    document.getElementById('addCategoryBtn').addEventListener('click', function () {
+      var name = (document.getElementById('newCategoryName').value || '').trim();
+      if (!name) return;
+      if (allCategories().indexOf(name) !== -1) {
+        toast('Category already exists.');
+        return;
+      }
+      state.customCategories.push(name);
+      document.getElementById('newCategoryName').value = '';
+      saveState();
+      fillCategoryFilters();
+      renderCategoryList();
+      toast('Category added.');
+    });
+
+    var btnOpenNewDrawing = document.getElementById('btnOpenNewDrawingModal');
+    if (btnOpenNewDrawing) {
+      btnOpenNewDrawing.addEventListener('click', function () {
+        if (!getSelectedProjectId()) {
+          toast('Select a project first.');
+          return;
+        }
+        fillProjectSelects();
+        var nl = document.getElementById('nlProject');
+        if (nl) nl.value = getSelectedProjectId();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalNewLocation')).show();
+      });
+    }
+
+    var catModal = document.getElementById('modalCategories');
+    if (catModal) {
+      catModal.addEventListener('show.bs.modal', function () {
+        renderCategoryList();
+      });
+    }
+
+    document.getElementById('linkManageCat').addEventListener('click', function (e) {
+      e.preventDefault();
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCategories')).show();
+    });
+
+    updateArchivedToggleButton();
+  }
+
+  function runAfterSiteSnagsDataLoad() {
+    syncMockPlanningLinksForAllSnags();
+    fillProjectSelects();
+    fillPeopleAssigneeSelects();
+    fillLocationSelect();
+    fillCategoryFilters();
+    renderSnagList();
+    renderMockTasks();
+    showDrawing(currentLocation());
+    bind();
+    startPolling();
+    updateStageTransform();
+    renderMeasurementList();
+    renderHighlightList();
+    syncDrawingScaleUI();
+    renderHighlightCanvas();
+    updateSiteSnagsSyncBadge();
+  }
+
+  function applyInjectedManagerSession() {
+    if (!getManagerSessionHeaders()) return;
+    hydrateSiteSnagsFromServer().then(function () {
+      fillProjectSelects();
+      fillPeopleAssigneeSelects();
+      fillLocationSelect();
+      fillCategoryFilters();
+      renderSnagList();
+      renderMockTasks();
+      showDrawing(currentLocation());
+      updateStageTransform();
+      renderMeasurementList();
+      renderHighlightList();
+      syncDrawingScaleUI();
+      renderHighlightCanvas();
+      updateSiteSnagsSyncBadge();
+    });
+  }
+
+  window.addEventListener('message', function (e) {
+    if (e.origin !== window.location.origin) return;
+    if (!e.data || e.data.type !== 'proconix_site_snags_session') return;
+    var sess = e.data.session;
+    if (!sess || sess.manager_id == null || !sess.email) return;
+    managerSessionFromParent = sess;
+    applyInjectedManagerSession();
+  });
+
+  if (siteSnagsUsesDb()) {
+    hydrateSiteSnagsFromServer().then(function () {
+      runAfterSiteSnagsDataLoad();
+    });
+  } else {
+    loadState();
+    runAfterSiteSnagsDataLoad();
+  }
+})();
+  </script>
+</body>
+</html>

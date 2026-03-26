@@ -20,12 +20,14 @@ const {
   updatePlatformUser,
   deletePlatformUser,
 } = require('../controllers/platformUsersAdminController');
-const { getSystemHealth } = require('../controllers/systemHealthAdminController');
+const { getSystemHealth, getServerLogStream, postLogTest } = require('../controllers/systemHealthAdminController');
 const { requirePlatformAdminAuth } = require('../middleware/requirePlatformAdminAuth');
 
 router.post('/login', login);
 router.get('/me', requirePlatformAdminAuth, me);
 router.get('/system-health', requirePlatformAdminAuth, getSystemHealth);
+router.get('/server-log-stream', requirePlatformAdminAuth, getServerLogStream);
+router.post('/log-test', requirePlatformAdminAuth, postLogTest);
 router.get('/billing-subscriptions', requirePlatformAdminAuth, listBillingSubscriptions);
 router.patch('/billing-subscriptions/:id', requirePlatformAdminAuth, updateBillingSubscription);
 router.get('/platform-users', requirePlatformAdminAuth, listPlatformUsers);

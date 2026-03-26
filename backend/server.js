@@ -1,10 +1,11 @@
 /**
  * Express server: serves frontend static files and API routes.
  * - Static: ../frontend
- * - API: /api/companies/*, /api/health
+ * - API: /api/companies/*, /api/health, /api/site-snags/*, …
  */
 
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+require('./lib/serverProcessLogBuffer').install();
 const express = require('express');
 const path = require('path');
 const { testConnection } = require('./db/pool');
@@ -22,6 +23,7 @@ const qaRoutes = require('./routes/qaRoutes');
 const materialsRoutes = require('./routes/materialsRoutes');
 const planningRoutes = require('./routes/planningRoutes');
 const platformAdminRoutes = require('./routes/platformAdminRoutes');
+const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
 const { metricsMiddleware } = require('./middleware/metricsMiddleware');
 const { printStartupConsoleBanner } = require('./lib/startupConsoleBanner');
 
@@ -31,7 +33,7 @@ const HOST = process.env.HOST || 'localhost';
 const frontendDir = path.resolve(__dirname, '../frontend');
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '25mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(metricsMiddleware);
 
@@ -44,14 +46,14 @@ app.get('/api/health', async (req, res) => {
         status: 'ok',
         connected: true,
         database: result.message,
-        message: 'Baza de date este conectată.',
+        message: 'Database is connected.',
       });
     }
     return res.status(503).json({
       status: 'error',
       connected: false,
       database: result.error,
-      message: 'Baza de date nu este conectată.',
+      message: 'Database is not connected.',
     });
   } catch (err) {
     return res.status(503).json({
@@ -103,6 +105,9 @@ app.use('/api/planning', planningRoutes);
 
 // Platform administrators (Proconix operator console)
 app.use('/api/platform-admin', platformAdminRoutes);
+
+// Site Snags (per-company JSON state; requires site_snags_state table)
+app.use('/api/site-snags', siteSnagsRoutes);
 
 // API 404 – ensure all unmatched /api/* return JSON (no HTML)
 app.use('/api', (req, res) => {

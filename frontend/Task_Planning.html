@@ -831,7 +831,7 @@
 
     .tp-gantt-summary-table tbody {
       display: block;
-      max-height: 3.4rem; /* ~2 rânduri vizibile */
+      max-height: 3.4rem; /* ~2 visible lines */
       overflow-y: auto;
     }
 
@@ -1333,6 +1333,116 @@
       };
 
       var STORAGE_KEY = 'proconix_planning_demo';
+      var SITE_SNAGS_STORAGE_KEY = 'proconix_site_snags_v1';
+
+      function isSiteSnagTask(t) {
+        return !!(t && t.source === 'site_snag');
+      }
+
+      function mapSnagStatusToPlanning(status) {
+        var s = String(status || '').toLowerCase();
+        if (s === 'in_progress') return 'in_progress';
+        if (s === 'completed' || s === 'verified' || s === 'closed') return 'completed';
+        return 'not_started';
+      }
+
+      function snagToPlanningTask(snag, locations, projects) {
+        var loc = (locations || []).find(function (l) {
+          return String(l.id) === String(snag.locationId);
+        });
+        var proj = loc
+          ? (projects || []).find(function (p) {
+              return String(p.id) === String(loc.projectId);
+            })
+          : null;
+        var locLabel = loc
+          ? (loc.name || 'Drawing') + ' · Block ' + (loc.block || '—') + ' · Fl. ' + (loc.floor || '—')
+          : 'Unknown drawing';
+        var projName = proj ? proj.name || '' : '';
+        var ymd = snag.targetDate && String(snag.targetDate).slice(0, 10);
+        if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+          ymd = snag.createdAt ? String(snag.createdAt).slice(0, 10) : '';
+        }
+        if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+          var d = new Date();
+          ymd =
+            d.getFullYear() +
+            '-' +
+            String(d.getMonth() + 1).padStart(2, '0') +
+            '-' +
+            String(d.getDate()).padStart(2, '0');
+        }
+        var assignName =
+          snag.assignee && String(snag.assignee).trim() ? String(snag.assignee).trim() : 'Unassigned';
+        var desc = (snag.description || '').trim();
+        var scope =
+          (projName ? 'Project: ' + projName + '\n' : '') + 'Drawing: ' + locLabel + (snag.category ? '\nCategory: ' + snag.category : '');
+        return {
+          id: 'ss-snag-' + snag.id,
+          source: 'site_snag',
+          snagId: snag.id,
+          title: snag.title || 'Site snag',
+          description: desc ? desc + '\n\n—\n' + scope : scope,
+          assignedTo: [assignName],
+          priority: 'medium',
+          deadline: null,
+          date: ymd,
+          startSpanDate: ymd,
+          time: '09:00',
+          sendToAssignees: false,
+          notes: null,
+          status: mapSnagStatusToPlanning(snag.status)
+        };
+      }
+
+      function mergeSiteSnagsIntoTasks() {
+        function applyWorkspace(ws) {
+          if (!ws) return;
+          var locations = ws.locations || [];
+          var projects = ws.projects || [];
+          var snags = ws.snags || [];
+          planState.tasks = planState.tasks.filter(function (t) {
+            return !isSiteSnagTask(t);
+          });
+          snags.forEach(function (s) {
+            planState.tasks.push(snagToPlanningTask(s, locations, projects));
+          });
+          derivePlanRangeFromTasks();
+        }
+
+        var headers = getSessionHeaders();
+        if (headers && headers['X-Manager-Id'] && headers['X-Manager-Email']) {
+          return fetch('/api/site-snags/workspace', {
+            method: 'GET',
+            headers: {
+              'X-Manager-Id': headers['X-Manager-Id'],
+              'X-Manager-Email': headers['X-Manager-Email']
+            },
+            credentials: 'same-origin'
+          })
+            .then(function (r) {
+              return r.json().catch(function () {
+                return {};
+              });
+            })
+            .then(function (data) {
+              if (data && data.success) applyWorkspace(data);
+            })
+            .catch(function () {});
+        }
+        try {
+          var raw = localStorage.getItem(SITE_SNAGS_STORAGE_KEY);
+          if (!raw) return Promise.resolve();
+          var data = JSON.parse(raw);
+          if (!data || data.version !== 1) return Promise.resolve();
+          applyWorkspace({
+            locations: data.locations || [],
+            projects: data.projects || [],
+            snags: data.snags || []
+          });
+        } catch (_) {}
+        return Promise.resolve();
+      }
 
       // Backend preparation:
       // - keep false to maintain current frontend-only behavior.
@@ -1481,7 +1591,12 @@
             'Plan · ' + (planState.startDate ? fmtDateLabel(parseYmdLocalToDate(planState.startDate)) : '—') +
             (planState.startDate !== planState.endDate && planState.endDate ? ' – ' + fmtDateLabel(parseYmdLocalToDate(planState.endDate)) : '');
           return p0;
-        });
+        })
+          .then(function (p0) {
+            return mergeSiteSnagsIntoTasks().then(function () {
+              return p0;
+            });
+          });
       }
 
       function syncPlanToBackend() {
@@ -1492,7 +1607,17 @@
         derivePlanRangeFromTasks();
 
         var payloadPlan = toBackendPlanPayload();
-        var payloadTasks = planState.tasks.map(function (t) { return toBackendTaskPayload(t); });
+        var payloadTasks = planState.tasks
+          .filter(function (t) {
+            return !isSiteSnagTask(t);
+          })
+          .map(function (t) {
+            return toBackendTaskPayload(t);
+          });
+
+        if (!payloadTasks.length) {
+          return loadPlanFromBackendLatest();
+        }
 
         function doUpsertWithPlanId(planId) {
           return fetchJson(PLANNING_API.upsertPlanTasks, {
@@ -2008,17 +2133,22 @@
       }
 
       function clearCurrentPlan() {
-        var tasksToDelete = planState.tasks.slice();
-        if (USE_BACKEND && currentPlanId && tasksToDelete.length) {
-          Promise.all(tasksToDelete.map(function (t) { return backendDeleteTask(t.id); }))
+        var backendDeletable = planState.tasks.filter(function (t) {
+          return !isSiteSnagTask(t);
+        });
+        if (USE_BACKEND && currentPlanId && backendDeletable.length) {
+          Promise.all(backendDeletable.map(function (t) { return backendDeleteTask(t.id); }))
             .then(function () {
-              planState.tasks = [];
-              planState.startDate = null;
-              planState.endDate = null;
-              currentPlanLabel.textContent = 'No plan saved yet';
+              return loadPlanFromBackendLatest();
+            })
+            .then(function () {
               updateFiltersOptions();
               renderCalendar();
-              showToast('Plan cleared', 'Tasks removed from database.', 'success');
+              showToast(
+                'Plan cleared',
+                'Planning tasks removed from the database. Site Snags pins still appear in this view.',
+                'success'
+              );
             })
             .catch(function (err) {
               showToast('Backend error', (err && err.message) ? err.message : 'Failed to clear plan.', 'error');
@@ -2026,13 +2156,20 @@
           return;
         }
 
-        planState.tasks = [];
-        planState.startDate = null;
-        planState.endDate = null;
-        currentPlanLabel.textContent = 'No plan saved yet';
-        updateFiltersOptions();
-        renderCalendar();
-        showToast('Plan cleared', 'Cleared from current draft.', 'success');
+        planState.tasks = planState.tasks.filter(function (t) {
+          return isSiteSnagTask(t);
+        });
+        mergeSiteSnagsIntoTasks().then(function () {
+          derivePlanRangeFromTasks();
+          if (!planState.tasks.length) {
+            planState.startDate = null;
+            planState.endDate = null;
+            currentPlanLabel.textContent = 'No plan saved yet';
+          }
+          updateFiltersOptions();
+          renderCalendar();
+          showToast('Plan cleared', 'Local planning tasks removed. Site Snags list refreshed.', 'success');
+        });
       }
 
       function applyFilters(tasks) {
@@ -2203,6 +2340,15 @@
       function changeTaskStatus(id, newStatus) {
         var t = planState.tasks.find(function (x) { return String(x.id) === String(id); });
         if (!t) return;
+        if (isSiteSnagTask(t)) {
+          showToast(
+            'Site Snags',
+            'This row comes from Site Snags. Change status or details there (dashboard → Site Snags).',
+            'success'
+          );
+          renderCalendar();
+          return;
+        }
         var prev = t.status;
         t.status = newStatus;
         renderCalendar();
@@ -2237,7 +2383,47 @@
         var t = planState.tasks.find(function (x) { return String(x.id) === String(taskId); });
         if (!t) return;
         currentTaskId = taskId;
+        var showModalActions = function (show) {
+          var disp = show ? '' : 'none';
+          if (taskMarkProgressBtn) taskMarkProgressBtn.style.display = disp;
+          if (taskMarkPausedBtn) taskMarkPausedBtn.style.display = disp;
+          if (taskMarkCompleteBtn) taskMarkCompleteBtn.style.display = disp;
+          if (taskDeleteBtn) taskDeleteBtn.style.display = disp;
+        };
         var people = (t.assignedTo || []).join(', ') || '—';
+        var status = t.status || 'not_started';
+        var startVal = t.startSpanDate || '';
+        if (isSiteSnagTask(t)) {
+          showModalActions(false);
+          taskModalBody.innerHTML =
+            '<p class="small text-info mb-2 border border-info border-opacity-50 rounded px-2 py-2">' +
+            '<strong>Site Snags</strong> — This row mirrors a snag on a drawing. Edit the snag, dates, and assignee in ' +
+            '<strong>Dashboard → Site Snags</strong>; changes appear here after reload.' +
+            '</p>' +
+            '<dl>' +
+            '<dt>Title</dt><dd>' +
+            escapeHtml(t.title || '—') +
+            '</dd>' +
+            '<dt>Assigned to</dt><dd>' +
+            escapeHtml(people) +
+            '</dd>' +
+            '<dt>Status</dt><dd><span class="tp-status-label" data-status="' +
+            escapeHtml(status) +
+            '">' +
+            escapeHtml(String(status).replace(/_/g, ' ')) +
+            '</span></dd>' +
+            '<dt>Day on calendar</dt><dd>' +
+            escapeHtml(startVal || '—') +
+            '</dd>' +
+            '<dt>Details</dt><dd class="text-break" style="white-space:pre-wrap">' +
+            escapeHtml(t.description || '—') +
+            '</dd>' +
+            '</dl>';
+          taskModal.classList.add('is-open');
+          taskModal.setAttribute('aria-hidden', 'false');
+          return;
+        }
+        showModalActions(true);
         var selectedPerson = (t.assignedTo && t.assignedTo.length) ? t.assignedTo[0] : '';
         var allPeopleSet = {};
         planState.tasks.forEach(function (x) {
@@ -2261,8 +2447,6 @@
           '</select>';
         var sendOk = t.sendToAssignees === true;
         var prio = (t.priority || 'medium');
-        var status = t.status || 'not_started';
-        var startVal = t.startSpanDate || '';
         var deadlineDateVal = t.date || '';
         var deadlineTimeVal = t.time || '00:00';
         var deadlineVal = deadlineDateVal ? (deadlineDateVal + 'T' + deadlineTimeVal) : '';
@@ -2612,6 +2796,14 @@
         if (!currentTaskId) return;
         var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
         if (!t) return;
+        if (isSiteSnagTask(t)) {
+          showToast(
+            'Site Snags',
+            'Update this item in Site Snags (dashboard). It cannot be edited from Task & Planning.',
+            'success'
+          );
+          return;
+        }
         var prev = t.status;
         t.status = newStatus;
         renderCalendar();
@@ -2658,6 +2850,14 @@
           var idx = planState.tasks.findIndex(function (x) { return String(x.id) === String(currentTaskId); });
           if (idx === -1) return;
           var removed = planState.tasks[idx];
+          if (isSiteSnagTask(removed)) {
+            showToast(
+              'Site Snags',
+              'Remove or archive this snag in Site Snags. It cannot be deleted from Task & Planning.',
+              'success'
+            );
+            return;
+          }
           planState.tasks.splice(idx, 1);
           renderCalendar();
           updateFiltersOptions();
@@ -2918,7 +3118,9 @@
         updateFiltersOptions();
         updateAssigneeDatalist();
         renderAssignedSelectedPills();
-        renderCalendar();
+        mergeSiteSnagsIntoTasks().then(function () {
+          renderCalendar();
+        });
       });
     })();
   </script>

@@ -1,6 +1,6 @@
 /**
- * Conexiune la PostgreSQL.
- * Setează variabilele de mediu în .env sau în shell (vezi .env.example).
+ * PostgreSQL connection.
+ * Set environment variables in .env or the shell (see .env.example).
  */
 
 require('dotenv').config();
@@ -18,11 +18,11 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('Eroare neașteptată în pool PostgreSQL:', err.message);
+  console.error('Unexpected PostgreSQL pool error:', err.message);
 });
 
 /**
- * Testează conexiunea la baza de date.
+ * Test database connectivity.
  * @returns {Promise<{ ok: boolean, message?: string, error?: string }>}
  */
 async function testConnection() {
@@ -30,7 +30,7 @@ async function testConnection() {
     const client = await pool.connect();
     await client.query('SELECT 1');
     client.release();
-    return { ok: true, message: 'Conexiune reușită.' };
+    return { ok: true, message: 'Connection successful.' };
   } catch (err) {
     return { ok: false, error: err.message };
   }

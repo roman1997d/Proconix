@@ -218,7 +218,7 @@
                 <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
               </button>
             </div>
-            <p class="text-white-50 small mb-3">Editează pe rând: <strong>Status</strong> (Achitat/Activ, Neachitat/Suspendat, Neachitat/Activ), <strong>data expirării</strong> (calendar), <strong>metoda de plată</strong>, apoi <strong>Salvează</strong>. Planul și data achiziției rămân informative până le legi de un gateway de plată.</p>
+            <p class="text-white-50 small mb-3">Edit each row: <strong>Status</strong> (Paid/Active, Unpaid/Suspended, Unpaid/Active), <strong>expiry date</strong> (calendar), <strong>payment method</strong>, then <strong>Save</strong>. Plan and purchase date stay informational until you connect a payment gateway.</p>
             <div id="pxAdminBillingAlert" class="alert alert-danger d-none" role="alert"></div>
             <div id="pxAdminBillingLoading" class="text-white-50 py-3 d-none">Loading billing data…</div>
             <div id="pxAdminBillingTableWrap" class="table-responsive d-none">
@@ -250,19 +250,12 @@
                 <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
               </button>
             </div>
-            <p class="text-white-50 small mb-3">Health checks, API timing &amp; errors (per-minute), pool / PostgreSQL stats, optional slow-query hints, and <code class="text-info">FEATURE_*</code> env flags.</p>
+            <p class="text-white-50 small mb-3">
+              <strong class="text-white-50">Operational</strong> view: API and database reachability, process uptime, host load, Node memory/CPU, request latency chart, and connection pool. For logs, disk usage, slow-query hints, and <code class="text-info">FEATURE_*</code> flags, open <strong>Audit &amp; logs</strong>.
+            </p>
             <div id="pxAdminSysAlert" class="alert alert-danger d-none" role="alert"></div>
             <div id="pxAdminSysLoading" class="text-white-50 py-3 d-none">Loading system metrics…</div>
             <div id="pxAdminSysContent" class="d-none">
-              <div class="px-admin-sys-console-card mb-4">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                  <h3 class="h6 text-white mb-0">Server log (terminal mirror)</h3>
-                  <span class="small text-white-50">Same text as on startup · DB status is live</span>
-                </div>
-                <div class="px-admin-sys-console-outer">
-                  <pre id="pxAdminSysConsole" class="px-admin-sys-console mb-0" role="region" aria-label="Server startup log"></pre>
-                </div>
-              </div>
               <div class="row g-3 mb-3">
                 <div class="col-sm-6 col-xl-3">
                   <div class="px-admin-stat-card h-100">
@@ -294,6 +287,41 @@
                 </div>
               </div>
 
+              <h3 class="h6 text-white mb-2 mt-1">Host &amp; Node (like htop summary)</h3>
+              <p class="small text-white-50 mb-3" id="pxAdminSysHostNote">
+                System load and RAM are for the whole machine. Node RSS / heap are this process only. Node CPU % updates after each refresh (time on CPU since the previous request).
+              </p>
+              <div class="row g-3 mb-3">
+                <div class="col-sm-6 col-xl-3">
+                  <div class="px-admin-stat-card h-100">
+                    <div class="text-white-50 small">Host load avg</div>
+                    <div class="px-admin-stat-value small" id="pxAdminSysHostLoad">—</div>
+                    <div class="small text-white-50" id="pxAdminSysHostLoadSub">1 / 5 / 15 min</div>
+                  </div>
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                  <div class="px-admin-stat-card h-100">
+                    <div class="text-white-50 small">Host RAM</div>
+                    <div class="px-admin-stat-value" id="pxAdminSysHostRam">—</div>
+                    <div class="small text-white-50" id="pxAdminSysHostRamSub">System memory</div>
+                  </div>
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                  <div class="px-admin-stat-card h-100">
+                    <div class="text-white-50 small">Node memory</div>
+                    <div class="px-admin-stat-value small" id="pxAdminSysNodeMem">—</div>
+                    <div class="small text-white-50" id="pxAdminSysNodeMemSub">RSS · heap</div>
+                  </div>
+                </div>
+                <div class="col-sm-6 col-xl-3">
+                  <div class="px-admin-stat-card h-100">
+                    <div class="text-white-50 small">Node CPU (interval)</div>
+                    <div class="px-admin-stat-value" id="pxAdminSysNodeCpu">—</div>
+                    <div class="small text-white-50" id="pxAdminSysNodeCpuSub">Since last refresh</div>
+                  </div>
+                </div>
+              </div>
+
               <div class="px-admin-sys-chart-wrap border border-secondary rounded-3 p-3 mb-3" style="background: rgba(15, 23, 42, 0.5);">
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                   <h3 class="h6 text-white mb-0">API response time &amp; error rate</h3>
@@ -317,9 +345,87 @@
                   <ul class="list-unstyled small text-white-50 mb-0" id="pxAdminSysPgConn"></ul>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-none" data-px-admin-panel="audit">
+          <div class="px-admin-panel-card">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+              <h2 class="h5 text-white mb-0">Audit &amp; logs</h2>
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-outline-light" id="pxAdminAuditRefresh" title="Reload metrics and log context">
+                  <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-info" id="pxAdminAuditLogTest" title="Writes one test line to stdout and stderr (same process)">
+                  <i class="bi bi-bug" aria-hidden="true"></i> Test log line
+                </button>
+              </div>
+            </div>
+            <p class="text-white-50 small mb-3">
+              Server output, deployment footprint on disk, PostgreSQL diagnostics (slow-query hints), and <code class="text-info">FEATURE_*</code> environment flags. Operational metrics (API, uptime, charts, pool) stay under <strong>System &amp; health</strong>.
+            </p>
+            <div id="pxAdminAuditAlert" class="alert alert-danger d-none" role="alert"></div>
+            <div id="pxAdminAuditLoading" class="text-white-50 py-3 d-none">Loading audit data…</div>
+            <div id="pxAdminAuditContent" class="d-none">
+              <div class="px-admin-sys-console-card mb-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                  <h3 class="h6 text-white mb-0">Startup summary</h3>
+                  <span class="small text-white-50">Refreshed when you open / refresh this panel</span>
+                </div>
+                <p class="small text-white-50 mb-2">
+                  This block is a <strong class="text-white-50">snapshot</strong> (URLs + DB check), not a live tail of the server terminal.
+                </p>
+                <div class="px-admin-sys-console-outer">
+                  <pre id="pxAdminAuditConsole" class="px-admin-sys-console mb-0" role="region" aria-label="Server startup summary"></pre>
+                </div>
+              </div>
+              <div class="px-admin-sys-console-card mb-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                  <h3 class="h6 text-white mb-0">Live server output</h3>
+                  <span class="small text-white-50">stdout / stderr · since this process started</span>
+                </div>
+                <p class="small text-white-50 mb-2">
+                  Streamed in real time from this Node process (last ~2000 lines kept). Leave this tab open to watch new errors as they are printed.
+                </p>
+                <div class="px-admin-sys-console-outer">
+                  <pre id="pxAdminAuditLiveLog" class="px-admin-sys-console px-admin-sys-live-log mb-0" role="log" aria-live="polite" aria-label="Live server log"></pre>
+                </div>
+              </div>
+
+              <h3 class="h6 text-white mb-2">Proconix project on disk</h3>
+              <p class="small text-white-50 mb-3" id="pxAdminAuditDiskIntro">
+                All files under the project root (backend, frontend, <code class="text-info">uploads</code>, images, <code class="text-info">node_modules</code>, etc.). Sizes are per top-level folder; total is the sum. Scan is cached ~90s per server process.
+              </p>
+              <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                  <div class="px-admin-stat-card h-100">
+                    <div class="text-white-50 small">Total (project)</div>
+                    <div class="px-admin-stat-value" id="pxAdminAuditDiskTotal">—</div>
+                    <div class="small text-white-50 text-break" id="pxAdminAuditDiskMeta">—</div>
+                    <hr class="border-secondary my-2">
+                    <div class="small text-white-50">Images: <span class="text-info" id="pxAdminAuditDiskImages">—</span></div>
+                    <div class="small text-white-50">Documents: <span class="text-info" id="pxAdminAuditDiskDocuments">—</span></div>
+                    <div class="small text-white-50">Others: <span class="text-info" id="pxAdminAuditDiskOthers">—</span></div>
+                  </div>
+                </div>
+                <div class="col-md-8">
+                  <div class="table-responsive border border-secondary rounded-3" style="max-height: 280px; overflow-y: auto;">
+                    <table class="table table-dark table-sm px-admin-data-table mb-0">
+                      <thead>
+                        <tr>
+                          <th scope="col">Top-level</th>
+                          <th scope="col" class="text-end">Size</th>
+                        </tr>
+                      </thead>
+                      <tbody id="pxAdminAuditDiskBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
 
               <h3 class="h6 text-white mb-2">Slow / expensive queries</h3>
-              <p class="small text-white-50" id="pxAdminSysSlowNote"></p>
+              <p class="small text-white-50" id="pxAdminAuditSlowNote"></p>
               <div class="table-responsive mb-4">
                 <table class="table table-dark table-sm px-admin-data-table mb-0">
                   <thead>
@@ -329,7 +435,7 @@
                       <th scope="col">Mean (ms)</th>
                     </tr>
                   </thead>
-                  <tbody id="pxAdminSysSlowBody"></tbody>
+                  <tbody id="pxAdminAuditSlowBody"></tbody>
                 </table>
               </div>
 
@@ -345,19 +451,11 @@
                       <th scope="col">Source</th>
                     </tr>
                   </thead>
-                  <tbody id="pxAdminSysFlagsBody"></tbody>
+                  <tbody id="pxAdminAuditFlagsBody"></tbody>
                 </table>
               </div>
-              <p id="pxAdminSysFlagsEmpty" class="text-white-50 small mb-0 d-none">No feature flags found in this process environment.</p>
+              <p id="pxAdminAuditFlagsEmpty" class="text-white-50 small mb-0 d-none">No feature flags found in this process environment.</p>
             </div>
-          </div>
-        </div>
-
-        <div class="d-none" data-px-admin-panel="audit">
-          <div class="px-admin-panel-card">
-            <h2 class="h5 text-white mb-3">Audit &amp; logs</h2>
-            <p class="text-white-50">Security events, admin actions, export for compliance.</p>
-            <span class="badge bg-secondary">Coming soon</span>
           </div>
         </div>
 

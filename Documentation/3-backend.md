@@ -105,9 +105,14 @@ Base URL: `/api`. Toate răspunsurile sunt JSON, cu excepția `GET /api/dashboar
 | POST | /api/operatives/tasks/:taskId/photos | Operative | multipart: `file` (imagine), field `source` | Salvează URL în `operative_task_photos`; max 10 poze per user/task |
 | POST | /api/operatives/issues | Operative | multipart (file) + fields | Issue creat, file_url injectat |
 | POST | /api/operatives/uploads | Operative | multipart (file) + fields | Document upload, file_url injectat |
-| GET | /api/operatives/work-log | Operative | — | Work logs ale operativului |
-| POST | /api/operatives/work-log/upload | Operative | multipart | Upload fișier work log |
-| POST | /api/operatives/work-log | Operative | body: job_display_id, worker_name, ... | Work log creat |
+| GET | /api/operatives/work-log | Operative | — | Work logs ale operativului (filtrate: **fără** rânduri cu `operative_archived = true` pentru operativ) |
+| POST | /api/operatives/work-log/upload | Operative | multipart: `file` | Salvează în `uploads/worklogs/`; răspuns `path` (ex. `/uploads/worklogs/...`) |
+| POST | /api/operatives/work-log | Operative | body: câmpuri work log + opțional `photoUrls[]`, **`timesheetJobs`** (JSON array: joburi cu `photos` ca string-uri path) | Work log creat (persistă `timesheet_jobs` dacă coloana există) |
+| POST | /api/operatives/work-log/:id/archive | Operative | id (path) | Setează `operative_archived`, `operative_archived_at` pentru intrarea proprie (nu șterge rândul) |
+| POST | /api/operatives/timesheet/generate | Operative | body: JSON (`jobs[]`, `total_before_tax`, `work_type`, `period_from`, `period_to`, `workerName` / `project`, logo opțional, etc.) | Generează PDF pontaj (PDFKit); `{ success, pdfPath, pdfUrl }` |
+| POST | /api/operatives/work-report/generate | Operative | body: JSON (`photos` / `photoUrls`, `work_performed`, `notes`, `total_before_tax`, date interval, `location`, logo, …) | Generează PDF raport lucrare (PDFKit); `{ success, pdfPath, pdfUrl }` |
+
+Implementare PDF: **`pdfKitReportsController.js`** + **`backend/templates/pdfkit/proconixPdfTemplate.js`** (layout unic: header, perioadă **dd/mm/yy**, **Total (before tax)** în rezumat).
 
 ---
 
@@ -122,8 +127,9 @@ Base URL: `/api`. Toate răspunsurile sunt JSON, cu excepția `GET /api/dashboar
 | PATCH | /api/worklogs/:id | Manager | id (path), body: quantity, unit_price, total | Job actualizat, edit_history |
 | POST | /api/worklogs/:id/approve | Manager | id (path) | Status → approved |
 | POST | /api/worklogs/:id/reject | Manager | id (path) | Status → rejected |
-| POST | /api/worklogs/:id/archive | Manager | id (path) | archived = true |
-| POST | /api/worklogs/archive-bulk | Manager | body: ids[] | Mai multe joburi arhivate |
+| POST | /api/worklogs/:id/archive | Manager | id (path) | `archived = true` (ascunde de listele manager „normale”; nu e același lucru cu `operative_archived`) |
+| POST | /api/worklogs/archive-bulk | Manager | body: `jobIds[]` | Mai multe joburi arhivate |
+| DELETE | /api/worklogs/:id | Manager | id (path) | **Ștergere definitivă**: `DELETE FROM work_logs` pentru `(id, company_id)`; șterge de pe disc fișierele referite sub `/uploads/` (factură, `photo_urls`, poze din `timesheet_jobs`) |
 
 ---
 
@@ -262,8 +268,9 @@ Sesiunea în frontend: după login, `localStorage` / `sessionStorage` (`proconix
 | authRoutes (inline) | GET /api/auth/validate – returnează company_name și manager dacă header-ele sunt valide. |
 | projectsController | CRUD proiecte (company_id din req.manager), list, getOne, create, update, deactivate, getAssignments, assign, removeAssignment. |
 | operativeController | CRUD operativi (list, add, update, delete), login operative, set-password. |
-| operativeDashboardController | getMe, clockIn/clockOut, workHours status/weekly, getCurrentProject, reportIssue, uploadDocument, getTasks, getMyWorkLogs, workLogUpload, createWorkLog. |
-| worklogsController | list (cu filtre), workers, getOne, update (edit quantity/price/total + edit_history), approve, reject, archive, archiveBulk, create. |
+| operativeDashboardController | getMe, clockIn/clockOut, workHours status/weekly, getCurrentProject, reportIssue, uploadDocument, getTasks, getTaskDetail, updateTaskStatus, uploadTaskConfirmationPhoto, **getMyWorkLogs** (exclude `operative_archived` pentru operativ), **workLogUpload**, **createWorkLog** (inclusiv `timesheet_jobs`), **archiveMyWorkLog**. |
+| worklogsController | list, workers, getOne, update, approve, reject, archive, archiveBulk, create, **remove** (hard delete + unlink fișiere `/uploads/`). |
+| pdfKitReportsController | **generateTimesheetPdf**, **generateWorkReportPdf** (PDFKit; meta operativ/proiect din DB când lipsește din body). |
 | qaController | listTemplates, getTemplate, createTemplate, updateTemplate, deleteTemplate; listJobs, getJob, getNextJobNumber, createJob, updateJob, deleteJob. Helpers: getStatusIdByCode, getCostTypeIdByCode, getFloorIdByCode, assertProjectAccess. |
 | materialsController | getProjects, getCategories, createCategory, getSuppliers, createSupplier, getMaterials, createMaterial, updateMaterial, deleteMaterial (soft delete), getForecast. Helper: recordConsumptionSnapshot (snapshot zilnic în material_consumption la create/update material). Toate operațiunile sunt filtrate după company_id; audit: created_by, updated_by, deleted_at/deleted_by. |
 | dashboardRoutes | HTML partials: `GET /api/dashboard/:module`; înregistrează **înainte** de `/:module` rutele JSON: `overview-stats`, `overview-lists`, `operative-activity-today` (vezi `dashboardOverviewController`). |
@@ -297,7 +304,7 @@ Logica de business este în controller-e: validare input, interogări DB, format
 ## Middleware de protecție a rutei
 
 - **requireManagerAuth**: obligatoriu pentru /api/auth/validate, /api/companies/me, /api/managers/me, /api/managers/phone, /api/managers/change-password, /api/managers/invite, /api/projects/* (exceptând eventual getOne dacă e partajat), /api/operatives (CRUD), /api/worklogs/*, /api/materials/*, /api/templates, /api/jobs, /api/dashboard/* (partials + overview-stats, overview-lists, operative-activity-today).
-- **requireOperativeAuth**: pentru /api/operatives/me, work-hours/*, project/current, tasks, issues, uploads, work-log.
+- **requireOperativeAuth**: pentru /api/operatives/me, work-hours/*, project/current, tasks, tasks/:id/photos, issues, uploads, work-log (GET, POST, upload, **/:id/archive**), **timesheet/generate**, **work-report/generate**.
 - **requireManagerOrOperativeAuth**: pentru GET /api/projects/:id (manager vede orice proiect al companiei; operativ doar proiectul la care e asignat).
 - **Fără auth**: /api/health, /api/companies/create, /api/onboarding/company, /api/managers/create, /api/managers/login, /api/operatives/login, login-temp, set-password.
 
@@ -305,4 +312,4 @@ Logica de business este în controller-e: validare input, interogări DB, format
 
 *Actualizează documentația la adăugarea de endpoint-uri sau middleware.*
 
-**Actualizat:** 16/03/2026
+**Actualizat:** 26/03/2026

@@ -154,20 +154,20 @@
   }
 
   var BILLING_PAYMENT_OPTIONS = [
-    ['registration', 'Înregistrare (self-serve)'],
+    ['registration', 'Registration (self-serve)'],
     ['card', 'Card'],
-    ['invoice', 'Factură'],
-    ['bank_transfer', 'Transfer bancar'],
-    ['cash', 'Numerar'],
-    ['free', 'Gratuit'],
+    ['invoice', 'Invoice'],
+    ['bank_transfer', 'Bank transfer'],
+    ['cash', 'Cash'],
+    ['free', 'Free'],
     ['manual', 'Manual / admin'],
-    ['other', 'Altele'],
+    ['other', 'Other'],
   ];
 
   var BILLING_STATUS_OPTIONS = [
-    ['paid_active', 'Achitat / Activ'],
-    ['unpaid_suspended', 'Neachitat / Suspendat'],
-    ['unpaid_active', 'Neachitat / Activ'],
+    ['paid_active', 'Paid / Active'],
+    ['unpaid_suspended', 'Unpaid / Suspended'],
+    ['unpaid_active', 'Unpaid / Active'],
   ];
 
   function billingAppendSelectOptions(sel, pairs, current) {
@@ -221,7 +221,7 @@
     if (row.calendar_expired) {
       var hint = document.createElement('div');
       hint.className = 'small text-warning mt-1';
-      hint.textContent = 'Data depășită (calendar)';
+      hint.textContent = 'Expiry date passed (calendar)';
       tdExp.appendChild(hint);
     }
     tr.appendChild(tdExp);
@@ -254,7 +254,7 @@
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn btn-sm btn-primary px-admin-billing-save';
-    btn.textContent = 'Salvează';
+    btn.textContent = 'Save';
     tdAct.appendChild(btn);
     tr.appendChild(tdAct);
 
@@ -326,17 +326,109 @@
   }
 
   var sysPollTimer = null;
+  var serverLogAbort = null;
+
+  function stopServerLogStream() {
+    if (serverLogAbort) {
+      serverLogAbort.abort();
+      serverLogAbort = null;
+    }
+  }
+
+  function scrollLiveLogToBottom() {
+    var pre = document.getElementById('pxAdminAuditLiveLog');
+    if (!pre) return;
+    pre.scrollTop = pre.scrollHeight;
+  }
+
+  function startServerLogStream(sess) {
+    stopServerLogStream();
+    var pre = document.getElementById('pxAdminAuditLiveLog');
+    if (!pre || !sess) return;
+    pre.textContent = 'Connecting to live log stream…';
+    serverLogAbort = new AbortController();
+    var signal = serverLogAbort.signal;
+    fetch('/api/platform-admin/server-log-stream', {
+      method: 'GET',
+      headers: sessionHeaders(sess),
+      credentials: 'same-origin',
+      signal: signal,
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          pre.textContent =
+            'Could not open live log stream (HTTP ' + res.status + '). Check platform admin session.';
+          return null;
+        }
+        if (!res.body || !res.body.getReader) {
+          pre.textContent = 'Streaming not supported in this browser.';
+          return null;
+        }
+        return res.body.getReader();
+      })
+      .then(function (reader) {
+        if (!reader) return;
+        var decoder = new TextDecoder();
+        var carry = '';
+        function pump() {
+          return reader.read().then(function (out) {
+            if (out.done) return;
+            carry += decoder.decode(out.value, { stream: true });
+            var parts = carry.split('\n');
+            carry = parts.pop() || '';
+            parts.forEach(function (line) {
+              if (!line.trim()) return;
+              try {
+                var obj = JSON.parse(line);
+                if (obj.type === 'snapshot' && Array.isArray(obj.lines)) {
+                  pre.textContent = obj.lines.length
+                    ? obj.lines.join('\n') + '\n'
+                    : '(No process output yet.)\n';
+                  scrollLiveLogToBottom();
+                } else if (obj.type === 'line' && obj.text != null) {
+                  if (pre.textContent.indexOf('Connecting to live log stream') === 0) {
+                    pre.textContent = '';
+                  }
+                  pre.textContent += obj.text + '\n';
+                  scrollLiveLogToBottom();
+                }
+              } catch (_) {}
+            });
+            return pump();
+          });
+        }
+        return pump();
+      })
+      .catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        if (pre) {
+          pre.textContent +=
+            (pre.textContent ? '\n' : '') +
+            '[Live log stream error: ' +
+            (err && err.message ? err.message : String(err)) +
+            ']';
+        }
+      });
+  }
+
   function clearSysPoll() {
+    stopServerLogStream();
     if (sysPollTimer) {
       clearInterval(sysPollTimer);
       sysPollTimer = null;
     }
   }
   function scheduleSysPoll(sess) {
-    clearSysPoll();
+    if (sysPollTimer) {
+      clearInterval(sysPollTimer);
+      sysPollTimer = null;
+    }
     sysPollTimer = setInterval(function () {
-      var p = document.querySelector('[data-px-admin-panel="system"]');
-      if (p && !p.classList.contains('d-none')) {
+      var sys = document.querySelector('[data-px-admin-panel="system"]');
+      var aud = document.querySelector('[data-px-admin-panel="audit"]');
+      var sysVis = sys && !sys.classList.contains('d-none');
+      var audVis = aud && !aud.classList.contains('d-none');
+      if (sysVis || audVis) {
         loadSystemHealthPanel(sess);
       }
     }, 30000);
@@ -411,15 +503,24 @@
 
   function loadSystemHealthPanel(sess) {
     var loading = document.getElementById('pxAdminSysLoading');
+    var auditLoading = document.getElementById('pxAdminAuditLoading');
     var content = document.getElementById('pxAdminSysContent');
+    var auditContent = document.getElementById('pxAdminAuditContent');
     var alertEl = document.getElementById('pxAdminSysAlert');
+    var auditAlert = document.getElementById('pxAdminAuditAlert');
     if (!sess) return;
     if (alertEl) {
       alertEl.classList.add('d-none');
       alertEl.textContent = '';
     }
+    if (auditAlert) {
+      auditAlert.classList.add('d-none');
+      auditAlert.textContent = '';
+    }
     if (loading) loading.classList.remove('d-none');
+    if (auditLoading) auditLoading.classList.remove('d-none');
     if (content) content.classList.add('d-none');
+    if (auditContent) auditContent.classList.add('d-none');
 
     fetch('/api/platform-admin/system-health', {
       method: 'GET',
@@ -433,22 +534,29 @@
       })
       .then(function (out) {
         if (loading) loading.classList.add('d-none');
+        if (auditLoading) auditLoading.classList.add('d-none');
         if (out.status === 401) {
           clearSession();
           window.location.replace(LOGIN_URL);
           return;
         }
         if (out.status !== 200 || !out.data || !out.data.success) {
+          var errMsg =
+            (out.data && out.data.message) || 'Could not load system health.';
           if (alertEl) {
-            alertEl.textContent =
-              (out.data && out.data.message) || 'Could not load system health.';
+            alertEl.textContent = errMsg;
             alertEl.classList.remove('d-none');
           }
+          if (auditAlert) {
+            auditAlert.textContent = errMsg;
+            auditAlert.classList.remove('d-none');
+          }
           if (content) content.classList.remove('d-none');
+          if (auditContent) auditContent.classList.remove('d-none');
           return;
         }
         var d = out.data;
-        var consolePre = document.getElementById('pxAdminSysConsole');
+        var consolePre = document.getElementById('pxAdminAuditConsole');
         if (consolePre) {
           if (d.console_banner && d.console_banner.lines && d.console_banner.lines.length) {
             consolePre.textContent = d.console_banner.lines.join('\n');
@@ -488,6 +596,179 @@
         if (qd) qd.textContent = d.queue && d.queue.depth != null ? String(d.queue.depth) : '—';
         if (qn) qn.textContent = (d.queue && d.queue.note) || 'Background jobs';
 
+        var host = d.host || {};
+        var np = d.node_process || {};
+        var hostNoteEl = document.getElementById('pxAdminSysHostNote');
+        if (hostNoteEl && d.host_metrics_note) hostNoteEl.textContent = d.host_metrics_note;
+
+        var hl = document.getElementById('pxAdminSysHostLoad');
+        var hls = document.getElementById('pxAdminSysHostLoadSub');
+        if (hl) {
+          var la = host.loadavg;
+          if (la && la.length >= 3) {
+            if (host.platform === 'win32' && la[0] === 0 && la[1] === 0 && la[2] === 0) {
+              hl.textContent = 'N/A';
+              if (hls) hls.textContent = 'Load average not available on Windows';
+            } else {
+              hl.textContent =
+                la[0].toFixed(2) + ' · ' + la[1].toFixed(2) + ' · ' + la[2].toFixed(2);
+              if (hls) {
+                hls.textContent =
+                  (host.cpu_count != null ? String(host.cpu_count) + ' CPUs · ' : '') + '1 / 5 / 15 min';
+              }
+            }
+          }
+        }
+
+        var hr = document.getElementById('pxAdminSysHostRam');
+        var hrs = document.getElementById('pxAdminSysHostRamSub');
+        if (hr && host.mem_used_pct != null && host.mem_total_mb != null) {
+          hr.textContent = host.mem_used_pct + '% used';
+          if (hrs) {
+            hrs.textContent =
+              (host.mem_free_mb != null ? String(host.mem_free_mb) + ' MB free · ' : '') +
+              String(host.mem_total_mb) +
+              ' MB total';
+          }
+        } else if (hr) {
+          hr.textContent = '—';
+        }
+
+        var nm = document.getElementById('pxAdminSysNodeMem');
+        var nms = document.getElementById('pxAdminSysNodeMemSub');
+        if (nm && np.rss_mb != null) {
+          nm.textContent = np.rss_mb + ' MB RSS';
+          if (nms && np.heap_used_mb != null && np.heap_total_mb != null) {
+            nms.textContent = 'Heap ' + np.heap_used_mb + ' / ' + np.heap_total_mb + ' MB';
+          }
+        } else if (nm) {
+          nm.textContent = '—';
+        }
+
+        var nc = document.getElementById('pxAdminSysNodeCpu');
+        var ncs = document.getElementById('pxAdminSysNodeCpuSub');
+        if (nc) {
+          if (np.cpu_percent_since_last != null && np.cpu_percent_since_last !== undefined) {
+            nc.textContent = String(np.cpu_percent_since_last) + '%';
+            nc.className =
+              'px-admin-stat-value ' +
+              (Number(np.cpu_percent_since_last) > 85 ? 'text-warning' : 'text-info');
+          } else {
+            nc.textContent = '—';
+            nc.className = 'px-admin-stat-value text-white-50';
+            if (ncs) ncs.textContent = 'Second refresh (or auto-refresh) shows %';
+          }
+        }
+
+        var projDisk = d.project_disk;
+        var diskTotal = document.getElementById('pxAdminAuditDiskTotal');
+        var diskMeta = document.getElementById('pxAdminAuditDiskMeta');
+        var diskBody = document.getElementById('pxAdminAuditDiskBody');
+        var diskImages = document.getElementById('pxAdminAuditDiskImages');
+        var diskDocuments = document.getElementById('pxAdminAuditDiskDocuments');
+        var diskOthers = document.getElementById('pxAdminAuditDiskOthers');
+        function formatSizeMb(mbValue) {
+          var mb = Number(mbValue || 0);
+          return mb >= 1024 ? (mb / 1024).toFixed(2) + ' GB' : mb.toFixed(1) + ' MB';
+        }
+        var diskMissingApi =
+          projDisk === undefined && !Object.prototype.hasOwnProperty.call(d, 'project_disk');
+        if (diskMissingApi) {
+          projDisk = null;
+        } else if (projDisk == null) {
+          projDisk = {};
+        }
+        if (diskTotal) {
+          if (diskMissingApi) {
+            diskTotal.textContent = '—';
+            diskTotal.className = 'px-admin-stat-value text-warning';
+            if (diskMeta) {
+              diskMeta.textContent =
+                'Disk metrics need a recent API: restart Node after git pull so GET /api/platform-admin/system-health includes project_disk.';
+            }
+            if (diskImages) diskImages.textContent = '—';
+            if (diskDocuments) diskDocuments.textContent = '—';
+            if (diskOthers) diskOthers.textContent = '—';
+          } else if (projDisk && projDisk.error) {
+            diskTotal.textContent = '—';
+            diskTotal.className = 'px-admin-stat-value text-warning';
+            if (diskMeta) diskMeta.textContent = projDisk.error;
+            if (diskImages) diskImages.textContent = '—';
+            if (diskDocuments) diskDocuments.textContent = '—';
+            if (diskOthers) diskOthers.textContent = '—';
+          } else if (projDisk && (projDisk.total_mb != null || projDisk.total_bytes != null)) {
+            var tmb =
+              projDisk.total_mb != null
+                ? Number(projDisk.total_mb)
+                : Number(projDisk.total_bytes) / (1024 * 1024);
+            diskTotal.textContent = formatSizeMb(tmb);
+            diskTotal.className = 'px-admin-stat-value text-info';
+            if (diskMeta) {
+              var metaD = [];
+              if (projDisk.root_path) metaD.push(projDisk.root_path);
+              if (projDisk.scanned_at) metaD.push('scanned ' + projDisk.scanned_at);
+              if (projDisk.from_cache) metaD.push('cached result');
+              diskMeta.textContent = metaD.length ? metaD.join(' · ') : '—';
+            }
+            var categories = projDisk.categories || {};
+            var imagesMb =
+              categories.images_mb != null
+                ? Number(categories.images_mb)
+                : Number(categories.images_bytes || 0) / (1024 * 1024);
+            var documentsMb =
+              categories.documents_mb != null
+                ? Number(categories.documents_mb)
+                : Number(categories.documents_bytes || 0) / (1024 * 1024);
+            var othersMb =
+              categories.others_mb != null
+                ? Number(categories.others_mb)
+                : Number(categories.others_bytes || 0) / (1024 * 1024);
+            if (diskImages) diskImages.textContent = formatSizeMb(imagesMb);
+            if (diskDocuments) diskDocuments.textContent = formatSizeMb(documentsMb);
+            if (diskOthers) diskOthers.textContent = formatSizeMb(othersMb);
+          } else if (diskMeta && !diskMissingApi) {
+            diskMeta.textContent = '—';
+            if (diskImages) diskImages.textContent = '—';
+            if (diskDocuments) diskDocuments.textContent = '—';
+            if (diskOthers) diskOthers.textContent = '—';
+          }
+        }
+        if (diskBody) {
+          diskBody.innerHTML = '';
+          if (diskMissingApi) {
+            var trM = document.createElement('tr');
+            trM.innerHTML =
+              '<td colspan="2" class="text-white-50">Update and restart the backend server, then refresh this page.</td>';
+            diskBody.appendChild(trM);
+          } else {
+            var rows = (projDisk && projDisk.entries) || [];
+            if (projDisk && projDisk.error) {
+              var trE = document.createElement('tr');
+              trE.innerHTML =
+                '<td colspan="2" class="text-white-50">Could not scan project directory.</td>';
+              diskBody.appendChild(trE);
+            } else if (rows.length === 0) {
+              var tr0 = document.createElement('tr');
+              tr0.innerHTML =
+                '<td colspan="2" class="text-white-50">No top-level entries (empty project root or no read access).</td>';
+              diskBody.appendChild(tr0);
+            } else {
+              rows.forEach(function (row) {
+                var tr = document.createElement('tr');
+                var mb = row.mb != null ? Number(row.mb) : 0;
+                var sz = formatSizeMb(mb);
+                tr.innerHTML =
+                  '<td class="font-monospace small">' +
+                  cellText(row.name) +
+                  '</td><td class="text-end text-nowrap">' +
+                  cellText(sz) +
+                  '</td>';
+                diskBody.appendChild(tr);
+              });
+            }
+          }
+        }
+
         var desc = document.getElementById('pxAdminSysMetricsDesc');
         if (desc && d.metrics && d.metrics.description) desc.textContent = d.metrics.description;
 
@@ -524,13 +805,13 @@
           if (pgUl.children.length === 0) li2('—');
         }
 
-        var slowNote = document.getElementById('pxAdminSysSlowNote');
+        var slowNote = document.getElementById('pxAdminAuditSlowNote');
         if (slowNote && d.slow_queries_meta) {
           slowNote.textContent =
             (d.slow_queries_meta.note || '') +
             (d.slow_queries_meta.source ? ' · source: ' + d.slow_queries_meta.source : '');
         }
-        var slowBody = document.getElementById('pxAdminSysSlowBody');
+        var slowBody = document.getElementById('pxAdminAuditSlowBody');
         if (slowBody) {
           slowBody.innerHTML = '';
           var sq = d.slow_queries || [];
@@ -561,8 +842,8 @@
           }
         }
 
-        var flagsBody = document.getElementById('pxAdminSysFlagsBody');
-        var flagsEmpty = document.getElementById('pxAdminSysFlagsEmpty');
+        var flagsBody = document.getElementById('pxAdminAuditFlagsBody');
+        var flagsEmpty = document.getElementById('pxAdminAuditFlagsEmpty');
         if (flagsBody) {
           flagsBody.innerHTML = '';
           var flags = d.feature_flags || [];
@@ -590,14 +871,21 @@
         }
 
         if (content) content.classList.remove('d-none');
+        if (auditContent) auditContent.classList.remove('d-none');
       })
       .catch(function () {
         if (loading) loading.classList.add('d-none');
+        if (auditLoading) auditLoading.classList.add('d-none');
         if (alertEl) {
           alertEl.textContent = 'Network error while loading system health.';
           alertEl.classList.remove('d-none');
         }
+        if (auditAlert) {
+          auditAlert.textContent = 'Network error while loading system health.';
+          auditAlert.classList.remove('d-none');
+        }
         if (content) content.classList.remove('d-none');
+        if (auditContent) auditContent.classList.remove('d-none');
       });
   }
 
@@ -716,6 +1004,11 @@
         loadSystemHealthPanel(session);
         scheduleSysPoll(session);
       }
+      if (id === 'audit') {
+        loadSystemHealthPanel(session);
+        scheduleSysPoll(session);
+        startServerLogStream(session);
+      }
       if (offcanvasEl && window.bootstrap) {
         var inst = window.bootstrap.Offcanvas.getInstance(offcanvasEl);
         if (inst) inst.hide();
@@ -734,6 +1027,47 @@
   if (btnSysRefresh) {
     btnSysRefresh.addEventListener('click', function () {
       loadSystemHealthPanel(session);
+    });
+  }
+
+  var btnAuditRefresh = document.getElementById('pxAdminAuditRefresh');
+  if (btnAuditRefresh) {
+    btnAuditRefresh.addEventListener('click', function () {
+      loadSystemHealthPanel(session);
+    });
+  }
+
+  var btnAuditLogTest = document.getElementById('pxAdminAuditLogTest');
+  if (btnAuditLogTest) {
+    btnAuditLogTest.addEventListener('click', function () {
+      btnAuditLogTest.disabled = true;
+      fetch('/api/platform-admin/log-test', {
+        method: 'POST',
+        headers: sessionHeaders(session),
+        credentials: 'same-origin',
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          btnAuditLogTest.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status === 200 && out.data && out.data.success) {
+            alert(out.data.message || 'Test lines logged.');
+          } else {
+            alert((out.data && out.data.message) || 'Could not run log test.');
+          }
+        })
+        .catch(function () {
+          btnAuditLogTest.disabled = false;
+          alert('Network error while sending test log.');
+        });
     });
   }
 
@@ -790,7 +1124,7 @@
             return;
           }
           if (billAlert) {
-            billAlert.textContent = 'Salvat.';
+            billAlert.textContent = 'Saved.';
             billAlert.className = 'alert alert-success';
             billAlert.classList.remove('d-none');
             window.setTimeout(function () {

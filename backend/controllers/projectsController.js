@@ -363,7 +363,19 @@ async function update(req, res) {
     return res.status(200).json({ success: true, project: result.rows[0] });
   } catch (err) {
     console.error('projectsController update:', err);
-    return res.status(500).json({ success: false, message: 'Failed to update project.' });
+    if (err.code === '42703') {
+      return res.status(503).json({
+        success: false,
+        message:
+          'Database schema is missing columns (e.g. planned_end_date or project_name). On the server run: psql -d ProconixDB -f scripts/migrate_projects_to_spec.sql and -f scripts/alter_projects_add_location.sql',
+        detail: err.message,
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update project.',
+      detail: process.env.NODE_ENV !== 'production' ? err.message : undefined,
+    });
   }
 }
 

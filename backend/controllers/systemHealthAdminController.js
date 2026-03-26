@@ -2,7 +2,62 @@
  * Platform admin: system health, DB stats, feature flags (read-only).
  */
 
+const os = require('os');
 const { pool } = require('../db/pool');
+const { getProjectDiskUsageCached } = require('../lib/projectDiskUsage');
+
+/** For approximate Node CPU % between consecutive GET /system-health calls. */
+let _nodeCpuMark = null;
+
+function bytesToMbOneDecimal(bytes) {
+  if (bytes == null || !isFinite(bytes)) return null;
+  return Math.round((bytes / (1024 * 1024)) * 10) / 10;
+}
+
+function computeNodeCpuPercentSinceLastRequest() {
+  const cur = process.cpuUsage();
+  const t = Date.now();
+  if (!_nodeCpuMark) {
+    _nodeCpuMark = { user: cur.user, system: cur.system, t };
+    return null;
+  }
+  const du = cur.user - _nodeCpuMark.user;
+  const ds = cur.system - _nodeCpuMark.system;
+  const wallSec = (t - _nodeCpuMark.t) / 1000;
+  _nodeCpuMark = { user: cur.user, system: cur.system, t };
+  if (wallSec <= 0.001) return null;
+  const cpuSec = (du + ds) / 1e6;
+  return Math.round(((cpuSec / wallSec) * 100) * 10) / 10;
+}
+
+function buildHostMetrics() {
+  const total = os.totalmem();
+  const free = os.freemem();
+  const used = total - free;
+  const usedPct = total > 0 ? Math.round((used / total) * 1000) / 10 : null;
+  const la = os.loadavg();
+  const n = (os.cpus() && os.cpus().length) || 1;
+  return {
+    hostname: os.hostname(),
+    platform: os.platform(),
+    cpu_count: n,
+    loadavg: [la[0], la[1], la[2]],
+    mem_total_mb: bytesToMbOneDecimal(total),
+    mem_free_mb: bytesToMbOneDecimal(free),
+    mem_used_pct: usedPct,
+  };
+}
+
+function buildNodeProcessMetrics() {
+  const m = process.memoryUsage();
+  return {
+    rss_mb: bytesToMbOneDecimal(m.rss),
+    heap_used_mb: bytesToMbOneDecimal(m.heapUsed),
+    heap_total_mb: bytesToMbOneDecimal(m.heapTotal),
+    external_mb: bytesToMbOneDecimal(m.external),
+    cpu_percent_since_last: computeNodeCpuPercentSinceLastRequest(),
+  };
+}
 const { getBuckets } = require('../lib/apiMetricsStore');
 const { getStartupConsoleBannerLines } = require('../lib/startupConsoleBanner');
 
@@ -174,7 +229,7 @@ async function getSystemHealth(req, res) {
     console_banner: {
       lines: consoleBannerLines,
       note:
-        'Same lines as the server startup log (HOST/PORT from env). Database status is checked live on each request.',
+        'Static summary (HOST/PORT, DB ping) refreshed when you load this panel — not a live terminal. Use “Live server output” below for real-time stdout/stderr from this Node process.',
     },
     pool: poolStats,
     pg_connections: pgConnections,
@@ -189,6 +244,25 @@ async function getSystemHealth(req, res) {
       backend: 'none',
       note: 'No background job queue (Bull/Redis etc.) is configured in this deployment.',
     },
+    host: buildHostMetrics(),
+    node_process: buildNodeProcessMetrics(),
+    host_metrics_note:
+      'Host load/RAM are system-wide (like htop summary). Node CPU % is estimated from process CPU time between the last two requests to this panel.',
+    project_disk: (function () {
+      try {
+        return getProjectDiskUsageCached();
+      } catch (e) {
+        return {
+          root_path: null,
+          scanned_at: new Date().toISOString(),
+          total_bytes: 0,
+          total_mb: 0,
+          entries: [],
+          error: e.message || String(e),
+          cache_ttl_seconds: 90,
+        };
+      }
+    })(),
     slow_queries: slowQueries,
     slow_queries_meta: {
       source: slowQueriesSource,
@@ -198,6 +272,66 @@ async function getSystemHealth(req, res) {
   });
 }
 
+/**
+ * NDJSON stream: first line is { type: 'snapshot', lines: string[] }, then { type: 'line', text } for new output.
+ * GET /api/platform-admin/server-log-stream
+ */
+function getServerLogStream(req, res) {
+  const { buffer } = require('../lib/serverProcessLogBuffer');
+
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
+  const snapshot = { type: 'snapshot', lines: buffer.getAllLines() };
+  res.write(`${JSON.stringify(snapshot)}\n`);
+
+  const unsub = buffer.subscribe((line) => {
+    if (res.writableEnded || res.destroyed) return;
+    try {
+      res.write(`${JSON.stringify({ type: 'line', text: line })}\n`);
+    } catch (_) {
+      unsub();
+    }
+  });
+
+  const ping = setInterval(() => {
+    if (res.writableEnded || res.destroyed) {
+      clearInterval(ping);
+      return;
+    }
+    try {
+      res.write(`${JSON.stringify({ type: 'ping' })}\n`);
+    } catch (_) {
+      clearInterval(ping);
+    }
+  }, 20000);
+
+  req.on('close', () => {
+    clearInterval(ping);
+    unsub();
+  });
+}
+
+/**
+ * POST /api/platform-admin/log-test
+ * Writes intentional lines to stdout/stderr so you can verify "Live server output" in System & health.
+ */
+function postLogTest(req, res) {
+  const tag = `[${new Date().toISOString()}] proconix_log_test`;
+  console.error(`${tag} — stderr (intentional test)`);
+  console.log(`${tag} — stdout (intentional test)`);
+  return res.status(200).json({
+    success: true,
+    message:
+      'Logged one line to stderr and one to stdout. Open System & health → Live server output to see [err] / [out] lines.',
+  });
+}
+
 module.exports = {
   getSystemHealth,
+  getServerLogStream,
+  postLogTest,
 };

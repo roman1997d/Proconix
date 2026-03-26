@@ -13,6 +13,7 @@ const {
   approve,
   reject,
   archive,
+  remove,
   archiveBulk,
   create,
 } = require('../controllers/worklogsController');
@@ -26,5 +27,6 @@ router.patch('/:id', requireManagerAuth, update);
 router.post('/:id/approve', requireManagerAuth, approve);
 router.post('/:id/reject', requireManagerAuth, reject);
 router.post('/:id/archive', requireManagerAuth, archive);
+router.delete('/:id', requireManagerAuth, remove);
 
 module.exports = router;
