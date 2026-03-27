@@ -212,7 +212,14 @@
 
       if (!form) return;
 
-      form.addEventListener('submit', function (event) {
+      function showMessage(text, isError) {
+        if (!messageEl) return;
+        messageEl.textContent = text;
+        messageEl.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success');
+        messageEl.classList.remove('d-none');
+      }
+
+      form.addEventListener('submit', async function (event) {
         event.preventDefault();
         event.stopPropagation();
 
@@ -226,19 +233,42 @@
           submitBtn.textContent = 'Sending...';
         }
 
-        // For now we only simulate success; backend route can be wired to /api/contact later.
-        setTimeout(function () {
-          if (messageEl) {
-            messageEl.className = 'alert alert-success';
-            messageEl.textContent = 'Thank you for your message. We will get back to you shortly.';
+        var payload = {
+          name: document.getElementById('contactName').value.trim(),
+          company: document.getElementById('contactCompany').value.trim(),
+          email: document.getElementById('contactEmail').value.trim(),
+          phone: document.getElementById('contactPhone').value.trim(),
+          role: document.getElementById('contactRole').value.trim(),
+          message: document.getElementById('contactMessage').value.trim(),
+        };
+
+        try {
+          var res = await fetch('/api/contact/message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          var text = await res.text();
+          var data = {};
+          try {
+            data = JSON.parse(text);
+          } catch (_) {}
+
+          if (res.ok && data.success) {
+            showMessage(data.message || 'Thank you for your message. We will get back to you shortly.', false);
+            form.reset();
+            form.classList.remove('was-validated');
+          } else {
+            showMessage(data.message || data.error || 'Something went wrong. Please try again.', true);
           }
-          form.reset();
-          form.classList.remove('was-validated');
+        } catch (err) {
+          showMessage('Network error. Please try again.', true);
+        } finally {
           if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Send message';
           }
-        }, 600);
+        }
       });
     })();
   </script>

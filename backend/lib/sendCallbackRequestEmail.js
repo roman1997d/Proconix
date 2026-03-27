@@ -75,4 +75,56 @@ async function sendCallbackRequestEmail(payload) {
   });
 }
 
-module.exports = { sendCallbackRequestEmail, createTransport };
+/**
+ * Contact Us page form → same inbox as callback (CALLBACK_NOTIFY_EMAIL / rdemian732@gmail.com).
+ * @param {{ name: string, company: string, email: string, phone: string, role: string, message: string }} payload
+ */
+async function sendContactUsEmail(payload) {
+  const { name, company, email, phone, role, message } = payload;
+  const to = (process.env.CALLBACK_NOTIFY_EMAIL || 'rdemian732@gmail.com').trim();
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send contact form email.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+
+  const roleLine = role ? `Role: ${role}` : 'Role: (not specified)';
+  const subject = `Proconix — Contact form from ${name}`;
+  const text = [
+    'New message (Contact Us page)',
+    '',
+    `Name: ${name}`,
+    `Company: ${company}`,
+    `Email: ${email}`,
+    `Phone: ${phone}`,
+    roleLine,
+    '',
+    'Message:',
+    message,
+  ].join('\n');
+
+  const html = `<p><strong>New message</strong> (Contact Us)</p>
+<ul>
+<li><strong>Name:</strong> ${escapeHtml(name)}</li>
+<li><strong>Company:</strong> ${escapeHtml(company)}</li>
+<li><strong>Email:</strong> ${escapeHtml(email)}</li>
+<li><strong>Phone:</strong> ${escapeHtml(phone)}</li>
+<li><strong>Role:</strong> ${escapeHtml(role || '(not specified)')}</li>
+</ul>
+<p><strong>Message:</strong></p>
+<p style="white-space:pre-wrap;">${escapeHtml(message)}</p>`;
+
+  await transport.sendMail({
+    from,
+    to,
+    replyTo: email,
+    subject,
+    text,
+    html,
+  });
+}
+
+module.exports = { sendCallbackRequestEmail, sendContactUsEmail, createTransport };
