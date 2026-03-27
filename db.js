@@ -6,12 +6,18 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
+var pgPassword = process.env.PGPASSWORD != null && process.env.PGPASSWORD !== ''
+  ? String(process.env.PGPASSWORD)
+  : process.env.DB_PASSWORD != null && process.env.DB_PASSWORD !== ''
+    ? String(process.env.DB_PASSWORD)
+    : '';
+
 const pool = new Pool({
   host: process.env.PGHOST || process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.PGPORT || process.env.DB_PORT || '5432', 10),
   database: process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB',
   user: process.env.PGUSER || process.env.DB_USER || 'postgres',
-  password: process.env.PGPASSWORD || process.env.DB_PASSWORD || '',
+  password: pgPassword,
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,

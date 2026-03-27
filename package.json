@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "db:bootstrap": "bash scripts/bootstrap_database.sh",
+    "db:verify": "bash scripts/verify_db_tables.sh",
     "lint": "eslint backend/ index.js server.js db.js",
     "lint:fix": "eslint backend/ index.js server.js db.js --fix",
     "audit:deps": "npm outdated && npm audit",
