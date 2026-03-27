@@ -1,6 +1,6 @@
 /**
  * Contact API routes.
- * POST /api/contact/request-callback – sends email to info@proconix.uk (or CALLBACK_NOTIFY_EMAIL).
+ * POST /api/contact/request-callback – sends email to CALLBACK_NOTIFY_EMAIL (default: rdemian732@gmail.com).
  */
 
 const express = require('express');

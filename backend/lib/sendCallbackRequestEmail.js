@@ -1,5 +1,5 @@
 /**
- * Send "Request a callback" notification to the Proconix inbox.
+ * Send "Request a callback" notification (default recipient: rdemian732@gmail.com).
  * Requires SMTP_* in .env (see .env.example).
  */
 
@@ -39,7 +39,7 @@ function createTransport() {
  */
 async function sendCallbackRequestEmail(payload) {
   const { fullName, email, phone } = payload;
-  const to = (process.env.CALLBACK_NOTIFY_EMAIL || 'info@proconix.uk').trim();
+  const to = (process.env.CALLBACK_NOTIFY_EMAIL || 'rdemian732@gmail.com').trim();
   const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
 
   const transport = createTransport();
