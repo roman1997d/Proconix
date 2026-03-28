@@ -334,7 +334,7 @@
       <i class="bi bi-tags"></i> Categories
     </button>
     <div class="ms-auto d-flex flex-wrap gap-1">
-      <button type="button" class="btn btn-sm btn-outline-warning" id="btnAddPin" title="Or double-click on the drawing to start, then click to place">
+      <button type="button" class="btn btn-sm btn-outline-warning" id="btnAddPin" title="Or double-click (desktop) / double-tap (tablet) on the drawing to place a pin">
         <i class="bi bi-geo-alt-fill"></i> Place pin
       </button>
       <button type="button" class="btn btn-sm btn-outline-info" id="btnMeasureDistance" title="Click two points on the drawing">
@@ -378,7 +378,7 @@
     <div class="ss-canvas-col">
       <div class="ss-canvas-toolbar d-flex align-items-center">
         <span class="text-secondary small me-2" id="locationMeta">No drawing loaded</span>
-        <span class="text-muted small ms-auto" id="hintPan">Drag or one finger to pan · Wheel or pinch to zoom</span>
+        <span class="text-muted small ms-auto" id="hintPan">Drag or one finger to pan · Wheel or pinch to zoom · Double-tap drawing to place a pin</span>
       </div>
       <div class="ss-viewport" id="viewport">
         <div class="ss-empty-drawing" id="emptyDrawing">
@@ -683,6 +683,12 @@
   var ssPointers = new Map();
   var panPointerId = null;
   var pinchLastDist = 0;
+  /** Touch double-tap → place pin (tablet): track one-finger gesture for tap vs pan. */
+  var ssTouchDown = null;
+  var ssLastTap = { t: 0, x: 0, y: 0 };
+  var SS_DOUBLE_TAP_MS = 380;
+  var SS_DOUBLE_TAP_MAX_DIST_PX = 42;
+  var SS_TAP_MOVE_MAX_PX = 18;
   var selectedSnagId = null;
   var pendingPhotosBefore = [];
   var pendingPhotosAfter = [];
@@ -2142,7 +2148,7 @@
   }
 
   function getDefaultPanZoomHint() {
-    return 'Drag or one finger to pan · Wheel or pinch to zoom';
+    return 'Drag or one finger to pan · Wheel or pinch to zoom · Double-tap drawing to place a pin';
   }
 
   function ssPointerDistance(a, b) {
@@ -3275,15 +3281,23 @@
     }, 2500);
   }
 
-  function onViewportClick(e) {
-    if (!view.addPinMode) return;
+  /**
+   * Place a new snag pin at viewport client coordinates (double-tap or add-pin mode click).
+   * @returns {boolean} true if modal opened
+   */
+  function placeNewPinAtClient(clientX, clientY) {
+    if (!requireProjectThenDrawing()) return false;
+    var el = document.elementFromPoint(clientX, clientY);
+    if (el && el.closest && el.closest('.ss-pin')) return false;
+    var stage = document.getElementById('stage');
     var inner = document.getElementById('inner');
     var img = document.getElementById('drawingImg');
-    if (!inner || !img.naturalWidth) return;
+    if (!stage || !inner || !img || !img.naturalWidth || stage.style.display === 'none') return false;
     var rect = inner.getBoundingClientRect();
-    var x = e.clientX - rect.left;
-    var y = e.clientY - rect.top;
-    if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
+    var x = clientX - rect.left;
+    var y = clientY - rect.top;
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) return false;
+    exitMeasureMode();
     var nx = x / rect.width;
     var ny = y / rect.height;
     view.addPinMode = false;
@@ -3298,6 +3312,13 @@
     document.getElementById('snagDelete').style.display = 'none';
     var ua = document.getElementById('snagUnarchive');
     if (ua) ua.style.display = 'none';
+    return true;
+  }
+
+  function onViewportClick(e) {
+    if (!view.addPinMode) return;
+    if (e.target.closest && e.target.closest('.ss-pin')) return;
+    placeNewPinAtClient(e.clientX, e.clientY);
   }
 
   function renderCategoryList() {
@@ -3467,10 +3488,14 @@
         panning = true;
         pinchLastDist = 0;
         vp.classList.add('panning');
+        if (e.pointerType === 'touch') {
+          ssTouchDown = { x: e.clientX, y: e.clientY, pointerId: e.pointerId, moved: false };
+        }
         try {
           vp.setPointerCapture(e.pointerId);
         } catch (err) {}
       } else if (ssPointers.size === 2) {
+        ssTouchDown = null;
         panning = false;
         panPointerId = null;
         vp.classList.remove('panning');
@@ -3489,6 +3514,7 @@
       ent.y = e.clientY;
 
       if (ssPointers.size >= 2) {
+        ssTouchDown = null;
         if (isBlockingPanZoom() || view.addPinMode) return;
         e.preventDefault();
         var arr = Array.from(ssPointers.values());
@@ -3511,6 +3537,16 @@
       if (ssPointers.size === 1 && panning && e.pointerId === panPointerId) {
         if (isBlockingPanZoom() || view.addPinMode) return;
         if (e.pointerType === 'mouse' && e.buttons !== 1) return;
+        if (
+          ssTouchDown &&
+          e.pointerId === ssTouchDown.pointerId &&
+          ssPointerDistance(
+            { x: e.clientX, y: e.clientY },
+            { x: ssTouchDown.x, y: ssTouchDown.y }
+          ) > SS_TAP_MOVE_MAX_PX
+        ) {
+          ssTouchDown.moved = true;
+        }
         e.preventDefault();
         view.panX += e.clientX - lastPan.x;
         view.panY += e.clientY - lastPan.y;
@@ -3521,6 +3557,43 @@
 
     function onViewportPointerUp(e) {
       if (!ssPointers.has(e.pointerId)) return;
+
+      if (e.pointerType === 'touch' && ssTouchDown && e.pointerId === ssTouchDown.pointerId) {
+        if (e.type === 'pointerup') {
+          if (
+            !(e.target.closest && e.target.closest('.ss-pin')) &&
+            !ssTouchDown.moved &&
+            !view.addPinMode &&
+            !isBlockingPanZoom()
+          ) {
+            var now = Date.now();
+            var dt = ssLastTap.t > 0 ? now - ssLastTap.t : 9999;
+            var distPrev =
+              ssLastTap.t > 0
+                ? ssPointerDistance(
+                    { x: ssLastTap.x, y: ssLastTap.y },
+                    { x: e.clientX, y: e.clientY }
+                  )
+                : 9999;
+            if (dt > 0 && dt < SS_DOUBLE_TAP_MS && distPrev < SS_DOUBLE_TAP_MAX_DIST_PX) {
+              if (placeNewPinAtClient(e.clientX, e.clientY)) {
+                ssLastTap = { t: 0, x: 0, y: 0 };
+                try {
+                  e.preventDefault();
+                } catch (errTap) {}
+              } else {
+                ssLastTap = { t: now, x: e.clientX, y: e.clientY };
+              }
+            } else {
+              ssLastTap = { t: now, x: e.clientX, y: e.clientY };
+            }
+          } else {
+            ssLastTap = { t: 0, x: 0, y: 0 };
+          }
+        }
+        ssTouchDown = null;
+      }
+
       ssPointers.delete(e.pointerId);
       try {
         vp.releasePointerCapture(e.pointerId);
