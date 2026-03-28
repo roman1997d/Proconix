@@ -3,8 +3,9 @@
  * Proconix — Demo tenant: Delta Construction
  *
  * Creates (or replaces) company + manager + 1 primary operative + 10 extra operatives
- * (random email/password each run) + 2 projects and light sample data across work logs,
- * tasks, planning, materials, QA, issues.
+ * (random email/password each run) + 2 projects: 7 work logs, 10 tasks, 10 planning plan
+ * tasks, 22 materials (4 categories, 3 suppliers), 5 QA templates with steps, 8 QA jobs
+ * with template links, plus optional issues/work hours where tables exist.
  *
  * Run from project root (uses .env like the app):
  *   node scripts/seed_demo_delta.js
@@ -314,6 +315,8 @@ async function main() {
     );
 
     const extraOperativeLogins = [];
+    const allOperativeIds = [operativeId];
+    const allOperativeNames = ['Roman Demian'];
 
     async function insertOperativeUser(company_id, project_id, role, fullName, email, passwordHash) {
       try {
@@ -372,7 +375,14 @@ async function main() {
         password: plainPwd,
         role,
       });
+      allOperativeIds.push(uid);
+      allOperativeNames.push(fullName);
     }
+
+    const u1 = allOperativeIds[1];
+    const u2 = allOperativeIds[2];
+    const u3 = allOperativeIds[3];
+    const u4 = allOperativeIds[4];
 
     await client.query(
       `INSERT INTO work_logs (
@@ -382,103 +392,449 @@ async function main() {
       ) VALUES
         ($1, $2, $3, 'WL-001', 'Roman Demian', 'Riverside Towers', 'A', '7', '704', 'North', 'Boarding', 120, 18.50, 2220.00, 'approved', 'Metal stud partitions — demo entry.', '[]'::jsonb, false),
         ($1, $2, $3, 'WL-002', 'Roman Demian', 'Riverside Towers', 'B', '3', '312', 'East', 'Taping & jointing', 85, 12.00, 1020.00, 'pending', 'Second fix prep — demo entry.', '[]'::jsonb, false),
-        ($1, $2, $4, 'WL-003', 'Roman Demian', 'Harbour Works', 'Unit 2', 'G', '—', 'Loading', 'Ceiling grid', 40, 22.00, 880.00, 'edited', 'Suspended ceiling bays — demo entry.', '[]'::jsonb, false)`,
-      [companyId, operativeId, projectId1, projectId2]
+        ($1, $2, $4, 'WL-003', 'Roman Demian', 'Harbour Works', 'Unit 2', 'G', '—', 'Loading', 'Ceiling grid', 40, 22.00, 880.00, 'edited', 'Suspended ceiling bays — demo entry.', '[]'::jsonb, false),
+        ($1, $5, $3, 'WL-004', 'James Owen', 'Riverside Towers', 'C', '5', '512', 'West', 'Dot & dab', 95, 14.25, 1353.75, 'pending', 'Demo: adhesive dabbed boards — awaiting sign-off.', '[]'::jsonb, false),
+        ($1, $6, $4, 'WL-005', 'Sophie Hughes', 'Harbour Works', 'Unit 1', 'L1', '—', 'Store', 'First fix containment', 32, 45.00, 1440.00, 'approved', 'Demo: trunking runs and box-outs.', '[]'::jsonb, false),
+        ($1, $7, $3, 'WL-006', 'Marcus Bell', 'Riverside Towers', 'A', '9', '902', 'Core', 'Fire stopping', 18, 120.00, 2160.00, 'pending', 'Demo: penetration seals — photos attached later.', '[]'::jsonb, false),
+        ($1, $8, $4, 'WL-007', 'Elena Vasilescu', 'Harbour Works', 'Yard', '—', '—', 'External', 'Scaffold handover', 1, 350.00, 350.00, 'edited', 'Demo: access tower sign-off sheet.', '[]'::jsonb, false)`,
+      [companyId, operativeId, projectId1, projectId2, u1, u2, u3, u4]
     );
 
+    const DEMO_OPERATIVE_TASKS = [
+      { name: 'Complete Level 7 boarding sign-off', days: 21, status: 'in_progress' },
+      { name: 'Order acoustic insulation for Unit 2', days: 7, status: 'pending' },
+      { name: 'Verify corridor ceiling deflection strips', days: 14, status: 'pending' },
+      { name: 'Submit O&M cut sheets for MEP risers', days: 30, status: 'in_progress' },
+      { name: 'Patch and sand Level 5 demo flats', days: 10, status: 'completed' },
+      { name: 'Coordinate hoist booking for board delivery', days: 5, status: 'pending' },
+      { name: 'Label waste streams at Harbour compound', days: 3, status: 'in_progress' },
+      { name: 'Second coat mist to Block B apartments', days: 12, status: 'pending' },
+      { name: 'Toolbox talk — manual handling refresher', days: 2, status: 'completed' },
+      { name: 'Upload weekly progress photos to manager', days: 1, status: 'pending' },
+    ];
+
     await tryOptional(client, async () => {
-      await client.query(
-        `INSERT INTO tasks (user_id, project_id, name, deadline, status) VALUES
-          ($1, $2, 'Complete Level 7 boarding sign-off', $3::date, 'in_progress'),
-          ($1, $4, 'Order acoustic insulation for Unit 2', $5::date, 'pending')`,
-        [
-          operativeId,
-          projectId1,
-          '2026-04-15',
-          projectId2,
-          '2026-03-20',
-        ]
-      );
+      for (let t = 0; t < DEMO_OPERATIVE_TASKS.length; t += 1) {
+        const row = DEMO_OPERATIVE_TASKS[t];
+        const uid = allOperativeIds[t % allOperativeIds.length];
+        const pid = t % 2 === 0 ? projectId1 : projectId2;
+        await client.query(
+          `INSERT INTO tasks (user_id, project_id, name, deadline, status)
+           VALUES ($1, $2, $3, CURRENT_DATE + ($4::int), $5)`,
+          [uid, pid, row.name, row.days, row.status]
+        );
+      }
     });
+
+    const DEMO_PLANNING_TASKS = [
+      {
+        title: 'Site walk — Riverside L7',
+        description: 'Check fire stopping and board fixings.',
+        priority: 'high',
+        status: 'in_progress',
+        dayOff: 3,
+      },
+      {
+        title: 'Deliver Harbour snag list',
+        description: 'Photo upload for three open snags.',
+        priority: 'medium',
+        status: 'not_started',
+        dayOff: 5,
+      },
+      {
+        title: 'Approve metal stud delivery note',
+        description: 'Match BOL to PO-DLT-8841.',
+        priority: 'low',
+        status: 'not_started',
+        dayOff: 2,
+      },
+      {
+        title: 'Client walk — Level 9 show flat',
+        description: 'Drylining and decoration ready for inspection.',
+        priority: 'critical',
+        status: 'in_progress',
+        dayOff: 7,
+      },
+      {
+        title: 'Programme review with drylining lead',
+        description: 'Re-baseline Harbour milestone dates.',
+        priority: 'medium',
+        status: 'paused',
+        dayOff: 4,
+      },
+      {
+        title: 'Order intumescent mastic stock',
+        description: 'Low stock alert from stores.',
+        priority: 'high',
+        status: 'not_started',
+        dayOff: 1,
+      },
+      {
+        title: 'Briefing — acoustic details Block C',
+        description: 'Issue marked-up PDFs to gangs.',
+        priority: 'medium',
+        status: 'completed',
+        dayOff: 0,
+      },
+      {
+        title: 'Scaffold inspection follow-up',
+        description: 'Close out tags from last lift.',
+        priority: 'high',
+        status: 'in_progress',
+        dayOff: 6,
+      },
+      {
+        title: 'Waste transfer note filing',
+        description: 'Harbour yard — week 12 bundle.',
+        priority: 'low',
+        status: 'not_started',
+        dayOff: 8,
+      },
+      {
+        title: 'Subcontractor induction slots',
+        description: 'Book two slots for ceiling specialist.',
+        priority: 'medium',
+        status: 'not_started',
+        dayOff: 9,
+      },
+    ];
 
     await tryOptional(client, async () => {
       const planIns = await client.query(
         `INSERT INTO planning_plans (company_id, type, start_date, end_date, created_by)
-         VALUES ($1, 'weekly', CURRENT_DATE - 1, CURRENT_DATE + 6, $2)
+         VALUES ($1, 'weekly', CURRENT_DATE - 1, CURRENT_DATE + 13, $2)
          RETURNING id`,
         [companyId, managerId]
       );
       const planId = planIns.rows[0].id;
-      await client.query(
-        `INSERT INTO planning_plan_tasks (
-          plan_id, title, description, assigned_to, priority, deadline, pickup_start_date, status, send_to_assignees
-        ) VALUES
-          ($1, 'Site walk — Riverside L7', 'Check fire stopping and board fixings.', ARRAY['Roman Demian']::text[], 'high', NOW() + INTERVAL '3 days', CURRENT_DATE, 'in_progress', true),
-          ($1, 'Deliver Harbour snag list', 'Photo upload for three open snags.', ARRAY['Roman Demian']::text[], 'medium', NOW() + INTERVAL '5 days', CURRENT_DATE + 1, 'not_started', true)`,
-        [planId]
-      );
+      for (let p = 0; p < DEMO_PLANNING_TASKS.length; p += 1) {
+        const pt = DEMO_PLANNING_TASKS[p];
+        const assignee = allOperativeNames[p % allOperativeNames.length];
+        await client.query(
+          `INSERT INTO planning_plan_tasks (
+            plan_id, title, description, assigned_to, priority, deadline, pickup_start_date, status, send_to_assignees
+          ) VALUES ($1, $2, $3, $4, $5, NOW() + ($6::int) * INTERVAL '1 day', CURRENT_DATE + ($6::int), $7, true)`,
+          [planId, pt.title, pt.description, [assignee], pt.priority, pt.dayOff, pt.status]
+        );
+      }
     });
 
     await tryOptional(client, async () => {
-      const catIns = await client.query(
+      const catBoard = await client.query(
         `INSERT INTO material_categories (company_id, name, description, created_by_id, created_by_name)
-         VALUES ($1, 'Board & sheet', 'Drywall and cement board', $2, 'Derek Stone')
-         RETURNING id`,
+         VALUES ($1, 'Board & sheet', 'Drywall and cement board', $2, 'Derek Stone') RETURNING id`,
         [companyId, managerId]
       );
-      const catId = catIns.rows[0].id;
-      const supIns = await client.query(
+      const catInsul = await client.query(
+        `INSERT INTO material_categories (company_id, name, description, created_by_id, created_by_name)
+         VALUES ($1, 'Insulation & acoustic', 'Wool, foam, barriers', $2, 'Derek Stone') RETURNING id`,
+        [companyId, managerId]
+      );
+      const catFix = await client.query(
+        `INSERT INTO material_categories (company_id, name, description, created_by_id, created_by_name)
+         VALUES ($1, 'Fixings & metal', 'Screws, channels, brackets', $2, 'Derek Stone') RETURNING id`,
+        [companyId, managerId]
+      );
+      const catFinish = await client.query(
+        `INSERT INTO material_categories (company_id, name, description, created_by_id, created_by_name)
+         VALUES ($1, 'Finishes', 'Compounds, tapes, primers', $2, 'Derek Stone') RETURNING id`,
+        [companyId, managerId]
+      );
+      const cBoard = catBoard.rows[0].id;
+      const cInsul = catInsul.rows[0].id;
+      const cFix = catFix.rows[0].id;
+      const cFin = catFinish.rows[0].id;
+
+      const sup1 = await client.query(
         `INSERT INTO material_suppliers (company_id, name, contact, email_phone, address, created_by_id, created_by_name)
-         VALUES ($1, 'BuildSupply North', 'Sarah Cole', 'orders@buildsupply.example', 'Leeds LS1', $2, 'Derek Stone')
-         RETURNING id`,
+         VALUES ($1, 'BuildSupply North', 'Sarah Cole', 'orders@buildsupply.example', 'Leeds LS1', $2, 'Derek Stone') RETURNING id`,
         [companyId, managerId]
       );
-      const supId = supIns.rows[0].id;
-      await client.query(
-        `INSERT INTO materials (
-          project_id, company_id, name, category_id, supplier_id, unit,
-          quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, status,
-          created_by_id, created_by_name
-        ) VALUES
-          ($1, $2, '12.5mm plasterboard', $3, $4, 'sheet', 400, 120, 280, 80, 'normal', $5, 'Derek Stone'),
-          ($6, $2, 'Metal stud C75', $3, $4, 'length', 600, 200, 400, 150, 'normal', $5, 'Derek Stone')`,
-        [projectId1, companyId, catId, supId, managerId, projectId2]
+      const sup2 = await client.query(
+        `INSERT INTO material_suppliers (company_id, name, contact, email_phone, address, created_by_id, created_by_name)
+         VALUES ($1, 'ProDry Trade', 'James Patel', '+44 161 555 0100', 'Manchester M4', $2, 'Derek Stone') RETURNING id`,
+        [companyId, managerId]
       );
+      const sup3 = await client.query(
+        `INSERT INTO material_suppliers (company_id, name, contact, email_phone, address, created_by_id, created_by_name)
+         VALUES ($1, 'Northern Fix Ltd', 'Chris Byrne', 'sales@northernfix.example', 'Liverpool L2', $2, 'Derek Stone') RETURNING id`,
+        [companyId, managerId]
+      );
+      const s1 = sup1.rows[0].id;
+      const s2 = sup2.rows[0].id;
+      const s3 = sup3.rows[0].id;
+
+      const materialRows = [
+        [projectId1, '12.5mm plasterboard', cBoard, s1, 'sheet', 400, 120, 280, 80, 'normal'],
+        [projectId2, '15mm fire board Type A', cBoard, s1, 'sheet', 220, 90, 130, 40, 'normal'],
+        [projectId1, 'Cement board 6mm', cBoard, s2, 'sheet', 80, 55, 25, 20, 'low'],
+        [projectId2, 'Moisture board green', cBoard, s3, 'sheet', 150, 148, 2, 30, 'out'],
+        [projectId1, 'Metal stud C75', cFix, s1, 'length', 600, 200, 400, 150, 'normal'],
+        [projectId2, 'Metal stud C100', cFix, s2, 'length', 400, 120, 280, 100, 'normal'],
+        [projectId1, 'U-channel floor track', cFix, s1, 'length', 500, 180, 320, 120, 'normal'],
+        [projectId2, 'Resilient bar pack', cFix, s3, 'pack', 120, 40, 80, 25, 'normal'],
+        [projectId1, 'Drywall screws 35mm', cFix, s2, 'box', 200, 95, 105, 40, 'normal'],
+        [projectId2, 'Wafer head screws', cFix, s2, 'box', 180, 170, 10, 50, 'low'],
+        [projectId1, 'Acoustic wool roll 50mm', cInsul, s3, 'roll', 90, 30, 60, 20, 'normal'],
+        [projectId2, 'PIR board 75mm', cInsul, s1, 'sheet', 60, 20, 40, 15, 'normal'],
+        [projectId1, 'Acoustic sealant grey', cInsul, s2, 'tube', 240, 100, 140, 48, 'normal'],
+        [projectId2, 'Rockwool slab 100mm', cInsul, s1, 'pack', 45, 12, 33, 10, 'normal'],
+        [projectId1, 'Vapour barrier roll', cInsul, s3, 'roll', 25, 5, 20, 8, 'normal'],
+        [projectId2, 'Intumescent mastic', cFin, s2, 'tube', 80, 72, 8, 24, 'low'],
+        [projectId1, 'Jointing compound 25kg', cFin, s1, 'bag', 70, 45, 25, 20, 'normal'],
+        [projectId2, 'Tape paper 50mm', cFin, s1, 'roll', 300, 200, 100, 80, 'normal'],
+        [projectId1, 'Corner bead metal', cFin, s3, 'length', 400, 250, 150, 100, 'normal'],
+        [projectId2, 'Skim finish bags', cFin, s2, 'bag', 55, 30, 25, 15, 'normal'],
+        [projectId1, 'Primer sealer 10L', cFin, s3, 'tub', 40, 18, 22, 10, 'normal'],
+        [projectId2, 'Sandpaper discs P120', cFin, s2, 'box', 90, 60, 30, 25, 'normal'],
+      ];
+
+      for (let m = 0; m < materialRows.length; m += 1) {
+        const r = materialRows[m];
+        await client.query(
+          `INSERT INTO materials (
+            project_id, company_id, name, category_id, supplier_id, unit,
+            quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, status,
+            created_by_id, created_by_name
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Derek Stone')`,
+          [
+            r[0],
+            companyId,
+            r[1],
+            r[2],
+            r[3],
+            r[4],
+            r[5],
+            r[6],
+            r[7],
+            r[8],
+            r[9],
+            managerId,
+          ]
+        );
+      }
     });
 
     await tryOptional(client, async () => {
-      const st = await client.query(
-        `SELECT id FROM qa_job_statuses WHERE code = 'active' LIMIT 1`
-      );
-      const st2 = await client.query(`SELECT id FROM qa_job_statuses ORDER BY id LIMIT 1`);
-      if (!st2.rows.length) return;
-      const statusId = st.rows[0] ? st.rows[0].id : st2.rows[0].id;
+      const stNew = await client.query(`SELECT id FROM qa_job_statuses WHERE code = 'new' LIMIT 1`);
+      const stAct = await client.query(`SELECT id FROM qa_job_statuses WHERE code = 'active' LIMIT 1`);
+      const stComp = await client.query(`SELECT id FROM qa_job_statuses WHERE code = 'completed' LIMIT 1`);
+      const stAny = await client.query(`SELECT id FROM qa_job_statuses ORDER BY id LIMIT 1`);
+      if (!stAny.rows.length) return;
+      const idNew = stNew.rows[0] ? stNew.rows[0].id : stAny.rows[0].id;
+      const idAct = stAct.rows[0] ? stAct.rows[0].id : idNew;
+      const idComp = stComp.rows[0] ? stComp.rows[0].id : idNew;
+
       const ct = await client.query(`SELECT id FROM qa_cost_types WHERE code = 'day' LIMIT 1`);
       const costTypeId = ct.rows[0] ? ct.rows[0].id : null;
       const qc = await client.query(`SELECT id FROM qa_worker_categories ORDER BY id LIMIT 1`);
       if (!qc.rows.length) return;
       const workerCatId = qc.rows[0].id;
+
       const supv = await client.query(
         `INSERT INTO qa_supervisors (company_id, name) VALUES ($1, 'Alex Morgan') RETURNING id`,
         [companyId]
       );
       const supvId = supv.rows[0].id;
-      await client.query(
+
+      const wIns = await client.query(
         `INSERT INTO qa_workers (company_id, name, category_id) VALUES ($1, 'Roman Demian', $2) RETURNING id`,
         [companyId, workerCatId]
       );
-      const fl1 = await client.query(
-        `INSERT INTO qa_floors (project_id, code, label, sort_order) VALUES ($1, 'L7', 'Level 7', 7) RETURNING id`,
-        [projectId1]
+      const qaWorkerId = wIns.rows[0].id;
+
+      const floorDefs = [
+        [projectId1, 'L5', 'Level 5', 5],
+        [projectId1, 'L7', 'Level 7', 7],
+        [projectId1, 'L9', 'Level 9', 9],
+        [projectId2, 'G', 'Ground', 0],
+        [projectId2, 'L1', 'Level 1', 1],
+        [projectId2, 'U2', 'Unit 2', 2],
+      ];
+      const floorByKey = {};
+      for (let fi = 0; fi < floorDefs.length; fi += 1) {
+        const f = floorDefs[fi];
+        const fr = await client.query(
+          `INSERT INTO qa_floors (project_id, code, label, sort_order) VALUES ($1, $2, $3, $4) RETURNING id, code`,
+          f
+        );
+        floorByKey[`${f[0]}:${fr.rows[0].code}`] = fr.rows[0].id;
+      }
+
+      async function insertQaTemplate(name, projId, steps) {
+        let ins;
+        try {
+          ins = await client.query(
+            `INSERT INTO qa_templates (name, created_by, company_id, project_id)
+             VALUES ($1, 'Derek Stone', $2, $3) RETURNING id`,
+            [name, companyId, projId]
+          );
+        } catch (e) {
+          if (e.code !== '42703') throw e;
+          ins = await client.query(
+            `INSERT INTO qa_templates (name, created_by) VALUES ($1, 'Derek Stone') RETURNING id`,
+            [name]
+          );
+        }
+        const tid = ins.rows[0].id;
+        for (let si = 0; si < steps.length; si += 1) {
+          await client.query(
+            `INSERT INTO qa_template_steps (
+              template_id, sort_order, description, price_per_m2, price_per_unit, price_per_linear, step_external_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [tid, si, steps[si], '', '', '', 'delta_seed_' + tid + '_' + si]
+          );
+        }
+        return tid;
+      }
+
+      const tplPartition = await insertQaTemplate('Partition — metal frame demo', projectId1, [
+        'Install head and floor track to line and level.',
+        'Fix I-studs at 600mm centres; brace openings.',
+        'Board both sides; stagger joints; fire detail to spec.',
+      ]);
+      const tplAcoustic = await insertQaTemplate('Acoustic lining package', projectId1, [
+        'Resilient bars fixed per drawing A-07.',
+        'Insulation full fill; no compression at perimeters.',
+        'Double layer 12.5mm; seal perimeters with acoustic mastic.',
+      ]);
+      const tplCeiling = await insertQaTemplate('Suspended MF ceiling', projectId1, [
+        'Grid layout verified against reflected ceiling plan.',
+        'Hanger spacing and load test records on file.',
+        'Tiles and trims; access panels aligned to MEP.',
+      ]);
+      const tplFire = await insertQaTemplate('Fire compartmentation snag', projectId2, [
+        'Penetration seals — photo each service.',
+        'Head of wall deflection detail signed off.',
+        'Intumescent paint touch-up where exposed.',
+      ]);
+      const tplMep = await insertQaTemplate('MEP first fix coordination', projectId2, [
+        'Set-out vs grid; clashes logged in Proconix.',
+        'Box-outs and riser sleeves verified.',
+        'Drylining clearance for cable containment.',
+      ]);
+
+      async function insertQaJob(
+        projId,
+        jobNumber,
+        floorCode,
+        location,
+        description,
+        statusId,
+        templateIds
+      ) {
+        const fk = `${projId}:${floorCode}`;
+        const floorId = floorByKey[fk];
+        const jr = await client.query(
+          `INSERT INTO qa_jobs (
+            project_id, job_number, floor_id, floor_code, location, sqm, specification, description,
+            target_completion_date, cost_included, cost_type_id, cost_value,
+            responsible_id, status_id, created_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_DATE + 25, true, $9, $10, $11, $12, 'Derek Stone')
+          RETURNING id`,
+          [
+            projId,
+            jobNumber,
+            floorId,
+            floorCode,
+            location,
+            '120',
+            'Demo spec — Delta seed',
+            description,
+            costTypeId,
+            '1850',
+            supvId,
+            statusId,
+          ]
+        );
+        const jid = jr.rows[0].id;
+        for (let ti = 0; ti < templateIds.length; ti += 1) {
+          await client.query(`INSERT INTO qa_job_templates (job_id, template_id) VALUES ($1, $2)`, [
+            jid,
+            templateIds[ti],
+          ]);
+        }
+        await client.query(`INSERT INTO qa_job_workers (job_id, worker_id) VALUES ($1, $2)`, [
+          jid,
+          qaWorkerId,
+        ]);
+        await client.query(`INSERT INTO qa_job_user_workers (job_id, user_id) VALUES ($1, $2)`, [
+          jid,
+          operativeId,
+        ]);
+      }
+
+      await insertQaJob(
+        projectId1,
+        'QA-RVT-001',
+        'L7',
+        'Core shafts — Block A',
+        'Fire-rated lining inspection — demo job.',
+        idAct,
+        [tplPartition, tplAcoustic]
       );
-      const floorId1 = fl1.rows[0].id;
-      await client.query(
-        `INSERT INTO qa_jobs (
-          project_id, job_number, floor_id, floor_code, location, description,
-          target_completion_date, cost_included, cost_type_id, cost_value,
-          responsible_id, status_id, created_by
-        ) VALUES ($1, 'QA-001', $2, 'L7', 'Core shafts — Block A', 'Fire-rated lining inspection checklist.', CURRENT_DATE + 20, true, $3, '1800', $4, $5, 'Derek Stone')`,
-        [projectId1, floorId1, costTypeId, supvId, statusId]
+      await insertQaJob(
+        projectId1,
+        'QA-RVT-002',
+        'L5',
+        'Typical apartments — wing B',
+        'Acoustic pre-handover sample sign-off.',
+        idNew,
+        [tplAcoustic]
+      );
+      await insertQaJob(
+        projectId1,
+        'QA-RVT-003',
+        'L9',
+        'Show flat 904',
+        'Client demonstration quality gate.',
+        idAct,
+        [tplPartition, tplCeiling]
+      );
+      await insertQaJob(
+        projectId1,
+        'QA-RVT-004',
+        'L9',
+        'Corridor soffits',
+        'MF ceiling package — level and lighting cut-outs.',
+        idComp,
+        [tplCeiling]
+      );
+      await insertQaJob(
+        projectId2,
+        'QA-HWD-001',
+        'G',
+        'Goods in — loading bay',
+        'Fire stopping at dock level — demo.',
+        idAct,
+        [tplFire]
+      );
+      await insertQaJob(
+        projectId2,
+        'QA-HWD-002',
+        'L1',
+        'Open plan office shell',
+        'Partition grid QA before MEP second fix.',
+        idNew,
+        [tplPartition, tplMep]
+      );
+      await insertQaJob(
+        projectId2,
+        'QA-HWD-003',
+        'U2',
+        'Warehouse storage cell',
+        'Compartment wall continuity check.',
+        idAct,
+        [tplFire, tplPartition]
+      );
+      await insertQaJob(
+        projectId2,
+        'QA-HWD-004',
+        'U2',
+        'Plant deck access',
+        'Coordination snag list from walk-down.',
+        idComp,
+        [tplMep]
       );
     });
 
@@ -532,7 +888,9 @@ async function main() {
     });
     console.log('');
     console.log('Projects: Riverside Towers (id ' + projectId1 + '), Harbour Works Depot (id ' + projectId2 + ')');
-    console.log('Sample data (where tables exist): work logs, tasks, planning, materials, QA job, issues, work hours.');
+    console.log(
+      'Sample data (where tables exist): 7 work logs, 10 operative tasks, 10 planning tasks, 22 materials, QA templates/jobs, issues, work hours.'
+    );
     console.log('Re-run anytime: it removes the previous "Delta Construction" demo first.');
     console.log('');
   } catch (err) {
