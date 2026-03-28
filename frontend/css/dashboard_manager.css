@@ -276,6 +276,17 @@ body.dashboard-manager {
   transition: padding-left var(--sidebar-animate);
 }
 
+/* Phones / small tablets: hide fixed footer + reclaim scroll space (manager dashboard only) */
+@media (max-width: 991.98px) {
+  body.dashboard-manager #dashboard-app .dashboard-footer {
+    display: none !important;
+  }
+
+  body.dashboard-manager #dashboard-app .dashboard-content-wrap {
+    padding-bottom: 0;
+  }
+}
+
 /* ===== Header ===== */
 .dashboard-header {
   display: flex;
