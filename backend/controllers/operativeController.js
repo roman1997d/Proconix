@@ -6,6 +6,7 @@
 const { pool } = require('../db/pool');
 const bcrypt = require('bcrypt');
 const { createSession } = require('../utils/operativeSessionStore');
+const { sendOperativeWelcomeEmail } = require('../lib/sendCallbackRequestEmail');
 
 const OPERATIVE_ROLES = ['Plaster', 'Dryliner', 'Electrician', 'Plumber', 'Painter', 'Carpenter', 'Other'];
 const SUPERVISOR_ROLE = 'Supervisor';
@@ -94,6 +95,39 @@ async function addOperative(req, res) {
     );
 
     const row = result.rows[0];
+
+    let companyName = 'your company';
+    try {
+      const cRes = await pool.query('SELECT name FROM companies WHERE id = $1', [companyId]);
+      if (cRes.rows.length && cRes.rows[0].name) {
+        companyName = String(cRes.rows[0].name).trim() || companyName;
+      }
+    } catch (_) {
+      /* ignore */
+    }
+
+    const mgr = req.manager || {};
+    const managerName =
+      [mgr.name, mgr.surname].filter(Boolean).join(' ').trim() || mgr.email || 'your manager';
+
+    try {
+      await sendOperativeWelcomeEmail({
+        firstName,
+        email,
+        temporaryPassword: tempPassword,
+        managerName,
+        companyName,
+        role,
+        isSupervisor,
+      });
+    } catch (mailErr) {
+      if (mailErr && mailErr.code === 'SMTP_NOT_CONFIGURED') {
+        console.warn('Operative welcome email skipped: SMTP not configured.');
+      } else {
+        console.error('Operative welcome email error:', mailErr);
+      }
+    }
+
     return res.status(201).json({
       success: true,
       message: isSupervisor ? 'Supervisor added successfully.' : 'Operative added successfully.',

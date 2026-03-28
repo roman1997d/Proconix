@@ -337,6 +337,177 @@ async function sendManagerAccountActivatedEmail(p) {
 }
 
 /**
+ * Operative / supervisor invited by a manager — temporary password email.
+ * @param {{
+ *   firstName: string,
+ *   email: string,
+ *   temporaryPassword: string,
+ *   managerName: string,
+ *   companyName: string,
+ *   role: string,
+ *   isSupervisor: boolean
+ * }} p
+ */
+function buildOperativeWelcomeEmailHtml(p) {
+  const roleLabel = p.isSupervisor ? 'Supervisor' : p.role;
+  const intro =
+    '<p style="margin:0 0 18px 0;font-size:16px;line-height:1.65;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Hi <strong style="color:#f8fafc;">' +
+    escapeHtml(p.firstName) +
+    '</strong>, you have been registered on <strong style="color:#f8fafc;">Proconix</strong> by <strong style="color:#f8fafc;">' +
+    escapeHtml(p.managerName) +
+    '</strong> at <strong style="color:#f8fafc;">' +
+    escapeHtml(p.companyName) +
+    '</strong> in the role of <strong style="color:#38bdf8;">' +
+    escapeHtml(roleLabel) +
+    '</strong>.</p>';
+
+  const credsBox =
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:8px;">' +
+    '<tr><td style="background-color:#0f172a;border-radius:10px;padding:20px 22px;border-left:4px solid #f59e0b;">' +
+    '<span style="display:block;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#fcd34d;margin-bottom:14px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Your temporary sign-in details' +
+    '</span>' +
+    '<p style="margin:0 0 12px 0;font-size:14px;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">Email</p>' +
+    '<p style="margin:0 0 16px 0;font-size:16px;font-weight:600;color:#f1f5f9;font-family:Consolas,Monaco,monospace;">' +
+    escapeHtml(p.email) +
+    '</p>' +
+    '<p style="margin:0 0 12px 0;font-size:14px;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">Temporary password</p>' +
+    '<p style="margin:0;font-size:18px;font-weight:700;letter-spacing:0.04em;color:#fef3c7;font-family:Consolas,Monaco,monospace;">' +
+    escapeHtml(p.temporaryPassword) +
+    '</p></td></tr></table>';
+
+  const nextStep =
+    '<p style="margin:22px 0 0 0;font-size:15px;line-height:1.65;color:#cbd5e1;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Please <strong style="color:#f8fafc;">sign in using the temporary password above</strong>. On first login you will be asked to <strong style="color:#f8fafc;">set your own password</strong> — choose something memorable and keep it private.</p>';
+
+  const support =
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px;">' +
+    '<tr><td style="background-color:#0f172a;border-radius:10px;padding:18px 20px;border-left:4px solid #2563eb;">' +
+    '<span style="display:block;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#94a3b8;margin-bottom:10px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Need help?' +
+    '</span>' +
+    '<p style="margin:0;font-size:15px;line-height:1.65;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Our in-app chat is available in <strong style="color:#f8fafc;">English</strong>, <strong style="color:#f8fafc;">Romanian</strong>, and <strong style="color:#f8fafc;">Russian</strong>. You can also email us at ' +
+    '<a href="mailto:info@proconix.com" style="color:#38bdf8;text-decoration:none;">info@proconix.com</a>.</p>' +
+    '</td></tr></table>';
+
+  const thankYou =
+    '<p style="margin:24px 0 0 0;font-size:15px;line-height:1.65;color:#cbd5e1;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Thank you for choosing Proconix — we are glad to have you on the team.' +
+    '</p>';
+
+  const signature =
+    '<p style="margin:24px 0 0 0;font-size:15px;line-height:1.6;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Kindest regards,<br>' +
+    '<strong style="color:#f8fafc;font-size:16px;">Roman Demian</strong><br>' +
+    '<span style="color:#94a3b8;font-size:14px;">Founder &amp; CEO, Proconix</span></p>';
+
+  const footer =
+    '<p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;">This message was sent because a company manager added you to Proconix.</p>';
+
+  return (
+    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
+    '<meta http-equiv="x-ua-compatible" content="ie=edge"></head><body style="margin:0;padding:0;background-color:#020617;">' +
+    '<div style="display:none;font-size:1px;color:#020617;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">' +
+    escapeHtml(`Your Proconix login details — sign in with your temporary password`) +
+    '</div>' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#020617;padding:32px 16px;">' +
+    '<tr><td align="center">' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background-color:#1e293b;border-radius:16px;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">' +
+    '<tr><td style="height:4px;background-color:#0ea5e9;font-size:0;line-height:0;">&nbsp;</td></tr>' +
+    '<tr><td style="padding:28px 32px 8px 32px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    '<span style="display:inline-block;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#64748b;">' +
+    'Team invitation' +
+    '</span>' +
+    '<h1 style="margin:12px 0 0 0;font-size:24px;font-weight:700;line-height:1.25;color:#f8fafc;letter-spacing:-0.02em;">' +
+    'You are invited to Proconix' +
+    '</h1></td></tr>' +
+    '<tr><td style="padding:8px 32px 28px 32px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    intro +
+    credsBox +
+    nextStep +
+    support +
+    thankYou +
+    signature +
+    '</td></tr>' +
+    '<tr><td style="padding:16px 32px 24px 32px;border-top:1px solid #334155;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    footer +
+    '</td></tr></table></td></tr></table></body></html>'
+  );
+}
+
+/**
+ * @param {{
+ *   firstName: string,
+ *   email: string,
+ *   temporaryPassword: string,
+ *   managerName: string,
+ *   companyName: string,
+ *   role: string,
+ *   isSupervisor: boolean
+ * }} p
+ */
+async function sendOperativeWelcomeEmail(p) {
+  const to = String(p.email || '').trim();
+  if (!to) return;
+
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send operative welcome email.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+
+  const roleLabel = p.isSupervisor ? 'Supervisor' : p.role;
+  const subject = 'Welcome to Proconix — your temporary login details';
+  const text = [
+    `Hi ${p.firstName},`,
+    '',
+    `You have been registered on Proconix by ${p.managerName} at ${p.companyName} in the role of ${roleLabel}.`,
+    '',
+    'Temporary sign-in details:',
+    `Email: ${p.email}`,
+    `Temporary password: ${p.temporaryPassword}`,
+    '',
+    'Sign in with the temporary password first. You will then be prompted to set your own password.',
+    '',
+    'Need help? Our in-app chat supports English, Romanian, and Russian. You can also email info@proconix.com.',
+    '',
+    'Thank you for choosing Proconix.',
+    '',
+    'Kindest regards,',
+    'Roman Demian',
+    'Founder & CEO, Proconix',
+  ].join('\n');
+
+  const html = buildOperativeWelcomeEmailHtml({
+    firstName: p.firstName,
+    email: p.email,
+    temporaryPassword: p.temporaryPassword,
+    managerName: p.managerName,
+    companyName: p.companyName,
+    role: p.role,
+    isSupervisor: p.isSupervisor,
+  });
+
+  const replyTo = (process.env.SUPPORT_REPLY_EMAIL || process.env.CALLBACK_NOTIFY_EMAIL || '').trim() || undefined;
+  const bccRaw = (process.env.COMPANY_WELCOME_BCC_EMAIL || 'rdemian732@gmail.com').trim();
+  const bcc = bccRaw && to.toLowerCase() !== bccRaw.toLowerCase() ? bccRaw : undefined;
+
+  await transport.sendMail({
+    from,
+    to,
+    ...(bcc ? { bcc } : {}),
+    replyTo: replyTo || from,
+    subject,
+    text,
+    html,
+  });
+}
+
+/**
  * @param {{
  *   managerFirstName: string,
  *   managerEmail: string,
@@ -541,5 +712,6 @@ module.exports = {
   sendContactUsEmail,
   sendCompanyWelcomeEmail,
   sendManagerAccountActivatedEmail,
+  sendOperativeWelcomeEmail,
   createTransport,
 };
