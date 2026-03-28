@@ -73,7 +73,7 @@ Sesiunea manager este stocată în **localStorage** sau **sessionStorage** (chei
 
 | Pagină | Cale | Scop |
 |--------|------|------|
-| **Manager Dashboard** | `dashboard_manager.html` | Layout: sidebar (navigare module) + header (titlu, company name, user, logout) + zonă de conținut. La încărcare: GET `/api/auth/validate` (cu header-e sesiune). Dacă 401 → „Access denied”; dacă 200 → se afișează aplicația. Conținutul din zonă principală se încarcă dinamic: fie prin **fetch** la `GET /api/dashboard/:module` (HTML partial), fie pentru **Quality Assurance** prin **iframe** cu `Quality_Assurance.html`. |
+| **Manager Dashboard** | `dashboard_manager.html` | Layout: **sidebar fix stânga** (rail îngust cu iconuri, extindere la hover/focus cu etichete; pe mobil **off-canvas** din stânga + hamburger) + header (titlu, company name, user, logout) + zonă de conținut. **Footer** fix jos: vizibil pe desktop; **ascuns pe ecrane ≤991px** (telefon / tabletă mică). La încărcare: GET `/api/auth/validate`. Conținut dinamic: fetch `GET /api/dashboard/:module` (HTML partial) sau **iframe** (QA, Task & Planning, Materials, Site Snags, Profile, Company settings). |
 
 **Module din sidebar (data-module):**
 
@@ -154,4 +154,4 @@ Quality_Assurance.html
 
 Acest document oferă o imagine de ansamblu pentru a înțelege cum funcționează Proconix și cum se leagă între ele index.js, componentele frontend și cele backend.
 
-**Actualizat:** 16/03/2026 – pentru lista detaliată a modificărilor recente vezi [README.md](README.md) (secțiunea „Modificări recente”).
+**Actualizat:** 27/03/2026 – pentru lista detaliată a modificărilor recente vezi [README.md](README.md) (secțiunea „Modificări recente”).

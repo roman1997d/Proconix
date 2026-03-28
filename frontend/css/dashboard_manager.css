@@ -219,46 +219,91 @@ body.dashboard-manager {
   }
 }
 
-/* Large touch screens: no hover — keep full labels and expanded width */
+/* Hidden on desktop-with-mouse; shown only in tablet touch block below */
+.sidebar-touch-toggle {
+  display: none;
+}
+
+/*
+ * Tablets / iPad (hover: none, wide viewport): no mouse hover — the rail stays narrow by default.
+ * Use the chevron button (#sidebar-touch-toggle) to expand/collapse (class .sidebar-expanded-touch).
+ * Previously we forced full width here, which made the bar never "strânge" on touch devices.
+ */
 @media (hover: none) and (min-width: 992px) {
-  .sidebar {
-    width: var(--sidebar-expanded-width);
+  .sidebar .sidebar-brand {
+    padding-right: 44px;
   }
 
-  #dashboard-app .main-wrap {
+  .sidebar-touch-toggle {
+    display: flex;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 10px;
+    right: 6px;
+    z-index: 2;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--accent);
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+  }
+
+  .sidebar-touch-toggle:hover,
+  .sidebar-touch-toggle:focus-visible {
+    background: rgba(27, 229, 198, 0.15);
+    outline: none;
+  }
+
+  .sidebar-touch-toggle i {
+    font-size: 1.1rem;
+    pointer-events: none;
+  }
+
+  .sidebar.sidebar-expanded-touch {
+    width: var(--sidebar-expanded-width);
+    box-shadow: 12px 0 40px rgba(0, 0, 0, 0.35);
+  }
+
+  #dashboard-app .main-wrap.main-wrap--sidebar-expanded-touch {
     padding-left: var(--sidebar-expanded-width);
   }
 
-  .sidebar .sidebar-brand {
+  .sidebar.sidebar-expanded-touch .sidebar-brand {
     justify-content: flex-start;
-    padding: 16px 18px;
+    padding: 16px 48px 16px 18px;
   }
 
-  .sidebar .sidebar-logo {
+  .sidebar.sidebar-expanded-touch .sidebar-logo {
     opacity: 1;
     max-width: 200px;
     transform: none;
     pointer-events: auto;
   }
 
-  .sidebar .sidebar-nav {
+  .sidebar.sidebar-expanded-touch .sidebar-nav {
     padding: 12px 14px;
   }
 
-  .sidebar .sidebar-item {
+  .sidebar.sidebar-expanded-touch .sidebar-item {
     justify-content: flex-start;
     gap: 12px;
     padding: 12px 14px;
   }
 
-  .sidebar .sidebar-item span {
+  .sidebar.sidebar-expanded-touch .sidebar-item span {
     opacity: 1;
     max-width: 220px;
     transform: none;
     pointer-events: auto;
   }
 
-  .sidebar .sidebar-footer {
+  .sidebar.sidebar-expanded-touch .sidebar-footer {
     padding: 12px 14px 20px;
   }
 }

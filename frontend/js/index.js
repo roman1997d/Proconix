@@ -5,6 +5,83 @@
 
 (function () {
   'use strict';
+  var MANAGER_SESSION_KEY = 'proconix_manager_session';
+  var OP_TOKEN_KEY = 'proconix_operative_token';
+  var OP_USER_KEY = 'proconix_operative_user';
+  var DASH_MANAGER = '/dashboard_manager.html';
+  var DASH_OPERATIVE = '/operative_dashboard.html';
+
+  function clearOperativeSession() {
+    try {
+      localStorage.removeItem(OP_TOKEN_KEY);
+      localStorage.removeItem(OP_USER_KEY);
+      sessionStorage.removeItem(OP_TOKEN_KEY);
+    } catch (_) {}
+  }
+
+  /**
+   * Try manager first (Keep me logged in → localStorage only), then operative token.
+   * Operative token is stored in localStorage + sessionStorage on login (same as operative_dashboard.js).
+   */
+  function redirectIfKnownSessionValid() {
+    try {
+      var raw = localStorage.getItem(MANAGER_SESSION_KEY);
+      if (raw) {
+        var session = JSON.parse(raw);
+        if (session && session.manager_id != null && session.email) {
+          fetch('/api/auth/validate', {
+            headers: {
+              'X-Manager-Id': String(session.manager_id),
+              'X-Manager-Email': String(session.email).trim(),
+            },
+          })
+            .then(function (res) {
+              if (res.ok) {
+                window.location.replace(DASH_MANAGER);
+                return;
+              }
+              if (res.status === 401) {
+                try {
+                  localStorage.removeItem(MANAGER_SESSION_KEY);
+                } catch (_) {}
+              }
+              tryOperativeRedirect();
+            })
+            .catch(function () {
+              tryOperativeRedirect();
+            });
+          return;
+        }
+      }
+    } catch (_) {}
+    tryOperativeRedirect();
+  }
+
+  function tryOperativeRedirect() {
+    try {
+      var token = localStorage.getItem(OP_TOKEN_KEY) || sessionStorage.getItem(OP_TOKEN_KEY);
+      if (!token) return;
+      fetch('/api/operatives/me', {
+        headers: { 'X-Operative-Token': token },
+      })
+        .then(function (res) {
+          if (res.ok) {
+            window.location.replace(DASH_OPERATIVE);
+            return;
+          }
+          if (res.status === 401) {
+            clearOperativeSession();
+          }
+        })
+        .catch(function () {});
+    } catch (_) {}
+  }
+
+  redirectIfKnownSessionValid();
+})();
+
+(function () {
+  'use strict';
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initMain);
   } else {

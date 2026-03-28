@@ -77,7 +77,7 @@ Alt exemplu: **Operativ trimite un work log**.
 | **register_company.html**   | Vizitator      | POST /api/companies/create           | companies                      |
 | **register_manager.html**   | Vizitator      | GET /api/onboarding/company, POST /api/managers/create | manager, companies   |
 | **login_manager.html**      | Manager        | POST /api/managers/login             | manager                        |
-| **dashboard_manager.html** | Manager        | GET /api/auth/validate; GET /api/dashboard/:module (HTML partials); **Project Overview**: GET /api/dashboard/overview-stats, overview-lists, operative-activity-today; iframes: Task_Planning, Quality_Assurance, manage_material, **Profile_Settings**, **my_company_settings**; /api/projects/*, /api/operatives/*, /api/worklogs/*; profil: /api/managers/me, phone, change-password; companie: /api/companies/me; invite: POST /api/managers/invite | manager, companies, projects, users, work_logs, work_hours, planning_*, qa_jobs, qa_cost_types |
+| **dashboard_manager.html** | Manager        | GET /api/auth/validate; GET /api/dashboard/:module (HTML partials); **Project Overview**: GET /api/dashboard/overview-stats, overview-lists, operative-activity-today; iframes: Task_Planning, Quality_Assurance, manage_material, **Site_Snags**, **Profile_Settings**, **my_company_settings**; UI: sidebar stânga (rail + hover / mobil off-canvas); footer ascuns pe ecrane mici; /api/projects/*, /api/operatives/*, /api/worklogs/*; profil: /api/managers/me, phone, change-password; companie: /api/companies/me; invite: POST /api/managers/invite | manager, companies, projects, users, work_logs, work_hours, planning_*, qa_jobs, qa_cost_types |
 | **Modul Projects**          | Manager        | GET/POST/PUT /api/projects/list, create, :id/update, :id/assignments, assign | projects, project_assignments, users |
 | **Modul Operatives**       | Manager        | GET/POST/PATCH/DELETE /api/operatives | users                          |
 | **Modul Work Logs**        | Manager        | GET/POST/PATCH /api/worklogs, approve, reject, archive, **DELETE** (ștergere definitivă + fișiere `/uploads/`) | work_logs                    |
@@ -149,4 +149,4 @@ Operativ         Frontend (Operative Dashboard)    Backend              DB
 
 *Documentația trebuie actualizată la fiecare schimbare majoră de structură sau flux.*
 
-**Actualizat:** 16/03/2026
+**Actualizat:** 27/03/2026

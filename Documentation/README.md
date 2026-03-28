@@ -53,6 +53,18 @@ Pentru diagrame Mermaid poți folosi: [Mermaid Live Editor](https://mermaid.live
 - **My Company Settings**: iframe `my_company_settings.html` – `GET /api/companies/me` (rând complet din `companies`); **Add manager** – `POST /api/managers/invite` (`manager_type`: `general` | `site`, `email`, `project_id` obligatoriu pentru site); UI în engleză.
 - Sidebar: intrări `profile-settings`, `my-company-settings` în `dashboard_manager.html`; navigare în `dashboard.js`.
 
+### Manager dashboard – sidebar stânga, mobil, fără footer pe ecrane mici
+- **Sidebar fix stânga**: rail îngust cu **iconuri mereu vizibile**; pe **hover** sau **focus-within** (tastatură) se extinde cu text (`dashboard_manager.css` – tranziții ~0,25s). Pe **ecrane fără hover** dar ≥992px (ex. tabletă mare): meniu lățime completă cu etichete.
+- **Mobil / tabletă îngustă (< 992px)**: meniu **off-canvas din stânga**; buton **hamburger stânga sus**; overlay; `dashboard.js` – `setMobileSidebarOpen`, `aria-expanded`, `aria-controls="manager-sidebar"`.
+- **Footer fix**: pe **≤ 991.98px** footer-ul dashboard manager este **ascuns** (`display: none` pe `#dashboard-app .dashboard-footer`); **`padding-bottom`** pe `.dashboard-content-wrap` setat la **0** ca să nu rămână bandă goală sub conținut.
+- **Fișiere**: `dashboard_manager.html`, `dashboard_manager.css`, `dashboard.css`, `dashboard.js`.
+
+### Task & Planning – layout pe toată zona iframe (modul Planning)
+- **`Task_Planning.html`**: `html`/`body` cu înălțime 100% pentru iframe-ul din dashboard; **fără `max-width`** pe shell; grid principal (`tp-layout`) ocupă **înălțimea rămasă** sub header; cardul **Planning** (Gantt + filtre) are clasă **`tp-planning-panel`**: zona calendar (`tp-calendar-body`) cu **`flex: 1`** și scroll; Kanban limitat în înălțime cu scroll propriu.
+
+### Site Snags – viewport tactil (tabletă / telefon)
+- **`Site_Snags.html`**: **pan** cu un deget și **pinch-zoom** pe viewport-ul desenului (Pointer Events, `setPointerCapture`); zoom +/- și wheel rămân pe desktop; hint: „Drag or one finger to pan · Wheel or pinch to zoom”.
+
 ### Task & Planning – poze confirmare (manager ↔ operativ)
 - **Operativ** (`operative_dashboard.html` + `operative_dashboard.js`): la click pe task se deschide modalul de detalii – UI în **engleză** (butoane **Decline**, **Mark in progress**, **Complete**; secțiune **Confirmation photos (n / 10)**; **Add photos (max. 10 total)**). Încărcare poze: `POST /api/operatives/tasks/:taskId/photos`; status: `PATCH /api/operatives/tasks/:taskId` cu `source` + `action`. Detalii + listă URL-uri: `GET /api/operatives/tasks/:taskId?source=legacy|planning`.
 - **Manager** (`Task_Planning.html`): în modalul **Task details**, dacă task-ul are status **completed** și există poze încărcate de operativ, se afișează un grid de miniaturi (link la imagine la dimensiune completă) – date din `GET /api/planning/plan-tasks/:id/confirmation-photos` (join `operative_task_photos`, `task_source=planning`).
@@ -101,4 +113,4 @@ Pentru diagrame Mermaid poți folosi: [Mermaid Live Editor](https://mermaid.live
 #### Curățare cod vechi
 - Eliminate șabloanele HTML Puppeteer din `backend/templates/pdf/` și fluxul `pdfReportsController` / `renderPdf`; dependența **puppeteer** scoasă din `package.json` unde nu mai e folosită.
 
-**Actualizat:** 26/03/2026
+**Actualizat:** 27/03/2026

@@ -990,6 +990,48 @@
       });
     }
 
+    var mainWrap = document.querySelector('#dashboard-app .main-wrap');
+    var touchToggle = document.getElementById('sidebar-touch-toggle');
+
+    function isTouchWideSidebar() {
+      try {
+        return window.matchMedia('(hover: none) and (min-width: 992px)').matches;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function syncSidebarTouchUi() {
+      if (!touchToggle || !sidebar || !mainWrap) return;
+      if (isTouchWideSidebar()) {
+        touchToggle.removeAttribute('hidden');
+      } else {
+        touchToggle.setAttribute('hidden', '');
+        sidebar.classList.remove('sidebar-expanded-touch');
+        mainWrap.classList.remove('main-wrap--sidebar-expanded-touch');
+      }
+    }
+
+    if (touchToggle && sidebar && mainWrap) {
+      touchToggle.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isTouchWideSidebar()) return;
+        var expanded = !sidebar.classList.contains('sidebar-expanded-touch');
+        sidebar.classList.toggle('sidebar-expanded-touch', expanded);
+        mainWrap.classList.toggle('main-wrap--sidebar-expanded-touch', expanded);
+        touchToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        touchToggle.setAttribute('aria-label', expanded ? 'Collapse navigation' : 'Expand navigation');
+        var icon = touchToggle.querySelector('i');
+        if (icon) {
+          icon.className = expanded ? 'bi bi-chevron-double-left' : 'bi bi-chevron-double-right';
+        }
+      });
+      window.addEventListener('resize', syncSidebarTouchUi);
+      window.addEventListener('orientationchange', syncSidebarTouchUi);
+      syncSidebarTouchUi();
+    }
+
     window.addEventListener('popstate', function (e) {
       if (e.state && e.state.module) {
         loadModule(e.state.module, false);

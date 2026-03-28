@@ -22,7 +22,8 @@ frontend/
 ├── css/
 │   ├── styles.css             # Stiluri globale
 │   ├── proconix_administration.css # Stiluri pagină admin platformă
-│   ├── dashboard.css          # Dashboard manager
+│   ├── dashboard_manager.css  # Temă manager: sidebar stânga (rail + hover), variabile, componente dashboard manager
+│   ├── dashboard.css          # Dashboard manager: layout app, iframe, footer, overlay mobil, content-wrap
 │   ├── projects.css           # Modul Projects
 │   ├── worklogs.css           # Modul Work Logs
 │   ├── operative_dashboard.css
@@ -55,7 +56,7 @@ frontend/
 | login_manager.html + login_manager.js | Login manager | Formular → POST /api/managers/login; salvare sesiune în localStorage; redirect dashboard |
 | proconix_administration_login.html + proconix_administration_login.js | Sign-in admin platformă | `POST /api/platform-admin/login`; salvează `proconix_platform_admin_session` (`id`, `email`, …); redirect consolă |
 | proconix_administration.html + proconix_administration_dashboard.js | Consolă admin | `GET /api/platform-admin/me` cu header-e `X-Platform-Admin-Id` / `Email`; secțiuni: companies, billing, **System & health** (operațiuni sistem), **Audit & logs** (jurnale); **Proconix project on disk**: utilizare pe tipuri (imagini, documente, altele). |
-| dashboard_manager.html + dashboard.js + dashboard_manager.js | Dashboard manager | GET /api/auth/validate; module HTML via GET /api/dashboard/:module; **Project Overview**: GET /api/dashboard/overview-stats, overview-lists, operative-activity-today; iframes: Task_Planning, Quality_Assurance, manage_material, Profile_Settings, my_company_settings; Projects, Operatives, Work Logs |
+| dashboard_manager.html + dashboard.js + dashboard_manager.js | Dashboard manager | GET /api/auth/validate; module HTML via GET /api/dashboard/:module; **Project Overview**: GET /api/dashboard/overview-stats, overview-lists, operative-activity-today; iframes: Task_Planning, Quality_Assurance, manage_material, Site_Snags, Profile_Settings, my_company_settings; Projects, Operatives, Work Logs. **UI**: sidebar fix **stânga** (rail icon-only, extindere hover/focus); mobil off-canvas stânga; **footer ascuns** pe ecrane ≤991px; `dashboard_manager.css` + `dashboard.css` |
 | Profile_Settings.html | Profil manager | GET /api/managers/me; PATCH /api/managers/phone; POST /api/managers/change-password (headers manager) |
 | my_company_settings.html | Companie + invite | GET /api/companies/me; POST /api/managers/invite; GET /api/projects/list pentru dropdown site manager |
 | projects.js | Projects | /api/projects/list, create, :id/update, :id/deactivate, :id/assignments, assign, delete assignment; formular Edit Project include și `latitude`/`longitude` + buton „Use current location” (HTML5 geolocation) |
@@ -64,7 +65,8 @@ frontend/
 | Quality_Assurance.html | QA | Logică inline în pagină: qaApi (backend: /api/templates, /api/jobs), /api/projects/list pentru dropdown; localStorage fallback când nu e sesiune manager |
 | manage_material.html | Material Management | Logică inline: materialApi la /api/materials (projects, categories, suppliers, materials CRUD, forecast); USE_MOCK pentru demo fără backend; dropdown proiect, tabel materiale cu filtre/sortare, Stock check, Edit full/Edit qty, export Excel, carduri Critical/Alerts, grafic forecast |
 | material.html | Landing materiale | Pagină informațională (hero, features, CTA); fără logică de gestiune |
-| Task_Planning.html | Task & Planning | UI manager: formular task + `Gantt chart overview` (Day/Week/Month) + Kanban + `Task details` modal; validează `Start date (pickup)` și `Deadline`; `Assigned to` este opțional (UI salvează în DB ca `Unassigned`); sincronizare cu DB prin `/api/planning/*`; listează operativi pentru autocomplete prin `/api/operatives`. Pentru task **completed**, modalul încarcă pozele de confirmare ale operativului: `GET /api/planning/plan-tasks/:id/confirmation-photos`. |
+| Task_Planning.html | Task & Planning | UI manager: formular task + `Gantt chart overview` (Day/Week/Month) + Kanban + `Task details` modal; validează `Start date (pickup)` și `Deadline`; `Assigned to` este opțional (UI salvează în DB ca `Unassigned`); sincronizare cu DB prin `/api/planning/*`; listează operativi pentru autocomplete prin `/api/operatives`. Pentru task **completed**, modalul încarcă pozele de confirmare ale operativului: `GET /api/planning/plan-tasks/:id/confirmation-photos`. **Layout**: în iframe ocupă **înălțimea și lățimea** disponibile (fără max-width centrat); panel Planning (`tp-planning-panel`) întinde zona Gantt. |
+| Site_Snags.html | Site Snags | Desen/proiect, pin-uri, măsurători; în dashboard prin iframe; sesiune trimisă prin `postMessage`. **Touch**: pan cu un deget, pinch-zoom pe viewport (Pointer Events). |
 
 ---
 
@@ -106,7 +108,7 @@ frontend/
 1. **Înregistrare companie** (dacă nu există): pe register_company.html completează datele companiei și trimite. Primește link de onboarding (cu token) pentru înregistrarea managerului.
 2. **Înregistrare manager**: deschide link-ul din email (register_manager.html?token=...). Introdu datele personale și parola. După succes, poate merge la login.
 3. **Login**: pe login_manager.html introduce email și parolă. La succes e redirecționat la dashboard_manager.html.
-4. **Dashboard**: din meniul lateral: **Project Overview** (statistici reale, task-uri cu deadline în 7 zile, coadă work logs neaprobate cu marcaj „Stale” >7 zile, activitate operativi azi, grafic QA day/hour/price work, grafic Activity – demo), Projects, Operatives, Work Logs, Task & Planning (iframe), Material Management (iframe), Quality Assurance (iframe), **Profile Settings** (iframe), **My Company Settings** (iframe).
+4. **Dashboard**: din **meniul stânga** (rail: iconuri; extinde la hover sau deschide din hamburger pe mobil): **Project Overview** (statistici reale, task-uri cu deadline în 7 zile, coadă work logs neaprobate cu marcaj „Stale” >7 zile, activitate operativi azi, grafic QA day/hour/price work, grafic Activity – demo), Projects, Operatives, Work Logs, Task & Planning (iframe), Material Management (iframe), Site Snags (iframe), Quality Assurance (iframe), **Profile Settings** (iframe), **My Company Settings** (iframe). Pe **telefon / tabletă mică** banda de footer cu credit dispare pentru mai mult spațiu de lucru.
 5. **Proiecte**: din modulul Projects poate adăuga proiect (Add Project), edita, dezactiva, vedea detalii și asigna operativi/supervizori la proiect (Assign Operatives/Managers).
 6. **Operatives**: adaugă operativi sau supervizori (Add Operative / Add Supervisor), editează sau șterge. Lista e filtrată după companie.
 7. **Work Logs**: (opțional) passkey; filtre; deschide job (detalii cu poze per job din pontaj, descărcare fișier încărcat); edit/aprobă/respinge/arhivare; **ștergere definitivă** (cu confirmare) șterge înregistrarea și fișierele asociate pe server; factură export; arhivare în bulk. Intrările **arhivate de operativ** apar cu indic vizual și notă în detalii.
@@ -143,4 +145,4 @@ frontend/
 
 *Actualizează documentația la adăugarea de pagini sau fluxuri noi.*
 
-**Actualizat:** 16/03/2026
+**Actualizat:** 27/03/2026
