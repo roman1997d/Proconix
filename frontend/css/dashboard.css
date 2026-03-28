@@ -104,13 +104,14 @@
   flex-shrink: 0;
 }
 
+/* Single scroll: only .dashboard-content-wrap scrolls (avoid nested scroll with iframe modules) */
 #dashboard-app .main-wrap {
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 /* ===== Sidebar hover ===== */
@@ -131,6 +132,26 @@
   flex-direction: column;
   padding-bottom: 60px; /* space for fixed footer */
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) rgba(255, 255, 255, 0.06);
+}
+
+#dashboard-app .dashboard-content-wrap::-webkit-scrollbar {
+  width: 8px;
+}
+
+#dashboard-app .dashboard-content-wrap::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+#dashboard-app .dashboard-content-wrap::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 4px;
+}
+
+#dashboard-app .dashboard-content-wrap::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.55);
 }
 
 .dashboard-content {
@@ -157,6 +178,17 @@
   min-height: 0;
   border: none;
   display: block;
+}
+
+/*
+ * Tablet / phone: Safari often under-sizes flex iframes — give a floor so Task & Planning
+ * (and similar) get a real height for their internal 100% / grid 1fr layout.
+ */
+@media (max-width: 991.98px) {
+  .dashboard-qa-iframe {
+    min-height: min(75vh, 900px);
+    min-height: min(75dvh, 900px);
+  }
 }
 
 /* ===== Module placeholder (for simple module views) ===== */

@@ -38,13 +38,16 @@
       box-sizing: border-box;
     }
 
+    /* iPad/Safari: fill iframe height; plain 100% alone can collapse inside nested flex/iframes */
     html {
       height: 100%;
+      height: -webkit-fill-available;
     }
 
     body {
       margin: 0;
       min-height: 100%;
+      min-height: -webkit-fill-available;
       height: 100%;
       padding: 0;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -113,9 +116,17 @@
     }
 
     /* Gantt + Kanban: fill remaining viewport / iframe height */
+    .tp-layout > .tp-card.tp-planning-panel {
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+      align-self: stretch;
+    }
+
     .tp-planning-panel {
       display: flex;
       flex-direction: column;
+      min-width: 0;
       min-height: 0;
       overflow: hidden;
     }
@@ -124,10 +135,17 @@
       flex-shrink: 0;
     }
 
+    /*
+     * min-width: 0 is required so the flex item can shrink below the Gantt's min-width (~960px);
+     * without it, overflow-x never scrolls and the timeline looks "cut off".
+     */
     .tp-planning-panel .tp-calendar-body {
       flex: 1 1 auto;
-      min-height: 200px;
+      min-width: 0;
+      min-height: 220px;
       overflow: auto;
+      overflow-x: auto;
+      overflow-y: auto;
       -webkit-overflow-scrolling: touch;
     }
 
@@ -147,6 +165,9 @@
       .tp-layout {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto minmax(0, 1fr);
+        /* vh fallback, then dvh/svh (better on iOS address bar / iframe) */
+        min-height: min(72vh, 780px);
+        min-height: min(72dvh, 780px);
       }
 
       .tp-layout > .tp-card:first-child {
@@ -154,7 +175,8 @@
       }
 
       .tp-planning-panel {
-        min-height: min(65vh, 720px);
+        min-height: min(58vh, 640px);
+        min-height: min(58dvh, 640px);
       }
     }
 
@@ -479,10 +501,6 @@
       padding: 0.5rem;
       min-height: 260px;
       overflow-x: auto;
-    }
-
-    .tp-planning-panel .tp-calendar-body {
-      min-height: 0;
     }
 
     /* Gantt */
