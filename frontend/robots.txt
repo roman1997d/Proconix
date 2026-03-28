@@ -1,0 +1,21 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# API — not for indexing
+Disallow: /api/
+
+# Authenticated / application UI (thin or duplicate vs marketing pages)
+Disallow: /dashboard_manager.html
+Disallow: /operative_dashboard.html
+Disallow: /manage_material.html
+Disallow: /my_company_settings.html
+Disallow: /Profile_Settings.html
+Disallow: /Site_Snags.html
+Disallow: /Task_Planning.html
+Disallow: /Quality_Assurance.html
+Disallow: /proconix_administration.html
+Disallow: /proconix_administration_login.html
+Disallow: /dashboard/
+
+Sitemap: https://proconix.uk/sitemap.xml
