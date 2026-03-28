@@ -5,6 +5,7 @@
 
 const bcrypt = require('bcrypt');
 const { pool } = require('../db/pool');
+const { sendManagerAccountActivatedEmail } = require('../lib/sendCallbackRequestEmail');
 
 const SALT_ROUNDS = 10;
 
@@ -235,6 +236,7 @@ async function updateCompany(req, res) {
   const companyIn = body.company && typeof body.company === 'object' ? body.company : {};
   const hmIn = body.head_manager && typeof body.head_manager === 'object' ? body.head_manager : {};
 
+  let managerJustActivated = null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -317,6 +319,35 @@ async function updateCompany(req, res) {
           hmVals.push(passwordHash);
           hp += 1;
         }
+        if (
+          hmSets.length &&
+          Object.prototype.hasOwnProperty.call(hmIn, 'active') &&
+          (hmIn.active === true || hmIn.active === 'true')
+        ) {
+          const prevH = await client.query(
+            `SELECT m.name, m.email, m.active, c.name AS company_name
+             FROM manager m
+             LEFT JOIN companies c ON c.id = m.company_id
+             WHERE m.id = $1`,
+            [hmId]
+          );
+          if (prevH.rows.length && prevH.rows[0].active !== true) {
+            const pr = prevH.rows[0];
+            const emailOut = Object.prototype.hasOwnProperty.call(hmIn, 'email')
+              ? String(hmIn.email || '').trim()
+              : String(pr.email || '').trim();
+            const nameOut = Object.prototype.hasOwnProperty.call(hmIn, 'name')
+              ? String(hmIn.name || '').trim()
+              : String(pr.name || '').trim();
+            if (emailOut && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailOut)) {
+              managerJustActivated = {
+                firstName: nameOut || 'there',
+                email: emailOut,
+                companyName: String(pr.company_name || '').trim() || 'your organization',
+              };
+            }
+          }
+        }
         if (hmSets.length) {
           hmVals.push(hmId);
           await client.query(
@@ -328,6 +359,18 @@ async function updateCompany(req, res) {
     }
 
     await client.query('COMMIT');
+
+    if (managerJustActivated) {
+      try {
+        await sendManagerAccountActivatedEmail(managerJustActivated);
+      } catch (mailErr) {
+        if (mailErr && mailErr.code === 'SMTP_NOT_CONFIGURED') {
+          console.warn('Manager activation email skipped: SMTP not configured.');
+        } else {
+          console.error('Manager activation email error:', mailErr);
+        }
+      }
+    }
 
     const c = await pool.query('SELECT * FROM companies WHERE id = $1', [id]);
     const hm = await pool.query(
@@ -344,7 +387,11 @@ async function updateCompany(req, res) {
       head_manager: hm.rows[0] ? mapHeadManagerRow(hm.rows[0]) : null,
     });
   } catch (err) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      /* ignore */
+    }
     console.error('platformAdmin updateCompany error:', err);
     return res.status(500).json({ success: false, message: err.message || 'Update failed.' });
   } finally {

@@ -195,6 +195,148 @@ function buildCompanyWelcomeEmailHtml(p) {
 }
 
 /**
+ * Head manager account activated by platform admin — full access + nudge to create first project.
+ * @param {{ firstName: string, email: string, companyName: string }} p
+ */
+function buildManagerActivatedEmailHtml(p) {
+  const intro =
+    '<p style="margin:0 0 18px 0;font-size:16px;line-height:1.65;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Hi <strong style="color:#f8fafc;">' +
+    escapeHtml(p.firstName) +
+    '</strong>, wonderful news — your manager account for <strong style="color:#f8fafc;">' +
+    escapeHtml(p.companyName) +
+    '</strong> is now <strong style="color:#4ade80;">active</strong>. You can sign in and start exploring everything Proconix has to offer.</p>';
+
+  const access =
+    '<p style="margin:0 0 16px 0;font-size:15px;line-height:1.65;color:#cbd5e1;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'You now have <strong style="color:#f8fafc;">full access to the platform</strong> and <strong style="color:#f8fafc;">all modules</strong> included in your plan: projects and team assignments, work logs, quality assurance, planning, materials, site snags, and your company dashboard — everything is ready when you are.</p>';
+
+  const modulesBox =
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:4px;">' +
+    '<tr><td style="background-color:#0f172a;border-radius:10px;padding:18px 20px;border-left:4px solid #8b5cf6;">' +
+    '<span style="display:block;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#c4b5fd;margin-bottom:12px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'What you can use from day one' +
+    '</span>' +
+    '<ul style="margin:0;padding:0 0 0 18px;color:#e2e8f0;font-size:14px;line-height:1.7;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    '<li>Projects &amp; operative assignments</li>' +
+    '<li>Work logs &amp; approvals</li>' +
+    '<li>Quality assurance workflows</li>' +
+    '<li>Task &amp; planning</li>' +
+    '<li>Material management</li>' +
+    '<li>Site snags</li>' +
+    '</ul></td></tr></table>';
+
+  const projectNudge =
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px;">' +
+    '<tr><td style="background-color:#0f172a;border-radius:10px;padding:20px 22px;border-left:4px solid #22c55e;">' +
+    '<span style="display:block;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#86efac;margin-bottom:10px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'First things first' +
+    '</span>' +
+    '<p style="margin:0;font-size:15px;line-height:1.65;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Before anything else, <strong style="color:#f8fafc;">create your first project</strong> from the dashboard. Projects tie your sites, teams, and daily work together — it is the step that really brings Proconix to life for your company.</p>' +
+    '<p style="margin:12px 0 0 0;font-size:14px;line-height:1.55;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Log in, open <strong style="color:#cbd5e1;">Projects</strong>, and add one site or job — you can refine details anytime.</p>' +
+    '</td></tr></table>';
+
+  const thankYou =
+    '<p style="margin:24px 0 0 0;font-size:15px;line-height:1.65;color:#cbd5e1;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'We are glad you are here. If you have questions, just reply to this email — we are happy to help.' +
+    '</p>';
+
+  const signature =
+    '<p style="margin:24px 0 0 0;font-size:15px;line-height:1.6;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Kindest regards,<br>' +
+    '<strong style="color:#f8fafc;font-size:16px;">Roman Demian</strong><br>' +
+    '<span style="color:#94a3b8;font-size:14px;">CEO &amp; Founder, Proconix</span></p>';
+
+  const footer =
+    '<p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;">You received this because your Proconix manager account was activated.</p>';
+
+  return (
+    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
+    '<meta http-equiv="x-ua-compatible" content="ie=edge"></head><body style="margin:0;padding:0;background-color:#020617;">' +
+    '<div style="display:none;font-size:1px;color:#020617;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">' +
+    escapeHtml(`Your Proconix account is active — sign in and create your first project`) +
+    '</div>' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#020617;padding:32px 16px;">' +
+    '<tr><td align="center">' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background-color:#1e293b;border-radius:16px;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">' +
+    '<tr><td style="height:4px;background-color:#8b5cf6;font-size:0;line-height:0;">&nbsp;</td></tr>' +
+    '<tr><td style="padding:28px 32px 8px 32px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    '<span style="display:inline-block;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#64748b;">' +
+    'Account active' +
+    '</span>' +
+    '<h1 style="margin:12px 0 0 0;font-size:24px;font-weight:700;line-height:1.25;color:#f8fafc;letter-spacing:-0.02em;">' +
+    'Welcome to the platform — you are all set' +
+    '</h1></td></tr>' +
+    '<tr><td style="padding:8px 32px 28px 32px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    intro +
+    access +
+    modulesBox +
+    projectNudge +
+    thankYou +
+    signature +
+    '</td></tr>' +
+    '<tr><td style="padding:16px 32px 24px 32px;border-top:1px solid #334155;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    footer +
+    '</td></tr></table></td></tr></table></body></html>'
+  );
+}
+
+/**
+ * Sent when platform admin sets head manager active from false to true.
+ * @param {{ firstName: string, email: string, companyName: string }} p
+ */
+async function sendManagerAccountActivatedEmail(p) {
+  const to = String(p.email || '').trim();
+  if (!to) return;
+
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send activation email.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+
+  const subject = 'Your Proconix account is active — welcome aboard!';
+  const text = [
+    `Hi ${p.firstName},`,
+    '',
+    `Great news — your manager account for "${p.companyName}" is now active. You can sign in and use the full platform.`,
+    '',
+    'You have access to all modules in your plan: projects, work logs, quality assurance, planning, materials, site snags, and your dashboard.',
+    '',
+    'First things first: create your first project from the dashboard. That connects your sites, teams, and daily work — it is what really brings Proconix to life.',
+    '',
+    'We are glad you are here. Reply to this email if you need help.',
+    '',
+    'Kindest regards,',
+    'Roman Demian',
+    'CEO & Founder, Proconix',
+  ].join('\n');
+
+  const html = buildManagerActivatedEmailHtml({
+    firstName: p.firstName,
+    companyName: p.companyName,
+  });
+
+  const replyTo = (process.env.SUPPORT_REPLY_EMAIL || process.env.CALLBACK_NOTIFY_EMAIL || '').trim() || undefined;
+  const bccRaw = (process.env.COMPANY_WELCOME_BCC_EMAIL || 'rdemian732@gmail.com').trim();
+  const bcc = bccRaw && to.toLowerCase() !== bccRaw.toLowerCase() ? bccRaw : undefined;
+
+  await transport.sendMail({
+    from,
+    to,
+    ...(bcc ? { bcc } : {}),
+    replyTo: replyTo || from,
+    subject,
+    text,
+    html,
+  });
+}
+
+/**
  * @param {{
  *   managerFirstName: string,
  *   managerEmail: string,
@@ -398,5 +540,6 @@ module.exports = {
   sendCallbackRequestEmail,
   sendContactUsEmail,
   sendCompanyWelcomeEmail,
+  sendManagerAccountActivatedEmail,
   createTransport,
 };
