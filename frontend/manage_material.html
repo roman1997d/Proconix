@@ -588,7 +588,7 @@
     if (USE_MOCK) {
       projects = [{ id: 'p1', name: 'Site Alpha' }, { id: 'p2', name: 'Site Beta' }, { id: 'p3', name: 'Site Gamma' }];
       categories = [{ id: 'c1', name: 'Cement' }, { id: 'c2', name: 'Timber' }, { id: 'c3', name: 'Electrical' }];
-      suppliers = [{ id: 's1', name: 'BuildCo Ltd', contact: 'John', emailPhone: 'john@buildco.com', address: '' }, { id: 's2', name: 'TimberWorld', contact: 'Jane', emailPhone: '07900123456', address: '' }];
+      suppliers = [{ id: 's1', name: 'BuildCo Ltd', contact: 'John', emailPhone: 'orders@buildco.co.uk', address: '' }, { id: 's2', name: 'TimberWorld', contact: 'Jane', emailPhone: '07900123456', address: '' }];
     } else {
       if (!getSessionHeaders()['X-Manager-Id']) {
         showToast('Log in as manager to load projects.', true);
