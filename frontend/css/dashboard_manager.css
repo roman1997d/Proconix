@@ -38,6 +38,11 @@
   box-sizing: border-box;
 }
 
+/* Manager dashboard does not load styles.css — same overscroll fix as global pages */
+html {
+  overscroll-behavior: none;
+}
+
 body.dashboard-manager {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -45,6 +50,7 @@ body.dashboard-manager {
   color: var(--text-primary);
   min-height: 100vh;
   display: flex;
+  overscroll-behavior: none;
 }
 
 /* ===== Sidebar (left rail: icons always; labels on hover / focus-within) ===== */

@@ -1,3 +1,11 @@
+/*
+ * Touch / tablet: reduce rubber-band overscroll and accidental pull-to-refresh
+ * (Chrome/Android, Safari/iOS to varying degrees).
+ */
+html {
+  overscroll-behavior: none;
+}
+
 /* ===== Variables ===== */
 :root {
   /* Sapphire / teal night palette for a premium SaaS feel */
@@ -21,6 +29,8 @@ body {
   min-height: 100vh;
   color: var(--white);
   overflow-x: hidden;
+  overscroll-behavior-y: none;
+  overscroll-behavior-x: none;
 }
 
 /* ===== Navigation ===== */

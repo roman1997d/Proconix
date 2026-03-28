@@ -98,6 +98,7 @@
   width: 100%;
   min-height: 100vh;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 #dashboard-app .sidebar {
@@ -133,6 +134,8 @@
   padding-bottom: 60px; /* space for fixed footer */
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  overscroll-behavior-x: none;
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.45) rgba(255, 255, 255, 0.06);
 }
