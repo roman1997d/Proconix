@@ -10,6 +10,7 @@
 
 const bcrypt = require('bcrypt');
 const { pool } = require('../db/pool');
+const { sendCompanyWelcomeEmail } = require('../lib/sendCallbackRequestEmail');
 
 const SALT_ROUNDS = 10;
 
@@ -96,6 +97,42 @@ async function createManager(req, res) {
     );
 
     const row = result.rows[0];
+
+    try {
+      const cRes = await pool.query(
+        `SELECT id, name, subscription_plan, created_at, security_token1
+         FROM companies WHERE id = $1`,
+        [company_id]
+      );
+      if (cRes.rows.length > 0) {
+        const c = cRes.rows[0];
+        const tokenRaw = c.security_token1 != null ? String(c.security_token1).trim() : '';
+        const securityToken = tokenRaw || '—';
+        const createdAtFormatted = c.created_at
+          ? new Date(c.created_at).toLocaleString('en-GB', {
+              dateStyle: 'full',
+              timeStyle: 'short',
+              timeZone: 'Europe/London',
+            })
+          : '—';
+        await sendCompanyWelcomeEmail({
+          managerFirstName: name,
+          managerEmail: email,
+          companyName: c.name || 'Your company',
+          planLabel: c.subscription_plan || '—',
+          companyId: String(c.id),
+          securityToken,
+          createdAtFormatted,
+        });
+      }
+    } catch (welcomeErr) {
+      if (welcomeErr && welcomeErr.code === 'SMTP_NOT_CONFIGURED') {
+        console.warn('Welcome email skipped: SMTP not configured (set SMTP_* in .env).');
+      } else {
+        console.error('Welcome email error:', welcomeErr);
+      }
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Manager registered successfully. You can now sign in when your account is activated.',

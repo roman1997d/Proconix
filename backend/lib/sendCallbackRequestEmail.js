@@ -85,6 +85,185 @@ function buildProconixEmailHtml(o) {
   );
 }
 
+/**
+ * Welcome email after company + manager onboarding (HTML + friendly English copy).
+ */
+function buildCompanyWelcomeEmailHtml(p) {
+  const tokenDisplay = p.securityToken && p.securityToken !== '—' ? p.securityToken : '—';
+  const intro =
+    '<p style="margin:0 0 20px 0;font-size:16px;line-height:1.65;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Hi <strong style="color:#f8fafc;">' +
+    escapeHtml(p.managerFirstName) +
+    '</strong>, wonderful news — <strong style="color:#f8fafc;">' +
+    escapeHtml(p.companyName) +
+    '</strong> is now registered on Proconix! We are genuinely excited to have you on board and cannot wait to help your teams work smarter.</p>';
+
+  const rows = [
+    { label: 'Company created on', value: p.createdAtFormatted },
+    { label: 'Plan selected', value: p.planLabel },
+    { label: 'Company ID', value: p.companyId },
+  ];
+  const rowsHtml = rows
+    .map(function (r) {
+      return (
+        '<tr><td style="padding:14px 0;border-bottom:1px solid #334155;vertical-align:top;">' +
+        '<span style="display:block;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+        escapeHtml(r.label) +
+        '</span>' +
+        '<span style="display:block;margin-top:6px;font-size:16px;line-height:1.45;color:#f1f5f9;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+        escapeHtml(r.value) +
+        '</span></td></tr>'
+      );
+    })
+    .join('');
+
+  const securityBox =
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:8px;">' +
+    '<tr><td style="background-color:#0f172a;border-radius:10px;padding:20px 22px;border-left:4px solid #f59e0b;">' +
+    '<span style="display:block;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#fcd34d;margin-bottom:10px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Security information · keep this safe' +
+    '</span>' +
+    '<p style="margin:0;font-size:15px;line-height:1.6;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Your <strong style="color:#f8fafc;">security token</strong> is: ' +
+    '<span style="font-family:Consolas,Monaco,monospace;font-size:17px;font-weight:700;color:#fef3c7;letter-spacing:0.06em;">' +
+    escapeHtml(tokenDisplay) +
+    '</span></p>' +
+    '<p style="margin:12px 0 0 0;font-size:14px;line-height:1.55;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    "You will use this token whenever you contact Proconix support about your account, billing, or any changes — it helps us verify it is really you." +
+    '</p></td></tr></table>';
+
+  const nextSteps =
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:20px;">' +
+    '<tr><td style="background-color:#0f172a;border-radius:10px;padding:20px 22px;border-left:4px solid #2563eb;">' +
+    '<span style="display:block;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#94a3b8;margin-bottom:10px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'What happens next' +
+    '</span>' +
+    '<p style="margin:0;font-size:15px;line-height:1.65;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Your profile will be reviewed and approved by our platform team. If we need anything else, we will reach out at <strong style="color:#f8fafc;">' +
+    escapeHtml(p.managerEmail) +
+    '</strong> — the email you registered with.' +
+    '</p></td></tr></table>';
+
+  const thankYou =
+    '<p style="margin:24px 0 0 0;font-size:15px;line-height:1.65;color:#cbd5e1;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    "Thank you for choosing <strong style=\"color:#f8fafc;\">Proconix</strong> — we are cheering for your next project win." +
+    '</p>';
+
+  const signature =
+    '<p style="margin:24px 0 0 0;font-size:15px;line-height:1.6;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    'Kindest regards,<br>' +
+    '<strong style="color:#f8fafc;font-size:16px;">Roman Demian</strong><br>' +
+    '<span style="color:#94a3b8;font-size:14px;">CEO &amp; Founder, Proconix</span></p>';
+
+  const footer =
+    '<p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;">You received this because you completed company registration on Proconix.</p>';
+
+  return (
+    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
+    '<meta http-equiv="x-ua-compatible" content="ie=edge"></head><body style="margin:0;padding:0;background-color:#020617;">' +
+    '<div style="display:none;font-size:1px;color:#020617;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">' +
+    escapeHtml(`${p.companyName} is registered on Proconix — here are your details`) +
+    '</div>' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#020617;padding:32px 16px;">' +
+    '<tr><td align="center">' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background-color:#1e293b;border-radius:16px;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">' +
+    '<tr><td style="height:4px;background-color:#22c55e;font-size:0;line-height:0;">&nbsp;</td></tr>' +
+    '<tr><td style="padding:28px 32px 8px 32px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    '<span style="display:inline-block;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#64748b;">' +
+    'Welcome aboard' +
+    '</span>' +
+    '<h1 style="margin:12px 0 0 0;font-size:24px;font-weight:700;line-height:1.25;color:#f8fafc;letter-spacing:-0.02em;">' +
+    'Your company is officially on Proconix' +
+    '</h1></td></tr>' +
+    '<tr><td style="padding:8px 32px 0 32px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    intro +
+    '</td></tr>' +
+    '<tr><td style="padding:16px 32px 8px 32px;">' +
+    '<p style="margin:0 0 8px 0;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">Your registration details</p>' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0">' +
+    rowsHtml +
+    '</table>' +
+    securityBox +
+    nextSteps +
+    thankYou +
+    signature +
+    '</td></tr>' +
+    '<tr><td style="padding:16px 32px 24px 32px;border-top:1px solid #334155;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    footer +
+    '</td></tr></table></td></tr></table></body></html>'
+  );
+}
+
+/**
+ * @param {{
+ *   managerFirstName: string,
+ *   managerEmail: string,
+ *   companyName: string,
+ *   planLabel: string,
+ *   companyId: string,
+ *   securityToken: string,
+ *   createdAtFormatted: string
+ * }} p
+ */
+async function sendCompanyWelcomeEmail(p) {
+  const to = String(p.managerEmail || '').trim();
+  if (!to) return;
+
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send welcome email.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+
+  const subject = `Welcome to Proconix — ${p.companyName} is registered!`;
+  const text = [
+    `Hi ${p.managerFirstName},`,
+    '',
+    `Great news — "${p.companyName}" is now registered on Proconix! We are excited to have you with us.`,
+    '',
+    'Here are your registration details:',
+    `- Company created on: ${p.createdAtFormatted}`,
+    `- Plan selected: ${p.planLabel}`,
+    `- Company ID: ${p.companyId}`,
+    '',
+    'Security information:',
+    `Your security token is: ${p.securityToken}`,
+    "Keep it safe — you'll need it when contacting Proconix support about your account or any changes.",
+    '',
+    'What happens next:',
+    `Your profile will be reviewed and approved by our platform team. If we need anything, we will reach out at ${p.managerEmail}.`,
+    '',
+    'Thank you for choosing Proconix!',
+    '',
+    'Kindest regards,',
+    'Roman Demian',
+    'CEO & Founder, Proconix',
+  ].join('\n');
+
+  const html = buildCompanyWelcomeEmailHtml({
+    managerFirstName: p.managerFirstName,
+    companyName: p.companyName,
+    createdAtFormatted: p.createdAtFormatted,
+    planLabel: p.planLabel,
+    companyId: p.companyId,
+    securityToken: p.securityToken,
+    managerEmail: p.managerEmail,
+  });
+
+  const replyTo = (process.env.SUPPORT_REPLY_EMAIL || process.env.CALLBACK_NOTIFY_EMAIL || '').trim() || undefined;
+
+  await transport.sendMail({
+    from,
+    to,
+    replyTo: replyTo || from,
+    subject,
+    text,
+    html,
+  });
+}
+
 function createTransport() {
   const host = process.env.SMTP_HOST;
   if (!host || !String(host).trim()) {
@@ -210,4 +389,9 @@ async function sendContactUsEmail(payload) {
   });
 }
 
-module.exports = { sendCallbackRequestEmail, sendContactUsEmail, createTransport };
+module.exports = {
+  sendCallbackRequestEmail,
+  sendContactUsEmail,
+  sendCompanyWelcomeEmail,
+  createTransport,
+};
