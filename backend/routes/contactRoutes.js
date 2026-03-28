@@ -1,10 +1,15 @@
 /**
  * Contact API routes.
- * POST /api/contact/request-callback – sends email to CALLBACK_NOTIFY_EMAIL (default: rdemian732@gmail.com).
+ * POST /api/contact/request-callback – sends email to CALLBACK_NOTIFY_EMAIL.
+ * POST /api/contact/book-demo – Book Demo modal on index.html → info@proconix.uk (override: BOOK_DEMO_NOTIFY_EMAIL).
  */
 
 const express = require('express');
-const { sendCallbackRequestEmail, sendContactUsEmail } = require('../lib/sendCallbackRequestEmail');
+const {
+  sendCallbackRequestEmail,
+  sendContactUsEmail,
+  sendBookDemoEmail,
+} = require('../lib/sendCallbackRequestEmail');
 
 const router = express.Router();
 
@@ -122,6 +127,55 @@ router.post('/message', async function (req, res) {
     return res.status(500).json({
       success: false,
       message: 'Failed to send message.',
+      error: err.message,
+    });
+  }
+});
+
+/** POST /api/contact/book-demo — index.html Book Demo modal */
+router.post('/book-demo', async function (req, res) {
+  try {
+    const body = req.body || {};
+    const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : '';
+    const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : '';
+    const email = typeof body.email === 'string' ? body.email.trim() : '';
+    const role = typeof body.role === 'string' ? body.role.trim() : '';
+
+    if (!firstName || firstName.length < 1) {
+      return res.status(400).json({ success: false, message: 'First name is required.' });
+    }
+    if (!lastName || lastName.length < 1) {
+      return res.status(400).json({ success: false, message: 'Last name is required.' });
+    }
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email address is required.' });
+    }
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
+    }
+
+    try {
+      await sendBookDemoEmail({ firstName, lastName, email, role });
+    } catch (mailErr) {
+      if (mailErr && mailErr.code === 'SMTP_NOT_CONFIGURED') {
+        console.error('book-demo: SMTP not configured.');
+        return res.status(503).json({
+          success: false,
+          message: 'Email is not configured on the server. Please email info@proconix.uk directly.',
+        });
+      }
+      throw mailErr;
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Thank you! We will be in touch to schedule your demo.',
+    });
+  } catch (err) {
+    console.error('book-demo error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to submit request.',
       error: err.message,
     });
   }

@@ -274,6 +274,139 @@
   }
 })();
 
+/** Book a demo modal (navbar) → POST /api/contact/book-demo */
+(function () {
+  'use strict';
+
+  var modal = document.getElementById('book-demo-modal');
+  var backdrop = document.getElementById('book-demo-modal-backdrop');
+  var closeBtn = document.getElementById('book-demo-modal-close');
+  var triggerBtn = document.getElementById('btn-book-demo');
+  var form = document.getElementById('book-demo-form');
+  var errorEl = document.getElementById('book-demo-modal-error');
+  var successEl = document.getElementById('book-demo-success');
+  var submitBtn = document.getElementById('book-demo-submit');
+
+  function showError(msg) {
+    if (!errorEl) return;
+    errorEl.textContent = msg || '';
+    errorEl.classList.remove('d-none');
+  }
+
+  function hideError() {
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.classList.add('d-none');
+    }
+  }
+
+  function hideSuccess() {
+    if (successEl) {
+      successEl.textContent = '';
+      successEl.classList.add('d-none');
+    }
+  }
+
+  function openModal() {
+    hideError();
+    hideSuccess();
+    if (form) form.classList.remove('d-none');
+    if (form) form.reset();
+    if (modal) {
+      modal.classList.add('is-open');
+      modal.setAttribute('aria-hidden', 'false');
+      if (triggerBtn) triggerBtn.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  function closeModal() {
+    if (modal) {
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden', 'true');
+      if (triggerBtn) triggerBtn.setAttribute('aria-expanded', 'false');
+    }
+    hideError();
+    hideSuccess();
+    if (form) {
+      form.classList.remove('d-none');
+      form.reset();
+    }
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Request demo';
+    }
+  }
+
+  function setLoading(loading) {
+    if (!submitBtn) return;
+    submitBtn.disabled = loading;
+    submitBtn.textContent = loading ? 'Sending…' : 'Request demo';
+  }
+
+  if (triggerBtn) {
+    triggerBtn.addEventListener('click', function () {
+      openModal();
+    });
+  }
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (backdrop) backdrop.addEventListener('click', closeModal);
+
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      hideError();
+      hideSuccess();
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      var firstName = (document.getElementById('book-demo-first-name') || {}).value;
+      var lastName = (document.getElementById('book-demo-last-name') || {}).value;
+      var email = (document.getElementById('book-demo-email') || {}).value;
+      var roleEl = document.getElementById('book-demo-role');
+      var role = roleEl && roleEl.value ? roleEl.value : '';
+
+      setLoading(true);
+      fetch('/api/contact/book-demo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          firstName: (firstName || '').trim(),
+          lastName: (lastName || '').trim(),
+          email: (email || '').trim(),
+          role: (role || '').trim(),
+        }),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { ok: res.ok, status: res.status, data: data };
+          });
+        })
+        .then(function (result) {
+          setLoading(false);
+          if (result.ok && result.data && result.data.success) {
+            form.classList.add('d-none');
+            if (successEl) {
+              successEl.textContent =
+                result.data.message ||
+                'Thank you! We will be in touch to schedule your demo.';
+              successEl.classList.remove('d-none');
+            }
+            window.setTimeout(closeModal, 3200);
+          } else {
+            showError(
+              (result.data && result.data.message) || 'Something went wrong. Please try again.'
+            );
+          }
+        })
+        .catch(function () {
+          setLoading(false);
+          showError('Request failed. Please try again or email info@proconix.uk.');
+        });
+    });
+  }
+})();
+
 // Scroll animations for landing page (cursor effects removed)
 (function () {
   'use strict';

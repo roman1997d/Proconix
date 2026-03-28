@@ -1126,6 +1126,30 @@ body {
   color: rgba(255, 255, 255, 0.4);
 }
 
+.book-demo-dialog {
+  max-width: 480px;
+}
+
+.operative-form .form-select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: var(--white);
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  width: 100%;
+}
+
+.operative-form .form-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(99, 179, 237, 0.3);
+}
+
+.operative-form .form-select option {
+  color: #0f172a;
+  background: #fff;
+}
+
 .operative-form .form-text {
   color: rgba(255, 255, 255, 0.5);
   font-size: 0.8rem;

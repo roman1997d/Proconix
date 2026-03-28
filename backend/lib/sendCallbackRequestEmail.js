@@ -707,9 +707,61 @@ async function sendContactUsEmail(payload) {
   });
 }
 
+/**
+ * Home page “Book demo” modal → info@proconix.uk by default (or BOOK_DEMO_NOTIFY_EMAIL / CALLBACK_NOTIFY_EMAIL).
+ * @param {{ firstName: string, lastName: string, email: string, role: string }} payload
+ */
+async function sendBookDemoEmail(payload) {
+  const { firstName, lastName, email, role } = payload;
+  const to = (process.env.BOOK_DEMO_NOTIFY_EMAIL || 'info@proconix.uk').trim();
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const fullName = `${firstName} ${lastName}`.trim();
+
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send book demo email.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+
+  const roleDisplay = role && String(role).trim() ? String(role).trim() : 'Not specified';
+  const subject = `Proconix — Book a demo: ${fullName}`;
+  const text = [
+    'New “Book a demo” request (index.html)',
+    '',
+    `First name: ${firstName}`,
+    `Last name: ${lastName}`,
+    `Email: ${email}`,
+    `Role: ${roleDisplay}`,
+  ].join('\n');
+
+  const html = buildProconixEmailHtml({
+    preheader: `${fullName} wants a demo — ${email}`,
+    badge: 'Website · Book a demo',
+    title: 'Someone booked a demo',
+    subtitle: 'Submitted from the home page. Reply to reach them directly.',
+    rows: [
+      { label: 'First name', value: firstName },
+      { label: 'Last name', value: lastName },
+      { label: 'Email', value: email },
+      { label: 'Role', value: roleDisplay },
+    ],
+  });
+
+  await transport.sendMail({
+    from,
+    to,
+    replyTo: email,
+    subject,
+    text,
+    html,
+  });
+}
+
 module.exports = {
   sendCallbackRequestEmail,
   sendContactUsEmail,
+  sendBookDemoEmail,
   sendCompanyWelcomeEmail,
   sendManagerAccountActivatedEmail,
   sendOperativeWelcomeEmail,

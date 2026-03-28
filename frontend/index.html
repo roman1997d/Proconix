@@ -40,6 +40,17 @@
       <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
         <ul class="navbar-nav align-items-lg-center gap-2 gap-lg-3">
           <li class="nav-item">
+            <button
+              type="button"
+              class="nav-link btn-nav btn-nav-primary border-0 bg-transparent text-start text-lg-center"
+              id="btn-book-demo"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+            >
+              Book Demo
+            </button>
+          </li>
+          <li class="nav-item">
             <a class="nav-link btn-nav" href="/register_company.html">Register a Company</a>
           </li>
           <li class="nav-item">
@@ -255,6 +266,55 @@
       </div>
     </div>
   </footer>
+
+  <!-- Book a demo modal -->
+  <div class="operative-login-modal" id="book-demo-modal" role="dialog" aria-labelledby="book-demo-modal-title" aria-modal="true" aria-hidden="true">
+    <div class="operative-login-backdrop" id="book-demo-modal-backdrop"></div>
+    <div class="operative-login-dialog book-demo-dialog">
+      <div class="operative-login-content">
+        <div class="operative-login-header">
+          <h2 class="operative-login-title" id="book-demo-modal-title">Book a demo</h2>
+          <button type="button" class="operative-login-close" id="book-demo-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="operative-login-body">
+          <p id="book-demo-modal-error" class="operative-login-error d-none" role="alert"></p>
+          <p class="text-white-50 small mb-3">
+            Tell us who you are — we will email you from <strong class="text-white-50">info@proconix.uk</strong> to schedule a short walkthrough.
+          </p>
+          <form id="book-demo-form" class="operative-form" novalidate>
+            <div class="row g-2">
+              <div class="col-md-6 mb-2 mb-md-3">
+                <label for="book-demo-first-name" class="form-label">First name <span class="text-danger">*</span></label>
+                <input type="text" id="book-demo-first-name" name="firstName" class="form-control" required autocomplete="given-name" minlength="1" maxlength="80" placeholder="Jane">
+              </div>
+              <div class="col-md-6 mb-2 mb-md-3">
+                <label for="book-demo-last-name" class="form-label">Last name <span class="text-danger">*</span></label>
+                <input type="text" id="book-demo-last-name" name="lastName" class="form-control" required autocomplete="family-name" minlength="1" maxlength="80" placeholder="Smith">
+              </div>
+            </div>
+            <div class="mb-3">
+              <label for="book-demo-email" class="form-label">Work email <span class="text-danger">*</span></label>
+              <input type="email" id="book-demo-email" name="email" class="form-control" required autocomplete="email" placeholder="name@company.com">
+            </div>
+            <div class="mb-3">
+              <label for="book-demo-role" class="form-label">Your role <span class="text-white-50 small">(optional)</span></label>
+              <select id="book-demo-role" name="role" class="form-select">
+                <option value="">— Select if you like —</option>
+                <option value="Manager">Manager</option>
+                <option value="Company owner / Director">Company owner / Director</option>
+                <option value="Estimator / QS">Estimator / QS</option>
+                <option value="Site supervisor">Site supervisor</option>
+                <option value="Operative lead">Operative lead</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <button type="submit" class="btn operative-btn-primary w-100" id="book-demo-submit">Request demo</button>
+          </form>
+          <p id="book-demo-success" class="text-success small mt-3 mb-0 d-none" role="status"></p>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Operative login modal (step-based) -->
   <div class="operative-login-modal" id="operative-login-modal" role="dialog" aria-labelledby="operative-modal-title" aria-modal="true" aria-hidden="true">
