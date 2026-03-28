@@ -194,6 +194,16 @@
   }
 }
 
+/*
+ * iPad (and large tablets) in landscape often exceed 992px width but still use touch + WebKit;
+ * Chrome iOS can collapse flex iframes to ~0 height without an explicit floor.
+ */
+@media (hover: none) and (pointer: coarse) {
+  .dashboard-qa-iframe {
+    min-height: min(75dvh, 900px);
+  }
+}
+
 /* ===== Module placeholder (for simple module views) ===== */
 .module-placeholder {
   padding: var(--gap);

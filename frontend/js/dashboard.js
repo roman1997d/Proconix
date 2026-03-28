@@ -121,6 +121,30 @@
     }
   }
 
+  /** Resolve iframe module HTML path against current page (works with subpaths; avoids bad relative resolution). */
+  function iframeModuleSrc(filename) {
+    try {
+      return new URL(filename, window.location.href).href;
+    } catch (_) {
+      return filename;
+    }
+  }
+
+  function postSiteSnagsSessionToFrame(snIframe) {
+    if (!snIframe || !snIframe.contentWindow) return;
+    var session = getSession();
+    try {
+      if (session) {
+        snIframe.contentWindow.postMessage(
+          { type: 'proconix_site_snags_session', session: session },
+          window.location.origin
+        );
+      }
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
   function loadModule(module, pushState) {
     if (!contentEl) return;
 
@@ -129,7 +153,9 @@
       setActiveItem(module);
       updateHeaderTitle(module);
       contentEl.innerHTML =
-        '<iframe src="Task_Planning.html" class="dashboard-qa-iframe" title="Task &amp; Planning"></iframe>';
+        '<iframe src="' +
+        iframeModuleSrc('Task_Planning.html') +
+        '" class="dashboard-qa-iframe" title="Task &amp; Planning"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
       if (pushState !== false) history.pushState({ module: module }, '', '#');
@@ -140,7 +166,10 @@
       contentEl.classList.add('dashboard-content-fade-out');
       setActiveItem(module);
       updateHeaderTitle(module);
-      contentEl.innerHTML = '<iframe src="Quality_Assurance.html" class="dashboard-qa-iframe" title="Quality Assurance Module"></iframe>';
+      contentEl.innerHTML =
+        '<iframe src="' +
+        iframeModuleSrc('Quality_Assurance.html') +
+        '" class="dashboard-qa-iframe" title="Quality Assurance Module"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
       if (pushState !== false) history.pushState({ module: module }, '', '#');
@@ -150,7 +179,10 @@
       contentEl.classList.add('dashboard-content-fade-out');
       setActiveItem(module);
       updateHeaderTitle(module);
-      contentEl.innerHTML = '<iframe src="manage_material.html" class="dashboard-qa-iframe" title="Material Management"></iframe>';
+      contentEl.innerHTML =
+        '<iframe src="' +
+        iframeModuleSrc('manage_material.html') +
+        '" class="dashboard-qa-iframe" title="Material Management"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
       if (pushState !== false) history.pushState({ module: module }, '', '#');
@@ -162,24 +194,19 @@
       setActiveItem(module);
       updateHeaderTitle(module);
       contentEl.innerHTML =
-        '<iframe id="iframe-site-snags" src="Site_Snags.html" class="dashboard-qa-iframe" title="Site Snags"></iframe>';
+        '<iframe id="iframe-site-snags" src="' +
+        iframeModuleSrc('Site_Snags.html') +
+        '" class="dashboard-qa-iframe" title="Site Snags"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
       var snIframe = document.getElementById('iframe-site-snags');
       if (snIframe) {
         snIframe.addEventListener('load', function onSiteSnagsFrameLoad() {
           snIframe.removeEventListener('load', onSiteSnagsFrameLoad);
-          var session = getSession();
-          try {
-            if (session && snIframe.contentWindow) {
-              snIframe.contentWindow.postMessage(
-                { type: 'proconix_site_snags_session', session: session },
-                window.location.origin
-              );
-            }
-          } catch (err) {
-            /* ignore */
-          }
+          postSiteSnagsSessionToFrame(snIframe);
+          window.setTimeout(function () {
+            postSiteSnagsSessionToFrame(snIframe);
+          }, 150);
         });
       }
       if (pushState !== false) history.pushState({ module: module }, '', '#');
@@ -190,7 +217,10 @@
       contentEl.classList.add('dashboard-content-fade-out');
       setActiveItem(module);
       updateHeaderTitle(module);
-      contentEl.innerHTML = '<iframe src="Profile_Settings.html" class="dashboard-qa-iframe" title="Profile Settings"></iframe>';
+      contentEl.innerHTML =
+        '<iframe src="' +
+        iframeModuleSrc('Profile_Settings.html') +
+        '" class="dashboard-qa-iframe" title="Profile Settings"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
       if (pushState !== false) history.pushState({ module: module }, '', '#');
@@ -202,7 +232,9 @@
       setActiveItem(module);
       updateHeaderTitle(module);
       contentEl.innerHTML =
-        '<iframe src="my_company_settings.html" class="dashboard-qa-iframe" title="My Company Settings"></iframe>';
+        '<iframe src="' +
+        iframeModuleSrc('my_company_settings.html') +
+        '" class="dashboard-qa-iframe" title="My Company Settings"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
       if (pushState !== false) history.pushState({ module: module }, '', '#');
