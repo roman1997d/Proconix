@@ -378,7 +378,7 @@
     <div class="ss-canvas-col">
       <div class="ss-canvas-toolbar d-flex align-items-center">
         <span class="text-secondary small me-2" id="locationMeta">No drawing loaded</span>
-        <span class="text-muted small ms-auto" id="hintPan">Drag to pan · Wheel to zoom</span>
+        <span class="text-muted small ms-auto" id="hintPan">Drag or one finger to pan · Wheel or pinch to zoom</span>
       </div>
       <div class="ss-viewport" id="viewport">
         <div class="ss-empty-drawing" id="emptyDrawing">
@@ -679,6 +679,10 @@
   var panning = false;
   var snapZoneDragging = false;
   var lastPan = { x: 0, y: 0 };
+  /** Pointer Events: viewport pan (1 contact) + pinch-zoom (2 contacts). */
+  var ssPointers = new Map();
+  var panPointerId = null;
+  var pinchLastDist = 0;
   var selectedSnagId = null;
   var pendingPhotosBefore = [];
   var pendingPhotosAfter = [];
@@ -2137,6 +2141,32 @@
     return t === 'distance' || t === 'area' || t === 'circle' || t === 'marker' || t === 'flag' || t === 'snapzone';
   }
 
+  function getDefaultPanZoomHint() {
+    return 'Drag or one finger to pan · Wheel or pinch to zoom';
+  }
+
+  function ssPointerDistance(a, b) {
+    var dx = b.x - a.x;
+    var dy = b.y - a.y;
+    return Math.sqrt(dx * dx + dy * dy) || 0;
+  }
+
+  /**
+   * Zoom toward (mx, my) in viewport-local pixels (0..width, 0..height).
+   * Matches stage transform: translate from viewport centre + pan, scale from stage centre.
+   */
+  function zoomStageTowardViewportPoint(newScale, mx, my, vp) {
+    var rect = vp.getBoundingClientRect();
+    var cx = rect.width / 2;
+    var cy = rect.height / 2;
+    var clamped = Math.max(0.25, Math.min(4, newScale));
+    var zoomFactor = clamped / view.scale;
+    if (!isFinite(zoomFactor) || zoomFactor <= 0) return;
+    view.panX = mx - cx - (mx - cx - view.panX) * zoomFactor;
+    view.panY = my - cy - (my - cy - view.panY) * zoomFactor;
+    view.scale = clamped;
+  }
+
   function updateMeasureToolbar() {
     var fd = document.getElementById('btnFinishArea');
     if (fd) {
@@ -2174,7 +2204,7 @@
     syncPointerLayersClass();
     updateMeasureToolbar();
     var hint = document.getElementById('hintPan');
-    if (hint) hint.textContent = 'Drag to pan · Wheel to zoom';
+    if (hint) hint.textContent = getDefaultPanZoomHint();
     renderMeasurementCanvas();
     renderHighlightCanvas();
   }
@@ -2200,7 +2230,7 @@
     if (hint) {
       hint.textContent = tool
         ? 'Measure: snap to pins · Area: double-click to finish · Pan/zoom disabled while tool is on'
-        : 'Drag to pan · Wheel to zoom';
+        : getDefaultPanZoomHint();
     }
     renderMeasurementCanvas();
     renderHighlightCanvas();
@@ -2234,7 +2264,7 @@
       } else if (tool === 'snapzone') {
         hint.textContent = 'Zone snapshot: click-drag a rectangle, release to download PNG · No pan/zoom';
       } else {
-        hint.textContent = 'Drag to pan · Wheel to zoom';
+        hint.textContent = getDefaultPanZoomHint();
       }
     }
     renderMeasurementCanvas();
@@ -3424,24 +3454,110 @@
       updateStageTransform();
     }, { passive: false });
 
-    vp.addEventListener('mousedown', function (e) {
-      if (isBlockingPanZoom()) return;
+    function onViewportPointerDown(e) {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
       if (e.target.closest('.ss-pin')) return;
-      if (view.addPinMode) return;
-      panning = true;
-      lastPan = { x: e.clientX, y: e.clientY };
-      vp.classList.add('panning');
-    });
-    window.addEventListener('mousemove', function (e) {
-      if (!panning) return;
-      view.panX += e.clientX - lastPan.x;
-      view.panY += e.clientY - lastPan.y;
-      lastPan = { x: e.clientX, y: e.clientY };
-      updateStageTransform();
-    });
-    window.addEventListener('mouseup', function () {
-      panning = false;
-      vp.classList.remove('panning');
+      if (isBlockingPanZoom() || view.addPinMode) return;
+
+      ssPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (ssPointers.size === 1) {
+        panPointerId = e.pointerId;
+        lastPan = { x: e.clientX, y: e.clientY };
+        panning = true;
+        pinchLastDist = 0;
+        vp.classList.add('panning');
+        try {
+          vp.setPointerCapture(e.pointerId);
+        } catch (err) {}
+      } else if (ssPointers.size === 2) {
+        panning = false;
+        panPointerId = null;
+        vp.classList.remove('panning');
+        var arr0 = Array.from(ssPointers.values());
+        pinchLastDist = ssPointerDistance(arr0[0], arr0[1]);
+        try {
+          vp.setPointerCapture(e.pointerId);
+        } catch (err2) {}
+      }
+    }
+
+    function onViewportPointerMove(e) {
+      if (!ssPointers.has(e.pointerId)) return;
+      var ent = ssPointers.get(e.pointerId);
+      ent.x = e.clientX;
+      ent.y = e.clientY;
+
+      if (ssPointers.size >= 2) {
+        if (isBlockingPanZoom() || view.addPinMode) return;
+        e.preventDefault();
+        var arr = Array.from(ssPointers.values());
+        var d = ssPointerDistance(arr[0], arr[1]);
+        var rect = vp.getBoundingClientRect();
+        var mx = (arr[0].x + arr[1].x) / 2 - rect.left;
+        var my = (arr[0].y + arr[1].y) / 2 - rect.top;
+        if (pinchLastDist >= 10 && d >= 10) {
+          var raw = d / pinchLastDist;
+          if (isFinite(raw) && raw > 0) {
+            var ratio = Math.max(0.5, Math.min(2, raw));
+            zoomStageTowardViewportPoint(view.scale * ratio, mx, my, vp);
+            updateStageTransform();
+          }
+        }
+        pinchLastDist = d;
+        return;
+      }
+
+      if (ssPointers.size === 1 && panning && e.pointerId === panPointerId) {
+        if (isBlockingPanZoom() || view.addPinMode) return;
+        if (e.pointerType === 'mouse' && e.buttons !== 1) return;
+        e.preventDefault();
+        view.panX += e.clientX - lastPan.x;
+        view.panY += e.clientY - lastPan.y;
+        lastPan = { x: e.clientX, y: e.clientY };
+        updateStageTransform();
+      }
+    }
+
+    function onViewportPointerUp(e) {
+      if (!ssPointers.has(e.pointerId)) return;
+      ssPointers.delete(e.pointerId);
+      try {
+        vp.releasePointerCapture(e.pointerId);
+      } catch (err) {}
+
+      if (ssPointers.size === 0) {
+        panning = false;
+        panPointerId = null;
+        pinchLastDist = 0;
+        vp.classList.remove('panning');
+      } else if (ssPointers.size === 1) {
+        pinchLastDist = 0;
+        var one = ssPointers.entries().next().value;
+        if (one) {
+          panPointerId = one[0];
+          var p = one[1];
+          lastPan = { x: p.x, y: p.y };
+          var canPan = !isBlockingPanZoom() && !view.addPinMode;
+          panning = canPan;
+          if (panning) {
+            vp.classList.add('panning');
+            try {
+              vp.setPointerCapture(panPointerId);
+            } catch (err2) {}
+          } else {
+            vp.classList.remove('panning');
+          }
+        }
+      }
+    }
+
+    vp.addEventListener('pointerdown', onViewportPointerDown);
+    vp.addEventListener('pointermove', onViewportPointerMove, { passive: false });
+    vp.addEventListener('pointerup', onViewportPointerUp);
+    vp.addEventListener('pointercancel', onViewportPointerUp);
+    vp.addEventListener('lostpointercapture', function (e) {
+      if (ssPointers.has(e.pointerId)) onViewportPointerUp(e);
     });
 
     vp.addEventListener('click', onViewportClick);

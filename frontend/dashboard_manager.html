@@ -39,13 +39,14 @@
 
   <!-- Dashboard app: shown only when access is granted -->
   <div id="dashboard-app" class="d-none">
-  <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle menu">
+  <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="manager-sidebar">
     <i class="bi bi-list"></i>
   </button>
   <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
 
-  <aside class="sidebar">
+  <aside class="sidebar" id="manager-sidebar" aria-label="Module navigation">
     <div class="sidebar-brand">
+      <i class="bi bi-columns-gap sidebar-brand-icon" aria-hidden="true"></i>
       <span class="sidebar-logo">Proconix</span>
     </div>
     <nav class="sidebar-nav">

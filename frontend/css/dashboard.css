@@ -212,12 +212,13 @@
   text-decoration: underline;
 }
 
-/* ===== Sidebar toggle (mobile) ===== */
+/* ===== Sidebar toggle (mobile / narrow — menu slides from left) ===== */
 .sidebar-toggle {
   display: none;
   position: fixed;
   top: 16px;
   left: 16px;
+  right: auto;
   z-index: 201;
   width: 44px;
   height: 44px;
@@ -241,7 +242,7 @@
   font-size: 1.25rem;
 }
 
-/* ===== Collapsible sidebar (mobile) ===== */
+/* ===== Off-canvas sidebar from the left (tablet / phone) ===== */
 @media (max-width: 991.98px) {
   #dashboard-app {
     flex-direction: row;
@@ -251,21 +252,57 @@
     display: flex;
   }
 
+  #dashboard-app .main-wrap {
+    padding-left: 0;
+    padding-right: 0;
+    min-width: 100%;
+  }
+
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
-    width: var(--sidebar-width);
+    right: auto;
+    width: min(var(--sidebar-expanded-width), 88vw);
     height: 100vh;
     z-index: 200;
     transform: translateX(-100%);
-    transition: transform 0.3s ease;
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.45);
     flex-shrink: 0;
+    border-right: 1px solid var(--divider);
   }
 
   .sidebar.sidebar-open {
     transform: translateX(0);
+  }
+
+  /* Full labels while drawer is open (touch / narrow) */
+  .sidebar .sidebar-logo,
+  .sidebar .sidebar-item span {
+    opacity: 1;
+    max-width: 280px;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .sidebar .sidebar-brand {
+    justify-content: flex-start;
+    padding: 16px 18px;
+  }
+
+  .sidebar .sidebar-item {
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+  }
+
+  .sidebar .sidebar-nav {
+    padding: 12px 14px;
+  }
+
+  .sidebar .sidebar-footer {
+    padding: 12px 14px 20px;
   }
 
   .sidebar-overlay {
@@ -280,13 +317,8 @@
     display: block;
   }
 
-  .main-wrap {
-    padding-left: 0;
-    min-width: 100%;
-  }
-
   .dashboard-header {
-    padding-left: 60px; /* space for toggle button */
+    padding-left: 60px; /* space for toggle (top-left) */
   }
 }
 

@@ -19,6 +19,10 @@
   --radius-pill: 12px;
   --gap: 24px;
   --sidebar-width: 260px;
+  --sidebar-rail-width: 56px;
+  --sidebar-expanded-width: 260px;
+  --sidebar-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --sidebar-animate: 0.25s var(--sidebar-ease);
   --input-bg: #2D2D2D;
   --input-placeholder: #8A8A8A;
   --row-alt: #2F2F2F;
@@ -43,44 +47,125 @@ body.dashboard-manager {
   display: flex;
 }
 
-/* ===== Sidebar ===== */
+/* ===== Sidebar (left rail: icons always; labels on hover / focus-within) ===== */
 .sidebar {
-  width: var(--sidebar-width);
+  width: var(--sidebar-rail-width);
   min-height: 100vh;
+  height: 100vh;
   background: var(--bg-sidebar);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: auto;
+  z-index: 90;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border-right: 1px solid var(--divider);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
+  transition: width var(--sidebar-animate), box-shadow var(--sidebar-animate);
+}
+
+/* Desktop / fine pointer: expand on hover or keyboard focus inside rail */
+@media (hover: hover) and (pointer: fine) {
+  .sidebar:hover,
+  .sidebar:focus-within {
+    width: var(--sidebar-expanded-width);
+    box-shadow: 12px 0 40px rgba(0, 0, 0, 0.35);
+  }
 }
 
 .sidebar-brand {
-  padding: var(--gap);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 8px;
   border-bottom: 1px solid var(--divider);
+  flex-shrink: 0;
+  min-height: 56px;
+  transition: justify-content var(--sidebar-animate), padding var(--sidebar-animate);
+}
+
+.sidebar-brand-icon {
+  font-size: 1.35rem;
+  color: var(--accent);
+  flex-shrink: 0;
 }
 
 .sidebar-logo {
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 700;
   color: var(--text-white);
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 0;
+  max-width: 0;
+  transform: translateX(-6px);
+  transition: opacity var(--sidebar-animate), max-width var(--sidebar-animate), transform var(--sidebar-animate);
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar:hover .sidebar-brand,
+  .sidebar:focus-within .sidebar-brand {
+    justify-content: flex-start;
+    padding: 16px 18px;
+  }
+
+  .sidebar:hover .sidebar-logo,
+  .sidebar:focus-within .sidebar-logo {
+    opacity: 1;
+    max-width: 200px;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
 }
 
 .sidebar-nav {
   flex: 1;
-  padding: var(--gap) 16px;
+  padding: 12px 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  transition: padding var(--sidebar-animate);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar:hover .sidebar-nav,
+  .sidebar:focus-within .sidebar-nav {
+    padding: 12px 14px;
+  }
 }
 
 .sidebar-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  justify-content: center;
+  gap: 0;
+  padding: 12px 10px;
   color: var(--text-secondary);
   text-decoration: none;
   border-radius: var(--radius-pill);
-  transition: background var(--transition), color var(--transition), filter var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition),
+    filter var(--transition),
+    gap var(--sidebar-animate),
+    padding var(--sidebar-animate),
+    justify-content var(--sidebar-animate);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar:hover .sidebar-item,
+  .sidebar:focus-within .sidebar-item {
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+  }
 }
 
 .sidebar-item:hover {
@@ -96,11 +181,86 @@ body.dashboard-manager {
 .sidebar-item i {
   font-size: 1.2rem;
   flex-shrink: 0;
+  width: 1.35rem;
+  text-align: center;
+}
+
+.sidebar-item span {
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 0;
+  max-width: 0;
+  transform: translateX(-6px);
+  transition: opacity var(--sidebar-animate), max-width var(--sidebar-animate), transform var(--sidebar-animate);
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar:hover .sidebar-item span,
+  .sidebar:focus-within .sidebar-item span {
+    opacity: 1;
+    max-width: 220px;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
 }
 
 .sidebar-footer {
-  padding: var(--gap) 16px;
+  padding: 12px 8px 20px;
   border-top: 1px solid var(--divider);
+  flex-shrink: 0;
+  transition: padding var(--sidebar-animate);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sidebar:hover .sidebar-footer,
+  .sidebar:focus-within .sidebar-footer {
+    padding: 12px 14px 20px;
+  }
+}
+
+/* Large touch screens: no hover — keep full labels and expanded width */
+@media (hover: none) and (min-width: 992px) {
+  .sidebar {
+    width: var(--sidebar-expanded-width);
+  }
+
+  #dashboard-app .main-wrap {
+    padding-left: var(--sidebar-expanded-width);
+  }
+
+  .sidebar .sidebar-brand {
+    justify-content: flex-start;
+    padding: 16px 18px;
+  }
+
+  .sidebar .sidebar-logo {
+    opacity: 1;
+    max-width: 200px;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .sidebar .sidebar-nav {
+    padding: 12px 14px;
+  }
+
+  .sidebar .sidebar-item {
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+  }
+
+  .sidebar .sidebar-item span {
+    opacity: 1;
+    max-width: 220px;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .sidebar .sidebar-footer {
+    padding: 12px 14px 20px;
+  }
 }
 
 /* ===== Main area (flex child of #dashboard-app) ===== */
@@ -111,6 +271,9 @@ body.dashboard-manager {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Reserve space for fixed left rail (desktop) */
+  padding-left: var(--sidebar-rail-width);
+  transition: padding-left var(--sidebar-animate);
 }
 
 /* ===== Header ===== */
@@ -491,37 +654,6 @@ body.dashboard-manager {
 @media (max-width: 768px) {
   body.dashboard-manager {
     flex-direction: column;
-  }
-
-  .sidebar {
-    width: 100%;
-    min-height: auto;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    padding: 12px;
-  }
-
-  .sidebar-brand {
-    border-bottom: none;
-    padding: 8px 0;
-  }
-
-  .sidebar-nav {
-    flex: 1 1 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    padding: 8px 0;
-    gap: 8px;
-  }
-
-  .sidebar-footer {
-    padding: 8px 0;
-    border-top: none;
-  }
-
-  .sidebar-item span {
-    display: none;
   }
 
   .stat-cards {

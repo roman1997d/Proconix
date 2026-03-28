@@ -99,52 +99,64 @@
 
         <!-- Right Section – Product preview & motion -->
         <div class="col-lg-6">
-          <div class="building-container hero-visual reveal-on-scroll" data-reveal="fade-left" aria-hidden="true">
+          <div
+            class="building-container building-container--hero-desktop hero-visual reveal-on-scroll"
+            data-reveal="fade-left"
+            aria-hidden="true"
+          >
             <div class="construction-clouds">
               <div class="cloud cloud-1"></div>
               <div class="cloud cloud-2"></div>
               <div class="cloud cloud-3"></div>
             </div>
-            <div class="hero-dashboard-shell">
-              <div class="hero-dashboard-header">
-                <span class="hero-pill hero-pill-green">Live project overview</span>
-                <span class="hero-pill hero-pill-blue">Work logs & QA</span>
+            <div class="hero-desktop-frame">
+              <div class="hero-desktop-chrome" aria-hidden="true">
+                <span class="hero-desktop-traffic">
+                  <i></i><i></i><i></i>
+                </span>
+                <span class="hero-desktop-url">proconix.uk/dashboard</span>
               </div>
-              <div class="hero-dashboard-body">
-                <div class="hero-dashboard-left">
-                  <p class="hero-metric-label">Approved work value (this month)</p>
-                  <p class="hero-metric-value">£148,920</p>
-                  <p class="hero-metric-sub">+24% vs last month</p>
-                  <div class="hero-metric-row">
-                    <div class="hero-metric-card">
-                      <span class="hero-metric-small-label">Open QA jobs</span>
-                      <span class="hero-metric-small-value">37</span>
-                    </div>
-                    <div class="hero-metric-card">
-                      <span class="hero-metric-small-label">Sites on schedule</span>
-                      <span class="hero-metric-small-value hero-positive">12 / 14</span>
-                    </div>
-                  </div>
+              <div class="hero-dashboard-shell">
+                <div class="hero-dashboard-header">
+                  <span class="hero-pill hero-pill-green">Live project overview</span>
+                  <span class="hero-pill hero-pill-blue">Work logs & QA</span>
                 </div>
-                <div class="hero-dashboard-right">
-                  <div class="hero-list-heading">
-                    <span>Today on site</span>
-                    <span class="hero-badge">Real-time</span>
+                <div class="hero-dashboard-body">
+                  <div class="hero-dashboard-left">
+                    <p class="hero-metric-label">Approved work value (this month)</p>
+                    <p class="hero-metric-value">£148,920</p>
+                    <p class="hero-metric-sub">+24% vs last month</p>
+                    <div class="hero-metric-row">
+                      <div class="hero-metric-card">
+                        <span class="hero-metric-small-label">Open QA jobs</span>
+                        <span class="hero-metric-small-value">37</span>
+                      </div>
+                      <div class="hero-metric-card">
+                        <span class="hero-metric-small-label">Sites on schedule</span>
+                        <span class="hero-metric-small-value hero-positive">12 / 14</span>
+                      </div>
+                    </div>
                   </div>
-                  <ul class="hero-list">
-                    <li class="hero-list-item">
-                      <span class="hero-list-title">Block A – concrete works</span>
-                      <span class="hero-list-meta">8 operatives · 4 work logs pending approval</span>
-                    </li>
-                    <li class="hero-list-item">
-                      <span class="hero-list-title">QA punch list – Tower 2</span>
-                      <span class="hero-list-meta">12 items open · 5 due today</span>
-                    </li>
-                    <li class="hero-list-item">
-                      <span class="hero-list-title">Materials – Project Riverside</span>
-                      <span class="hero-list-meta">3 critical materials · reorder suggested</span>
-                    </li>
-                  </ul>
+                  <div class="hero-dashboard-right">
+                    <div class="hero-list-heading">
+                      <span>Today on site</span>
+                      <span class="hero-badge">Real-time</span>
+                    </div>
+                    <ul class="hero-list">
+                      <li class="hero-list-item">
+                        <span class="hero-list-title">Block A – concrete works</span>
+                        <span class="hero-list-meta">8 operatives · 4 work logs pending approval</span>
+                      </li>
+                      <li class="hero-list-item">
+                        <span class="hero-list-title">QA punch list – Tower 2</span>
+                        <span class="hero-list-meta">12 items open · 5 due today</span>
+                      </li>
+                      <li class="hero-list-item">
+                        <span class="hero-list-title">Materials – Project Riverside</span>
+                        <span class="hero-list-meta">3 critical materials · reorder suggested</span>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </div>
@@ -152,11 +164,188 @@
         </div>
       </div>
 
+      <!-- App mockups: operative mobile + manager desktop -->
+      <section
+        class="landing-section app-mockups-section mt-5 pt-lg-4 reveal-on-scroll"
+        data-reveal="fade-up"
+        aria-labelledby="app-mockups-heading"
+      >
+        <div class="text-center text-lg-start mb-4 mb-lg-5">
+          <span class="hero-eyebrow mb-2 d-inline-block">Designed for the field and the office</span>
+          <h2 id="app-mockups-heading" class="app-mockups-title mb-3">
+            Mobile for operatives. Desktop for managers.
+          </h2>
+          <p class="app-mockups-lead text-white-50 mb-0 mx-auto mx-lg-0">
+            On site, operatives use a focused pocket experience—tasks, work logs and updates without clutter.
+            In the office, managers get the full dashboard to approve work, run QA and steer every project.
+          </p>
+        </div>
+        <div class="row g-5 align-items-end justify-content-center">
+          <div class="col-12 col-lg-4 d-flex justify-content-center justify-content-lg-start">
+            <div class="app-mockup-column">
+              <p class="app-mockup-label mb-3">
+                <span class="app-mockup-badge app-mockup-badge--op">Operative</span>
+                Mobile interface
+              </p>
+              <div
+                class="app-mockup-phone"
+                role="img"
+                aria-label="Illustration of the Proconix operative mobile app: project, tasks and work log"
+              >
+                <div class="app-mockup-phone-notch" aria-hidden="true"></div>
+                <div class="app-mockup-phone-screen">
+                  <header class="am-op-top">
+                    <span class="am-op-project">Riverside Towers</span>
+                    <span class="am-op-greet">Good morning, Alex</span>
+                  </header>
+                  <div class="am-op-highlight">
+                    <span class="am-op-highlight-label">Next up</span>
+                    <strong class="am-op-highlight-title">Submit work log</strong>
+                    <span class="am-op-highlight-meta">Block B · Boarding · 120 m²</span>
+                  </div>
+                  <ul class="am-op-list" aria-hidden="true">
+                    <li class="am-op-item am-op-item--done">
+                      <span class="am-op-check">✓</span>
+                      <span>Site induction</span>
+                    </li>
+                    <li class="am-op-item">
+                      <span class="am-op-dot"></span>
+                      <span>QA photos · Level 4</span>
+                    </li>
+                    <li class="am-op-item">
+                      <span class="am-op-dot"></span>
+                      <span>Materials check · Unit 2</span>
+                    </li>
+                  </ul>
+                  <div class="am-op-cta" aria-hidden="true">+ New work log</div>
+                  <nav class="am-op-tabbar" aria-hidden="true">
+                    <span class="am-op-tab am-op-tab--active">Home</span>
+                    <span class="am-op-tab">Tasks</span>
+                    <span class="am-op-tab">Logs</span>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-lg-8">
+            <p class="app-mockup-label mb-3 text-center text-lg-start">
+              <span class="app-mockup-badge app-mockup-badge--mgr">Manager</span>
+              Desktop dashboard
+            </p>
+            <div
+              class="app-mockup-desktop"
+              role="img"
+              aria-label="Illustration of the Proconix manager desktop dashboard with approvals and work logs"
+            >
+              <div class="am-dt-chrome" aria-hidden="true">
+                <span class="am-dt-traffic">
+                  <i></i><i></i><i></i>
+                </span>
+                <span class="am-dt-url">proconix.uk/dashboard</span>
+              </div>
+              <div class="am-dt-shell">
+                <aside class="am-dt-sidebar" aria-hidden="true">
+                  <span class="am-dt-ico am-dt-ico--active"></span>
+                  <span class="am-dt-ico"></span>
+                  <span class="am-dt-ico"></span>
+                  <span class="am-dt-ico"></span>
+                </aside>
+                <div class="am-dt-main">
+                  <div class="am-dt-topbar">
+                    <span class="am-dt-title">Manager overview</span>
+                    <span class="am-dt-pill">Live</span>
+                  </div>
+                  <div class="am-dt-kpis">
+                    <div class="am-dt-kpi">
+                      <span class="am-dt-kpi-label">Pending approvals</span>
+                      <strong class="am-dt-kpi-val">14</strong>
+                    </div>
+                    <div class="am-dt-kpi">
+                      <span class="am-dt-kpi-label">Active projects</span>
+                      <strong class="am-dt-kpi-val">12</strong>
+                    </div>
+                    <div class="am-dt-kpi">
+                      <span class="am-dt-kpi-label">Open QA jobs</span>
+                      <strong class="am-dt-kpi-val">37</strong>
+                    </div>
+                  </div>
+                  <div class="am-dt-panel">
+                    <div class="am-dt-panel-h">Recent work logs</div>
+                    <div class="am-dt-rows">
+                      <div class="am-dt-row am-dt-row--head">
+                        <span>Operative</span>
+                        <span>Project</span>
+                        <span>Status</span>
+                      </div>
+                      <div class="am-dt-row">
+                        <span>J. Owen</span>
+                        <span>Riverside</span>
+                        <span><span class="am-dt-status am-dt-status--pend">Pending</span></span>
+                      </div>
+                      <div class="am-dt-row">
+                        <span>S. Hughes</span>
+                        <span>Harbour</span>
+                        <span><span class="am-dt-status am-dt-status--ok">Approved</span></span>
+                      </div>
+                      <div class="am-dt-row">
+                        <span>M. Bell</span>
+                        <span>Riverside</span>
+                        <span><span class="am-dt-status am-dt-status--pend">Pending</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Sales sections under hero -->
       <section class="landing-section mt-5 reveal-on-scroll" data-reveal="fade-up">
         <div class="row g-4">
           <div class="col-lg-4">
-            <h2 class="landing-section-title">From spreadsheets and chats to one source of truth.</h2>
+            <div class="landing-source-truth-col">
+              <div
+                class="landing-excel-mockup"
+                role="img"
+                aria-label="Decorative illustration of a cluttered Excel spreadsheet—replaced by Proconix"
+              >
+                <div class="landing-excel-chrome">
+                  <span class="landing-excel-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                  <span class="landing-excel-filename">WorkLogs_MASTER_v4_FINAL.xlsx</span>
+                </div>
+                <div class="landing-excel-formula-bar" aria-hidden="true">
+                  <span class="landing-excel-fx">fx</span>
+                  <span class="landing-excel-formula-text">=SUMIF(B:B,"???",C:C)</span>
+                </div>
+                <div class="landing-excel-sheet" aria-hidden="true">
+                  <div class="landing-excel-col-head">A</div>
+                  <div class="landing-excel-col-head">B</div>
+                  <div class="landing-excel-col-head">C</div>
+                  <div class="landing-excel-col-head">D</div>
+                  <div class="landing-excel-cell landing-excel-cell--hdr">Site</div>
+                  <div class="landing-excel-cell landing-excel-cell--hdr">Hours</div>
+                  <div class="landing-excel-cell landing-excel-cell--hdr">£</div>
+                  <div class="landing-excel-cell landing-excel-cell--hdr">Notes</div>
+                  <div class="landing-excel-cell">Riverside</div>
+                  <div class="landing-excel-cell">7.5</div>
+                  <div class="landing-excel-cell landing-excel-cell--err">#REF!</div>
+                  <div class="landing-excel-cell">???</div>
+                  <div class="landing-excel-cell">Harbour</div>
+                  <div class="landing-excel-cell">??</div>
+                  <div class="landing-excel-cell">1200</div>
+                  <div class="landing-excel-cell">old</div>
+                  <div class="landing-excel-cell">Tower 2</div>
+                  <div class="landing-excel-cell">8</div>
+                  <div class="landing-excel-cell">copy…</div>
+                  <div class="landing-excel-cell">—</div>
+                </div>
+              </div>
+              <h2 class="landing-section-title landing-section-title--with-excel">
+                From spreadsheets and chats to one source of truth.
+              </h2>
+            </div>
           </div>
           <div class="col-lg-8">
             <div class="landing-cards-grid">
