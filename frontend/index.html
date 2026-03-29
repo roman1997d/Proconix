@@ -71,8 +71,13 @@
         <!-- Left Section – Sales-focused hero -->
         <div class="col-lg-6 left-section mb-5 mb-lg-0">
           <span class="hero-eyebrow mb-2 d-inline-block">Construction workflow platform</span>
-          <h1 class="welcome-title mb-3">
-            Turn chaotic projects into one clear, controllable workflow.
+          <h1
+            class="welcome-title mb-3 hero-typewriter-heading"
+            aria-label="Turn chaotic projects into one clear, controllable workflow. Approve work, run QA, and invoice from one place. Give your site teams clarity—tasks, logs, and updates without the noise."
+          >
+            <span class="hero-typewriter-mount" aria-hidden="true">
+              <span id="heroTypewriterText"></span><span class="hero-typewriter-cursor"></span>
+            </span>
           </h1>
           <p class="welcome-sub mb-4 text-white-50">
             Proconix centralizes projects, operatives, work logs and quality assurance in one place,
@@ -109,55 +114,207 @@
               <div class="cloud cloud-2"></div>
               <div class="cloud cloud-3"></div>
             </div>
-            <div class="hero-desktop-frame">
+            <div class="hero-desktop-frame" id="heroDesktopFrame">
               <div class="hero-desktop-chrome" aria-hidden="true">
                 <span class="hero-desktop-traffic">
                   <i></i><i></i><i></i>
                 </span>
-                <span class="hero-desktop-url">proconix.uk/dashboard</span>
+                <span class="hero-desktop-url" id="heroDesktopUrl">proconix.uk/dashboard</span>
               </div>
-              <div class="hero-dashboard-shell">
-                <div class="hero-dashboard-header">
-                  <span class="hero-pill hero-pill-green">Live project overview</span>
-                  <span class="hero-pill hero-pill-blue">Work logs & QA</span>
-                </div>
-                <div class="hero-dashboard-body">
-                  <div class="hero-dashboard-left">
-                    <p class="hero-metric-label">Approved work value (this month)</p>
-                    <p class="hero-metric-value">£148,920</p>
-                    <p class="hero-metric-sub">+24% vs last month</p>
-                    <div class="hero-metric-row">
-                      <div class="hero-metric-card">
-                        <span class="hero-metric-small-label">Open QA jobs</span>
-                        <span class="hero-metric-small-value">37</span>
+              <div
+                class="hero-desktop-carousel"
+                id="heroDesktopCarousel"
+                aria-roledescription="carousel"
+                aria-label="Product preview"
+              >
+                <div class="hero-desktop-carousel-track" id="heroDesktopCarouselTrack" data-slide="0">
+                  <div class="hero-desktop-slide" data-hero-slide="0" aria-label="Manager overview dashboard">
+                    <div class="hero-dashboard-shell">
+                      <div class="hero-dashboard-header">
+                        <span class="hero-pill hero-pill-green">Live project overview</span>
+                        <span class="hero-pill hero-pill-blue">Work logs &amp; QA</span>
                       </div>
-                      <div class="hero-metric-card">
-                        <span class="hero-metric-small-label">Sites on schedule</span>
-                        <span class="hero-metric-small-value hero-positive">12 / 14</span>
+                      <div class="hero-dashboard-body">
+                        <div class="hero-dashboard-left">
+                          <p class="hero-metric-label">Approved work value (this month)</p>
+                          <p class="hero-metric-value">£148,920</p>
+                          <p class="hero-metric-sub">+24% vs last month</p>
+                          <div class="hero-metric-row">
+                            <div class="hero-metric-card">
+                              <span class="hero-metric-small-label">Open QA jobs</span>
+                              <span class="hero-metric-small-value">37</span>
+                            </div>
+                            <div class="hero-metric-card">
+                              <span class="hero-metric-small-label">Sites on schedule</span>
+                              <span class="hero-metric-small-value hero-positive">12 / 14</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="hero-dashboard-right">
+                          <div class="hero-list-heading">
+                            <span>Today on site</span>
+                            <span class="hero-badge">Real-time</span>
+                          </div>
+                          <ul class="hero-list">
+                            <li class="hero-list-item">
+                              <span class="hero-list-title">Block A – concrete works</span>
+                              <span class="hero-list-meta">8 operatives · 4 work logs pending approval</span>
+                            </li>
+                            <li class="hero-list-item">
+                              <span class="hero-list-title">QA punch list – Tower 2</span>
+                              <span class="hero-list-meta">12 items open · 5 due today</span>
+                            </li>
+                            <li class="hero-list-item">
+                              <span class="hero-list-title">Materials – Project Riverside</span>
+                              <span class="hero-list-meta">3 critical materials · reorder suggested</span>
+                            </li>
+                          </ul>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div class="hero-dashboard-right">
-                    <div class="hero-list-heading">
-                      <span>Today on site</span>
-                      <span class="hero-badge">Real-time</span>
+                  <div
+                    class="hero-desktop-slide"
+                    data-hero-slide="1"
+                    aria-hidden="true"
+                    aria-label="Field to office workflow"
+                  >
+                    <div class="hero-dashboard-shell hero-dashboard-shell--pipeline-slide">
+                      <div class="hero-dashboard-header">
+                        <span class="hero-pill hero-pill-blue">Site → office</span>
+                        <span class="hero-pill hero-pill-green">Same thread</span>
+                      </div>
+                      <div class="hero-pipeline">
+                        <div class="hero-pipeline-col">
+                          <p class="hero-pipeline-col-title">On site</p>
+                          <div class="hero-pipeline-card">
+                            <span class="hero-pipeline-pulse"></span>
+                            <span class="hero-pipeline-card-title">Work log submitted</span>
+                            <span class="hero-pipeline-card-meta">Riverside · Boarding · photos attached</span>
+                          </div>
+                          <div class="hero-pipeline-card hero-pipeline-card--muted">
+                            <span class="hero-pipeline-card-title">Operative check-in</span>
+                            <span class="hero-pipeline-card-meta">7:02 · Block B</span>
+                          </div>
+                        </div>
+                        <div class="hero-pipeline-bridge" aria-hidden="true">
+                          <div class="hero-pipeline-bridge-line"></div>
+                          <div class="hero-pipeline-bridge-dots">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                          </div>
+                        </div>
+                        <div class="hero-pipeline-col">
+                          <p class="hero-pipeline-col-title">In the office</p>
+                          <div class="hero-pipeline-approve">
+                            <div class="hero-pipeline-ring" aria-hidden="true"></div>
+                            <div class="hero-pipeline-approve-text">
+                              <span class="hero-pipeline-approve-value">94%</span>
+                              <span class="hero-pipeline-approve-label">Logs on time this week</span>
+                            </div>
+                          </div>
+                          <div class="hero-pipeline-queue">
+                            <div class="hero-pipeline-queue-row">
+                              <span class="hero-pipeline-queue-dot hero-pipeline-queue-dot--pend"></span>
+                              <span>3 awaiting approval</span>
+                            </div>
+                            <div class="hero-pipeline-queue-row">
+                              <span class="hero-pipeline-queue-dot hero-pipeline-queue-dot--ok"></span>
+                              <span>18 cleared today</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <ul class="hero-list">
-                      <li class="hero-list-item">
-                        <span class="hero-list-title">Block A – concrete works</span>
-                        <span class="hero-list-meta">8 operatives · 4 work logs pending approval</span>
-                      </li>
-                      <li class="hero-list-item">
-                        <span class="hero-list-title">QA punch list – Tower 2</span>
-                        <span class="hero-list-meta">12 items open · 5 due today</span>
-                      </li>
-                      <li class="hero-list-item">
-                        <span class="hero-list-title">Materials – Project Riverside</span>
-                        <span class="hero-list-meta">3 critical materials · reorder suggested</span>
-                      </li>
-                    </ul>
+                  </div>
+                  <div
+                    class="hero-desktop-slide"
+                    data-hero-slide="2"
+                    aria-hidden="true"
+                    aria-label="Quality assurance and materials"
+                  >
+                    <div class="hero-dashboard-shell hero-dashboard-shell--control-slide">
+                      <div class="hero-dashboard-header">
+                        <span class="hero-pill hero-pill-green">QA &amp; snags</span>
+                        <span class="hero-pill hero-pill-blue">Materials</span>
+                      </div>
+                      <div class="hero-control-grid">
+                        <div class="hero-control-panel">
+                          <p class="hero-control-label">Inspection queue</p>
+                          <ul class="hero-qa-mini">
+                            <li>
+                              <span class="hero-qa-st hero-qa-st--warn"></span>
+                              <span class="hero-qa-txt">Tower 2 · boarding checklist</span>
+                            </li>
+                            <li>
+                              <span class="hero-qa-st hero-qa-st--ok"></span>
+                              <span class="hero-qa-txt">Block A · concrete sign-off</span>
+                            </li>
+                            <li>
+                              <span class="hero-qa-st hero-qa-st--pend"></span>
+                              <span class="hero-qa-txt">Level 4 · fixings due today</span>
+                            </li>
+                          </ul>
+                          <div class="hero-snag-board" aria-hidden="true">
+                            <span class="hero-snag-pin hero-snag-pin--a"></span>
+                            <span class="hero-snag-pin hero-snag-pin--b"></span>
+                            <span class="hero-snag-pin hero-snag-pin--c"></span>
+                          </div>
+                        </div>
+                        <div class="hero-control-panel hero-control-panel--stock">
+                          <p class="hero-control-label">Stock levels</p>
+                          <div class="hero-mat-row">
+                            <span class="hero-mat-name">Plasterboard</span>
+                            <div class="hero-mat-bar-wrap">
+                              <div class="hero-mat-bar hero-mat-bar--low">
+                                <span class="hero-mat-bar-fill" style="width: 28%"></span>
+                              </div>
+                              <span class="hero-mat-flag">Reorder</span>
+                            </div>
+                          </div>
+                          <div class="hero-mat-row">
+                            <span class="hero-mat-name">Fixings</span>
+                            <div class="hero-mat-bar-wrap">
+                              <div class="hero-mat-bar hero-mat-bar--ok">
+                                <span class="hero-mat-bar-fill" style="width: 78%"></span>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="hero-mat-row">
+                            <span class="hero-mat-name">Insulation</span>
+                            <div class="hero-mat-bar-wrap">
+                              <div class="hero-mat-bar hero-mat-bar--mid">
+                                <span class="hero-mat-bar-fill" style="width: 52%"></span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
+              </div>
+              <div class="hero-desktop-indicators" role="group" aria-label="Product preview slides">
+                <button
+                  type="button"
+                  class="hero-desktop-dot is-active"
+                  data-hero-dot="0"
+                  aria-label="Show manager overview"
+                  aria-current="true"
+                ></button>
+                <button
+                  type="button"
+                  class="hero-desktop-dot"
+                  data-hero-dot="1"
+                  aria-label="Show field to office workflow"
+                ></button>
+                <button
+                  type="button"
+                  class="hero-desktop-dot"
+                  data-hero-dot="2"
+                  aria-label="Show QA and materials view"
+                ></button>
               </div>
             </div>
           </div>
@@ -374,34 +531,92 @@
         </div>
       </section>
 
-      <section class="landing-section mt-5 reveal-on-scroll" data-reveal="fade-up">
+      <section
+        class="landing-section landing-how-flow-section mt-5 reveal-on-scroll"
+        data-reveal="fade-up"
+        aria-labelledby="how-flow-heading"
+      >
         <div class="row g-4 align-items-start">
           <div class="col-lg-5">
-            <h2 class="landing-section-title">How Proconix fits into your day.</h2>
+            <span class="hero-eyebrow mb-2 d-inline-block">How it works</span>
+            <h2 id="how-flow-heading" class="landing-section-title">How Proconix fits into your day.</h2>
             <p class="landing-section-sub">
               A simple flow your team can follow from the first project to every single work log.
             </p>
           </div>
           <div class="col-lg-7">
-            <ol class="how-it-works-list">
-              <li>
-                <h3>Set up your company and projects</h3>
-                <p>Add your company, managers and active projects in a few minutes. No complex configuration.</p>
-              </li>
-              <li>
-                <h3>Invite operatives and supervisors</h3>
-                <p>
+            <div class="landing-flow" role="list">
+              <article class="landing-flow-step" role="listitem">
+                <div class="landing-flow-illust landing-flow-illust--hq" aria-hidden="true">
+                  <div class="lf-hq-chrome">
+                    <span class="lf-hq-dot"></span>
+                    <span class="lf-hq-dot"></span>
+                    <span class="lf-hq-dot"></span>
+                  </div>
+                  <div class="lf-hq-body">
+                    <div class="lf-hq-tower">
+                      <span class="lf-hq-win"></span>
+                      <span class="lf-hq-win"></span>
+                      <span class="lf-hq-win"></span>
+                    </div>
+                    <div class="lf-hq-label">Projects</div>
+                  </div>
+                </div>
+                <h3 class="landing-flow-step-title">Set up your company and projects</h3>
+                <p class="landing-flow-step-text">
+                  Add your company, managers and active projects in a few minutes. No complex configuration.
+                </p>
+              </article>
+              <div class="landing-flow-arrow" aria-hidden="true">
+                <span class="landing-flow-arrow-line"></span>
+              </div>
+              <article class="landing-flow-step" role="listitem">
+                <div class="landing-flow-illust landing-flow-illust--field" aria-hidden="true">
+                  <div class="lf-device">
+                    <div class="lf-device-notch"></div>
+                    <div class="lf-device-screen">
+                      <div class="lf-device-avatars">
+                        <span class="lf-av"></span>
+                        <span class="lf-av"></span>
+                        <span class="lf-av"></span>
+                      </div>
+                      <div class="lf-device-lines">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </div>
+                      <div class="lf-device-pill">Log</div>
+                    </div>
+                  </div>
+                  <div class="lf-helmet" aria-hidden="true"></div>
+                </div>
+                <h3 class="landing-flow-step-title">Invite operatives and supervisors</h3>
+                <p class="landing-flow-step-text">
                   Give field teams a clear dashboard for hours, tasks, issues, uploads and work logs – on desktop or
                   tablet.
                 </p>
-              </li>
-              <li>
-                <h3>Approve, forecast and invoice with confidence</h3>
-                <p>
+              </article>
+              <div class="landing-flow-arrow" aria-hidden="true">
+                <span class="landing-flow-arrow-line"></span>
+              </div>
+              <article class="landing-flow-step" role="listitem">
+                <div class="landing-flow-illust landing-flow-illust--insights" aria-hidden="true">
+                  <div class="lf-chart">
+                    <span class="lf-chart-bar" style="--lf-bar: 38%"></span>
+                    <span class="lf-chart-bar" style="--lf-bar: 62%"></span>
+                    <span class="lf-chart-bar" style="--lf-bar: 88%"></span>
+                  </div>
+                  <div class="lf-chart-badge">
+                    <span class="lf-chart-check">✓</span>
+                    <span class="lf-chart-caption">Approved</span>
+                  </div>
+                </div>
+                <h3 class="landing-flow-step-title">Approve, forecast and invoice with confidence</h3>
+                <p class="landing-flow-step-text">
                   Managers approve or reject work logs, monitor materials and QA, and always know what can be invoiced.
                 </p>
-              </li>
-            </ol>
+              </article>
+            </div>
           </div>
         </div>
       </section>
@@ -430,6 +645,309 @@
               <p class="social-proof-note">
                 Start with one project and expand as your team adopts the platform.
               </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="landing-section testimonials-section mt-5 pt-4 pb-2 reveal-on-scroll"
+        data-reveal="fade-up"
+        aria-labelledby="testimonials-heading"
+      >
+        <div class="text-center mb-4 mb-lg-5">
+          <span class="hero-eyebrow mb-2 d-inline-block">Voices from the field</span>
+          <h2 id="testimonials-heading" class="landing-section-title mb-3">
+            What people are saying about Proconix
+          </h2>
+          <p class="testimonials-lead text-white-50 mb-0 mx-auto">
+            Illustrative feedback — sample quotes to show how teams describe the platform.
+          </p>
+        </div>
+        <div class="row g-4 justify-content-center">
+          <div class="col-md-6 col-lg-4">
+            <article class="testimonial-card">
+              <p class="testimonial-stars" aria-hidden="true">★★★★★</p>
+              <blockquote class="testimonial-quote">
+                <p>
+                  “We went from chasing WhatsApp photos to a single approval queue. My PMs actually sleep during
+                  month-end now.”
+                </p>
+              </blockquote>
+              <footer class="testimonial-footer">
+                <p class="testimonial-name">Sarah Mitchell</p>
+                <p class="testimonial-role">Operations Director · Southeast Drywall Ltd</p>
+              </footer>
+            </article>
+          </div>
+          <div class="col-md-6 col-lg-4">
+            <article class="testimonial-card">
+              <p class="testimonial-stars" aria-hidden="true">★★★★★</p>
+              <blockquote class="testimonial-quote">
+                <p>
+                  “Site snags on the drawing, QA jobs linked to work logs — the lads on site get it without a
+                  training day.”
+                </p>
+              </blockquote>
+              <footer class="testimonial-footer">
+                <p class="testimonial-name">James Okonkwo</p>
+                <p class="testimonial-role">Site Manager · Meridian Build Group</p>
+              </footer>
+            </article>
+          </div>
+          <div class="col-md-6 col-lg-4">
+            <article class="testimonial-card">
+              <p class="testimonial-stars" aria-hidden="true">★★★★☆</p>
+              <blockquote class="testimonial-quote">
+                <p>
+                  “Materials visibility next to labour hours makes our valuations defensible. Clients stopped
+                  second-guessing variations.”
+                </p>
+              </blockquote>
+              <footer class="testimonial-footer">
+                <p class="testimonial-name">Elena Vasquez</p>
+                <p class="testimonial-role">Quantity Surveyor · Hartwell Contractors</p>
+              </footer>
+            </article>
+          </div>
+          <div class="col-md-6 col-lg-4">
+            <article class="testimonial-card">
+              <p class="testimonial-stars" aria-hidden="true">★★★★★</p>
+              <blockquote class="testimonial-quote">
+                <p>
+                  “Operatives submit logs on their phones; I approve from the van between sites. No more ‘I’ll send
+                  the sheet tonight’.”
+                </p>
+              </blockquote>
+              <footer class="testimonial-footer">
+                <p class="testimonial-name">David Brennan</p>
+                <p class="testimonial-role">Contracts Manager · Loughshore Fit-Out</p>
+              </footer>
+            </article>
+          </div>
+          <div class="col-md-6 col-lg-4">
+            <article class="testimonial-card">
+              <p class="testimonial-stars" aria-hidden="true">★★★★★</p>
+              <blockquote class="testimonial-quote">
+                <p>
+                  “Finally one database for projects, people and QA. Onboarding a new supervisor took an hour, not a
+                  week.”
+                </p>
+              </blockquote>
+              <footer class="testimonial-footer">
+                <p class="testimonial-name">Priya Nair</p>
+                <p class="testimonial-role">Head of Delivery · Northline Structures</p>
+              </footer>
+            </article>
+          </div>
+          <div class="col-md-6 col-lg-4">
+            <article class="testimonial-card">
+              <p class="testimonial-stars" aria-hidden="true">★★★★★</p>
+              <blockquote class="testimonial-quote">
+                <p>
+                  “Task planning on the same board as snags means nothing falls between trades. Handover packs almost
+                  write themselves.”
+                </p>
+              </blockquote>
+              <footer class="testimonial-footer">
+                <p class="testimonial-name">Marcus Webb</p>
+                <p class="testimonial-role">Project Director · Webb &amp; Cole Joinery</p>
+              </footer>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="landing-section landing-faq-section mt-5 pt-4 pb-2 reveal-on-scroll"
+        data-reveal="fade-up"
+        aria-labelledby="faq-heading"
+      >
+        <div class="text-center mb-4 mb-lg-5">
+          <span class="hero-eyebrow mb-2 d-inline-block">FAQ</span>
+          <h2 id="faq-heading" class="landing-section-title mb-3">Frequently asked questions</h2>
+          <p class="testimonials-lead text-white-50 mb-0 mx-auto">
+            Quick answers about Proconix for managers, site teams and company owners.
+          </p>
+        </div>
+        <div class="row justify-content-center">
+          <div class="col-lg-9 col-xl-8">
+            <div class="accordion landing-faq-accordion" id="landingFaqAccordion">
+              <div class="accordion-item">
+                <h3 class="accordion-header">
+                  <button
+                    class="accordion-button"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#faqCollapse1"
+                    aria-expanded="true"
+                    aria-controls="faqCollapse1"
+                  >
+                    What is Proconix?
+                  </button>
+                </h3>
+                <div
+                  id="faqCollapse1"
+                  class="accordion-collapse collapse show"
+                  data-bs-parent="#landingFaqAccordion"
+                >
+                  <div class="accordion-body">
+                    Proconix is a construction workflow platform: one place for projects, operatives, work logs,
+                    approvals, materials, task planning, site snags and quality assurance — so office and site stay in
+                    sync without spreadsheets and scattered chats.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h3 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#faqCollapse2"
+                    aria-expanded="false"
+                    aria-controls="faqCollapse2"
+                  >
+                    Who is it for — managers only, or operatives too?
+                  </button>
+                </h3>
+                <div
+                  id="faqCollapse2"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#landingFaqAccordion"
+                >
+                  <div class="accordion-body">
+                    Both. Managers use the full dashboard to approve work, run QA, plan tasks and see materials. Operatives
+                    get a focused experience for daily tasks, work logs and updates — including on mobile — without
+                    wading through admin screens.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h3 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#faqCollapse3"
+                    aria-expanded="false"
+                    aria-controls="faqCollapse3"
+                  >
+                    Do we need a long implementation project?
+                  </button>
+                </h3>
+                <div
+                  id="faqCollapse3"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#landingFaqAccordion"
+                >
+                  <div class="accordion-body">
+                    No. You register your company, add projects and invite people in a short session. Many teams start
+                    with one live project and grow usage as supervisors and operatives adopt it — no multi-week rollout
+                    required to get value.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h3 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#faqCollapse4"
+                    aria-expanded="false"
+                    aria-controls="faqCollapse4"
+                  >
+                    Where is our data stored?
+                  </button>
+                </h3>
+                <div
+                  id="faqCollapse4"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#landingFaqAccordion"
+                >
+                  <div class="accordion-body">
+                    You run Proconix on infrastructure you control (for example your own server or VPS). Data lives in
+                    your database with a documented schema — not locked in an opaque black box. Exact hosting details
+                    depend on how you deploy; we’re happy to walk through options on a demo.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h3 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#faqCollapse5"
+                    aria-expanded="false"
+                    aria-controls="faqCollapse5"
+                  >
+                    Is there a free trial or how do pricing and plans work?
+                  </button>
+                </h3>
+                <div
+                  id="faqCollapse5"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#landingFaqAccordion"
+                >
+                  <div class="accordion-body">
+                    See our <a href="/see_plans.html">Plans</a> page for current tiers and what’s included. If you’re
+                    unsure which fits your company size, <a href="/ContactUs.html">contact us</a> or book a demo from the
+                    top of this page — we’ll keep it straightforward.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h3 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#faqCollapse6"
+                    aria-expanded="false"
+                    aria-controls="faqCollapse6"
+                  >
+                    Can we replace Excel and WhatsApp for work logs?
+                  </button>
+                </h3>
+                <div
+                  id="faqCollapse6"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#landingFaqAccordion"
+                >
+                  <div class="accordion-body">
+                    That’s a core use case. Structured work logs with photos and notes flow into a single approval queue
+                    for managers, instead of chasing files and screenshots. You still get human judgement on approvals —
+                    just without the version chaos.
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h3 class="accordion-header">
+                  <button
+                    class="accordion-button collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#faqCollapse7"
+                    aria-expanded="false"
+                    aria-controls="faqCollapse7"
+                  >
+                    How do we get help or request a walkthrough?
+                  </button>
+                </h3>
+                <div
+                  id="faqCollapse7"
+                  class="accordion-collapse collapse"
+                  data-bs-parent="#landingFaqAccordion"
+                >
+                  <div class="accordion-body">
+                    Email <a href="mailto:info@proconix.uk">info@proconix.uk</a>, use <a href="/ContactUs.html">Contact
+                    Us</a>, or click <strong>Book Demo</strong> in the navigation to leave your details — we’ll follow up
+                    from the same address.
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

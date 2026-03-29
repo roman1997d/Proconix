@@ -82,11 +82,85 @@
 
 (function () {
   'use strict';
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initMain);
-  } else {
-    initMain();
+
+  var HERO_TYPEWRITER_PHRASES = [
+    'Turn chaotic projects into one clear, controllable workflow.',
+    'Approve work, run QA, and invoice from one place.',
+    'Give your site teams clarity—tasks, logs, and updates without the noise.',
+  ];
+
+  function initHeroTypewriter() {
+    var el = document.getElementById('heroTypewriterText');
+    var heading = document.querySelector('.hero-typewriter-heading');
+    if (!el || !heading) return;
+
+    var phrases = HERO_TYPEWRITER_PHRASES;
+    if (!phrases.length) return;
+
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      el.textContent = phrases[0];
+      return;
+    }
+
+    var i = 0;
+    var charIndex = 0;
+    var deleting = false;
+    var typeMs = 38;
+    var deleteMs = 26;
+    var pauseAfterTypedMs = 2400;
+    var pauseBeforeNextMs = 380;
+    var timer = null;
+
+    function clearTimer() {
+      if (timer) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    }
+
+    function schedule(fn, ms) {
+      clearTimer();
+      timer = window.setTimeout(fn, ms);
+    }
+
+    function tick() {
+      var full = phrases[i];
+      if (typeof full !== 'string') return;
+
+      if (!deleting) {
+        if (charIndex < full.length) {
+          el.textContent = full.slice(0, charIndex + 1);
+          charIndex += 1;
+          schedule(tick, typeMs + (Math.random() < 0.12 ? 55 : 0));
+        } else {
+          heading.classList.add('is-typewriter-paused');
+          schedule(function () {
+            heading.classList.remove('is-typewriter-paused');
+            deleting = true;
+            tick();
+          }, pauseAfterTypedMs);
+        }
+      } else {
+        if (charIndex > 0) {
+          charIndex -= 1;
+          el.textContent = full.slice(0, charIndex);
+          schedule(tick, deleteMs);
+        } else {
+          deleting = false;
+          i = (i + 1) % phrases.length;
+          schedule(tick, pauseBeforeNextMs);
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) clearTimer();
+      else tick();
+    });
+
+    tick();
   }
+
   function initMain() {
     document.body.classList.add('loaded');
     document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
@@ -98,6 +172,13 @@
         }
       });
     });
+    initHeroTypewriter();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMain);
+  } else {
+    initMain();
   }
 })();
 
@@ -482,6 +563,89 @@
         });
     });
   }
+
+  function initHeroDesktopCarousel() {
+    var track = document.getElementById('heroDesktopCarouselTrack');
+    var urlEl = document.getElementById('heroDesktopUrl');
+    var frame = document.getElementById('heroDesktopFrame');
+    var dots = document.querySelectorAll('.hero-desktop-dot');
+    if (!track || !dots.length) return;
+
+    var slide = 0;
+    var n = 3;
+    var intervalMs = 2000;
+    var timer = null;
+    var heroUrls = [
+      'proconix.uk/dashboard',
+      'proconix.uk/operations',
+      'proconix.uk/qa-materials',
+    ];
+
+    function prefersReducedMotion() {
+      return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    function apply() {
+      track.setAttribute('data-slide', String(slide));
+      if (urlEl) {
+        urlEl.textContent = heroUrls[slide] || heroUrls[0];
+      }
+      dots.forEach(function (d, i) {
+        d.classList.toggle('is-active', i === slide);
+        if (i === slide) d.setAttribute('aria-current', 'true');
+        else d.removeAttribute('aria-current');
+      });
+      var slides = track.querySelectorAll('.hero-desktop-slide');
+      slides.forEach(function (s, i) {
+        s.setAttribute('aria-hidden', i !== slide ? 'true' : 'false');
+      });
+    }
+
+    function next() {
+      slide = (slide + 1) % n;
+      apply();
+    }
+
+    function start() {
+      if (prefersReducedMotion()) return;
+      stop();
+      timer = window.setInterval(next, intervalMs);
+    }
+
+    function stop() {
+      if (timer) {
+        window.clearInterval(timer);
+        timer = null;
+      }
+    }
+
+    apply();
+    start();
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) stop();
+      else start();
+    });
+
+    var pauseHost = frame || track;
+    pauseHost.addEventListener('mouseenter', stop);
+    pauseHost.addEventListener('mouseleave', start);
+    pauseHost.addEventListener('focusin', stop);
+    pauseHost.addEventListener('focusout', function (e) {
+      if (!pauseHost.contains(e.relatedTarget)) start();
+    });
+
+    dots.forEach(function (dot, i) {
+      dot.addEventListener('click', function () {
+        slide = i;
+        apply();
+        stop();
+        start();
+      });
+    });
+  }
+
+  initHeroDesktopCarousel();
 })();
 
 // Scroll animations for landing page (cursor effects removed)
