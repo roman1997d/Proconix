@@ -38,6 +38,34 @@
   margin-right: auto;
 }
 
+.pricing-trial-banner {
+  max-width: 720px;
+  text-align: left;
+  padding: 1.1rem 1.35rem;
+  border-radius: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.22), rgba(15, 23, 42, 0.92));
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.pricing-trial-banner-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e0f2fe;
+  margin: 0;
+}
+
+.pricing-trial-banner-title .bi {
+  margin-right: 0.4rem;
+  color: #7dd3fc;
+}
+
+.pricing-trial-banner-text {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: rgba(226, 232, 240, 0.95);
+}
+
 /* ===== Pricing cards container ===== */
 .plans-main {
   padding-top: 1rem;
@@ -104,6 +132,14 @@
   margin-bottom: 0.5rem;
 }
 
+.pricing-tier-band {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(125, 211, 252, 0.95);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.02em;
+}
+
 .pricing-desc {
   font-size: 0.9rem;
   color: rgba(255, 255, 255, 0.85);
@@ -130,6 +166,62 @@
 
 .pricing-features li {
   padding: 0.2rem 0;
+}
+
+.pricing-features-compact {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  text-align: left;
+  width: 100%;
+  max-width: 100%;
+}
+
+.btn-pricing-outline {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: rgba(226, 232, 240, 0.95);
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.7);
+  border-radius: 10px;
+  text-decoration: none;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+  width: 100%;
+  max-width: 220px;
+  text-align: center;
+}
+
+.btn-pricing-outline:hover {
+  background: rgba(15, 23, 42, 0.6);
+  border-color: rgba(56, 189, 248, 0.85);
+  color: #fff;
+}
+
+/* Policy notes under cards */
+.pricing-policy-notes {
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.pricing-notes-title {
+  font-size: clamp(1.15rem, 2.5vw, 1.4rem);
+  font-weight: 650;
+  color: #fff;
+}
+
+.pricing-notes-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.pricing-notes-list li {
+  margin-bottom: 0.5rem;
 }
 
 /* CTA button ===== */

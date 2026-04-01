@@ -1,6 +1,6 @@
 /**
  * Default billing window when a company self-registers (no real payment gateway yet).
- * Aligns roughly with see_plans.html copy (Free 30d, Silver 3mo, Gold 6mo, Platinum 12mo).
+ * Aligns with see_plans.html / price_policy.md tiers + legacy plans.
  */
 
 function addDays(d, n) {
@@ -24,7 +24,11 @@ function getPlanBillingDefaults(subscriptionPlan) {
   const s = String(subscriptionPlan || '').toLowerCase().trim();
 
   let expires;
-  if (s === 'free' || s.includes('free')) {
+  if (s.includes('small team')) {
+    expires = addDays(now, 30);
+  } else if (s.includes('growing team') || s.includes('medium team') || s.includes('enterprise')) {
+    expires = addMonths(now, 1);
+  } else if (s === 'free' || s.includes('free')) {
     expires = addDays(now, 30);
   } else if (s.includes('silver')) {
     expires = addMonths(now, 3);

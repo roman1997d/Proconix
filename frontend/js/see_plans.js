@@ -31,7 +31,7 @@
 
   var STORAGE_KEY = 'proconix_selected_plan';
 
-  /** Values: free | silver | gold | platinum — same as data-plan on cards */
+  /** Values: small_team | growing_team | medium_team | enterprise (+ legacy free | silver | gold | platinum) — same as data-plan on cards */
   function initPlanLinks() {
     document.querySelectorAll('a.js-plan-register[data-plan]').forEach(function (link) {
       link.addEventListener('click', function () {

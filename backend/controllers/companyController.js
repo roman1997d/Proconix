@@ -27,8 +27,12 @@ function generateSecurityToken() {
 /** Allowed industry types (must match frontend dropdown) */
 const ALLOWED_INDUSTRIES = ['Drylining', 'Plumbing', 'Electrical', 'Carpentry', 'Other'];
 
-/** Allowed subscription plans (tiers from See Plans + legacy billing periods) */
+/** Allowed subscription plans (tiers from See Plans / price_policy + legacy billing periods) */
 const ALLOWED_PLANS = [
+  'Small Team',
+  'Growing Team',
+  'Medium Team',
+  'Enterprise',
   'Free',
   'Silver',
   'Gold',

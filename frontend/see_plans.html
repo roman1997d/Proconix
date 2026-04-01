@@ -15,7 +15,8 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="apple-touch-icon" href="/favicon_io/apple-touch-icon.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <title>See Plans – Proconix</title>
+  <meta name="description" content="Proconix pricing for UK construction teams: Small, Growing, Medium and Enterprise plans. Full platform access per company. Trial and annual discount available.">
+  <title>Plans &amp; Pricing – Proconix</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
   <link href="css/styles.css" rel="stylesheet">
@@ -26,7 +27,6 @@
   <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PFZTF6ND"
   height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   <!-- End Google Tag Manager (noscript) -->
-  <!-- Top Navigation Bar (consistent with homepage) -->
   <nav class="navbar navbar-expand-lg navbar-dark py-3">
     <div class="container">
       <a class="navbar-brand d-flex align-items-center" href="/index.html">
@@ -57,104 +57,144 @@
     </div>
   </nav>
 
-  <!-- Hero / Page title -->
   <header class="plans-hero text-center py-5">
     <div class="container">
       <p class="plans-eyebrow mb-2">Pricing built for modern construction teams</p>
-      <h1 class="plans-title mb-3">Start with one site, grow without friction.</h1>
+      <h1 class="plans-title mb-3">One platform, one price per company</h1>
       <p class="plans-subtitle text-white-50">
-        Clear plans for tracking projects, operatives, work logs, QA and materials — without hidden fees.
+        All modules included on every tier — you scale by team size, not by feature gates. Prices are per company (GBP), not per module or per user add-on.
       </p>
       <p class="plans-subtitle text-white-50 mb-0 mt-3 small">
         New to Proconix? <a href="/about" class="link-light link-underline-opacity-25 link-underline-opacity-75-hover">About our UK construction workflow platform and construction software for contractors</a> — team, mission, UK base.
       </p>
+      <div class="pricing-trial-banner mt-4 mx-auto">
+        <p class="pricing-trial-banner-title mb-2">
+          <i class="bi bi-gift-fill" aria-hidden="true"></i> Free trial on any plan
+        </p>
+        <p class="pricing-trial-banner-text mb-0">
+          You choose which package you want (Small, Growing, Medium or Enterprise) and start with a <strong>free trial of 14 or 30 days</strong> on that tier.
+          When the trial ends, a <strong>Proconix administrator will contact you</strong> to agree what happens next — upgrade to paid, adjust the plan, or close the trial.
+        </p>
+      </div>
     </div>
   </header>
 
-  <!-- Pricing cards -->
   <main class="plans-main py-5">
     <div class="container">
       <div class="row g-4 justify-content-center align-items-stretch">
-        <!-- Free Plan -->
-        <div class="col-sm-6 col-lg-3">
-          <div class="pricing-card" data-plan="free">
+        <!-- Small Team -->
+        <div class="col-sm-6 col-xl-3">
+          <div class="pricing-card" data-plan="small_team">
             <div class="pricing-card-inner">
-              <h2 class="pricing-title">Free Plan</h2>
-              <p class="pricing-desc">For small teams exploring the platform</p>
-              <ul class="pricing-features">
-                <li>1 Project Limit</li>
-                <li><strong>£0</strong> / month</li>
-                <li>Valid for 30 days</li>
+              <h2 class="pricing-title">Small Team</h2>
+              <p class="pricing-tier-band">1–5 users (incl. managers)</p>
+              <p class="pricing-desc">Ideal for small firms or pilot teams — full platform, no module limits.</p>
+              <ul class="pricing-features pricing-features-compact">
+                <li><strong>£49</strong> / month</li>
+                <li>All Proconix modules</li>
+                <li>Manager dashboard</li>
+                <li>Task management</li>
+                <li>QA &amp; full reporting</li>
               </ul>
-              <a href="/register_company.html" class="btn btn-pricing js-plan-register" data-plan="free">Choose Free Plan</a>
+              <a href="/register_company.html" class="btn btn-pricing js-plan-register" data-plan="small_team">Choose Small Team</a>
             </div>
           </div>
         </div>
 
-        <!-- Silver Plan -->
-        <div class="col-sm-6 col-lg-3">
-          <div class="pricing-card" data-plan="silver">
+        <!-- Growing Team (popular) -->
+        <div class="col-sm-6 col-xl-3">
+          <div class="pricing-card pricing-card-popular" data-plan="growing_team">
+            <div class="pricing-badge">Growing teams</div>
             <div class="pricing-card-inner">
-              <h2 class="pricing-title">Silver Plan</h2>
-              <p class="pricing-desc">Perfect for growing subcontractors</p>
-              <p class="pricing-rule">Minimum 3-month commitment</p>
-              <ul class="pricing-features">
-                <li>Up to 5 Projects</li>
-                <li><strong>£10</strong> / month</li>
-                <li>Cancel anytime after the first 3 months</li>
+              <h2 class="pricing-title">Growing Team</h2>
+              <p class="pricing-tier-band">6–30 users</p>
+              <p class="pricing-desc">For expanding contractors who need faster technical support.</p>
+              <ul class="pricing-features pricing-features-compact">
+                <li><strong>£180</strong> / month</li>
+                <li>Everything in Small Team</li>
+                <li>Dedicated technical support (helpdesk &amp; troubleshooting)</li>
               </ul>
-              <a href="/register_company.html" class="btn btn-pricing js-plan-register" data-plan="silver">Select Silver Plan</a>
+              <a href="/register_company.html" class="btn btn-pricing js-plan-register" data-plan="growing_team">Choose Growing Team</a>
             </div>
           </div>
         </div>
 
-        <!-- Gold Plan (popular) -->
-        <div class="col-sm-6 col-lg-3">
-          <div class="pricing-card pricing-card-popular" data-plan="gold">
-            <div class="pricing-badge">Most Popular</div>
+        <!-- Medium Team -->
+        <div class="col-sm-6 col-xl-3">
+          <div class="pricing-card" data-plan="medium_team">
             <div class="pricing-card-inner">
-              <h2 class="pricing-title">Gold Plan</h2>
-              <p class="pricing-desc">Our most popular option</p>
-              <p class="pricing-rule">6-month billing cycle</p>
-              <ul class="pricing-features">
-                <li>Up to 15 Projects</li>
-                <li><strong>£20</strong> / month</li>
+              <h2 class="pricing-title">Medium Team</h2>
+              <p class="pricing-tier-band">31–60 users</p>
+              <p class="pricing-desc">Daily visibility on work, materials and finances.</p>
+              <ul class="pricing-features pricing-features-compact">
+                <li><strong>£299</strong> / month</li>
+                <li>Everything in Growing Team</li>
+                <li>Daily email digest: work done, materials, finances</li>
               </ul>
-              <a href="/register_company.html" class="btn btn-pricing js-plan-register" data-plan="gold">Choose Gold Plan</a>
+              <a href="/register_company.html" class="btn btn-pricing js-plan-register" data-plan="medium_team">Choose Medium Team</a>
             </div>
           </div>
         </div>
 
-        <!-- Platinum Plan -->
-        <div class="col-sm-6 col-lg-3">
-          <div class="pricing-card" data-plan="platinum">
+        <!-- Enterprise -->
+        <div class="col-sm-6 col-xl-3">
+          <div class="pricing-card" data-plan="enterprise">
             <div class="pricing-card-inner">
-              <h2 class="pricing-title">Platinum Plan</h2>
-              <p class="pricing-desc">For advanced companies with multiple sites</p>
-              <p class="pricing-rule">12-month billing cycle</p>
-              <ul class="pricing-features">
-                <li>Up to 30 Projects</li>
-                <li><strong>£40</strong> / month</li>
+              <h2 class="pricing-title">Enterprise</h2>
+              <p class="pricing-tier-band">61+ users</p>
+              <p class="pricing-desc">Large multi-team operations with full data protection.</p>
+              <ul class="pricing-features pricing-features-compact">
+                <li><strong>Custom</strong> — quote by size &amp; requirements</li>
+                <li>All Medium Team services</li>
+                <li>Daily backup: database &amp; company files (photos, docs, materials, finance data)</li>
               </ul>
-              <a href="/register_company.html" class="btn btn-pricing js-plan-register" data-plan="platinum">Select Platinum Plan</a>
+              <a href="/register_company.html" class="btn btn-pricing js-plan-register" data-plan="enterprise">Register interest</a>
+              <a href="/ContactUs.html" class="btn btn-pricing-outline mt-2">Contact sales</a>
             </div>
           </div>
         </div>
       </div>
+
+      <section class="pricing-policy-notes mt-5 pt-4">
+        <div class="row justify-content-center">
+          <div class="col-lg-10 col-xl-9">
+            <h2 class="pricing-notes-title text-center mb-4">Trial, discounts &amp; policy</h2>
+            <div class="row g-4">
+              <div class="col-md-6">
+                <ul class="pricing-notes-list">
+                  <li>
+                    <strong>Free trial (any tier):</strong> pick the package you want; trial length is <strong>14 or 30 days</strong> (set at signup).
+                    After the trial, a <strong>Proconix administrator contacts you</strong> to agree next steps — paid subscription, plan change, or end of trial.
+                  </li>
+                  <li><strong>Annual discount:</strong> pay 12 months, get 1 month free.</li>
+                  <li><strong>Scalability:</strong> move between tiers as your company grows.</li>
+                  <li><strong>Enterprise extras:</strong> optional integration consulting and team training.</li>
+                </ul>
+              </div>
+              <div class="col-md-6">
+                <ul class="pricing-notes-list">
+                  <li>Pricing is <strong>per company</strong>, not per module or per named user — the product is built as one system.</li>
+                  <li>Tiers reflect <strong>active user count</strong> and the level of added services (support, digests, backup).</li>
+                  <li>Every plan includes <strong>full access to all Proconix modules</strong>.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
 
-    <!-- Custom Plan & Contact Section -->
     <section class="custom-plan-section py-5">
       <div class="container">
         <div class="row justify-content-center">
           <div class="col-lg-10 col-xl-8">
             <p class="custom-plan-message text-center">
-              If you need a customized plan or want to discuss a tailored solution, please contact us.
+              Need a tailored quote (especially for Enterprise), or want to walk through modules before you commit? Request a callback.
             </p>
             <div class="callback-form-card">
               <h2 class="callback-form-title">Request a Callback</h2>
               <p class="callback-form-subtitle text-muted">
-                Share your details and we will reach out with a tailored walkthrough for your projects and team size.
+                Share your details and we will reach out with a walkthrough matched to your projects and team size.
               </p>
               <div id="callbackFormMessage" class="alert d-none" role="alert"></div>
               <form id="callbackForm" class="callback-form needs-validation" novalidate>
@@ -190,7 +230,6 @@
     </section>
   </main>
 
-  <!-- Footer -->
   <footer class="plans-footer py-5">
     <div class="container text-center">
       <p class="footer-copyright mb-2">Proconix © 2026 — Created by Roman Demian</p>

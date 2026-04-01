@@ -89,14 +89,20 @@
                   <label for="subscriptionPlan" class="form-label">Subscription plan <span class="text-danger">*</span></label>
                   <select class="form-select form-control-proconix" id="subscriptionPlan" name="subscription_plan" required>
                     <option value="">Select plan</option>
-                    <option value="Free">Free Plan</option>
-                    <option value="Silver">Silver Plan</option>
-                    <option value="Gold">Gold Plan</option>
-                    <option value="Platinum">Platinum Plan</option>
-                    <option value="1 month">1 month (legacy)</option>
-                    <option value="3 months">3 months (legacy)</option>
-                    <option value="6 months">6 months (legacy)</option>
-                    <option value="12 months">12 months (legacy)</option>
+                    <option value="Small Team">Small Team — £49/mo (1–5 users)</option>
+                    <option value="Growing Team">Growing Team — £180/mo (6–30 users)</option>
+                    <option value="Medium Team">Medium Team — £299/mo (31–60 users)</option>
+                    <option value="Enterprise">Enterprise — custom (61+ users)</option>
+                    <optgroup label="Legacy">
+                      <option value="Free">Free Plan</option>
+                      <option value="Silver">Silver Plan</option>
+                      <option value="Gold">Gold Plan</option>
+                      <option value="Platinum">Platinum Plan</option>
+                      <option value="1 month">1 month</option>
+                      <option value="3 months">3 months</option>
+                      <option value="6 months">6 months</option>
+                      <option value="12 months">12 months</option>
+                    </optgroup>
                   </select>
                   <div class="invalid-feedback">Please select a subscription plan.</div>
                   <p id="planFromSeePlansHint" class="form-text text-muted small mb-0 d-none">Plan pre-selected from <a href="/see_plans.html">See Plans</a>.</p>
@@ -172,6 +178,10 @@
     (function () {
       var STORAGE_KEY = 'proconix_selected_plan';
       var PLAN_MAP = {
+        small_team: 'Small Team',
+        growing_team: 'Growing Team',
+        medium_team: 'Medium Team',
+        enterprise: 'Enterprise',
         free: 'Free',
         silver: 'Silver',
         gold: 'Gold',
