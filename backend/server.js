@@ -123,6 +123,15 @@ app.get(['/about', '/about-us'], (req, res) => {
   res.sendFile(aboutHtmlPath);
 });
 
+// Root favicon — Google and other crawlers often request only GET /favicon.ico (not /favicon_io/...)
+const faviconIcoPath = path.join(frontendDir, 'favicon_io', 'favicon.ico');
+app.get('/favicon.ico', (req, res) => {
+  res.type('image/x-icon');
+  res.sendFile(faviconIcoPath, (err) => {
+    if (err) res.status(404).end();
+  });
+});
+
 // Static frontend (index.html, register_company.html, css/, js/, etc.)
 app.use(express.static(frontendDir));
 
