@@ -86,12 +86,39 @@ function buildProconixEmailHtml(o) {
 }
 
 /**
- * Platform admin → client email: light beige / beige-brown palette, minimal chrome.
+ * Sanitize URL for href (http/https only).
+ * @param {string} u
+ */
+function safePublicHttpUrl(u) {
+  var s = String(u || '').trim();
+  if (!/^https?:\/\//i.test(s)) return 'https://proconix.uk';
+  return s;
+}
+
+/**
+ * Platform admin → client email: light beige / beige-brown palette.
+ * @param {{
+ *   preheader: string,
+ *   title: string,
+ *   bodyText: string,
+ *   contactEmail: string,
+ *   websiteUrl: string,
+ *   marketingLine: string,
+ * }} o
  */
 function buildClientCommunicationEmailHtml(o) {
   var title = escapeHtml(o.title);
   var pre = escapeHtml(o.preheader);
   var bodyText = escapeHtml(o.bodyText);
+  var contactEmail = String(o.contactEmail || 'info@proconix.uk').trim();
+  var contactEscaped = escapeHtml(contactEmail);
+  var websiteUrl = safePublicHttpUrl(o.websiteUrl);
+  var websiteHref = escapeHtml(websiteUrl);
+  var marketingLine = escapeHtml(o.marketingLine || '');
+  var mailtoAttr = encodeURIComponent(contactEmail).replace(/'/g, '%27');
+
+  var websiteHost = websiteUrl.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+  var websiteLabel = escapeHtml(websiteHost);
 
   return (
     '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
@@ -104,19 +131,39 @@ function buildClientCommunicationEmailHtml(o) {
     '<tr><td align="center">' +
     '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background-color:#efe8dd;border:1px solid #d4c4b0;border-radius:14px;overflow:hidden;box-shadow:0 12px 28px rgba(74,63,53,0.08);">' +
     '<tr><td style="height:4px;background-color:#a89888;font-size:0;line-height:0;">&nbsp;</td></tr>' +
-    '<tr><td style="padding:28px 32px 20px 32px;font-family:Georgia,Times New Roman,serif;">' +
-    '<h1 style="margin:0 0 20px 0;font-size:22px;font-weight:600;line-height:1.3;color:#4a3f35;letter-spacing:-0.02em;">' +
+    '<tr><td style="padding:26px 32px 8px 32px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    '<p style="margin:0 0 2px 0;font-size:17px;font-weight:700;letter-spacing:0.02em;color:#4a3f35;">Proconix</p>' +
+    '<p style="margin:0 0 22px 0;font-size:12px;line-height:1.45;color:#6b5d52;">Proconix — construction workflow platform</p>' +
+    '<h2 style="margin:0 0 14px 0;font-size:17px;font-weight:600;line-height:1.35;color:#4a3f35;letter-spacing:-0.01em;">' +
     title +
-    '</h1>' +
+    '</h2>' +
+    '</td></tr>' +
+    '<tr><td style="padding:0 32px 22px 32px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
     '<table role="presentation" width="100%" cellspacing="0" cellpadding="0">' +
     '<tr><td style="background-color:#faf8f4;border-radius:10px;padding:18px 20px;border:1px solid #e0d4c4;">' +
-    '<span style="display:block;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8a7d72;margin-bottom:12px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">Message</span>' +
-    '<p style="margin:0;font-size:15px;line-height:1.65;color:#5d5349;white-space:pre-wrap;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    '<span style="display:block;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8a7d72;margin-bottom:12px;">Message</span>' +
+    '<p style="margin:0;font-size:15px;line-height:1.65;color:#5d5349;white-space:pre-wrap;">' +
     bodyText +
     '</p></td></tr></table>' +
+    '<p style="margin:20px 0 10px 0;font-size:13px;line-height:1.6;color:#5d5349;">' +
+    '<a href="mailto:' +
+    mailtoAttr +
+    '" style="color:#7a6a5a;font-weight:600;text-decoration:none;border-bottom:1px solid #c9b8a6;">' +
+    contactEscaped +
+    '</a>' +
+    '<span style="color:#b0a090;margin:0 8px;">·</span>' +
+    '<a href="' +
+    websiteHref +
+    '" style="color:#7a6a5a;font-weight:600;text-decoration:none;border-bottom:1px solid #c9b8a6;">' +
+    websiteLabel +
+    '</a>' +
+    '</p>' +
+    (marketingLine
+      ? '<p style="margin:0;font-size:13px;line-height:1.55;color:#6b5d52;font-style:italic;">' + marketingLine + '</p>'
+      : '') +
     '</td></tr>' +
-    '<tr><td style="padding:14px 32px 22px 32px;border-top:1px solid #d4c4b0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
-    '<p style="margin:0;font-size:11px;line-height:1.5;color:#9a8e84;letter-spacing:0.04em;">Proconix</p>' +
+    '<tr><td style="padding:12px 32px 18px 32px;border-top:1px solid #d4c4b0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    '<p style="margin:0;font-size:11px;line-height:1.45;color:#9a8e84;">Proconix</p>' +
     '</td></tr></table></td></tr></table></body></html>'
   );
 }
@@ -892,13 +939,40 @@ async function sendPlatformAdminClientEmail(p) {
 
   const pre = subject.length > 110 ? `${subject.slice(0, 107)}…` : subject;
 
+  const contactEmail =
+    (process.env.PROCONIX_CONTACT_EMAIL || process.env.CALLBACK_NOTIFY_EMAIL || 'info@proconix.uk').trim();
+  const websiteUrl = (process.env.PROCONIX_PUBLIC_URL || 'https://proconix.uk').trim();
+  const marketingLine =
+    (
+      process.env.PROCONIX_CLIENT_EMAIL_TAGLINE ||
+      'Bring office and site together — one platform for UK construction teams, from programme to handover.'
+    ).trim();
+
   const html = buildClientCommunicationEmailHtml({
     preheader: pre,
     title: subject,
     bodyText,
+    contactEmail,
+    websiteUrl,
+    marketingLine,
   });
 
-  const text = [subject, '', bodyText, '', '—', 'Proconix'].join('\n');
+  const text = [
+    'Proconix',
+    'Proconix — construction workflow platform',
+    '',
+    subject,
+    '',
+    bodyText,
+    '',
+    contactEmail,
+    websiteUrl.replace(/^https?:\/\//i, ''),
+    '',
+    marketingLine,
+    '',
+    '—',
+    'Proconix',
+  ].join('\n');
 
   await transport.sendMail({
     from,
