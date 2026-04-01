@@ -483,6 +483,52 @@
       justify-content: flex-end;
     }
 
+    .tp-gantt-period-nav {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.35rem;
+      margin-top: 0.25rem;
+    }
+
+    .tp-gantt-period-nav[hidden] {
+      display: none !important;
+    }
+
+    .tp-period-nav-inner {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      flex-wrap: wrap;
+    }
+
+    .tp-period-nav-inner[hidden] {
+      display: none !important;
+    }
+
+    .tp-period-nav-inner button {
+      border-radius: 999px;
+      border: 1px solid var(--tp-border);
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--tp-muted);
+      font-size: 0.78rem;
+      padding: 0.2rem 0.55rem;
+      cursor: pointer;
+      line-height: 1.2;
+    }
+
+    .tp-period-nav-inner button:hover {
+      color: #e5e7eb;
+      border-color: rgba(148, 163, 184, 0.7);
+    }
+
+    .tp-period-nav-inner .tp-nav-arrow {
+      font-weight: 700;
+      padding: 0.2rem 0.5rem;
+      min-width: 2rem;
+    }
+
     .tp-filter {
       min-width: 120px;
     }
@@ -1353,6 +1399,18 @@
                 </select>
               </div>
             </div>
+            <div class="tp-gantt-period-nav" id="tp-gantt-period-nav" hidden>
+              <div class="tp-period-nav-inner" id="tp-month-nav" hidden>
+                <button type="button" class="tp-nav-arrow" id="tp-month-prev" aria-label="Previous month">‹</button>
+                <button type="button" id="tp-month-today">This month</button>
+                <button type="button" class="tp-nav-arrow" id="tp-month-next" aria-label="Next month">›</button>
+              </div>
+              <div class="tp-period-nav-inner" id="tp-week-nav" hidden>
+                <button type="button" class="tp-nav-arrow" id="tp-week-prev" aria-label="Previous week">‹</button>
+                <button type="button" id="tp-week-this">This week</button>
+                <button type="button" class="tp-nav-arrow" id="tp-week-next" aria-label="Next week">›</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1417,6 +1475,11 @@
         endDate: null,
         tasks: []
       };
+
+      /** Calendar month shown in Gantt “Month” view (independent of DB plan start_date). */
+      var ganttViewMonth = null;
+      /** Monday YYYY-MM-DD for Gantt “Week” view. */
+      var ganttWeekMondayYmd = null;
 
       var STORAGE_KEY = 'proconix_planning_demo';
       var SITE_SNAGS_STORAGE_KEY = 'proconix_site_snags_v1';
@@ -1680,6 +1743,11 @@
         })
           .then(function (p0) {
             return mergeSiteSnagsIntoTasks().then(function () {
+              if (planState.tasks.length) {
+                derivePlanRangeFromTasks();
+              }
+              initGanttViewMonthFromToday();
+              initGanttViewWeekFromToday();
               return p0;
             });
           });
@@ -1950,6 +2018,71 @@
         });
         planState.startDate = minStart;
         planState.endDate = maxEnd;
+      }
+
+      function mondayOfLocalDate(d) {
+        var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        var day = x.getDay();
+        var diff = day === 0 ? -6 : 1 - day;
+        x.setDate(x.getDate() + diff);
+        return x;
+      }
+
+      function initGanttViewMonthFromToday() {
+        var n = new Date();
+        ganttViewMonth = { y: n.getFullYear(), m: n.getMonth() };
+      }
+
+      function initGanttViewWeekFromToday() {
+        ganttWeekMondayYmd = fmtDate(mondayOfLocalDate(new Date()));
+      }
+
+      function shiftGanttMonth(delta) {
+        if (!ganttViewMonth) initGanttViewMonthFromToday();
+        var nm = ganttViewMonth.m + delta;
+        var ny = ganttViewMonth.y;
+        while (nm < 0) {
+          nm += 12;
+          ny -= 1;
+        }
+        while (nm > 11) {
+          nm -= 12;
+          ny += 1;
+        }
+        ganttViewMonth = { y: ny, m: nm };
+      }
+
+      function shiftGanttWeek(delta) {
+        if (!ganttWeekMondayYmd) initGanttViewWeekFromToday();
+        var d = parseYmdLocalToDate(ganttWeekMondayYmd);
+        if (!d) {
+          initGanttViewWeekFromToday();
+          d = parseYmdLocalToDate(ganttWeekMondayYmd);
+        }
+        if (!d) return;
+        d.setDate(d.getDate() + 7 * delta);
+        ganttWeekMondayYmd = fmtDate(d);
+      }
+
+      function updatePeriodNavVisibility() {
+        var nav = document.getElementById('tp-gantt-period-nav');
+        if (!nav || !calendarTabs) return;
+        var active = calendarTabs.querySelector('.tp-tab-btn.active');
+        var view = active ? active.getAttribute('data-view') : 'daily';
+        var monthInner = document.getElementById('tp-month-nav');
+        var weekInner = document.getElementById('tp-week-nav');
+        if (view === 'daily' || !planState.tasks.length) {
+          nav.hidden = true;
+          return;
+        }
+        nav.hidden = false;
+        if (view === 'monthly') {
+          if (monthInner) monthInner.hidden = false;
+          if (weekInner) weekInner.hidden = true;
+        } else if (view === 'weekly') {
+          if (monthInner) monthInner.hidden = true;
+          if (weekInner) weekInner.hidden = false;
+        }
       }
 
       function loadFromStorage() {
@@ -3037,23 +3170,26 @@
       }
 
       function renderWeekView(tasks) {
-        if (!planState.startDate) {
-          calendarBody.innerHTML = '<div class="tp-empty-state">Select a weekly plan period and save it first.</div>';
-          return;
-        }
-        var start = parseYmdLocalToDate(planState.startDate);
+        if (!ganttWeekMondayYmd) initGanttViewWeekFromToday();
+        var start = parseYmdLocalToDate(ganttWeekMondayYmd);
         if (!start) {
-          calendarBody.innerHTML = '<div class="tp-empty-state">Invalid plan start date.</div>';
+          initGanttViewWeekFromToday();
+          start = parseYmdLocalToDate(ganttWeekMondayYmd);
+        }
+        if (!start) {
+          calendarBody.innerHTML = '<div class="tp-empty-state">Invalid week start.</div>';
           return;
         }
         var days = [];
         for (var i = 0; i < 7; i++) {
-          var d = new Date(start);
+          var d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
           d.setDate(start.getDate() + i);
           days.push(d);
         }
+        var weekLabel =
+          fmtDateLabel(days[0]) + ' – ' + fmtDateLabel(days[6]);
         var html = '<div class="tp-gantt-header">' +
-          '<span>Week view – per day</span>' +
+          '<span>Week view – ' + weekLabel + '</span>' +
           '<div class="tp-gantt-scale"><span>Mon</span><span>Wed</span><span>Fri</span><span>Sun</span></div>' +
           '</div><div class="tp-gantt-body">';
 
@@ -3085,19 +3221,13 @@
       }
 
       function renderMonthView(tasks) {
-        if (!planState.startDate) {
-          calendarBody.innerHTML = '<div class="tp-empty-state">Select a monthly plan period and save it first.</div>';
-          return;
-        }
-        var start = parseYmdLocalToDate(planState.startDate);
-        if (!start) {
-          calendarBody.innerHTML = '<div class="tp-empty-state">Invalid plan start date.</div>';
-          return;
-        }
-        var label = fmtMonthYear(start);
-        var first = new Date(start.getFullYear(), start.getMonth(), 1);
-        var last = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+        if (!ganttViewMonth) initGanttViewMonthFromToday();
+        var year = ganttViewMonth.y;
+        var monthIndex = ganttViewMonth.m;
+        var first = new Date(year, monthIndex, 1);
+        var last = new Date(year, monthIndex + 1, 0);
         var daysInMonth = last.getDate();
+        var label = fmtMonthYear(first);
 
         var html = '<div class="tp-gantt-header">' +
           '<span>' + label + ' – per day</span>' +
@@ -3105,7 +3235,7 @@
           '</div><div class="tp-gantt-body">';
 
         for (var d = 1; d <= daysInMonth; d++) {
-          var current = new Date(start.getFullYear(), start.getMonth(), d);
+          var current = new Date(year, monthIndex, d);
           var dStr = fmtDate(current);
           var dayTasks = applyFilters(tasks.filter(function (t) { return isInSpan(t, dStr); }));
           html += '<div class="tp-gantt-row">';
@@ -3133,6 +3263,7 @@
       function renderCalendar() {
         if (!planState.tasks.length) {
           calendarBody.innerHTML = '<div class="tp-empty-state">No tasks in this plan yet. Add tasks and click Save Task to see them in the calendar.</div>';
+          updatePeriodNavVisibility();
           updateGanttSummary();
           renderKanban();
           return;
@@ -3141,6 +3272,7 @@
         if (view === 'daily') renderDayView(planState.tasks);
         else if (view === 'weekly') renderWeekView(planState.tasks);
         else renderMonthView(planState.tasks);
+        updatePeriodNavVisibility();
         updateGanttSummary();
         renderKanban();
       }
@@ -3159,6 +3291,21 @@
           renderCalendar();
         });
       }
+
+      (function wireGanttPeriodNav() {
+        var mp = document.getElementById('tp-month-prev');
+        var mn = document.getElementById('tp-month-next');
+        var mt = document.getElementById('tp-month-today');
+        var wp = document.getElementById('tp-week-prev');
+        var wn = document.getElementById('tp-week-next');
+        var wt = document.getElementById('tp-week-this');
+        if (mp) mp.addEventListener('click', function () { shiftGanttMonth(-1); renderCalendar(); });
+        if (mn) mn.addEventListener('click', function () { shiftGanttMonth(1); renderCalendar(); });
+        if (mt) mt.addEventListener('click', function () { initGanttViewMonthFromToday(); renderCalendar(); });
+        if (wp) wp.addEventListener('click', function () { shiftGanttWeek(-1); renderCalendar(); });
+        if (wn) wn.addEventListener('click', function () { shiftGanttWeek(1); renderCalendar(); });
+        if (wt) wt.addEventListener('click', function () { initGanttViewWeekFromToday(); renderCalendar(); });
+      })();
 
       // Open modal when clicking a bar in Gantt
       if (calendarBody) {
