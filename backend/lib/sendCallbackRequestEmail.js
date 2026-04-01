@@ -86,6 +86,42 @@ function buildProconixEmailHtml(o) {
 }
 
 /**
+ * Platform admin → client email: light beige / beige-brown palette, minimal chrome.
+ */
+function buildClientCommunicationEmailHtml(o) {
+  var title = escapeHtml(o.title);
+  var pre = escapeHtml(o.preheader);
+  var bodyText = escapeHtml(o.bodyText);
+
+  return (
+    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
+    '<meta http-equiv="x-ua-compatible" content="ie=edge"></head>' +
+    '<body style="margin:0;padding:0;background-color:#f7f3eb;">' +
+    '<div style="display:none;font-size:1px;color:#f7f3eb;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">' +
+    pre +
+    '</div>' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f7f3eb;padding:32px 16px;">' +
+    '<tr><td align="center">' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background-color:#efe8dd;border:1px solid #d4c4b0;border-radius:14px;overflow:hidden;box-shadow:0 12px 28px rgba(74,63,53,0.08);">' +
+    '<tr><td style="height:4px;background-color:#a89888;font-size:0;line-height:0;">&nbsp;</td></tr>' +
+    '<tr><td style="padding:28px 32px 20px 32px;font-family:Georgia,Times New Roman,serif;">' +
+    '<h1 style="margin:0 0 20px 0;font-size:22px;font-weight:600;line-height:1.3;color:#4a3f35;letter-spacing:-0.02em;">' +
+    title +
+    '</h1>' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0">' +
+    '<tr><td style="background-color:#faf8f4;border-radius:10px;padding:18px 20px;border:1px solid #e0d4c4;">' +
+    '<span style="display:block;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8a7d72;margin-bottom:12px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">Message</span>' +
+    '<p style="margin:0;font-size:15px;line-height:1.65;color:#5d5349;white-space:pre-wrap;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    bodyText +
+    '</p></td></tr></table>' +
+    '</td></tr>' +
+    '<tr><td style="padding:14px 32px 22px 32px;border-top:1px solid #d4c4b0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+    '<p style="margin:0;font-size:11px;line-height:1.5;color:#9a8e84;letter-spacing:0.04em;">Proconix</p>' +
+    '</td></tr></table></td></tr></table></body></html>'
+  );
+}
+
+/**
  * Welcome email after company + manager onboarding (HTML + friendly English copy).
  */
 function buildCompanyWelcomeEmailHtml(p) {
@@ -836,7 +872,7 @@ async function sendSeatLimitReachedEmail(p) {
 }
 
 /**
- * Platform admin console → outbound client email (same branded layout as other Proconix emails).
+ * Platform admin console → outbound client email (beige / light brown template, minimal copy).
  *
  * @param {{ to: string, subject: string, bodyText: string, adminEmail: string, adminName?: string }} p
  */
@@ -845,7 +881,6 @@ async function sendPlatformAdminClientEmail(p) {
   const subject = String(p.subject || '').trim();
   const bodyText = String(p.bodyText || '').trim();
   const adminEmail = String(p.adminEmail || '').trim();
-  const adminName = String(p.adminName || '').trim();
 
   const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
   const transport = createTransport();
@@ -855,35 +890,15 @@ async function sendPlatformAdminClientEmail(p) {
     throw err;
   }
 
-  const fromLine =
-    adminName && adminEmail
-      ? `${adminName} · ${adminEmail}`
-      : adminEmail || 'Proconix administration';
-
   const pre = subject.length > 110 ? `${subject.slice(0, 107)}…` : subject;
 
-  const html = buildProconixEmailHtml({
+  const html = buildClientCommunicationEmailHtml({
     preheader: pre,
-    badge: 'Proconix · Client communication',
     title: subject,
-    subtitle:
-      'This message was sent to you by the Proconix team. You can reply to this email and your response will go directly to the colleague who contacted you.',
-    rows: [{ label: 'Sent by', value: fromLine }],
-    messageBlock: {
-      title: 'Your message',
-      text: bodyText,
-    },
+    bodyText,
   });
 
-  const text = [
-    subject,
-    '',
-    bodyText,
-    '',
-    '—',
-    'Proconix — construction workflow platform',
-    `Sent by: ${fromLine}`,
-  ].join('\n');
+  const text = [subject, '', bodyText, '', '—', 'Proconix'].join('\n');
 
   await transport.sendMail({
     from,
