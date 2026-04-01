@@ -662,8 +662,40 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
+/**
+ * GET /api/operatives/seat-status
+ * Manager dashboard: check user_limit vs current seats before opening add operative/supervisor modal.
+ */
+async function getCompanySeatStatus(req, res) {
+  const companyId = req.manager?.company_id;
+  if (companyId == null) {
+    return res.status(403).json({
+      success: false,
+      message: 'Manager company not found.',
+    });
+  }
+
+  try {
+    const info = await getCompanySeatInfo(pool, companyId);
+    return res.status(200).json({
+      success: true,
+      at_limit: info.atLimit,
+      current_seats: info.current,
+      seat_limit: info.limit,
+      has_limit: info.limit != null,
+    });
+  } catch (err) {
+    console.error('operativeController getCompanySeatStatus error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Could not load seat status.',
+    });
+  }
+}
+
 module.exports = {
   addOperative,
+  getCompanySeatStatus,
   listOperatives,
   updateOperative,
   deleteOperative,

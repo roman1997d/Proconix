@@ -323,20 +323,12 @@
     var target = e.target;
     if (target.closest('[data-action="add-operative"]')) {
       e.preventDefault();
-      var modal = contentEl && contentEl.querySelector('#modal-add-operative');
-      if (modal) {
-        modal.classList.add('is-open');
-        modal.setAttribute('aria-hidden', 'false');
-      }
+      requestSeatStatusAndOpenModal('#modal-add-operative');
       return;
     }
     if (target.closest('[data-action="add-supervisor"]')) {
       e.preventDefault();
-      var modal = contentEl && contentEl.querySelector('#modal-add-supervisor');
-      if (modal) {
-        modal.classList.add('is-open');
-        modal.setAttribute('aria-hidden', 'false');
-      }
+      requestSeatStatusAndOpenModal('#modal-add-supervisor');
       return;
     }
     if (target.closest('[data-dismiss="modal"]') || target.closest('[data-dismiss="confirm-modal"]')) {
@@ -451,6 +443,53 @@
     if (!contentEl) return;
     var feedback = contentEl.querySelector('#operatives-feedback');
     if (feedback) feedback.classList.add('d-none');
+  }
+
+  var SEAT_LIMIT_MESSAGE =
+    'Your company has reached the maximum number of users for your current plan. Please contact support at info@proconix.uk to upgrade.';
+
+  /**
+   * Before opening add operative / supervisor modal, check companies.user_limit vs current seats.
+   */
+  function requestSeatStatusAndOpenModal(modalSelector) {
+    if (!contentEl) return;
+    var headers = getSessionHeaders();
+    if (!headers['X-Manager-Id']) {
+      showOperativesFeedback('Session expired. Please sign in again.', true);
+      return;
+    }
+    fetch('/api/operatives/seat-status', { headers: headers, credentials: 'same-origin' })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (out.status === 401) {
+          showOperativesFeedback('Session expired. Please sign in again.', true);
+          return;
+        }
+        if (out.status !== 200 || !out.data || !out.data.success) {
+          showOperativesFeedback(
+            (out.data && out.data.message) || 'Could not verify seat limit. Please try again.',
+            true
+          );
+          return;
+        }
+        if (out.data.at_limit) {
+          window.alert(SEAT_LIMIT_MESSAGE);
+          return;
+        }
+        hideOperativesFeedback();
+        var modal = contentEl.querySelector(modalSelector);
+        if (modal) {
+          modal.classList.add('is-open');
+          modal.setAttribute('aria-hidden', 'false');
+        }
+      })
+      .catch(function () {
+        showOperativesFeedback('Could not verify seat limit. Please try again.', true);
+      });
   }
 
   function validateEmail(email) {
@@ -983,7 +1022,12 @@
           form.reset();
           loadOperativesData();
         } else {
-          showOperativesFeedback(result.data.message || 'Something went wrong. Please try again.', true);
+          var errMsg = result.data.message || 'Something went wrong. Please try again.';
+          if (result.status === 403 && result.data && result.data.code === 'USER_LIMIT_REACHED') {
+            window.alert(errMsg);
+          } else {
+            showOperativesFeedback(errMsg, true);
+          }
         }
       })
       .catch(function () {

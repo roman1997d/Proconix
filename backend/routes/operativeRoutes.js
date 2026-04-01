@@ -8,6 +8,7 @@ const { requireManagerAuth } = require('../middleware/requireManagerAuth');
 const { requireOperativeAuth } = require('../middleware/requireOperativeAuth');
 const {
   addOperative,
+  getCompanySeatStatus,
   listOperatives,
   updateOperative,
   deleteOperative,
@@ -45,6 +46,7 @@ const {
 
 // ——— Manager-only (dashboard) ———
 router.get('/', requireManagerAuth, listOperatives);
+router.get('/seat-status', requireManagerAuth, getCompanySeatStatus);
 router.post('/add', requireManagerAuth, addOperative);
 router.patch('/:id', requireManagerAuth, updateOperative);
 router.delete('/:id', requireManagerAuth, deleteOperative);
