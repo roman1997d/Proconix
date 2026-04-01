@@ -89,22 +89,10 @@
                   <label for="subscriptionPlan" class="form-label">Subscription plan <span class="text-danger">*</span></label>
                   <select class="form-select form-control-proconix" id="subscriptionPlan" name="subscription_plan" required>
                     <option value="">Select plan</option>
-                    <optgroup label="Current plans (trial available on any tier)">
-                      <option value="Small Team">Small Team — £49/mo · 1–5 users · all modules</option>
-                      <option value="Growing Team">Growing Team — £180/mo · 6–30 users · dedicated support</option>
-                      <option value="Medium Team">Medium Team — £299/mo · 31–60 users · daily email digest</option>
-                      <option value="Enterprise">Enterprise — custom pricing · 61+ users · backups &amp; scale</option>
-                    </optgroup>
-                    <optgroup label="Legacy">
-                      <option value="Free">Free Plan</option>
-                      <option value="Silver">Silver Plan</option>
-                      <option value="Gold">Gold Plan</option>
-                      <option value="Platinum">Platinum Plan</option>
-                      <option value="1 month">1 month</option>
-                      <option value="3 months">3 months</option>
-                      <option value="6 months">6 months</option>
-                      <option value="12 months">12 months</option>
-                    </optgroup>
+                    <option value="Small Team">Small Team — £49/mo · 1–5 users · all modules</option>
+                    <option value="Growing Team">Growing Team — £180/mo · 6–30 users · dedicated support</option>
+                    <option value="Medium Team">Medium Team — £299/mo · 31–60 users · daily email digest</option>
+                    <option value="Enterprise">Enterprise — custom pricing · 61+ users · backups &amp; scale</option>
                   </select>
                   <div class="invalid-feedback">Please select a subscription plan.</div>
                   <p id="planFromSeePlansHint" class="form-text text-muted small mb-0 d-none">Plan pre-selected from <a href="/see_plans.html">See Plans</a>.</p>
@@ -117,7 +105,7 @@
                     <option value="30">30 days free trial</option>
                   </select>
                   <p id="trialLengthHelp" class="form-text text-muted small mb-0">
-                    For <strong>Small Team – Enterprise</strong>, pick 14 or 30 days. After the trial, a Proconix administrator will contact you to agree next steps. Legacy plans ignore this field.
+                    Pick <strong>14 or 30 days</strong> free trial. After the trial, a Proconix administrator will contact you to agree next steps.
                   </p>
                 </div>
                 <div class="col-md-6">
@@ -196,10 +184,6 @@
         growing_team: 'Growing Team',
         medium_team: 'Medium Team',
         enterprise: 'Enterprise',
-        free: 'Free',
-        silver: 'Silver',
-        gold: 'Gold',
-        platinum: 'Platinum',
       };
 
       function syncTrialLengthField() {
