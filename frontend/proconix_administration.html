@@ -466,9 +466,69 @@
 
         <div class="d-none" data-px-admin-panel="content">
           <div class="px-admin-panel-card">
-            <h2 class="h5 text-white mb-3">Content &amp; communications</h2>
-            <p class="text-white-50">Email templates, in-app announcements, legal pages.</p>
-            <span class="badge bg-secondary">Coming soon</span>
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+              <div>
+                <h2 class="h5 text-white mb-2">Content &amp; communications</h2>
+                <p class="text-white-50 small mb-0">
+                  Compose an email to a client. It is delivered in a <strong class="text-white-50">Proconix-branded</strong> template.
+                  Replies go to your platform admin address (<span class="font-monospace" id="pxContentReplyHint">—</span>).
+                </p>
+              </div>
+              <div class="rounded-3 border border-secondary px-3 py-2" style="background: rgba(15, 23, 42, 0.65);">
+                <span class="text-white-50 small text-uppercase" style="letter-spacing: 0.06em;">Compose</span>
+                <div class="text-info mt-1"><i class="bi bi-envelope-at-fill me-1" aria-hidden="true"></i> Client email</div>
+              </div>
+            </div>
+            <div id="pxAdminContentEmailAlert" class="alert d-none" role="alert"></div>
+            <form id="pxContentClientEmailForm" class="px-admin-compose-email" novalidate>
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label text-white-50 small mb-1" for="pxContentEmailTo">To (client email)</label>
+                  <input
+                    type="email"
+                    class="form-control form-control-sm bg-dark text-white border-secondary"
+                    id="pxContentEmailTo"
+                    name="to"
+                    required
+                    maxlength="200"
+                    placeholder="client@company.com"
+                    autocomplete="email"
+                  >
+                </div>
+                <div class="col-12">
+                  <label class="form-label text-white-50 small mb-1" for="pxContentEmailSubject">Subject</label>
+                  <input
+                    type="text"
+                    class="form-control form-control-sm bg-dark text-white border-secondary"
+                    id="pxContentEmailSubject"
+                    name="subject"
+                    required
+                    maxlength="200"
+                    placeholder="e.g. Your Proconix account — next steps"
+                    autocomplete="off"
+                  >
+                </div>
+                <div class="col-12">
+                  <label class="form-label text-white-50 small mb-1" for="pxContentEmailBody">Message</label>
+                  <textarea
+                    class="form-control form-control-sm bg-dark text-white border-secondary px-admin-compose-textarea"
+                    id="pxContentEmailBody"
+                    name="body"
+                    rows="14"
+                    required
+                    maxlength="50000"
+                    placeholder="Write your message here. Line breaks are preserved."
+                  ></textarea>
+                  <div class="form-text text-white-50 small">Plain text only; formatting appears in the branded template.</div>
+                </div>
+                <div class="col-12 d-flex flex-wrap align-items-center gap-2">
+                  <button type="submit" class="btn btn-primary btn-sm" id="pxContentEmailSendBtn">
+                    <i class="bi bi-send-fill me-1" aria-hidden="true"></i> Send email
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="pxContentEmailClearBtn">Clear form</button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
 

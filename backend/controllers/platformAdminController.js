@@ -5,7 +5,10 @@
 
 const bcrypt = require('bcrypt');
 const { pool } = require('../db/pool');
-const { sendManagerAccountActivatedEmail } = require('../lib/sendCallbackRequestEmail');
+const {
+  sendManagerAccountActivatedEmail,
+  sendPlatformAdminClientEmail,
+} = require('../lib/sendCallbackRequestEmail');
 const { countCompanySeats } = require('../utils/companyUserSeats');
 
 const SALT_ROUNDS = 10;
@@ -748,6 +751,67 @@ async function listBillingSubscriptions(req, res) {
   }
 }
 
+/**
+ * POST /api/platform-admin/send-client-email
+ * Body: { to, subject, body } — sends branded HTML email to client; Reply-To = platform admin.
+ */
+async function sendClientEmail(req, res) {
+  const raw = req.body || {};
+  const to = typeof raw.to === 'string' ? raw.to.trim() : '';
+  const subject = typeof raw.subject === 'string' ? raw.subject.trim() : '';
+  const body = typeof raw.body === 'string' ? raw.body : '';
+
+  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    return res.status(400).json({
+      success: false,
+      message: 'A valid recipient email address is required.',
+    });
+  }
+  if (!subject || subject.length > 200) {
+    return res.status(400).json({
+      success: false,
+      message: 'Subject is required (max 200 characters).',
+    });
+  }
+  const bodyTrim = body.trim();
+  if (!bodyTrim || bodyTrim.length > 50000) {
+    return res.status(400).json({
+      success: false,
+      message: 'Message is required (max 50,000 characters).',
+    });
+  }
+
+  const admin = req.platformAdmin || {};
+  const adminEmail = typeof admin.email === 'string' ? admin.email.trim() : '';
+  const adminName = admin.full_name != null ? String(admin.full_name).trim() : '';
+
+  try {
+    await sendPlatformAdminClientEmail({
+      to,
+      subject,
+      bodyText: bodyTrim,
+      adminEmail,
+      adminName,
+    });
+    return res.status(200).json({
+      success: true,
+      message: 'Email sent successfully.',
+    });
+  } catch (err) {
+    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({
+        success: false,
+        message: 'Email is not configured on the server. Set SMTP_* environment variables.',
+      });
+    }
+    console.error('platformAdmin sendClientEmail error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to send email.',
+    });
+  }
+}
+
 module.exports = {
   login,
   me,
@@ -757,4 +821,5 @@ module.exports = {
   deleteCompany,
   listBillingSubscriptions,
   updateBillingSubscription,
+  sendClientEmail,
 };

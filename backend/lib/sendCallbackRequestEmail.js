@@ -835,6 +835,66 @@ async function sendSeatLimitReachedEmail(p) {
   });
 }
 
+/**
+ * Platform admin console → outbound client email (same branded layout as other Proconix emails).
+ *
+ * @param {{ to: string, subject: string, bodyText: string, adminEmail: string, adminName?: string }} p
+ */
+async function sendPlatformAdminClientEmail(p) {
+  const to = String(p.to || '').trim();
+  const subject = String(p.subject || '').trim();
+  const bodyText = String(p.bodyText || '').trim();
+  const adminEmail = String(p.adminEmail || '').trim();
+  const adminName = String(p.adminName || '').trim();
+
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send email.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+
+  const fromLine =
+    adminName && adminEmail
+      ? `${adminName} · ${adminEmail}`
+      : adminEmail || 'Proconix administration';
+
+  const pre = subject.length > 110 ? `${subject.slice(0, 107)}…` : subject;
+
+  const html = buildProconixEmailHtml({
+    preheader: pre,
+    badge: 'Proconix · Client communication',
+    title: subject,
+    subtitle:
+      'This message was sent to you by the Proconix team. You can reply to this email and your response will go directly to the colleague who contacted you.',
+    rows: [{ label: 'Sent by', value: fromLine }],
+    messageBlock: {
+      title: 'Your message',
+      text: bodyText,
+    },
+  });
+
+  const text = [
+    subject,
+    '',
+    bodyText,
+    '',
+    '—',
+    'Proconix — construction workflow platform',
+    `Sent by: ${fromLine}`,
+  ].join('\n');
+
+  await transport.sendMail({
+    from,
+    to,
+    replyTo: adminEmail || undefined,
+    subject,
+    text,
+    html,
+  });
+}
+
 module.exports = {
   sendCallbackRequestEmail,
   sendContactUsEmail,
@@ -843,5 +903,6 @@ module.exports = {
   sendManagerAccountActivatedEmail,
   sendOperativeWelcomeEmail,
   sendSeatLimitReachedEmail,
+  sendPlatformAdminClientEmail,
   createTransport,
 };

@@ -428,3 +428,14 @@
 .px-admin-form-switch .form-check-input:focus {
   box-shadow: 0 0 0 0.2rem rgba(34, 197, 94, 0.25);
 }
+
+/* Content — client email composer */
+.px-admin-compose-email {
+  max-width: 52rem;
+}
+
+.px-admin-compose-textarea {
+  min-height: 280px;
+  resize: vertical;
+  line-height: 1.5;
+}

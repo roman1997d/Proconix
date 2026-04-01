@@ -13,6 +13,7 @@ const {
   deleteCompany,
   listBillingSubscriptions,
   updateBillingSubscription,
+  sendClientEmail,
 } = require('../controllers/platformAdminController');
 const {
   listPlatformUsers,
@@ -28,6 +29,7 @@ router.get('/me', requirePlatformAdminAuth, me);
 router.get('/system-health', requirePlatformAdminAuth, getSystemHealth);
 router.get('/server-log-stream', requirePlatformAdminAuth, getServerLogStream);
 router.post('/log-test', requirePlatformAdminAuth, postLogTest);
+router.post('/send-client-email', requirePlatformAdminAuth, sendClientEmail);
 router.get('/billing-subscriptions', requirePlatformAdminAuth, listBillingSubscriptions);
 router.patch('/billing-subscriptions/:id', requirePlatformAdminAuth, updateBillingSubscription);
 router.get('/platform-users', requirePlatformAdminAuth, listPlatformUsers);

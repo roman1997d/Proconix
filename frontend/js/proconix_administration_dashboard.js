@@ -899,6 +899,9 @@
   var emailEl = document.getElementById('pxAdminUserEmail');
   if (emailEl) emailEl.textContent = session.email;
 
+  var replyHintEl = document.getElementById('pxContentReplyHint');
+  if (replyHintEl && session.email) replyHintEl.textContent = session.email;
+
   var nameEl = document.getElementById('pxAdminUserName');
   if (nameEl && session.full_name) {
     nameEl.textContent = session.full_name;
@@ -924,6 +927,7 @@
       }
       var pa = out.data.platform_admin;
       if (emailEl) emailEl.textContent = pa.email || session.email;
+      if (replyHintEl) replyHintEl.textContent = pa.email || session.email || '—';
       if (nameEl && pa.full_name) nameEl.textContent = pa.full_name;
 
       var banner = document.getElementById('pxAdminDevBanner');
@@ -956,6 +960,77 @@
     btnOut.addEventListener('click', function () {
       clearSession();
       window.location.href = LOGIN_URL;
+    });
+  }
+
+  function showContentEmailAlert(text, kind) {
+    var el = document.getElementById('pxAdminContentEmailAlert');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'alert ' + (kind === 'success' ? 'alert-success' : 'alert-danger');
+    el.classList.remove('d-none');
+  }
+
+  function hideContentEmailAlert() {
+    var el = document.getElementById('pxAdminContentEmailAlert');
+    if (el) {
+      el.classList.add('d-none');
+      el.textContent = '';
+    }
+  }
+
+  var contentEmailForm = document.getElementById('pxContentClientEmailForm');
+  var contentEmailBtn = document.getElementById('pxContentEmailSendBtn');
+  var contentEmailClear = document.getElementById('pxContentEmailClearBtn');
+  if (contentEmailForm) {
+    contentEmailForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      hideContentEmailAlert();
+      var toEl = document.getElementById('pxContentEmailTo');
+      var subjEl = document.getElementById('pxContentEmailSubject');
+      var bodyEl = document.getElementById('pxContentEmailBody');
+      if (!toEl || !subjEl || !bodyEl) return;
+      var payload = {
+        to: toEl.value.trim(),
+        subject: subjEl.value.trim(),
+        body: bodyEl.value,
+      };
+      if (contentEmailBtn) contentEmailBtn.disabled = true;
+      fetch('/api/platform-admin/send-client-email', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          if (contentEmailBtn) contentEmailBtn.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status === 200 && out.data && out.data.success) {
+            showContentEmailAlert(out.data.message || 'Email sent.', 'success');
+            contentEmailForm.reset();
+            return;
+          }
+          showContentEmailAlert((out.data && out.data.message) || 'Send failed.', 'error');
+        })
+        .catch(function () {
+          if (contentEmailBtn) contentEmailBtn.disabled = false;
+          showContentEmailAlert('Network error.', 'error');
+        });
+    });
+  }
+  if (contentEmailClear) {
+    contentEmailClear.addEventListener('click', function () {
+      hideContentEmailAlert();
+      if (contentEmailForm) contentEmailForm.reset();
     });
   }
 
