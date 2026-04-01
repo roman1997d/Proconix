@@ -6,7 +6,8 @@
 const { pool } = require('../db/pool');
 const bcrypt = require('bcrypt');
 const { createSession } = require('../utils/operativeSessionStore');
-const { sendOperativeWelcomeEmail } = require('../lib/sendCallbackRequestEmail');
+const { sendOperativeWelcomeEmail, sendSeatLimitReachedEmail } = require('../lib/sendCallbackRequestEmail');
+const { getCompanySeatInfo } = require('../utils/companyUserSeats');
 
 const OPERATIVE_ROLES = ['Plaster', 'Dryliner', 'Electrician', 'Plumber', 'Painter', 'Carpenter', 'Other'];
 const SUPERVISOR_ROLE = 'Supervisor';
@@ -68,6 +69,46 @@ async function addOperative(req, res) {
     return res.status(400).json({
       success: false,
       message: 'Please enter a valid email address.',
+    });
+  }
+
+  let seat;
+  try {
+    seat = await getCompanySeatInfo(pool, companyId);
+  } catch (se) {
+    console.error('getCompanySeatInfo', se);
+    return res.status(500).json({
+      success: false,
+      message: 'Could not verify company limits. Please try again.',
+    });
+  }
+  if (seat.atLimit) {
+    const mgr = req.manager || {};
+    const managerFullName = [mgr.name, mgr.surname].filter(Boolean).join(' ').trim() || mgr.email || '';
+    let companyName = '';
+    try {
+      const cr = await pool.query('SELECT name FROM companies WHERE id = $1', [companyId]);
+      if (cr.rows[0]) companyName = String(cr.rows[0].name || '').trim();
+    } catch (_) {
+      /* ignore */
+    }
+    try {
+      await sendSeatLimitReachedEmail({
+        managerFullName,
+        managerEmail: mgr.email || '',
+        companyName,
+        companyId,
+        attemptLabelRo: isSupervisor ? 'un nou supervizor' : 'un nou operativ',
+        attemptLabelEn: isSupervisor ? 'a supervisor' : 'an operative',
+      });
+    } catch (mailErr) {
+      if (mailErr && mailErr.code !== 'SMTP_NOT_CONFIGURED') console.error('sendSeatLimitReachedEmail', mailErr);
+    }
+    return res.status(403).json({
+      success: false,
+      code: 'USER_LIMIT_REACHED',
+      message:
+        'Your company has reached the maximum number of users for your current plan. Please contact support at info@proconix.uk to upgrade.',
     });
   }
 

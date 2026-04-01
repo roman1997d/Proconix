@@ -6,6 +6,7 @@
 const bcrypt = require('bcrypt');
 const { pool } = require('../db/pool');
 const { sendManagerAccountActivatedEmail } = require('../lib/sendCallbackRequestEmail');
+const { countCompanySeats } = require('../utils/companyUserSeats');
 
 const SALT_ROUNDS = 10;
 
@@ -46,19 +47,6 @@ function mapHeadManagerRow(row) {
     created_at: row.created_at,
     project_onboard_name: row.project_onboard_name,
   };
-}
-
-/**
- * Total seats = all manager rows + all users rows for this company.
- * @param {import('pg').Pool | import('pg').PoolClient} db
- * @param {number} companyId
- */
-async function countCompanySeats(db, companyId) {
-  const m = await db.query('SELECT COUNT(*)::int AS n FROM manager WHERE company_id = $1', [companyId]);
-  const u = await db.query('SELECT COUNT(*)::int AS n FROM users WHERE company_id = $1', [companyId]);
-  const nm = m.rows[0] && m.rows[0].n != null ? Number(m.rows[0].n) : 0;
-  const nu = u.rows[0] && u.rows[0].n != null ? Number(u.rows[0].n) : 0;
-  return nm + nu;
 }
 
 /**

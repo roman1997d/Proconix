@@ -758,6 +758,83 @@ async function sendBookDemoEmail(payload) {
   });
 }
 
+/**
+ * Manager hit companies.user_limit when adding operative / supervisor / manager.
+ * Default inbox: info@proconix.uk (override SEAT_LIMIT_NOTIFY_EMAIL).
+ *
+ * @param {{
+ *   managerFullName: string,
+ *   managerEmail: string,
+ *   companyName: string,
+ *   companyId: number,
+ *   attemptLabelRo: string,
+ *   attemptLabelEn: string,
+ * }} p
+ */
+async function sendSeatLimitReachedEmail(p) {
+  const to = (process.env.SEAT_LIMIT_NOTIFY_EMAIL || process.env.BOOK_DEMO_NOTIFY_EMAIL || 'info@proconix.uk').trim();
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const managerFullName = String(p.managerFullName || '').trim() || '(unknown)';
+  const managerEmail = String(p.managerEmail || '').trim() || '—';
+  const companyName = String(p.companyName || '').trim() || '—';
+  const companyId = p.companyId != null ? String(p.companyId) : '—';
+  const attemptLabelRo = String(p.attemptLabelRo || 'un utilizator nou').trim();
+  const attemptLabelEn = String(p.attemptLabelEn || 'a user').trim();
+
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send seat-limit notification.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+
+  const subject = `Proconix — Seat limit reached (${companyName})`;
+  const roBody =
+    `Managerul "${managerFullName}", adresa de email "${managerEmail}", a încercat să adauge ${attemptLabelRo} în companie, ` +
+    `dar nu a putut din cauză că a ajuns la limita abonamentului ales. ` +
+    `Este timpul să îl contactezi și să îi faci o ofertă.`;
+
+  const text = [
+    'Seat limit reached — manager action blocked',
+    '',
+    `Company: ${companyName} (ID ${companyId})`,
+    `Manager: ${managerFullName}`,
+    `Email: ${managerEmail}`,
+    `Attempt: add ${attemptLabelEn}`,
+    '',
+    roBody,
+  ].join('\n');
+
+  const html = buildProconixEmailHtml({
+    preheader: `${managerFullName} · limit reached · ${companyName}`,
+    badge: 'Billing · Seat limit',
+    title: 'User limit reached',
+    subtitle:
+      'A manager tried to add someone but the company is at its configured user cap. Follow up with an upgrade offer.',
+    rows: [
+      { label: 'Company', value: `${companyName} (ID ${companyId})` },
+      { label: 'Manager name', value: managerFullName },
+      { label: 'Manager email', value: managerEmail },
+      { label: 'Attempt', value: `Add ${attemptLabelEn}` },
+    ],
+    messageBlock: {
+      title: 'Mesaj (RO)',
+      text: roBody,
+    },
+  });
+
+  const replyTo = (managerEmail && managerEmail !== '—' ? managerEmail : undefined) || undefined;
+
+  await transport.sendMail({
+    from,
+    to,
+    ...(replyTo ? { replyTo } : {}),
+    subject,
+    text,
+    html,
+  });
+}
+
 module.exports = {
   sendCallbackRequestEmail,
   sendContactUsEmail,
@@ -765,5 +842,6 @@ module.exports = {
   sendCompanyWelcomeEmail,
   sendManagerAccountActivatedEmail,
   sendOperativeWelcomeEmail,
+  sendSeatLimitReachedEmail,
   createTransport,
 };

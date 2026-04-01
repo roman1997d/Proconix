@@ -10,7 +10,8 @@
 
 const bcrypt = require('bcrypt');
 const { pool } = require('../db/pool');
-const { sendCompanyWelcomeEmail } = require('../lib/sendCallbackRequestEmail');
+const { sendCompanyWelcomeEmail, sendSeatLimitReachedEmail } = require('../lib/sendCallbackRequestEmail');
+const { getCompanySeatInfo } = require('../utils/companyUserSeats');
 
 const SALT_ROUNDS = 10;
 
@@ -455,6 +456,43 @@ async function inviteManager(req, res) {
     );
     if (existing.rows.length) {
       return res.status(409).json({ success: false, message: 'A manager with this email already exists.' });
+    }
+
+    let seat;
+    try {
+      seat = await getCompanySeatInfo(pool, companyId);
+    } catch (se) {
+      console.error('getCompanySeatInfo', se);
+      return res.status(500).json({ success: false, message: 'Could not verify company limits.' });
+    }
+    if (seat.atLimit) {
+      const mgr = op || {};
+      const managerFullName = [mgr.name, mgr.surname].filter(Boolean).join(' ').trim() || mgr.email || '';
+      let companyName = '';
+      try {
+        const cr = await pool.query('SELECT name FROM companies WHERE id = $1', [companyId]);
+        if (cr.rows[0]) companyName = String(cr.rows[0].name || '').trim();
+      } catch (_) {
+        /* ignore */
+      }
+      try {
+        await sendSeatLimitReachedEmail({
+          managerFullName,
+          managerEmail: mgr.email || '',
+          companyName,
+          companyId,
+          attemptLabelRo: 'un nou manager',
+          attemptLabelEn: 'a manager',
+        });
+      } catch (mailErr) {
+        if (mailErr && mailErr.code !== 'SMTP_NOT_CONFIGURED') console.error('sendSeatLimitReachedEmail', mailErr);
+      }
+      return res.status(403).json({
+        success: false,
+        code: 'USER_LIMIT_REACHED',
+        message:
+          'Your company has reached the maximum number of users for your current plan. Please contact support at info@proconix.uk to upgrade.',
+      });
     }
 
     const tempPassword = generateTempPassword();
