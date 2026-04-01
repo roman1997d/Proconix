@@ -15,6 +15,7 @@ Acest folder conține documentația de arhitectură, bază de date, backend, fro
 | 5 | [5-installation-setup.md](5-installation-setup.md) | Setup local/VPS, Node.js, PostgreSQL, npm, variabile .env, PM2, Nginx, SSL, backup/restore DB, deployment |
 | 6 | [6-qa-testing.md](6-qa-testing.md) | Test cases (login, CRUD proiecte, operatives, work logs, QA, dashboard operativ), loguri și debugging (PM2, Nginx, Node, frontend) |
 | 7 | [7-business-product.md](7-business-product.md) | Scop și obiective, utilizatori țintă, roadmap/MVP vs viitor, plan monetizare (Free/Silver/Gold), strategie lansare |
+| 8 | [8-recent-extras.md](8-recent-extras.md) | Extra recent: landing (typewriter, carusel hero, flux „How it works”, testimoniale, FAQ), dashboard iframe + touch, Site Snags double-tap, folder `Doc_Marketing_Suite` |
 
 ---
 
@@ -34,11 +35,19 @@ Pentru diagrame Mermaid poți folosi: [Mermaid Live Editor](https://mermaid.live
 - La **adăugare rute API**: actualizează `3-backend.md` și, dacă e cazul, `4-frontend.md` (ce script face fetch la noul endpoint).
 - La **schimbare schemă DB**: actualizează `2-database.md` (ERD, schema, scripturi) și `5-installation-setup.md` dacă apar noi scripturi.
 - La **pagină sau modul nou**: actualizează `1-architecture.md` (tabel module) și `4-frontend.md` (structură, flux, manual).
+- La **schimbări majore pe landing / iframe dashboard / Site Snags**: actualizează `8-recent-extras.md` (și rezumatul din acest README).
 - La **nou flux de business sau test**: actualizează `6-qa-testing.md` și, dacă e cazul, `7-business-product.md`.
 
 ---
 
 ## Modificări recente (rezumat consolidat)
+
+### Extra (landing, iframe dashboard, Site Snags, marketing doc)
+- Detaliat în **[8-recent-extras.md](8-recent-extras.md)** — rezumat scurt:
+  - **Landing:** typewriter pe titlu hero (3 fraze); carusel 3 slide-uri în fereastra produs; secțiune interactivă „How Proconix fits…”; testimoniale + FAQ; cutii software 3D Manager/Operative **eliminate**.
+  - **Dashboard:** `iframeModuleSrc`, retry `postMessage` Site Snags, `min-height` iframe pe dispozitive touch.
+  - **Site Snags:** double-tap pentru pin nou; `placeNewPinAtClient`.
+  - **Marketing:** `Doc_Marketing_Suite/Proconix_Marketing_Suite.md`.
 
 ### Dashboard manager – Project Overview (date reale)
 - **Stat cards**: Total Projects, Active Tasks (număr `planning_plan_tasks` pe planuri ale companiei), Operatives (număr din `/api/operatives`), Total project cost (sumă `work_logs.total`, ne-arhivate) – sursă `GET /api/dashboard/overview-stats`.
@@ -113,4 +122,4 @@ Pentru diagrame Mermaid poți folosi: [Mermaid Live Editor](https://mermaid.live
 #### Curățare cod vechi
 - Eliminate șabloanele HTML Puppeteer din `backend/templates/pdf/` și fluxul `pdfReportsController` / `renderPdf`; dependența **puppeteer** scoasă din `package.json` unde nu mai e folosită.
 
-**Actualizat:** 27/03/2026
+**Actualizat:** 27/03/2026 (inclusiv `8-recent-extras.md`)

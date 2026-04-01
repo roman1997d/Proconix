@@ -117,6 +117,12 @@ app.use('/api', (req, res) => {
 // Uploaded files (issues, documents) – served from backend/uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Clean URLs for About (SEO-friendly /about and /about-us)
+const aboutHtmlPath = path.join(frontendDir, 'about.html');
+app.get(['/about', '/about-us'], (req, res) => {
+  res.sendFile(aboutHtmlPath);
+});
+
 // Static frontend (index.html, register_company.html, css/, js/, etc.)
 app.use(express.static(frontendDir));
 
