@@ -27,12 +27,11 @@ function generateSecurityToken() {
 /** Allowed industry types (must match frontend dropdown) */
 const ALLOWED_INDUSTRIES = ['Drylining', 'Plumbing', 'Electrical', 'Carpentry', 'Other'];
 
-/** Allowed subscription plans (tiers from See Plans / price_policy + legacy billing periods) */
-const ALLOWED_PLANS = [
-  'Small Team',
-  'Growing Team',
-  'Medium Team',
-  'Enterprise',
+/** Tier plans (See Plans / price_policy) — may be stored with optional ` (trial 14 days)` / ` (trial 30 days)` suffix */
+const TIER_PLANS = ['Small Team', 'Growing Team', 'Medium Team', 'Enterprise'];
+
+/** Legacy / billing-period style plans */
+const LEGACY_PLANS = [
   'Free',
   'Silver',
   'Gold',
@@ -42,6 +41,32 @@ const ALLOWED_PLANS = [
   '6 months',
   '12 months',
 ];
+
+/** Allowed base subscription_plan values (tiers + legacy) */
+const ALLOWED_PLANS = [...TIER_PLANS, ...LEGACY_PLANS];
+
+/**
+ * @param {string} raw
+ * @returns {{ base: string, trialDays: number|null }}
+ */
+function parseSubscriptionPlan(raw) {
+  const s = String(raw || '').trim();
+  const m = s.match(/^(.*?)\s*\(trial\s*(14|30)\s*days\)\s*$/i);
+  if (m) {
+    return { base: m[1].trim(), trialDays: parseInt(m[2], 10) };
+  }
+  return { base: s, trialDays: null };
+}
+
+function isAllowedSubscriptionPlan(raw) {
+  const { base, trialDays } = parseSubscriptionPlan(raw);
+  if (!ALLOWED_PLANS.includes(base)) return false;
+  if (trialDays !== null) {
+    if (!TIER_PLANS.includes(base)) return false;
+    if (![14, 30].includes(trialDays)) return false;
+  }
+  return true;
+}
 
 /**
  * Validates and sanitizes company create payload.
@@ -67,8 +92,10 @@ function validateCreateBody(body) {
     errors.push(`Industry type must be one of: ${ALLOWED_INDUSTRIES.join(', ')}.`);
   }
   if (!subscription_plan) errors.push('Subscription plan is required.');
-  if (!ALLOWED_PLANS.includes(subscription_plan)) {
-    errors.push(`Subscription plan must be one of: ${ALLOWED_PLANS.join(', ')}.`);
+  if (!isAllowedSubscriptionPlan(subscription_plan)) {
+    errors.push(
+      `Subscription plan must be a tier (${TIER_PLANS.join(', ')}) optionally with (trial 14 days) or (trial 30 days), or a legacy plan (${LEGACY_PLANS.join(', ')}).`
+    );
   }
   if (!created_by) errors.push('Head manager name (created_by) is required.');
   if (!office_address) errors.push('Office address is required.');

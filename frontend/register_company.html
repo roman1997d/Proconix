@@ -89,10 +89,12 @@
                   <label for="subscriptionPlan" class="form-label">Subscription plan <span class="text-danger">*</span></label>
                   <select class="form-select form-control-proconix" id="subscriptionPlan" name="subscription_plan" required>
                     <option value="">Select plan</option>
-                    <option value="Small Team">Small Team — £49/mo (1–5 users)</option>
-                    <option value="Growing Team">Growing Team — £180/mo (6–30 users)</option>
-                    <option value="Medium Team">Medium Team — £299/mo (31–60 users)</option>
-                    <option value="Enterprise">Enterprise — custom (61+ users)</option>
+                    <optgroup label="Current plans (trial available on any tier)">
+                      <option value="Small Team">Small Team — £49/mo · 1–5 users · all modules</option>
+                      <option value="Growing Team">Growing Team — £180/mo · 6–30 users · dedicated support</option>
+                      <option value="Medium Team">Medium Team — £299/mo · 31–60 users · daily email digest</option>
+                      <option value="Enterprise">Enterprise — custom pricing · 61+ users · backups &amp; scale</option>
+                    </optgroup>
                     <optgroup label="Legacy">
                       <option value="Free">Free Plan</option>
                       <option value="Silver">Silver Plan</option>
@@ -106,6 +108,17 @@
                   </select>
                   <div class="invalid-feedback">Please select a subscription plan.</div>
                   <p id="planFromSeePlansHint" class="form-text text-muted small mb-0 d-none">Plan pre-selected from <a href="/see_plans.html">See Plans</a>.</p>
+                </div>
+                <div class="col-md-6">
+                  <label for="trialLength" class="form-label">Free trial length</label>
+                  <select class="form-select form-control-proconix" id="trialLength" name="trial_length" aria-describedby="trialLengthHelp">
+                    <option value="">— Choose after selecting a plan —</option>
+                    <option value="14">14 days free trial</option>
+                    <option value="30">30 days free trial</option>
+                  </select>
+                  <p id="trialLengthHelp" class="form-text text-muted small mb-0">
+                    For <strong>Small Team – Enterprise</strong>, pick 14 or 30 days. After the trial, a Proconix administrator will contact you to agree next steps. Legacy plans ignore this field.
+                  </p>
                 </div>
                 <div class="col-md-6">
                   <label for="numberOfUsers" class="form-label">Number of users</label>
@@ -177,6 +190,7 @@
   <script>
     (function () {
       var STORAGE_KEY = 'proconix_selected_plan';
+      var TIER_PLAN_VALUES = ['Small Team', 'Growing Team', 'Medium Team', 'Enterprise'];
       var PLAN_MAP = {
         small_team: 'Small Team',
         growing_team: 'Growing Team',
@@ -187,6 +201,31 @@
         gold: 'Gold',
         platinum: 'Platinum',
       };
+
+      function syncTrialLengthField() {
+        var planSel = document.getElementById('subscriptionPlan');
+        var trialSel = document.getElementById('trialLength');
+        if (!planSel || !trialSel) return;
+        var base = planSel.value;
+        var isTier = TIER_PLAN_VALUES.indexOf(base) >= 0;
+        trialSel.disabled = !isTier;
+        if (!isTier) {
+          trialSel.value = '';
+        } else if (!trialSel.value) {
+          trialSel.value = '14';
+        }
+      }
+
+      function buildSubscriptionPlanPayload() {
+        var base = document.getElementById('subscriptionPlan').value;
+        var trial = document.getElementById('trialLength').value;
+        if (trial === '14' || trial === '30') {
+          if (TIER_PLAN_VALUES.indexOf(base) >= 0) {
+            return base + ' (trial ' + trial + ' days)';
+          }
+        }
+        return base;
+      }
 
       function applyPlanFromStorage() {
         var raw = null;
@@ -206,13 +245,22 @@
           sel.value = value;
           var hint = document.getElementById('planFromSeePlansHint');
           if (hint) hint.classList.remove('d-none');
+          syncTrialLengthField();
         }
       }
 
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', applyPlanFromStorage);
+        document.addEventListener('DOMContentLoaded', function () {
+          applyPlanFromStorage();
+          syncTrialLengthField();
+          var planSel = document.getElementById('subscriptionPlan');
+          if (planSel) planSel.addEventListener('change', syncTrialLengthField);
+        });
       } else {
         applyPlanFromStorage();
+        syncTrialLengthField();
+        var planSel2 = document.getElementById('subscriptionPlan');
+        if (planSel2) planSel2.addEventListener('change', syncTrialLengthField);
       }
 
       const form = document.getElementById('registerCompanyForm');
@@ -243,7 +291,7 @@
         const payload = {
           name: document.getElementById('companyName').value.trim(),
           industry_type: document.getElementById('industryType').value,
-          subscription_plan: document.getElementById('subscriptionPlan').value,
+          subscription_plan: buildSubscriptionPlanPayload(),
           created_by: document.getElementById('headManagerName').value.trim(),
           office_address: document.getElementById('officeAddress').value.trim(),
           security_question1: document.getElementById('securityQuestion').value.trim(),

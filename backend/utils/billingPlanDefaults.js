@@ -23,6 +23,17 @@ function getPlanBillingDefaults(subscriptionPlan) {
   const now = new Date();
   const s = String(subscriptionPlan || '').toLowerCase().trim();
 
+  const trialMatch = String(subscriptionPlan || '').match(/\(trial\s*(14|30)\s*days\)/i);
+  if (trialMatch) {
+    const days = parseInt(trialMatch[1], 10);
+    return {
+      plan_purchased_at: now,
+      plan_expires_at: addDays(now, days),
+      payment_method: 'registration',
+      billing_status: 'unpaid_active',
+    };
+  }
+
   let expires;
   if (s.includes('small team')) {
     expires = addDays(now, 30);
