@@ -1801,8 +1801,11 @@
     }
   }
 
-  function fillCompanyModal(company, hm) {
+  function fillCompanyModal(company, hm, userCount) {
     if (!company) return;
+    var count = userCount != null && userCount !== '' ? parseInt(String(userCount), 10) : NaN;
+    if (!Number.isInteger(count) || count < 0) count = 0;
+
     setVal('pxCo_id', company.id);
     setVal('pxCo_name', company.name);
     setVal('pxCo_industry_type', company.industry_type);
@@ -1812,6 +1815,26 @@
     setVal('pxCo_office_address', company.office_address);
     setVal('pxCo_security_question1', company.security_question1);
     setVal('pxCo_security_token1', company.security_token1);
+
+    var limRaw = company.user_limit;
+    var lim =
+      limRaw != null && limRaw !== ''
+        ? parseInt(String(limRaw), 10)
+        : NaN;
+    var limEl = document.getElementById('pxCo_user_limit');
+    if (limEl) {
+      limEl.value = Number.isInteger(lim) && lim >= 1 ? String(lim) : '';
+    }
+    var disp = document.getElementById('pxCo_user_count_display');
+    if (disp) {
+      disp.value =
+        Number.isInteger(lim) && lim >= 1 ? String(count) + ' of ' + String(lim) : String(count);
+    }
+    var warn = document.getElementById('pxCo_user_limit_warning');
+    if (warn) {
+      var over = Number.isInteger(lim) && lim >= 1 && count > lim;
+      warn.classList.toggle('d-none', !over);
+    }
     var cat = document.getElementById('pxCo_created_at');
     if (cat) {
       if (company.created_at) {
@@ -1876,7 +1899,7 @@
           if (modalForm) modalForm.classList.remove('d-none');
           return;
         }
-        fillCompanyModal(out.data.company, out.data.head_manager);
+        fillCompanyModal(out.data.company, out.data.head_manager, out.data.user_count);
         if (modalForm) modalForm.classList.remove('d-none');
       })
       .catch(function () {
@@ -1909,6 +1932,19 @@
     btnSaveCo.addEventListener('click', function () {
       if (currentCompanyId == null) return;
       hideModalFeedback();
+      var limInp = document.getElementById('pxCo_user_limit');
+      var limStr = limInp && limInp.value != null ? String(limInp.value).trim() : '';
+      var userLimitPayload = null;
+      if (limStr === '') {
+        userLimitPayload = null;
+      } else {
+        var ln = parseInt(limStr, 10);
+        if (!Number.isInteger(ln) || ln < 1) {
+          showModalFeedback('User limit must be a positive integer or empty for no limit.', 'error');
+          return;
+        }
+        userLimitPayload = ln;
+      }
       var companyPayload = {
         name: document.getElementById('pxCo_name') && document.getElementById('pxCo_name').value,
         industry_type: document.getElementById('pxCo_industry_type') && document.getElementById('pxCo_industry_type').value,
@@ -1918,6 +1954,7 @@
         office_address: document.getElementById('pxCo_office_address') && document.getElementById('pxCo_office_address').value,
         security_question1: document.getElementById('pxCo_security_question1') && document.getElementById('pxCo_security_question1').value,
         security_token1: document.getElementById('pxCo_security_token1') && document.getElementById('pxCo_security_token1').value,
+        user_limit: userLimitPayload,
       };
       var hmIdEl = document.getElementById('pxHm_id');
       var hmPayload = {};
@@ -1954,7 +1991,7 @@
             return;
           }
           showModalFeedback('Saved successfully.', 'success');
-          fillCompanyModal(out.data.company, out.data.head_manager);
+          fillCompanyModal(out.data.company, out.data.head_manager, out.data.user_count);
           loadCompaniesPanel(session);
         })
         .catch(function () {

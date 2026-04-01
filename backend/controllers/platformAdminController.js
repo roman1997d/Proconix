@@ -49,6 +49,19 @@ function mapHeadManagerRow(row) {
 }
 
 /**
+ * Total seats = all manager rows + all users rows for this company.
+ * @param {import('pg').Pool | import('pg').PoolClient} db
+ * @param {number} companyId
+ */
+async function countCompanySeats(db, companyId) {
+  const m = await db.query('SELECT COUNT(*)::int AS n FROM manager WHERE company_id = $1', [companyId]);
+  const u = await db.query('SELECT COUNT(*)::int AS n FROM users WHERE company_id = $1', [companyId]);
+  const nm = m.rows[0] && m.rows[0].n != null ? Number(m.rows[0].n) : 0;
+  const nu = u.rows[0] && u.rows[0].n != null ? Number(u.rows[0].n) : 0;
+  return nm + nu;
+}
+
+/**
  * POST /api/platform-admin/login
  * Body: { email, password }
  */
@@ -197,9 +210,16 @@ async function getCompany(req, res) {
        LIMIT 1`,
       [id]
     );
+    let userCount = 0;
+    try {
+      userCount = await countCompanySeats(pool, id);
+    } catch (cntErr) {
+      if (cntErr.code !== '42P01') throw cntErr;
+    }
     return res.status(200).json({
       success: true,
       company: c.rows[0],
+      user_count: userCount,
       head_manager: hm.rows[0] ? mapHeadManagerRow(hm.rows[0]) : null,
     });
   } catch (err) {
@@ -257,12 +277,44 @@ async function updateCompany(req, res) {
         p += 1;
       }
     });
+    if (Object.prototype.hasOwnProperty.call(companyIn, 'user_limit')) {
+      const raw = companyIn.user_limit;
+      let limitVal = null;
+      if (raw === null || raw === undefined || raw === '') {
+        limitVal = null;
+      } else {
+        const n = parseInt(String(raw).trim(), 10);
+        if (!Number.isInteger(n) || n < 1) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            success: false,
+            message: 'user_limit must be a positive integer, or empty / null for no limit.',
+          });
+        }
+        limitVal = n;
+      }
+      sets.push(`user_limit = $${p}`);
+      vals.push(limitVal);
+      p += 1;
+    }
     if (sets.length) {
       vals.push(id);
-      await client.query(
-        `UPDATE companies SET ${sets.join(', ')} WHERE id = $${p}`,
-        vals
-      );
+      try {
+        await client.query(
+          `UPDATE companies SET ${sets.join(', ')} WHERE id = $${p}`,
+          vals
+        );
+      } catch (updErr) {
+        if (updErr.code === '42703' && sets.some((s) => s.startsWith('user_limit'))) {
+          await client.query('ROLLBACK');
+          return res.status(503).json({
+            success: false,
+            message:
+              'Column user_limit is missing on companies. Run: scripts/alter_companies_user_limit.sql',
+          });
+        }
+        throw updErr;
+      }
     }
 
     if (Object.keys(hmIn).length > 0) {
@@ -380,10 +432,17 @@ async function updateCompany(req, res) {
        LIMIT 1`,
       [id]
     );
+    let userCountAfter = 0;
+    try {
+      userCountAfter = await countCompanySeats(pool, id);
+    } catch (cntErr) {
+      if (cntErr.code !== '42P01') throw cntErr;
+    }
     return res.status(200).json({
       success: true,
       message: 'Company updated.',
       company: c.rows[0],
+      user_count: userCountAfter,
       head_manager: hm.rows[0] ? mapHeadManagerRow(hm.rows[0]) : null,
     });
   } catch (err) {
