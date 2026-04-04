@@ -8,6 +8,7 @@ const { pool } = require('../db/pool');
 const {
   sendManagerAccountActivatedEmail,
   sendPlatformAdminClientEmail,
+  sendDemoTenantWelcomeEmail,
 } = require('../lib/sendCallbackRequestEmail');
 const { countCompanySeats } = require('../utils/companyUserSeats');
 const { runCreateDemoRecords } = require('../lib/createDemoRecords');
@@ -813,6 +814,92 @@ async function sendClientEmail(req, res) {
   }
 }
 
+function getDemoPortalUrls() {
+  const base = (process.env.PROCONIX_PUBLIC_URL || 'https://proconix.uk').replace(/\/$/, '');
+  const mgr = process.env.PROCONIX_MANAGER_DEMO_PATH || '/dashboard_manager.html';
+  const op = process.env.PROCONIX_OPERATIVE_DEMO_PATH || '/operative_dashboard.html';
+  const mPath = mgr.startsWith('/') ? mgr : `/${mgr}`;
+  const oPath = op.startsWith('/') ? op : `/${op}`;
+  return {
+    managerPortalUrl: `${base}${mPath}`,
+    operativePortalUrl: `${base}${oPath}`,
+  };
+}
+
+/**
+ * POST /api/platform-admin/send-demo-login-email
+ * Body: { to, company_name, head_manager_name?, head_manager_email, primary_operative_email, password }
+ * Sends branded email with manager + operative URLs and credentials (same password for both).
+ */
+async function sendDemoLoginEmail(req, res) {
+  const b = req.body || {};
+  const to = typeof b.to === 'string' ? b.to.trim() : '';
+  const company_name = typeof b.company_name === 'string' ? b.company_name.trim() : '';
+  const head_manager_name =
+    typeof b.head_manager_name === 'string' ? b.head_manager_name.trim() : '';
+  const head_manager_email =
+    typeof b.head_manager_email === 'string' ? b.head_manager_email.trim() : '';
+  const primary_operative_email =
+    typeof b.primary_operative_email === 'string' ? b.primary_operative_email.trim() : '';
+  const password = typeof b.password === 'string' ? b.password : '';
+
+  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    return res.status(400).json({ success: false, message: 'A valid recipient email is required.' });
+  }
+  if (!company_name || company_name.length < 2) {
+    return res.status(400).json({ success: false, message: 'Company name is required.' });
+  }
+  if (!head_manager_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(head_manager_email)) {
+    return res.status(400).json({ success: false, message: 'Head manager email is required.' });
+  }
+  if (!primary_operative_email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(primary_operative_email)) {
+    return res.status(400).json({ success: false, message: 'Primary operative email is required.' });
+  }
+  if (!password || password.length < 8) {
+    return res.status(400).json({
+      success: false,
+      message: 'Password must be at least 8 characters (same as used when creating the demo).',
+    });
+  }
+
+  const admin = req.platformAdmin || {};
+  const adminEmail = typeof admin.email === 'string' ? admin.email.trim() : '';
+  const adminName = admin.full_name != null ? String(admin.full_name).trim() : '';
+
+  const { managerPortalUrl, operativePortalUrl } = getDemoPortalUrls();
+
+  try {
+    await sendDemoTenantWelcomeEmail({
+      to,
+      companyName: company_name,
+      headManagerName: head_manager_name,
+      headManagerEmail: head_manager_email,
+      primaryOperativeEmail: primary_operative_email,
+      password,
+      managerPortalUrl,
+      operativePortalUrl,
+      adminEmail,
+      adminName,
+    });
+    return res.status(200).json({
+      success: true,
+      message: 'Login details sent to the client.',
+    });
+  } catch (err) {
+    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({
+        success: false,
+        message: 'Email is not configured on the server. Set SMTP_* environment variables.',
+      });
+    }
+    console.error('sendDemoLoginEmail error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to send email.',
+    });
+  }
+}
+
 /**
  * POST /api/platform-admin/create-demo-records
  * Body: { company_name, head_manager_name, email, password }
@@ -880,4 +967,5 @@ module.exports = {
   updateBillingSubscription,
   sendClientEmail,
   createDemoRecords,
+  sendDemoLoginEmail,
 };

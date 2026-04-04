@@ -984,6 +984,70 @@ async function sendPlatformAdminClientEmail(p) {
   });
 }
 
+/**
+ * Platform admin → prospect after demo tenant is created (login URLs + credentials).
+ *
+ * @param {{
+ *   to: string,
+ *   companyName: string,
+ *   headManagerName?: string,
+ *   headManagerEmail: string,
+ *   primaryOperativeEmail: string,
+ *   password: string,
+ *   managerPortalUrl: string,
+ *   operativePortalUrl: string,
+ *   adminEmail: string,
+ *   adminName?: string,
+ * }} p
+ */
+async function sendDemoTenantWelcomeEmail(p) {
+  const to = String(p.to || '').trim();
+  const companyName = String(p.companyName || '').trim();
+  const headManagerName = String(p.headManagerName || '').trim();
+  const headManagerEmail = String(p.headManagerEmail || '').trim();
+  const primaryOperativeEmail = String(p.primaryOperativeEmail || '').trim();
+  const password = String(p.password || '');
+  const managerPortalUrl = String(p.managerPortalUrl || '').trim();
+  const operativePortalUrl = String(p.operativePortalUrl || '').trim();
+  const adminEmail = String(p.adminEmail || '').trim();
+  const adminName = String(p.adminName || '').trim();
+
+  const greeting = headManagerName ? `Hello ${headManagerName},` : 'Hello,';
+  const subject = `Your Proconix demo — ${companyName || 'your workspace'}`;
+
+  const bodyText = [
+    greeting,
+    '',
+    'Your Proconix demo workspace is ready. Use the details below to sign in to the manager dashboard and the operative app. The same password works for both accounts.',
+    '',
+    `Company: ${companyName}`,
+    '',
+    'Head manager (web dashboard)',
+    `• Open: ${managerPortalUrl}`,
+    `• Email: ${headManagerEmail}`,
+    `• Password: ${password}`,
+    '',
+    'Primary demo operative (field app)',
+    `• Open: ${operativePortalUrl}`,
+    `• Email: ${primaryOperativeEmail}`,
+    '• Password: same as above',
+    '',
+    'The demo includes sample projects, work logs, planning, materials, quality assurance, and more so you can see how teams use Proconix day to day.',
+    '',
+    'If you have any questions, reply to this email.',
+    '',
+    `— ${adminName || 'Proconix'}`,
+  ].join('\n');
+
+  await sendPlatformAdminClientEmail({
+    to,
+    subject,
+    bodyText,
+    adminEmail,
+    adminName,
+  });
+}
+
 module.exports = {
   sendCallbackRequestEmail,
   sendContactUsEmail,
@@ -993,5 +1057,6 @@ module.exports = {
   sendOperativeWelcomeEmail,
   sendSeatLimitReachedEmail,
   sendPlatformAdminClientEmail,
+  sendDemoTenantWelcomeEmail,
   createTransport,
 };

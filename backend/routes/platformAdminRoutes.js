@@ -15,6 +15,7 @@ const {
   updateBillingSubscription,
   sendClientEmail,
   createDemoRecords,
+  sendDemoLoginEmail,
 } = require('../controllers/platformAdminController');
 const {
   listPlatformUsers,
@@ -32,6 +33,7 @@ router.get('/server-log-stream', requirePlatformAdminAuth, getServerLogStream);
 router.post('/log-test', requirePlatformAdminAuth, postLogTest);
 router.post('/send-client-email', requirePlatformAdminAuth, sendClientEmail);
 router.post('/create-demo-records', requirePlatformAdminAuth, createDemoRecords);
+router.post('/send-demo-login-email', requirePlatformAdminAuth, sendDemoLoginEmail);
 router.get('/billing-subscriptions', requirePlatformAdminAuth, listBillingSubscriptions);
 router.patch('/billing-subscriptions/:id', requirePlatformAdminAuth, updateBillingSubscription);
 router.get('/platform-users', requirePlatformAdminAuth, listPlatformUsers);

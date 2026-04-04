@@ -1038,8 +1038,28 @@
   var demoAlert = document.getElementById('pxDemoCreateAlert');
   var demoSuccess = document.getElementById('pxDemoCreateSuccess');
   var demoBtn = document.getElementById('pxDemoCreateBtn');
+  var demoSendWrap = document.getElementById('pxDemoSendEmailWrap');
+  var demoSendBtn = document.getElementById('pxDemoSendEmailBtn');
+  var demoSendAlert = document.getElementById('pxDemoSendEmailAlert');
+  var demoSendOk = document.getElementById('pxDemoSendEmailOk');
+  /** Set after successful create-demo; used only to POST send-demo-login-email (password kept in memory until page reload). */
+  var lastDemoSendPayload = null;
+
+  function hideDemoSendAlerts() {
+    if (demoSendAlert) {
+      demoSendAlert.classList.add('d-none');
+      demoSendAlert.textContent = '';
+    }
+    if (demoSendOk) {
+      demoSendOk.classList.add('d-none');
+      demoSendOk.textContent = '';
+    }
+  }
 
   function hideDemoAlerts() {
+    lastDemoSendPayload = null;
+    if (demoSendWrap) demoSendWrap.classList.add('d-none');
+    hideDemoSendAlerts();
     if (demoAlert) {
       demoAlert.classList.add('d-none');
       demoAlert.textContent = '';
@@ -1096,6 +1116,16 @@
               demoSuccess.textContent = lines.join('\n');
               demoSuccess.classList.remove('d-none');
             }
+            lastDemoSendPayload = {
+              to: payload.email,
+              company_name: payload.company_name,
+              head_manager_name: payload.head_manager_name,
+              head_manager_email: d.head_manager_email || payload.email,
+              primary_operative_email: d.primary_operative_email || '',
+              password: payload.password,
+            };
+            if (demoSendWrap) demoSendWrap.classList.remove('d-none');
+            hideDemoSendAlerts();
             demoForm.reset();
             return;
           }
@@ -1110,6 +1140,60 @@
           if (demoAlert) {
             demoAlert.textContent = 'Network error.';
             demoAlert.classList.remove('d-none');
+          }
+        });
+    });
+  }
+
+  if (demoSendBtn) {
+    demoSendBtn.addEventListener('click', function () {
+      hideDemoSendAlerts();
+      if (!lastDemoSendPayload || !lastDemoSendPayload.password) {
+        if (demoSendAlert) {
+          demoSendAlert.textContent =
+            'Create a demo again to send email (password is only kept for the session right after creation).';
+          demoSendAlert.classList.remove('d-none');
+        }
+        return;
+      }
+      demoSendBtn.disabled = true;
+      fetch('/api/platform-admin/send-demo-login-email', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+        credentials: 'same-origin',
+        body: JSON.stringify(lastDemoSendPayload),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          demoSendBtn.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status === 200 && out.data && out.data.success) {
+            if (demoSendOk) {
+              demoSendOk.textContent =
+                out.data.message || 'Email sent to ' + (lastDemoSendPayload.to || 'client') + '.';
+              demoSendOk.classList.remove('d-none');
+            }
+            return;
+          }
+          if (demoSendAlert) {
+            demoSendAlert.textContent =
+              (out.data && out.data.message) || 'Could not send email.';
+            demoSendAlert.classList.remove('d-none');
+          }
+        })
+        .catch(function () {
+          demoSendBtn.disabled = false;
+          if (demoSendAlert) {
+            demoSendAlert.textContent = 'Network error.';
+            demoSendAlert.classList.remove('d-none');
           }
         });
     });
