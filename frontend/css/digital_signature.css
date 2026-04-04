@@ -17,6 +17,10 @@
   --ds-radius: 12px;
 }
 
+.d-none {
+  display: none !important;
+}
+
 html {
   height: 100%;
   height: -webkit-fill-available;
@@ -221,6 +225,158 @@ body.ds-module {
   background: var(--ds-accent-dim);
   border-radius: 8px;
   border-left: 3px solid var(--ds-accent);
+}
+
+.ds-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.75);
+  z-index: 1000;
+}
+
+.ds-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.ds-modal.d-none,
+.ds-modal-backdrop.d-none {
+  display: none !important;
+}
+
+.ds-modal:not(.d-none) {
+  display: flex !important;
+}
+
+.ds-modal-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+
+.ds-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid var(--ds-border);
+}
+
+.ds-modal-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.ds-modal-close {
+  background: none;
+  border: none;
+  color: var(--ds-muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.ds-modal-close:hover {
+  color: var(--ds-text);
+}
+
+.ds-modal-body {
+  padding: 1.15rem;
+}
+
+.ds-field {
+  margin-bottom: 1rem;
+}
+
+.ds-field label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--ds-muted);
+  margin-bottom: 0.35rem;
+}
+
+.ds-req {
+  color: var(--ds-danger);
+}
+
+.ds-input-block,
+.ds-textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ds-textarea {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  color: var(--ds-text);
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.9rem;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.ds-file {
+  font-size: 0.85rem;
+  color: var(--ds-muted);
+}
+
+.ds-form-error {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid var(--ds-danger);
+  color: #fecaca;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.ds-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 0.5rem;
+}
+
+.ds-btn-secondary {
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--ds-border);
+  background: transparent;
+  color: var(--ds-text);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.ds-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ds-card-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ds-card-actions a {
+  font-size: 0.8rem;
+  color: var(--ds-accent);
 }
 
 @media (max-width: 576px) {

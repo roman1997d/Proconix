@@ -15,7 +15,7 @@
   <div class="ds-wrap">
     <div class="ds-toolbar">
       <h1><i class="bi bi-file-earmark-medical" aria-hidden="true"></i> Documents &amp; Signatures</h1>
-      <button type="button" class="ds-btn-primary" id="dsBtnNewDoc" disabled title="Coming when API is connected">
+      <button type="button" class="ds-btn-primary" id="dsBtnNewDoc" disabled title="Upload a PDF">
         <i class="bi bi-plus-lg" aria-hidden="true"></i> New document
       </button>
     </div>
@@ -31,9 +31,9 @@
         <label for="dsFilterStatus">Status</label>
         <select id="dsFilterStatus" class="ds-select" aria-label="Filter by status">
           <option value="">All</option>
-          <option value="pending">Pending signatures</option>
-          <option value="signed">Completed</option>
           <option value="draft">Draft</option>
+          <option value="pending_signatures">Pending signatures</option>
+          <option value="completed">Completed</option>
         </select>
       </div>
       <div>
@@ -54,6 +54,54 @@
       <strong>Manager workflow:</strong> upload PDF → place signature fields → assign operatives → track progress. Operatives sign on mobile with the same password flow as the rest of Proconix.
     </p>
   </div>
+
+  <div id="dsModalBackdrop" class="ds-modal-backdrop d-none" aria-hidden="true"></div>
+  <div id="dsModalNew" class="ds-modal d-none" role="dialog" aria-labelledby="dsModalTitle" aria-modal="true">
+    <div class="ds-modal-card">
+      <div class="ds-modal-head">
+        <h2 id="dsModalTitle" class="ds-modal-title">New document</h2>
+        <button type="button" class="ds-modal-close" id="dsModalClose" aria-label="Close">&times;</button>
+      </div>
+      <form id="dsFormUpload" class="ds-modal-body">
+        <p id="dsFormError" class="ds-form-error d-none" role="alert"></p>
+        <div class="ds-field">
+          <label for="dsUpTitle">Title <span class="ds-req">*</span></label>
+          <input type="text" id="dsUpTitle" name="title" class="ds-input ds-input-block" required maxlength="500" placeholder="e.g. Site induction pack">
+        </div>
+        <div class="ds-field">
+          <label for="dsUpFile">PDF file <span class="ds-req">*</span></label>
+          <input type="file" id="dsUpFile" name="file" class="ds-file" accept=".pdf,application/pdf" required>
+        </div>
+        <div class="ds-field">
+          <label for="dsUpProject">Project (optional)</label>
+          <select id="dsUpProject" name="project_id" class="ds-select ds-input-block">
+            <option value="">— No project —</option>
+          </select>
+        </div>
+        <div class="ds-field">
+          <label for="dsUpType">Document type</label>
+          <select id="dsUpType" name="document_type" class="ds-select ds-input-block">
+            <option value="">— Select —</option>
+            <option value="RAMS">RAMS</option>
+            <option value="Toolbox Talk">Toolbox Talk</option>
+            <option value="Induction">Induction</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="ds-field">
+          <label for="dsUpDesc">Description</label>
+          <textarea id="dsUpDesc" name="description" class="ds-textarea" rows="2" maxlength="2000" placeholder="Optional notes"></textarea>
+        </div>
+        <div class="ds-modal-actions">
+          <button type="button" class="ds-btn-secondary" id="dsModalCancel">Cancel</button>
+          <button type="submit" class="ds-btn-primary" id="dsModalSubmit">
+            <i class="bi bi-upload" aria-hidden="true"></i> Upload
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="js/digital_signature.js"></script>
 </body>
 </html>
