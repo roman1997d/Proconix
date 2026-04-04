@@ -1,0 +1,230 @@
+/**
+ * Documents & Digital Signatures — iframe module (manager dashboard).
+ * Fills iframe height; dark theme aligned with Task & Planning / dashboard.
+ */
+
+:root {
+  --ds-bg: #0b1620;
+  --ds-surface: #111827;
+  --ds-border: #1f2937;
+  --ds-accent: #22d3ee;
+  --ds-accent-dim: rgba(34, 211, 238, 0.12);
+  --ds-text: #e5e7eb;
+  --ds-muted: #94a3b8;
+  --ds-success: #4ade80;
+  --ds-warning: #fbbf24;
+  --ds-danger: #f87171;
+  --ds-radius: 12px;
+}
+
+html {
+  height: 100%;
+  height: -webkit-fill-available;
+}
+
+body.ds-module {
+  margin: 0;
+  min-height: 100%;
+  min-height: -webkit-fill-available;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: radial-gradient(circle at 12% 8%, #132337 0%, var(--ds-bg) 45%, #020617 100%);
+  color: var(--ds-text);
+  display: flex;
+  flex-direction: column;
+}
+
+.ds-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.25rem 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ds-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.ds-toolbar h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  flex: 1 1 auto;
+}
+
+.ds-toolbar h1 i {
+  color: var(--ds-accent);
+  margin-right: 0.35rem;
+  vertical-align: -0.1em;
+}
+
+.ds-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
+  color: #020617;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.35);
+}
+
+.ds-btn-primary:hover {
+  filter: brightness(1.06);
+}
+
+.ds-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ds-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.ds-filters label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ds-muted);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.ds-input,
+.ds-select {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  color: var(--ds-text);
+  border-radius: 8px;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.9rem;
+  min-width: 160px;
+}
+
+.ds-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+#dsListMount:empty {
+  display: none;
+}
+
+#dsListMount:not(:empty) ~ #dsEmpty {
+  display: none;
+}
+
+.ds-card {
+  background: var(--ds-surface);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius);
+  padding: 1.1rem 1.15rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.ds-card:hover {
+  border-color: rgba(34, 211, 238, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.ds-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.35;
+}
+
+.ds-card-meta {
+  font-size: 0.8rem;
+  color: var(--ds-muted);
+  margin-bottom: 0.75rem;
+}
+
+.ds-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ds-badge--pending {
+  background: rgba(251, 191, 36, 0.2);
+  color: var(--ds-warning);
+}
+
+.ds-badge--signed {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--ds-success);
+}
+
+.ds-badge--draft {
+  background: rgba(148, 163, 184, 0.2);
+  color: var(--ds-muted);
+}
+
+.ds-progress {
+  height: 6px;
+  background: var(--ds-border);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.ds-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #06b6d4, #22d3ee);
+  border-radius: 999px;
+  width: 0%;
+}
+
+.ds-empty {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  border: 1px dashed var(--ds-border);
+  border-radius: var(--ds-radius);
+  color: var(--ds-muted);
+}
+
+.ds-empty i {
+  font-size: 2.5rem;
+  opacity: 0.35;
+  display: block;
+  margin-bottom: 0.75rem;
+  color: var(--ds-accent);
+}
+
+.ds-hint {
+  font-size: 0.85rem;
+  color: var(--ds-muted);
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--ds-accent-dim);
+  border-radius: 8px;
+  border-left: 3px solid var(--ds-accent);
+}
+
+@media (max-width: 576px) {
+  .ds-toolbar h1 {
+    font-size: 1.05rem;
+  }
+}

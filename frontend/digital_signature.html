@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon_io/favicon.ico" sizes="any">
+  <title>Documents &amp; Digital Signatures – Proconix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/digital_signature.css" rel="stylesheet">
+</head>
+<body class="ds-module">
+  <div class="ds-wrap">
+    <div class="ds-toolbar">
+      <h1><i class="bi bi-file-earmark-medical" aria-hidden="true"></i> Documents &amp; Signatures</h1>
+      <button type="button" class="ds-btn-primary" id="dsBtnNewDoc" disabled title="Coming when API is connected">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i> New document
+      </button>
+    </div>
+
+    <div class="ds-filters">
+      <div>
+        <label for="dsFilterProject">Project</label>
+        <select id="dsFilterProject" class="ds-select" aria-label="Filter by project">
+          <option value="">All projects</option>
+        </select>
+      </div>
+      <div>
+        <label for="dsFilterStatus">Status</label>
+        <select id="dsFilterStatus" class="ds-select" aria-label="Filter by status">
+          <option value="">All</option>
+          <option value="pending">Pending signatures</option>
+          <option value="signed">Completed</option>
+          <option value="draft">Draft</option>
+        </select>
+      </div>
+      <div>
+        <label for="dsSearch">Search</label>
+        <input type="search" id="dsSearch" class="ds-input" placeholder="Title…" autocomplete="off" disabled>
+      </div>
+    </div>
+
+    <div id="dsListMount" class="ds-grid" aria-live="polite"></div>
+
+    <div id="dsEmpty" class="ds-empty">
+      <i class="bi bi-journal-text" aria-hidden="true"></i>
+      <p class="mb-1"><strong>No documents yet</strong></p>
+      <p class="mb-0 small">When the documents API is enabled, your RAMS, toolbox talks and signed PDFs will appear here. Use <strong>New document</strong> to upload and assign signatures.</p>
+    </div>
+
+    <p class="ds-hint mb-0" role="note">
+      <strong>Manager workflow:</strong> upload PDF → place signature fields → assign operatives → track progress. Operatives sign on mobile with the same password flow as the rest of Proconix.
+    </p>
+  </div>
+  <script src="js/digital_signature.js"></script>
+</body>
+</html>

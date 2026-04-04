@@ -27,6 +27,7 @@
     'operatives': 'Operatives',
     'worklogs': 'Work Logs',
     'quality-assurance': 'Quality Assurance',
+    'digital-signature': 'Documents & Signatures',
     'task-planning': 'Task & Planning',
     'site-snags': 'Site Snags',
     'profile-settings': 'Profile Settings',
@@ -170,6 +171,20 @@
         '<iframe src="' +
         iframeModuleSrc('Quality_Assurance.html') +
         '" class="dashboard-qa-iframe" title="Quality Assurance Module"></iframe>';
+      contentEl.classList.remove('dashboard-content-fade-out');
+      contentEl.classList.add('dashboard-content-fade-in');
+      if (pushState !== false) history.pushState({ module: module }, '', '#');
+      return;
+    }
+
+    if (module === 'digital-signature') {
+      contentEl.classList.add('dashboard-content-fade-out');
+      setActiveItem(module);
+      updateHeaderTitle(module);
+      contentEl.innerHTML =
+        '<iframe src="' +
+        iframeModuleSrc('digital_signature.html') +
+        '" class="dashboard-qa-iframe" title="Documents &amp; Digital Signatures"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
       if (pushState !== false) history.pushState({ module: module }, '', '#');
