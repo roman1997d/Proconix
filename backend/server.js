@@ -95,6 +95,10 @@ app.use('/api/projects', projectsRoutes);
 // Work Logs (manager: list, edit, approve, reject, archive)
 app.use('/api/worklogs', worklogsRoutes);
 
+// Documents & digital signatures — register BEFORE the broad `app.use('/api', qaRoutes)` so
+// GET /api/documents is never shadowed by the QA router stack (Express 4 order matters).
+app.use('/api/documents', digitalDocumentsRoutes);
+
 // Quality Assurance (templates, jobs) – GET/POST/PUT/DELETE /api/templates, /api/jobs
 app.use('/api', qaRoutes);
 
@@ -109,9 +113,6 @@ app.use('/api/platform-admin', platformAdminRoutes);
 
 // Site Snags (per-company JSON state; requires site_snags_state table)
 app.use('/api/site-snags', siteSnagsRoutes);
-
-// Documents & digital signatures (PDF storage under backend/uploads/{Name}_{companyId}_docs/)
-app.use('/api/documents', digitalDocumentsRoutes);
 
 // API 404 – ensure all unmatched /api/* return JSON (no HTML)
 app.use('/api', (req, res) => {
