@@ -20,11 +20,96 @@ async function insertAudit(client, documentId, action, actorType, actorId, detai
   );
 }
 
+const SIGNABLE_FIELD_TYPES = ['signature', 'initials', 'date', 'checkbox', 'text'];
+
+/** Transparent 1×1 PNG — DB requires a file; used for checkbox/date/text values. */
+const PLACEHOLDER_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  'base64'
+);
+
+function normalizeFieldsArray(fieldsJson) {
+  if (Array.isArray(fieldsJson)) return fieldsJson;
+  if (typeof fieldsJson === 'string') {
+    try {
+      return JSON.parse(fieldsJson);
+    } catch (_) {
+      return [];
+    }
+  }
+  return [];
+}
+
 function validateFieldsJson(fields) {
   if (!Array.isArray(fields)) return 'fields must be an array';
-  const sig = fields.filter((f) => f && f.type === 'signature');
-  if (sig.length < 1) return 'At least one signature field is required';
+  let count = 0;
+  for (let i = 0; i < fields.length; i++) {
+    const f = fields[i];
+    if (!f || typeof f !== 'object') return 'Invalid field at index ' + i;
+    if (typeof f.id !== 'string' || !f.id.trim()) return 'Each field requires a string id';
+    if (!SIGNABLE_FIELD_TYPES.includes(f.type)) {
+      return 'Invalid field type for ' + f.id + ' (use signature, initials, date, checkbox, or text).';
+    }
+    const p = parseInt(f.page, 10);
+    if (!Number.isInteger(p) || p < 1) return 'Field ' + f.id + ' requires page >= 1';
+    for (const k of ['x', 'y', 'w', 'h']) {
+      const n = Number(f[k]);
+      if (!Number.isFinite(n) || n < 0 || n > 1) {
+        return 'Field ' + f.id + ' requires ' + k + ' between 0 and 1 (relative to page).';
+      }
+    }
+    if (f.for_user_id != null && f.for_user_id !== '') {
+      const u = parseInt(f.for_user_id, 10);
+      if (!Number.isInteger(u) || u < 1) return 'Invalid for_user_id on field ' + f.id;
+    }
+    count += 1;
+  }
+  if (count < 1) return 'Add at least one field on the document.';
+  const hasInk = fields.some((f) => f && (f.type === 'signature' || f.type === 'initials'));
+  if (!hasInk) return 'At least one signature or initials field is required.';
   return null;
+}
+
+function fieldAppliesToUser(f, userId) {
+  if (!f || f.for_user_id == null || f.for_user_id === '') return true;
+  const uid = parseInt(f.for_user_id, 10);
+  return Number.isInteger(uid) && uid === userId;
+}
+
+function fieldRequiresOperativeInput(f) {
+  return f && SIGNABLE_FIELD_TYPES.includes(f.type);
+}
+
+function requiredFieldIdsForUser(fields, userId) {
+  const out = [];
+  fields.forEach((f) => {
+    if (!fieldRequiresOperativeInput(f)) return;
+    if (!fieldAppliesToUser(f, userId)) return;
+    if (f.required === false) return;
+    out.push(String(f.id));
+  });
+  return out;
+}
+
+async function isDocumentFullySigned(client, documentId, fieldsJson) {
+  const fields = normalizeFieldsArray(fieldsJson);
+  const assignR = await client.query('SELECT user_id FROM digital_document_assignments WHERE document_id = $1', [
+    documentId,
+  ]);
+  if (assignR.rows.length === 0) return false;
+  for (let i = 0; i < assignR.rows.length; i++) {
+    const uid = assignR.rows[i].user_id;
+    const needed = requiredFieldIdsForUser(fields, uid);
+    for (let j = 0; j < needed.length; j++) {
+      const fid = needed[j];
+      const sig = await client.query(
+        'SELECT 1 FROM digital_document_signatures WHERE document_id = $1 AND user_id = $2 AND field_id = $3 LIMIT 1',
+        [documentId, uid, fid]
+      );
+      if (sig.rows.length === 0) return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -227,13 +312,13 @@ async function assign(req, res) {
       await client.query('ROLLBACK');
       return res.status(404).json({ success: false, message: 'Document not found.' });
     }
-    const fields = doc.rows[0].fields_json;
-    const arr = Array.isArray(fields) ? fields : typeof fields === 'string' ? JSON.parse(fields) : [];
-    if (validateFieldsJson(arr)) {
+    const arr = normalizeFieldsArray(doc.rows[0].fields_json);
+    const fieldsErr = validateFieldsJson(arr);
+    if (fieldsErr) {
       await client.query('ROLLBACK');
       return res.status(400).json({
         success: false,
-        message: 'Save signature fields first (PATCH fields with at least one signature field).',
+        message: fieldsErr || 'Save field layout first (Document Builder).',
       });
     }
 
@@ -377,12 +462,54 @@ async function getOne(req, res) {
       return res.status(404).json({ success: false, message: 'Document not found.' });
     }
     const row = r.rows[0];
+    const fieldsArr = normalizeFieldsArray(row.fields_json);
+
+    const assignR = await pool.query(
+      `SELECT a.user_id, a.deadline, a.mandatory, a.recurrence_days, u.name, u.email
+       FROM digital_document_assignments a
+       JOIN users u ON u.id = a.user_id
+       WHERE a.document_id = $1
+       ORDER BY u.name NULLS LAST, u.email`,
+      [id]
+    );
+    const sigR = await pool.query(
+      `SELECT user_id, field_id FROM digital_document_signatures WHERE document_id = $1`,
+      [id]
+    );
+    const sigByUser = {};
+    sigR.rows.forEach((s) => {
+      if (!sigByUser[s.user_id]) sigByUser[s.user_id] = new Set();
+      sigByUser[s.user_id].add(String(s.field_id));
+    });
+
+    const assignments = assignR.rows.map((a) => {
+      const need = requiredFieldIdsForUser(fieldsArr, a.user_id);
+      const have = sigByUser[a.user_id] || new Set();
+      let done = 0;
+      need.forEach((fid) => {
+        if (have.has(fid)) done += 1;
+      });
+      const reqLen = need.length;
+      return {
+        user_id: a.user_id,
+        name: a.name,
+        email: a.email,
+        deadline: a.deadline,
+        mandatory: a.mandatory,
+        recurrence_days: a.recurrence_days,
+        required_fields: reqLen,
+        completed_fields: done,
+        is_complete: reqLen === 0 ? true : done >= reqLen,
+      };
+    });
+
     return res.status(200).json({
       success: true,
       document: {
         ...mapDocumentRow(row),
         assignees_count: row.assignees_count,
         signed_users_count: row.signed_users_count,
+        assignments,
       },
     });
   } catch (err) {
@@ -508,6 +635,8 @@ async function operativeInbox(req, res) {
 
 /**
  * POST /api/documents/:id/sign — operative
+ * Body: field_id, confirmed_read, signatureImageBase64 (signature/initials),
+ * optional: checkbox_value, date_value, text_value for other field types.
  */
 async function sign(req, res) {
   const id = parseInt(req.params.id, 10);
@@ -524,20 +653,6 @@ async function sign(req, res) {
   }
   if (!confirmedRead) {
     return res.status(400).json({ success: false, message: 'You must confirm that you have read the document.' });
-  }
-  if (!rawB64) {
-    return res.status(400).json({ success: false, message: 'signatureImageBase64 is required.' });
-  }
-
-  let buf;
-  try {
-    const b64 = rawB64.includes(',') ? rawB64.split(',')[1] : rawB64;
-    buf = Buffer.from(b64, 'base64');
-    if (!buf.length || buf.length > 5 * 1024 * 1024) {
-      return res.status(400).json({ success: false, message: 'Invalid signature image.' });
-    }
-  } catch (_) {
-    return res.status(400).json({ success: false, message: 'Invalid base64 signature.' });
   }
 
   const userId = req.operative.id;
@@ -574,11 +689,63 @@ async function sign(req, res) {
       return res.status(403).json({ success: false, message: 'You are not assigned to this document.' });
     }
 
-    const fields = Array.isArray(doc.fields_json) ? doc.fields_json : [];
-    const fieldOk = fields.some((f) => f && String(f.id) === fieldId && f.type === 'signature');
-    if (!fieldOk) {
+    const fields = normalizeFieldsArray(doc.fields_json);
+    const fieldDef = fields.find((f) => f && String(f.id) === fieldId);
+    if (!fieldDef || !SIGNABLE_FIELD_TYPES.includes(fieldDef.type)) {
       await client.query('ROLLBACK');
       return res.status(400).json({ success: false, message: 'Invalid field_id for this document.' });
+    }
+    if (!fieldAppliesToUser(fieldDef, userId)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ success: false, message: 'This field is not assigned to you.' });
+    }
+
+    let buf;
+    const meta = { field_type: fieldDef.type };
+
+    if (fieldDef.type === 'signature' || fieldDef.type === 'initials') {
+      if (!rawB64) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, message: 'signatureImageBase64 is required for this field.' });
+      }
+      try {
+        const b64 = rawB64.includes(',') ? rawB64.split(',')[1] : rawB64;
+        buf = Buffer.from(b64, 'base64');
+        if (!buf.length || buf.length > 5 * 1024 * 1024) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ success: false, message: 'Invalid signature image.' });
+        }
+      } catch (_) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, message: 'Invalid base64 signature.' });
+      }
+    } else if (fieldDef.type === 'checkbox') {
+      const ok = body.checkbox_value === true || body.checkbox_value === 'true';
+      if (!ok) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, message: 'You must confirm this checkbox.' });
+      }
+      meta.checkbox_value = true;
+      buf = PLACEHOLDER_PNG;
+    } else if (fieldDef.type === 'date') {
+      const dv = typeof body.date_value === 'string' ? body.date_value.trim() : '';
+      if (!dv) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, message: 'date_value is required.' });
+      }
+      meta.date_value = dv;
+      buf = PLACEHOLDER_PNG;
+    } else if (fieldDef.type === 'text') {
+      const tv = typeof body.text_value === 'string' ? body.text_value.trim() : '';
+      if (!tv) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, message: 'text_value is required.' });
+      }
+      meta.text_value = tv;
+      buf = PLACEHOLDER_PNG;
+    } else {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'Unsupported field type.' });
     }
 
     const fname = `sig-${id}-${userId}-${fieldId.replace(/[^a-zA-Z0-9_-]/g, '')}-${Date.now()}.png`;
@@ -587,10 +754,13 @@ async function sign(req, res) {
     fs.writeFileSync(abs, buf);
     const url = `/uploads/${rel}`;
 
+    const mergedMeta =
+      body.client_meta && typeof body.client_meta === 'object' ? { ...meta, ...body.client_meta } : meta;
+
     await client.query(
       `INSERT INTO digital_document_signatures (
         document_id, user_id, field_id, signature_image_rel_path, signature_image_url, confirmed_read, client_meta
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
       ON CONFLICT (document_id, user_id, field_id)
       DO UPDATE SET
         signature_image_rel_path = EXCLUDED.signature_image_rel_path,
@@ -598,47 +768,23 @@ async function sign(req, res) {
         confirmed_read = EXCLUDED.confirmed_read,
         signed_at = NOW(),
         client_meta = EXCLUDED.client_meta`,
-      [
-        id,
-        userId,
-        fieldId,
-        rel,
-        url,
-        confirmedRead,
-        body.client_meta && typeof body.client_meta === 'object' ? JSON.stringify(body.client_meta) : null,
-      ]
+      [id, userId, fieldId, rel, url, confirmedRead, mergedMeta]
     );
 
-    await insertAudit(client, id, 'sign', 'operative', userId, { field_id: fieldId });
+    await insertAudit(client, id, 'sign', 'operative', userId, { field_id: fieldId, type: fieldDef.type });
 
-    const assignCount = await client.query(
-      `SELECT COUNT(*)::int AS c FROM digital_document_assignments WHERE document_id = $1`,
-      [id]
-    );
-    const ac = assignCount.rows[0].c;
-    if (ac > 0) {
-      const remaining = await client.query(
-        `SELECT COUNT(*)::int AS c FROM digital_document_assignments a
-         WHERE a.document_id = $1 AND NOT EXISTS (
-           SELECT 1 FROM digital_document_signatures s
-           WHERE s.document_id = a.document_id AND s.user_id = a.user_id
-         )`,
-        [id]
-      );
-      if (remaining.rows[0].c === 0) {
-        await client.query(
-          `UPDATE digital_documents SET status = 'completed', updated_at = NOW() WHERE id = $1`,
-          [id]
-        );
-        await insertAudit(client, id, 'completed', 'system', null, {});
-      }
+    const done = await isDocumentFullySigned(client, id, doc.fields_json);
+    if (done) {
+      await client.query(`UPDATE digital_documents SET status = 'completed', updated_at = NOW() WHERE id = $1`, [id]);
+      await insertAudit(client, id, 'completed', 'system', null, {});
     }
 
     await client.query('COMMIT');
     return res.status(200).json({
       success: true,
-      message: 'Signature recorded.',
+      message: 'Field saved.',
       signature_url: url,
+      document_completed: done,
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -685,12 +831,26 @@ async function getOneOperative(req, res) {
       return res.status(404).json({ success: false, message: 'Document not found or not assigned to you.' });
     }
     const row = r.rows[0];
+    const fieldsArr = normalizeFieldsArray(row.fields_json);
+    const needIds = requiredFieldIdsForUser(fieldsArr, userId);
+    const sigMine = await pool.query(
+      `SELECT field_id FROM digital_document_signatures WHERE document_id = $1 AND user_id = $2`,
+      [id, userId]
+    );
+    const signedSet = new Set(sigMine.rows.map((x) => String(x.field_id)));
+    let myCompleted = 0;
+    needIds.forEach((fid) => {
+      if (signedSet.has(fid)) myCompleted += 1;
+    });
     return res.status(200).json({
       success: true,
       document: {
         ...mapDocumentRow(row),
         assignees_count: row.assignees_count,
         signed_users_count: row.signed_users_count,
+        my_required_fields: needIds.length,
+        my_completed_fields: myCompleted,
+        my_field_ids_signed: sigMine.rows.map((x) => String(x.field_id)),
       },
     });
   } catch (err) {

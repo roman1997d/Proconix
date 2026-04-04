@@ -2,6 +2,36 @@
  * Operative Dashboard – mobile-app style, Proconix brand.
  */
 
+/* Documents to sign (digital signatures) */
+.op-docs-list {
+  font-size: 0.95rem;
+}
+
+a.op-doc-row {
+  display: block;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: var(--op-radius);
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--op-card-border);
+  text-decoration: none;
+  color: inherit;
+}
+
+a.op-doc-row:active {
+  opacity: 0.92;
+}
+
+.op-doc-title {
+  font-weight: 600;
+}
+
+.op-doc-meta {
+  font-size: 0.85rem;
+  color: var(--op-text-muted);
+  margin-top: 4px;
+}
+
 .operative-dashboard {
   --op-bg: #0a1628;
   --op-card: #1a365d;

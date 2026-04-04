@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="icon" href="/favicon_io/favicon.ico" sizes="any">
+  <title>Sign document – Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/operative_document_sign.css" rel="stylesheet">
+</head>
+<body class="ods-module">
+  <header class="ods-header">
+    <a href="operative_dashboard.html"><i class="bi bi-arrow-left"></i> Dashboard</a>
+    <h1 class="ods-title" id="odsTitle">Document</h1>
+    <span class="ods-muted" id="odsMeta"></span>
+  </header>
+
+  <div id="odsError" class="ods-error d-none" role="alert"></div>
+  <div id="odsSuccess" class="ods-success d-none" role="status"></div>
+
+  <div id="odsPages" class="ods-pages"></div>
+
+  <div class="ods-panel" id="odsPanel">
+    <h2><i class="bi bi-pen"></i> Start signing</h2>
+    <p class="ods-muted" id="odsHint">Confirm you have read the PDF, complete each field below, then submit.</p>
+    <label class="ods-muted"><input type="checkbox" id="odsConfirmRead"> I have read and understood this document</label>
+
+    <div id="odsFieldsMount"></div>
+
+    <button type="button" class="ods-btn ods-btn-primary" id="odsBtnSubmit">
+      <i class="bi bi-check2-circle"></i> Submit all fields
+    </button>
+    <button type="button" class="ods-btn ods-btn-secondary d-none" id="odsBtnViewDash">Back to dashboard</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="js/operative_document_sign.js"></script>
+</body>
+</html>

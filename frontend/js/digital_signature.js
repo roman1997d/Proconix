@@ -171,6 +171,23 @@
         listEl.innerHTML = docs
           .map(function (d) {
             var prog = d.signatures_progress || '0/0';
+            var buildHref = 'digital_signature_builder.html?id=' + d.id;
+            var actions =
+              '<a href="' +
+              attrEscape(buildHref) +
+              '">Build &amp; assign</a>';
+            if (d.status === 'pending_signatures' || d.status === 'completed') {
+              actions +=
+                ' · <a href="#" class="ds-link-progress" data-doc-id="' +
+                d.id +
+                '">Progress</a>';
+            }
+            actions +=
+              (d.file_url
+                ? ' · <a href="' +
+                  attrEscape(d.file_url) +
+                  '" target="_blank" rel="noopener noreferrer">PDF</a>'
+                : '');
             return (
               '<article class="ds-card" data-id="' +
               d.id +
@@ -185,18 +202,14 @@
               '</h3>' +
               '<p class="ds-card-meta">' +
               (d.document_type ? escapeHtml(d.document_type) + ' · ' : '') +
-              'Signatures: ' +
+              'Progress: ' +
               escapeHtml(prog) +
               '</p>' +
               '<div class="ds-progress"><div class="ds-progress-bar" style="width:' +
               progressPercent(d) +
               '%"></div></div>' +
               '<div class="ds-card-actions">' +
-              (d.file_url
-                ? '<a href="' +
-                  attrEscape(d.file_url) +
-                  '" target="_blank" rel="noopener noreferrer">Open PDF</a>'
-                : '') +
+              actions +
               '</div></article>'
             );
           })
@@ -213,6 +226,40 @@
     var s = parseInt(d.signed_users_count, 10) || 0;
     if (a <= 0) return 0;
     return Math.min(100, Math.round((s / a) * 100));
+  }
+
+  function showAssignmentProgress(docId) {
+    var headers = getHeadersJson();
+    if (!headers) return;
+    fetch('/api/documents/' + docId, { headers: headers, credentials: 'same-origin' })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data.success) {
+          window.alert((out.data && out.data.message) || 'Could not load document.');
+          return;
+        }
+        var asg = out.data.document.assignments || [];
+        var msg = asg
+          .map(function (a) {
+            return (
+              (a.name || a.email || 'User ' + a.user_id) +
+              ': ' +
+              (a.completed_fields != null ? a.completed_fields : 0) +
+              '/' +
+              (a.required_fields != null ? a.required_fields : 0) +
+              (a.is_complete ? ' ✓' : '')
+            );
+          })
+          .join('\n');
+        window.alert(msg || 'No assignees.');
+      })
+      .catch(function () {
+        window.alert('Network error.');
+      });
   }
 
   function openModal() {
@@ -313,6 +360,17 @@
       });
     }
 
+    var listMount = document.getElementById('dsListMount');
+    if (listMount) {
+      listMount.addEventListener('click', function (e) {
+        var link = e.target.closest && e.target.closest('.ds-link-progress');
+        if (!link) return;
+        e.preventDefault();
+        var did = link.getAttribute('data-doc-id');
+        if (did) showAssignmentProgress(parseInt(did, 10));
+      });
+    }
+
     if (form) {
       form.addEventListener('submit', function (e) {
         e.preventDefault();
@@ -363,6 +421,11 @@
             if (submitBtn) submitBtn.disabled = false;
             if (out.ok && out.data && out.data.success) {
               closeModal();
+              var newId = out.data.document && out.data.document.id;
+              if (newId) {
+                window.location.href = 'digital_signature_builder.html?id=' + newId;
+                return;
+              }
               loadDocuments();
               return;
             }

@@ -26,6 +26,42 @@
     window.location.href = '/';
   }
 
+  /** Digital documents API (not under /api/operatives). */
+  function apiDocuments(path, options) {
+    var token = getToken();
+    if (!token) return Promise.reject(new Error('No token'));
+    var opts = options || {};
+    var headers = opts.headers || {};
+    headers['X-Operative-Token'] = token;
+    if (opts.body && !(opts.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+    opts.headers = headers;
+    opts.credentials = 'same-origin';
+    return fetch('/api/documents' + path, opts).then(function (res) {
+      var contentType = res.headers.get('Content-Type') || '';
+      if (contentType.indexOf('application/json') !== -1) {
+        return res.json().then(function (data) {
+          if (res.status === 401) {
+            clearSession();
+            return Promise.reject(new Error(data.message || 'Session expired'));
+          }
+          if (
+            res.status === 403 &&
+            (data.code === 'account_deactivated' || (data.message && /deactivated|dezactivat/i.test(data.message)))
+          ) {
+            showDeactivatedBlock();
+            return Promise.reject(new Error(data.message || 'Account deactivated'));
+          }
+          return { status: res.status, data: data };
+        });
+      }
+      return res.text().then(function (text) {
+        return { status: res.status, data: { message: text } };
+      });
+    });
+  }
+
   function api(path, options) {
     var token = getToken();
     if (!token) return Promise.reject(new Error('No token'));
@@ -1658,9 +1694,52 @@
     return;
   }
 
+  function loadDocumentsInbox() {
+    var el = document.getElementById('op-docs-list');
+    if (!el) return;
+    apiDocuments('/operative/inbox', { method: 'GET' })
+      .then(function (r) {
+        if (r.status === 401) return;
+        if (!r.data || !r.data.success) {
+          el.textContent = 'Could not load documents.';
+          return;
+        }
+        var docs = r.data.documents || [];
+        if (docs.length === 0) {
+          el.innerHTML = '<p class="op-tasks-hint">No documents waiting for signature.</p>';
+          return;
+        }
+        el.innerHTML = docs
+          .map(function (d) {
+            var dl = d.assignment_deadline
+              ? formatDate(d.assignment_deadline) + ' · ' + formatTime(d.assignment_deadline)
+              : '—';
+            var urgent =
+              d.assignment_deadline && new Date(d.assignment_deadline).getTime() < Date.now() + 86400000;
+            return (
+              '<a class="op-doc-row" href="operative_document_sign.html?id=' +
+              d.id +
+              '">' +
+              '<div class="op-doc-title">' +
+              escapeHtml(d.title || 'Document') +
+              '</div>' +
+              '<div class="op-doc-meta">Deadline: ' +
+              escapeHtml(dl) +
+              (urgent ? ' · <span style="color:#feb2b2">Due soon</span>' : '') +
+              '</div></a>'
+            );
+          })
+          .join('');
+      })
+      .catch(function () {
+        if (el) el.textContent = 'Could not load documents.';
+      });
+  }
+
   loadMe();
   loadClockStatus();
   loadWeekly();
   loadProject();
   loadTasks();
+  loadDocumentsInbox();
 })();

@@ -1,0 +1,277 @@
+/**
+ * Document Builder — PDF + field overlays (manager).
+ */
+.dsb-module {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #0b1620;
+  color: #e5e7eb;
+  display: flex;
+  flex-direction: column;
+}
+
+.dsb-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #1f2937;
+  background: #111827;
+}
+
+.dsb-top h1 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.dsb-steps {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.dsb-step {
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: transparent;
+  color: inherit;
+}
+
+.dsb-step.is-active {
+  background: rgba(34, 211, 238, 0.15);
+  border-color: #22d3ee;
+  color: #22d3ee;
+}
+
+.dsb-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  flex: 1;
+  min-height: 0;
+}
+
+@media (max-width: 960px) {
+  .dsb-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dsb-canvas-col {
+  overflow: auto;
+  padding: 1rem;
+  background: #0f172a;
+}
+
+.dsb-pages {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.dsb-page-wrap {
+  position: relative;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #52525b;
+}
+
+.dsb-page-wrap canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.dsb-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+.dsb-field {
+  position: absolute;
+  border: 2px dashed #22d3ee;
+  background: rgba(34, 211, 238, 0.12);
+  cursor: move;
+  box-sizing: border-box;
+  min-width: 8px;
+  min-height: 8px;
+}
+
+.dsb-field.is-selected {
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.15);
+  z-index: 2;
+}
+
+.dsb-field-label {
+  position: absolute;
+  left: 0;
+  top: -1.1rem;
+  font-size: 0.65rem;
+  color: #e5e7eb;
+  text-shadow: 0 1px 2px #000;
+  white-space: nowrap;
+}
+
+.dsb-side {
+  border-left: 1px solid #1f2937;
+  padding: 1rem;
+  background: #111827;
+  overflow: auto;
+}
+
+.dsb-side h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.dsb-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dsb-pal-btn {
+  text-align: left;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  background: #1f2937;
+  color: #e5e7eb;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.dsb-pal-btn:hover {
+  border-color: #22d3ee;
+}
+
+.dsb-pal-btn.is-active {
+  border-color: #22d3ee;
+  background: rgba(34, 211, 238, 0.12);
+}
+
+.dsb-hint {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-top: 0.75rem;
+}
+
+.dsb-props {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #1f2937;
+}
+
+.dsb-props label {
+  display: block;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-bottom: 0.25rem;
+}
+
+.dsb-props input[type='number'],
+.dsb-props select {
+  width: 100%;
+  margin-bottom: 0.65rem;
+  padding: 0.35rem;
+  border-radius: 6px;
+  border: 1px solid #374151;
+  background: #0f172a;
+  color: #e5e7eb;
+}
+
+.dsb-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.dsb-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.dsb-btn-primary {
+  background: linear-gradient(135deg, #0891b2, #22d3ee);
+  color: #0f172a;
+}
+
+.dsb-btn-secondary {
+  background: transparent;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+}
+
+.dsb-btn-danger {
+  background: rgba(248, 113, 113, 0.2);
+  color: #fecaca;
+  border: 1px solid #f87171;
+}
+
+.dsb-error {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid #f87171;
+  color: #fecaca;
+  padding: 0.5rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.dsb-assign {
+  padding: 1rem;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.dsb-cb-list {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 0.5rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.dsb-cb-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem;
+  border-radius: 4px;
+}
+
+.dsb-cb-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dsb-hidden {
+  display: none !important;
+}
+
+.dsb-back {
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.dsb-back:hover {
+  color: #22d3ee;
+}
