@@ -16,6 +16,7 @@ Acest folder conține documentația de arhitectură, bază de date, backend, fro
 | 6 | [6-qa-testing.md](6-qa-testing.md) | Test cases (login, CRUD proiecte, operatives, work logs, QA, dashboard operativ), loguri și debugging (PM2, Nginx, Node, frontend) |
 | 7 | [7-business-product.md](7-business-product.md) | Scop și obiective, utilizatori țintă, roadmap/MVP vs viitor, plan monetizare (Free/Silver/Gold), strategie lansare |
 | 8 | [8-recent-extras.md](8-recent-extras.md) | Extra recent: landing (typewriter, carusel hero, flux „How it works”, testimoniale, FAQ), dashboard iframe + touch, Site Snags double-tap, folder `Doc_Marketing_Suite` |
+| 9 | [9-documents-digital-signatures-frontend-plan.md](9-documents-digital-signatures-frontend-plan.md) | Plan front-end modul Documente & semnături digitale: pagini, componente, state, API, validări, UX, checklist livrabile (vanilla vs React) |
 
 ---
 
