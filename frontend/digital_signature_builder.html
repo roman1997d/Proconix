@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dsb-html">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,32 +28,36 @@
       <div id="dsbPages" class="dsb-pages"></div>
     </div>
     <aside class="dsb-side">
-      <h2>Field types</h2>
-      <div class="dsb-palette">
-        <button type="button" class="dsb-pal-btn" data-tool="signature"><i class="bi bi-pen"></i> Signature</button>
-        <button type="button" class="dsb-pal-btn" data-tool="initials"><i class="bi bi-fonts"></i> Initials</button>
-        <button type="button" class="dsb-pal-btn" data-tool="date"><i class="bi bi-calendar3"></i> Date</button>
-        <button type="button" class="dsb-pal-btn" data-tool="checkbox"><i class="bi bi-check2-square"></i> Checkbox</button>
-        <button type="button" class="dsb-pal-btn" data-tool="text"><i class="bi bi-input-cursor-text"></i> Text</button>
-      </div>
-      <p class="dsb-hint">At least one <strong>Signature</strong> or <strong>Initials</strong> field is required before saving.</p>
+      <div class="dsb-side-scroll">
+        <div class="dsb-props dsb-hidden" id="dsbProps">
+          <h2>Selected field</h2>
+          <label>Width (0–1)</label>
+          <input type="number" id="dsbPropW" min="0.05" max="1" step="0.01">
+          <label>Height (0–1)</label>
+          <input type="number" id="dsbPropH" min="0.03" max="1" step="0.01">
+          <label><input type="checkbox" id="dsbPropReq"> Required</label>
+          <label>Only for operative (optional)</label>
+          <select id="dsbPropUser">
+            <option value="">— All assignees —</option>
+          </select>
+          <button type="button" class="dsb-btn dsb-btn-danger" id="dsbDeleteField">Remove field</button>
+        </div>
 
-      <div class="dsb-props dsb-hidden" id="dsbProps">
-        <h2>Selected field</h2>
-        <label>Width (0–1)</label>
-        <input type="number" id="dsbPropW" min="0.05" max="1" step="0.01">
-        <label>Height (0–1)</label>
-        <input type="number" id="dsbPropH" min="0.03" max="1" step="0.01">
-        <label><input type="checkbox" id="dsbPropReq"> Required</label>
-        <label>Only for operative (optional)</label>
-        <select id="dsbPropUser">
-          <option value="">— All assignees —</option>
-        </select>
-        <button type="button" class="dsb-btn dsb-btn-danger" id="dsbDeleteField">Remove field</button>
+        <div class="dsb-btn-row">
+          <button type="button" class="dsb-btn dsb-btn-primary" id="dsbSaveFields"><i class="bi bi-save"></i> Save template</button>
+        </div>
       </div>
 
-      <div class="dsb-btn-row">
-        <button type="button" class="dsb-btn dsb-btn-primary" id="dsbSaveFields"><i class="bi bi-save"></i> Save template</button>
+      <div class="dsb-palette-footer">
+        <h2>Field types</h2>
+        <div class="dsb-palette">
+          <button type="button" class="dsb-pal-btn" data-tool="signature"><i class="bi bi-pen"></i> Signature</button>
+          <button type="button" class="dsb-pal-btn" data-tool="initials"><i class="bi bi-fonts"></i> Initials</button>
+          <button type="button" class="dsb-pal-btn" data-tool="date"><i class="bi bi-calendar3"></i> Date</button>
+          <button type="button" class="dsb-pal-btn" data-tool="checkbox"><i class="bi bi-check2-square"></i> Checkbox</button>
+          <button type="button" class="dsb-pal-btn" data-tool="text"><i class="bi bi-input-cursor-text"></i> Text</button>
+        </div>
+        <p class="dsb-hint dsb-palette-hint">At least one <strong>Signature</strong> or <strong>Initials</strong> field is required before saving.</p>
       </div>
     </aside>
   </div>
