@@ -503,6 +503,25 @@ async function getOne(req, res) {
       };
     });
 
+    const sigDetailR = await pool.query(
+      `SELECT s.field_id, s.user_id, s.signed_at, s.signature_image_url, s.client_meta,
+              u.name AS user_name, u.email AS user_email
+       FROM digital_document_signatures s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.document_id = $1
+       ORDER BY s.signed_at ASC`,
+      [id]
+    );
+    const signatures = (sigDetailR.rows || []).map((srow) => ({
+      field_id: String(srow.field_id),
+      user_id: srow.user_id,
+      user_name: srow.user_name,
+      user_email: srow.user_email,
+      signed_at: srow.signed_at,
+      signature_image_url: srow.signature_image_url,
+      client_meta: srow.client_meta,
+    }));
+
     return res.status(200).json({
       success: true,
       document: {
@@ -510,6 +529,7 @@ async function getOne(req, res) {
         assignees_count: row.assignees_count,
         signed_users_count: row.signed_users_count,
         assignments,
+        signatures,
       },
     });
   } catch (err) {

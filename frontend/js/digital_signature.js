@@ -181,12 +181,16 @@
                 ' · <a href="#" class="ds-link-progress" data-doc-id="' +
                 d.id +
                 '">Progress</a>';
+              actions +=
+                ' · <a href="' +
+                attrEscape('digital_signature_view.html?id=' + d.id) +
+                '">View signatures</a>';
             }
             actions +=
               (d.file_url
                 ? ' · <a href="' +
                   attrEscape(d.file_url) +
-                  '" target="_blank" rel="noopener noreferrer">PDF</a>'
+                  '" target="_blank" rel="noopener noreferrer">Original PDF</a>'
                 : '');
             return (
               '<article class="ds-card" data-id="' +
