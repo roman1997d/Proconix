@@ -622,6 +622,63 @@ async function remove(req, res) {
 }
 
 /**
+ * POST /api/documents/:id/reset — manager: clear fields, assignments, signatures; PDF file unchanged; status → draft.
+ */
+async function resetDocument(req, res) {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid document id.' });
+  }
+  const companyId = req.manager.company_id;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const doc = await client.query(
+      'SELECT id FROM digital_documents WHERE id = $1 AND company_id = $2',
+      [id, companyId]
+    );
+    if (!doc.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Document not found.' });
+    }
+
+    const sigs = await client.query(
+      'SELECT signature_image_rel_path FROM digital_document_signatures WHERE document_id = $1',
+      [id]
+    );
+
+    await client.query('DELETE FROM digital_document_signatures WHERE document_id = $1', [id]);
+    await client.query('DELETE FROM digital_document_assignments WHERE document_id = $1', [id]);
+    await client.query(
+      `UPDATE digital_documents
+       SET fields_json = '[]'::jsonb, status = 'draft', updated_at = NOW()
+       WHERE id = $1 AND company_id = $2`,
+      [id, companyId]
+    );
+    await insertAudit(client, id, 'reset', 'manager', req.manager.id, { cleared: 'fields_assignments_signatures' });
+
+    await client.query('COMMIT');
+
+    (sigs.rows || []).forEach((s) => removeFileFromDisk(s.signature_image_rel_path));
+
+    return res.status(200).json({
+      success: true,
+      message: 'Document reset to the original PDF. Field layout, assignments and signatures were cleared.',
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (tableMissing(err)) {
+      return res.status(503).json({ success: false, message: 'Digital documents tables are missing.' });
+    }
+    console.error('resetDocument:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Reset failed.' });
+  } finally {
+    client.release();
+  }
+}
+
+/**
  * GET /api/documents/operative/inbox — operatives only
  */
 async function operativeInbox(req, res) {
@@ -890,6 +947,7 @@ module.exports = {
   getOne,
   getAudit,
   remove,
+  resetDocument,
   operativeInbox,
   getOneOperative,
   sign,

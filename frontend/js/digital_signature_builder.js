@@ -480,6 +480,84 @@
 
     document.getElementById('dsbSendAssign').addEventListener('click', sendAssign);
 
+    var btnResetDoc = document.getElementById('dsbBtnResetDoc');
+    if (btnResetDoc) {
+      btnResetDoc.addEventListener('click', function () {
+        if (!docId) return;
+        if (
+          !window.confirm(
+            'Reset to the original uploaded PDF?\n\nAll field placements, assignments and signatures will be removed. The PDF file stays.'
+          )
+        ) {
+          return;
+        }
+        var headers = getHeaders();
+        if (!headers) return;
+        showError('');
+        fetch('/api/documents/' + docId + '/reset', {
+          method: 'POST',
+          headers: headers,
+          credentials: 'same-origin',
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { ok: res.ok, data: data };
+            });
+          })
+          .then(function (out) {
+            if (out.ok && out.data.success) {
+              fields = [];
+              selectedId = null;
+              syncProps();
+              renderFieldOverlays();
+              setStep('build');
+              showError('');
+            } else {
+              showError((out.data && out.data.message) || 'Reset failed.');
+            }
+          })
+          .catch(function () {
+            showError('Network error.');
+          });
+      });
+    }
+
+    var btnDeleteDoc = document.getElementById('dsbBtnDeleteDoc');
+    if (btnDeleteDoc) {
+      btnDeleteDoc.addEventListener('click', function () {
+        if (!docId) return;
+        if (
+          !window.confirm(
+            'Delete this document permanently? The PDF and all related data will be removed from the server.'
+          )
+        ) {
+          return;
+        }
+        var headers = getHeaders();
+        if (!headers) return;
+        fetch('/api/documents/' + docId, {
+          method: 'DELETE',
+          headers: headers,
+          credentials: 'same-origin',
+        })
+          .then(function (res) {
+            return res.json().then(function (data) {
+              return { ok: res.ok, data: data };
+            });
+          })
+          .then(function (out) {
+            if (out.ok && out.data.success) {
+              window.location.href = 'digital_signature.html';
+            } else {
+              showError((out.data && out.data.message) || 'Delete failed.');
+            }
+          })
+          .catch(function () {
+            showError('Network error.');
+          });
+      });
+    }
+
     ['dsbPropW', 'dsbPropH'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) {

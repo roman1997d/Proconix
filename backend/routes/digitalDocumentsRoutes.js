@@ -38,6 +38,7 @@ router.post(
 );
 router.patch('/:id/fields', requireManagerAuth, ctrl.patchFields);
 router.post('/:id/assign', requireManagerAuth, ctrl.assign);
+router.post('/:id/reset', requireManagerAuth, ctrl.resetDocument);
 router.get('/:id/audit', requireManagerAuth, ctrl.getAudit);
 router.delete('/:id', requireManagerAuth, ctrl.remove);
 router.get('/:id', requireManagerAuth, ctrl.getOne);

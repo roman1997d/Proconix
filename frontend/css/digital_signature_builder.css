@@ -35,6 +35,18 @@ html.dsb-html {
   font-weight: 700;
 }
 
+.dsb-doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.dsb-btn-sm {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+}
+
 .dsb-steps {
   display: flex;
   gap: 0.5rem;

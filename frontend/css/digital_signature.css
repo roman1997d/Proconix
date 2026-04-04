@@ -379,6 +379,14 @@ body.ds-module {
   color: var(--ds-accent);
 }
 
+.ds-card-actions a.ds-link-delete {
+  color: var(--ds-danger);
+}
+
+.ds-card-actions a.ds-link-reset {
+  color: #fbbf24;
+}
+
 @media (max-width: 576px) {
   .ds-toolbar h1 {
     font-size: 1.05rem;

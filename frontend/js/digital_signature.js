@@ -192,6 +192,14 @@
                   attrEscape(d.file_url) +
                   '" target="_blank" rel="noopener noreferrer">Original PDF</a>'
                 : '');
+            actions +=
+              ' · <a href="#" class="ds-link-reset" data-doc-id="' +
+              d.id +
+              '">Reset</a>';
+            actions +=
+              ' · <a href="#" class="ds-link-delete" data-doc-id="' +
+              d.id +
+              '">Delete</a>';
             return (
               '<article class="ds-card" data-id="' +
               d.id +
@@ -230,6 +238,70 @@
     var s = parseInt(d.signed_users_count, 10) || 0;
     if (a <= 0) return 0;
     return Math.min(100, Math.round((s / a) * 100));
+  }
+
+  function deleteDocument(docId) {
+    var headers = getHeadersJson();
+    if (!headers) return;
+    if (
+      !window.confirm(
+        'Delete this document permanently? The PDF file and all signatures will be removed from the server.'
+      )
+    ) {
+      return;
+    }
+    fetch('/api/documents/' + docId, {
+      method: 'DELETE',
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (out.ok && out.data && out.data.success) {
+          loadDocuments();
+        } else {
+          window.alert((out.data && out.data.message) || 'Delete failed.');
+        }
+      })
+      .catch(function () {
+        window.alert('Network error.');
+      });
+  }
+
+  function resetDocument(docId) {
+    var headers = getHeadersJson();
+    if (!headers) return;
+    if (
+      !window.confirm(
+        'Reset to the original uploaded PDF?\n\nAll field placements, assignments and recorded signatures will be removed. The PDF file stays; you can edit fields again.'
+      )
+    ) {
+      return;
+    }
+    fetch('/api/documents/' + docId + '/reset', {
+      method: 'POST',
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (out.ok && out.data && out.data.success) {
+          loadDocuments();
+        } else {
+          window.alert((out.data && out.data.message) || 'Reset failed.');
+        }
+      })
+      .catch(function () {
+        window.alert('Network error.');
+      });
   }
 
   function showAssignmentProgress(docId) {
@@ -367,11 +439,26 @@
     var listMount = document.getElementById('dsListMount');
     if (listMount) {
       listMount.addEventListener('click', function (e) {
-        var link = e.target.closest && e.target.closest('.ds-link-progress');
-        if (!link) return;
-        e.preventDefault();
-        var did = link.getAttribute('data-doc-id');
-        if (did) showAssignmentProgress(parseInt(did, 10));
+        var prog = e.target.closest && e.target.closest('.ds-link-progress');
+        if (prog) {
+          e.preventDefault();
+          var pid = prog.getAttribute('data-doc-id');
+          if (pid) showAssignmentProgress(parseInt(pid, 10));
+          return;
+        }
+        var reset = e.target.closest && e.target.closest('.ds-link-reset');
+        if (reset) {
+          e.preventDefault();
+          var rid = reset.getAttribute('data-doc-id');
+          if (rid) resetDocument(parseInt(rid, 10));
+          return;
+        }
+        var del = e.target.closest && e.target.closest('.ds-link-delete');
+        if (del) {
+          e.preventDefault();
+          var did = del.getAttribute('data-doc-id');
+          if (did) deleteDocument(parseInt(did, 10));
+        }
       });
     }
 
