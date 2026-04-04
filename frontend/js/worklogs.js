@@ -1,13 +1,11 @@
 /**
  * Work Logs module – uses backend API when available.
- * Manager: list, view, edit, approve, reject, archive. Passkey gate before access.
+ * Manager: list, view, edit, approve, reject, archive (session via manager headers).
  */
 
 (function () {
   'use strict';
 
-  var PASSKEY_STORAGE = 'worklogs_unlocked';
-  var PASSKEY = 'proconix2026'; // change to your desired passkey
   var SESSION_KEY = 'proconix_manager_session';
 
   function getSession() {
@@ -411,18 +409,9 @@
     var container = document.getElementById('dashboard-content');
     if (!container) return;
 
-    var gateEl = document.getElementById('worklogs-passkey-gate');
     var contentWrapEl = document.getElementById('worklogs-content-wrap');
-    var formEl = document.getElementById('worklogs-passkey-form');
-    var inputEl = document.getElementById('worklogs-passkey-input');
-    var errorEl = document.getElementById('worklogs-passkey-error');
 
-    function showGate() {
-      if (gateEl) gateEl.classList.remove('d-none');
-      if (contentWrapEl) contentWrapEl.classList.add('d-none');
-    }
     function showContent() {
-      if (gateEl) gateEl.classList.add('d-none');
       if (contentWrapEl) contentWrapEl.classList.remove('d-none');
     }
 
@@ -602,38 +591,8 @@
       });
     }
 
-    try {
-      if (sessionStorage.getItem(PASSKEY_STORAGE) === 'true') {
-        showContent();
-        runWorkLogsInit();
-      } else {
-        showGate();
-        if (formEl && inputEl) {
-          formEl.addEventListener('submit', function (e) {
-            e.preventDefault();
-            if (errorEl) errorEl.classList.add('d-none');
-            var value = (inputEl.value || '').trim();
-            if (value === PASSKEY) {
-              try { sessionStorage.setItem(PASSKEY_STORAGE, 'true'); } catch (_) {}
-              inputEl.value = '';
-              showContent();
-              runWorkLogsInit();
-            } else {
-              if (errorEl) errorEl.classList.remove('d-none');
-            }
-          });
-        }
-        var requestBtn = document.getElementById('worklogs-btn-request-passkey');
-        if (requestBtn) {
-          requestBtn.addEventListener('click', function () {
-            alert('Passkey request has been sent to your administrator.');
-          });
-        }
-      }
-    } catch (_) {
-      showContent();
-      runWorkLogsInit();
-    }
+    showContent();
+    runWorkLogsInit();
   }
 
   window.initWorkLogsModule = initWorkLogsModule;

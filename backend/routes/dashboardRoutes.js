@@ -498,21 +498,7 @@ function getOperativesHtml() {
 function getWorkLogsHtml() {
   return `
     <section class="worklogs-module">
-      <div id="worklogs-passkey-gate" class="worklogs-passkey-gate">
-        <div class="worklogs-passkey-card dashboard-card">
-          <h2 class="card-title">Work Logs – Restricted access</h2>
-          <p class="worklogs-passkey-hint">Enter the passkey to access Work Logs.</p>
-          <form id="worklogs-passkey-form" class="worklogs-passkey-form">
-            <input type="password" id="worklogs-passkey-input" class="worklogs-input" placeholder="Passkey" autocomplete="off" aria-label="Passkey">
-            <button type="submit" class="btn-worklogs btn-worklogs-primary">Access</button>
-          </form>
-          <p class="worklogs-passkey-request-wrap">
-            <button type="button" class="btn-worklogs btn-worklogs-secondary" id="worklogs-btn-request-passkey">Request Pass Key</button>
-          </p>
-          <p id="worklogs-passkey-error" class="worklogs-passkey-error d-none" role="alert">Incorrect passkey. Try again.</p>
-        </div>
-      </div>
-      <div id="worklogs-content-wrap" class="worklogs-content-wrap d-none">
+      <div id="worklogs-content-wrap" class="worklogs-content-wrap">
       <div class="worklogs-analytics dashboard-card">
         <h2 class="card-title">Progress &amp; Cost</h2>
         <div class="worklogs-progress-wrap">
