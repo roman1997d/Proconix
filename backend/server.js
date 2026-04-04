@@ -24,6 +24,7 @@ const materialsRoutes = require('./routes/materialsRoutes');
 const planningRoutes = require('./routes/planningRoutes');
 const platformAdminRoutes = require('./routes/platformAdminRoutes');
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
+const digitalDocumentsRoutes = require('./routes/digitalDocumentsRoutes');
 const { metricsMiddleware } = require('./middleware/metricsMiddleware');
 const { printStartupConsoleBanner } = require('./lib/startupConsoleBanner');
 
@@ -108,6 +109,9 @@ app.use('/api/platform-admin', platformAdminRoutes);
 
 // Site Snags (per-company JSON state; requires site_snags_state table)
 app.use('/api/site-snags', siteSnagsRoutes);
+
+// Documents & digital signatures (PDF storage under backend/uploads/{Name}_{companyId}_docs/)
+app.use('/api/documents', digitalDocumentsRoutes);
 
 // API 404 – ensure all unmatched /api/* return JSON (no HTML)
 app.use('/api', (req, res) => {

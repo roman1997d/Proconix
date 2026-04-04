@@ -133,6 +133,25 @@ Implementare PDF: **`pdfKitReportsController.js`** + **`backend/templates/pdfkit
 
 ---
 
+### Documents & digital signatures (Manager + Operative)
+
+Fișiere PDF și PNG semnături: `backend/uploads/{NumeCompanieSanitizat}_{companyId}_docs/` (subfolder `signatures/` pentru PNG). Migrare: `scripts/create_digital_documents_tables.sql`.
+
+| Method | Route | Auth | Parametri / Body | Returnat |
+|--------|--------|------|------------------|----------|
+| GET | /api/documents | Manager | query: project_id?, status?, q? | `{ success, documents[] }` — include `assignees_count`, `signed_users_count`, `signatures_progress` |
+| POST | /api/documents/upload | Manager | multipart: `file` (PDF), `title`, `description?`, `document_type?`, `project_id?` | `{ success, document }` — status `draft` |
+| PATCH | /api/documents/:id/fields | Manager | body: `fields` (array JSON, min. 1 câmp `type: signature`) | `{ success, document }` |
+| POST | /api/documents/:id/assign | Manager | body: `assignments[]`: `user_id`, `deadline?`, `mandatory?`, `recurrence_days?` | `{ success, document_id }` — setează `pending_signatures` |
+| GET | /api/documents/:id | Manager | id | `{ success, document }` |
+| GET | /api/documents/:id/audit | Manager | id | `{ success, audit[] }` |
+| DELETE | /api/documents/:id | Manager | id | Șterge rânduri + fișiere PDF și PNG asociate |
+| GET | /api/documents/operative/inbox | Operative | header `X-Operative-Token` | `{ success, documents[] }` — doar `pending_signatures` |
+| GET | /api/documents/operative/document/:id | Operative | id | `{ success, document }` — doar dacă userul e asignat |
+| POST | /api/documents/:id/sign | Operative | body: `field_id`, `signatureImageBase64`, `confirmed_read`, `client_meta?` | `{ success, signature_url }` |
+
+---
+
 ### Quality Assurance (Templates & Jobs) – Manager
 
 | Method | Route | Auth | Parametri / Body | Returnat |
