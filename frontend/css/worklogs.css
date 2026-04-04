@@ -17,49 +17,6 @@
   border: 1px solid var(--divider);
 }
 
-/* Passkey gate */
-.worklogs-passkey-gate {
-  margin-bottom: var(--gap);
-}
-.worklogs-passkey-card {
-  max-width: 400px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-.worklogs-passkey-card .card-title {
-  margin-bottom: 0.5rem;
-}
-.worklogs-passkey-hint {
-  color: var(--text-secondary);
-  font-size: 0.95rem;
-  margin: 0 0 1.5rem 0;
-}
-.worklogs-passkey-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: stretch;
-}
-.worklogs-passkey-form .worklogs-input {
-  text-align: center;
-  font-size: 1rem;
-}
-.worklogs-passkey-form .btn-worklogs {
-  align-self: center;
-}
-.worklogs-passkey-request-wrap {
-  margin: 1rem 0 0 0;
-}
-.worklogs-passkey-request-wrap .btn-worklogs {
-  font-size: 0.9rem;
-}
-.worklogs-passkey-error {
-  margin: 1rem 0 0 0;
-  color: var(--status-red);
-  font-size: 0.9rem;
-}
-
 .worklogs-analytics .card-title,
 .worklogs-filters .card-title,
 .worklogs-table-wrap .card-title {
