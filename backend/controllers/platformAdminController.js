@@ -10,6 +10,7 @@ const {
   sendPlatformAdminClientEmail,
 } = require('../lib/sendCallbackRequestEmail');
 const { countCompanySeats } = require('../utils/companyUserSeats');
+const { runCreateDemoRecords } = require('../lib/createDemoRecords');
 
 const SALT_ROUNDS = 10;
 
@@ -812,6 +813,62 @@ async function sendClientEmail(req, res) {
   }
 }
 
+/**
+ * POST /api/platform-admin/create-demo-records
+ * Body: { company_name, head_manager_name, email, password }
+ * Creates a full demo tenant (same dataset as scripts/create_demo_records.js).
+ */
+async function createDemoRecords(req, res) {
+  const body = req.body || {};
+  const company_name = typeof body.company_name === 'string' ? body.company_name.trim() : '';
+  const head_manager_name =
+    typeof body.head_manager_name === 'string' ? body.head_manager_name.trim() : '';
+  const email = typeof body.email === 'string' ? body.email.trim() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await runCreateDemoRecords(client, {
+      companyName: company_name,
+      headManagerName: head_manager_name,
+      email,
+      password,
+    });
+    await client.query('COMMIT');
+    return res.status(201).json({
+      success: true,
+      message: result.message || 'Demo records created.',
+      demo: result,
+    });
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      /* ignore */
+    }
+    if (err && err.code === 'VALIDATION') {
+      return res.status(400).json({ success: false, message: err.message || 'Validation failed.' });
+    }
+    if (err && (err.code === 'DUPLICATE_COMPANY' || err.code === 'DUPLICATE_EMAIL')) {
+      return res.status(409).json({ success: false, message: err.message || 'Already exists.' });
+    }
+    if (err && err.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message: 'A unique constraint failed (company name or email may already exist).',
+      });
+    }
+    console.error('createDemoRecords error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to create demo records.',
+    });
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   login,
   me,
@@ -822,4 +879,5 @@ module.exports = {
   listBillingSubscriptions,
   updateBillingSubscription,
   sendClientEmail,
+  createDemoRecords,
 };

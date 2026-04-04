@@ -1034,6 +1034,87 @@
     });
   }
 
+  var demoForm = document.getElementById('pxDemoCreateForm');
+  var demoAlert = document.getElementById('pxDemoCreateAlert');
+  var demoSuccess = document.getElementById('pxDemoCreateSuccess');
+  var demoBtn = document.getElementById('pxDemoCreateBtn');
+
+  function hideDemoAlerts() {
+    if (demoAlert) {
+      demoAlert.classList.add('d-none');
+      demoAlert.textContent = '';
+    }
+    if (demoSuccess) {
+      demoSuccess.classList.add('d-none');
+      demoSuccess.textContent = '';
+    }
+  }
+
+  if (demoForm) {
+    demoForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      hideDemoAlerts();
+      var companyEl = document.getElementById('pxDemoCompanyName');
+      var nameEl = document.getElementById('pxDemoHeadManagerName');
+      var emailEl = document.getElementById('pxDemoHeadEmail');
+      var passEl = document.getElementById('pxDemoHeadPassword');
+      if (!companyEl || !nameEl || !emailEl || !passEl) return;
+      var payload = {
+        company_name: companyEl.value.trim(),
+        head_manager_name: nameEl.value.trim(),
+        email: emailEl.value.trim(),
+        password: passEl.value,
+      };
+      if (demoBtn) demoBtn.disabled = true;
+      fetch('/api/platform-admin/create-demo-records', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          if (demoBtn) demoBtn.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status === 201 && out.data && out.data.success && out.data.demo) {
+            var d = out.data.demo;
+            var lines = [
+              out.data.message || 'Demo tenant created.',
+              '',
+              'Manager login: ' + (d.head_manager_email || payload.email) + ' (password: the one you entered).',
+              'Primary operative: ' + (d.primary_operative_email || '—') + ' (same password).',
+            ];
+            if (demoSuccess) {
+              demoSuccess.textContent = lines.join('\n');
+              demoSuccess.classList.remove('d-none');
+            }
+            demoForm.reset();
+            return;
+          }
+          if (demoAlert) {
+            demoAlert.textContent =
+              (out.data && out.data.message) || 'Could not create demo records.';
+            demoAlert.classList.remove('d-none');
+          }
+        })
+        .catch(function () {
+          if (demoBtn) demoBtn.disabled = false;
+          if (demoAlert) {
+            demoAlert.textContent = 'Network error.';
+            demoAlert.classList.remove('d-none');
+          }
+        });
+    });
+  }
+
   var navDesktop = document.getElementById('pxAdminSideNav');
   var navMobile = document.getElementById('pxAdminSideNavMobile');
   var navs = [navDesktop, navMobile].filter(Boolean);

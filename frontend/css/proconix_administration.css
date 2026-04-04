@@ -439,3 +439,7 @@
   resize: vertical;
   line-height: 1.5;
 }
+
+.px-admin-preline {
+  white-space: pre-line;
+}
