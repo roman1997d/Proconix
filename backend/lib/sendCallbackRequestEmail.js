@@ -1048,6 +1048,73 @@ async function sendDemoTenantWelcomeEmail(p) {
   });
 }
 
+/**
+ * Email the manager a merged signed PDF (Documents & Signatures module).
+ * @param {{ to: string, managerFirstName?: string, documentTitle: string, pdfBuffer: Buffer, filename?: string }} o
+ */
+async function sendSignedDocumentEmail(o) {
+  const to = String(o.to || '').trim();
+  if (!to) {
+    const err = new Error('Recipient email is required.');
+    err.code = 'INVALID_EMAIL';
+    throw err;
+  }
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send email.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const title = o.documentTitle || 'Document';
+  const safe = String(title)
+    .replace(/[^\w\s\-]+/g, '_')
+    .replace(/\s+/g, '_')
+    .slice(0, 72);
+  const attachName = o.filename || `signed-${safe || 'document'}.pdf`;
+  const first = o.managerFirstName ? String(o.managerFirstName).trim() : '';
+  const subject = `Proconix — Signed document: ${title}`;
+  const text = [
+    first ? `Hello ${first},` : 'Hello,',
+    '',
+    `Attached is the signed copy of your document: "${title}".`,
+    'Signature images and completed fields (dates, checkboxes, text) are merged onto the original PDF pages.',
+    '',
+    '— Proconix',
+  ].join('\n');
+
+  const html = buildProconixEmailHtml({
+    preheader: `Signed PDF attached — ${title}`,
+    badge: 'Documents & signatures',
+    title: 'Your signed document',
+    subtitle:
+      'The PDF attached includes operative signatures and field responses as recorded in Proconix. You can download it anytime from the manager dashboard.',
+    rows: [
+      { label: 'Document', value: title },
+      { label: 'Sent to', value: to },
+    ],
+    messageBlock: {
+      title: 'Tip',
+      text: 'Keep this file for HSE, client handover, or internal records. If you did not request this email, contact your administrator.',
+    },
+  });
+
+  await transport.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html,
+    attachments: [
+      {
+        filename: attachName,
+        content: o.pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ],
+  });
+}
+
 module.exports = {
   sendCallbackRequestEmail,
   sendContactUsEmail,
@@ -1058,5 +1125,6 @@ module.exports = {
   sendSeatLimitReachedEmail,
   sendPlatformAdminClientEmail,
   sendDemoTenantWelcomeEmail,
+  sendSignedDocumentEmail,
   createTransport,
 };

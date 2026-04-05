@@ -33,6 +33,28 @@
     };
   }
 
+  /** Auth only (no Content-Type) — use for GET binary responses. */
+  function getAuthHeaders() {
+    var session = getSession();
+    if (!session || session.manager_id == null || !session.email) return null;
+    return {
+      'X-Manager-Id': String(session.manager_id),
+      'X-Manager-Email': session.email,
+    };
+  }
+
+  function parseFilenameFromContentDisposition(cd) {
+    if (!cd) return 'signed-document.pdf';
+    var m = /filename\*=(?:UTF-8'')?([^;\s]+)|filename="([^"]+)"/i.exec(cd);
+    if (!m) return 'signed-document.pdf';
+    var raw = (m[1] || m[2] || '').replace(/^"|"$/g, '');
+    try {
+      return decodeURIComponent(raw);
+    } catch (_) {
+      return raw || 'signed-document.pdf';
+    }
+  }
+
   function qsId() {
     var m = /[?&]id=(\d+)/.exec(window.location.search);
     return m ? parseInt(m[1], 10) : NaN;
@@ -269,9 +291,107 @@
       });
   }
 
+  function wireDownloadAndEmail() {
+    var bd = document.getElementById('dsvBtnDownload');
+    var em = document.getElementById('dsvBtnEmail');
+
+    function runDownload() {
+      var id = qsId();
+      var headers = getAuthHeaders();
+      if (!headers) {
+        alert('Sign in via Manager Dashboard, then open this page from Documents & Signatures.');
+        return;
+      }
+      if (!Number.isInteger(id) || id < 1) {
+        alert('Invalid document id.');
+        return;
+      }
+      if (bd) bd.disabled = true;
+      fetch('/api/documents/' + id + '/signed-pdf', { headers: headers, credentials: 'same-origin' })
+        .then(function (res) {
+          var ct = (res.headers.get('Content-Type') || '').toLowerCase();
+          if (ct.indexOf('application/json') !== -1) {
+            return res.json().then(function (data) {
+              throw new Error((data && data.message) || 'Download failed.');
+            });
+          }
+          if (!res.ok) {
+            return res.text().then(function () {
+              throw new Error('Download failed (' + res.status + ').');
+            });
+          }
+          var fname = parseFilenameFromContentDisposition(res.headers.get('Content-Disposition'));
+          return res.blob().then(function (blob) {
+            return { blob: blob, fname: fname };
+          });
+        })
+        .then(function (o) {
+          var url = URL.createObjectURL(o.blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = o.fname || 'signed-document.pdf';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        })
+        .catch(function (e) {
+          alert(e.message || String(e));
+        })
+        .finally(function () {
+          if (bd) bd.disabled = false;
+        });
+    }
+
+    function runEmail() {
+      var id = qsId();
+      var headers = getHeaders();
+      if (!headers) {
+        alert('Sign in via Manager Dashboard, then open this page from Documents & Signatures.');
+        return;
+      }
+      if (!Number.isInteger(id) || id < 1) {
+        alert('Invalid document id.');
+        return;
+      }
+      if (em) em.disabled = true;
+      fetch('/api/documents/' + id + '/email-signed', {
+        method: 'POST',
+        headers: headers,
+        credentials: 'same-origin',
+        body: '{}',
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          if (!out.data || !out.data.success) {
+            var msg = (out.data && out.data.message) || 'Failed to send email.';
+            throw new Error(msg);
+          }
+          alert(out.data.message || 'Signed PDF was sent to your email.');
+        })
+        .catch(function (e) {
+          alert(e.message || String(e));
+        })
+        .finally(function () {
+          if (em) em.disabled = false;
+        });
+    }
+
+    if (bd) bd.addEventListener('click', runDownload);
+    if (em) em.addEventListener('click', runEmail);
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', load);
+    document.addEventListener('DOMContentLoaded', function () {
+      wireDownloadAndEmail();
+      load();
+    });
   } else {
+    wireDownloadAndEmail();
     load();
   }
 })();

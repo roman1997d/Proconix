@@ -7,6 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const { pool } = require('../db/pool');
 const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
+const { buildSignedDocumentPdf } = require('../lib/buildSignedDocumentPdf');
+const { sendSignedDocumentEmail } = require('../lib/sendCallbackRequestEmail');
 
 function tableMissing(err) {
   return err && err.code === '42P01';
@@ -572,6 +574,116 @@ async function getAudit(req, res) {
   }
 }
 
+/**
+ * GET /api/documents/:id/signed-pdf — PDF with signatures / field values merged (manager).
+ */
+async function downloadSignedPdf(req, res) {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid document id.' });
+  }
+  const companyId = req.manager.company_id;
+  try {
+    const d = await pool.query(
+      'SELECT * FROM digital_documents WHERE id = $1 AND company_id = $2',
+      [id, companyId]
+    );
+    if (!d.rows.length) {
+      return res.status(404).json({ success: false, message: 'Document not found.' });
+    }
+    const sigs = await pool.query(
+      `SELECT s.*, u.name AS user_name, u.email AS user_email
+       FROM digital_document_signatures s
+       LEFT JOIN users u ON u.id = s.user_id
+       WHERE s.document_id = $1
+       ORDER BY s.signed_at ASC`,
+      [id]
+    );
+    const buf = await buildSignedDocumentPdf(d.rows[0], sigs.rows || []);
+    const rawTitle = d.rows[0].title || 'document';
+    const safeFile = String(rawTitle)
+      .replace(/[^\w\s\-]+/g, '_')
+      .replace(/\s+/g, '_')
+      .slice(0, 80);
+    const filename = `signed-${safeFile || 'document'}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '')}"`);
+    return res.status(200).send(buf);
+  } catch (err) {
+    if (tableMissing(err)) {
+      return res.status(503).json({ success: false, message: 'Digital documents tables are missing.' });
+    }
+    console.error('downloadSignedPdf:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to build PDF.' });
+  }
+}
+
+/**
+ * POST /api/documents/:id/email-signed — send merged PDF to manager email (SMTP).
+ */
+async function emailSignedPdf(req, res) {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid document id.' });
+  }
+  const companyId = req.manager.company_id;
+  const managerEmail = req.manager.email && String(req.manager.email).trim();
+  if (!managerEmail) {
+    return res.status(400).json({ success: false, message: 'Manager email not available.' });
+  }
+
+  try {
+    const d = await pool.query(
+      'SELECT * FROM digital_documents WHERE id = $1 AND company_id = $2',
+      [id, companyId]
+    );
+    if (!d.rows.length) {
+      return res.status(404).json({ success: false, message: 'Document not found.' });
+    }
+    const sigs = await pool.query(
+      `SELECT s.*, u.name AS user_name, u.email AS user_email
+       FROM digital_document_signatures s
+       LEFT JOIN users u ON u.id = s.user_id
+       WHERE s.document_id = $1
+       ORDER BY s.signed_at ASC`,
+      [id]
+    );
+    const docRow = d.rows[0];
+    const buf = await buildSignedDocumentPdf(docRow, sigs.rows || []);
+
+    await sendSignedDocumentEmail({
+      to: managerEmail,
+      managerFirstName: req.manager.name,
+      documentTitle: docRow.title || 'Document',
+      pdfBuffer: buf,
+    });
+
+    const client = await pool.connect();
+    try {
+      await insertAudit(client, id, 'email_signed_pdf', 'manager', req.manager.id, { to: managerEmail });
+    } finally {
+      client.release();
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Signed PDF was sent to ${managerEmail}.`,
+    });
+  } catch (err) {
+    if (err.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({
+        success: false,
+        message: 'Email is not configured on the server (set SMTP_HOST in .env).',
+      });
+    }
+    if (tableMissing(err)) {
+      return res.status(503).json({ success: false, message: 'Digital documents tables are missing.' });
+    }
+    console.error('emailSignedPdf:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to send email.' });
+  }
+}
+
 function removeFileFromDisk(relPath) {
   if (!relPath || relPath.includes('..')) return;
   const full = path.join(UPLOADS_ROOT, relPath);
@@ -946,6 +1058,8 @@ module.exports = {
   list,
   getOne,
   getAudit,
+  downloadSignedPdf,
+  emailSignedPdf,
   remove,
   resetDocument,
   operativeInbox,

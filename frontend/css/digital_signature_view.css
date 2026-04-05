@@ -22,6 +22,39 @@
   background: #111827;
 }
 
+.dsv-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.dsv-btn {
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: #1e293b;
+  color: #e5e7eb;
+}
+
+.dsv-btn-primary {
+  background: linear-gradient(135deg, #0891b2, #22d3ee);
+  border-color: #22d3ee;
+  color: #0f172a;
+}
+
+.dsv-btn-secondary:hover {
+  border-color: #94a3b8;
+}
+
+.dsv-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .dsv-top h1 {
   margin: 0;
   font-size: 1.05rem;

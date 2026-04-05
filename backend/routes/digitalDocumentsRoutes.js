@@ -39,6 +39,8 @@ router.post(
 router.patch('/:id/fields', requireManagerAuth, ctrl.patchFields);
 router.post('/:id/assign', requireManagerAuth, ctrl.assign);
 router.post('/:id/reset', requireManagerAuth, ctrl.resetDocument);
+router.get('/:id/signed-pdf', requireManagerAuth, ctrl.downloadSignedPdf);
+router.post('/:id/email-signed', requireManagerAuth, ctrl.emailSignedPdf);
 router.get('/:id/audit', requireManagerAuth, ctrl.getAudit);
 router.delete('/:id', requireManagerAuth, ctrl.remove);
 router.get('/:id', requireManagerAuth, ctrl.getOne);
