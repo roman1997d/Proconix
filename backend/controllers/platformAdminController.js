@@ -12,6 +12,11 @@ const {
 } = require('../lib/sendCallbackRequestEmail');
 const { countCompanySeats } = require('../utils/companyUserSeats');
 const { runCreateDemoRecords } = require('../lib/createDemoRecords');
+const {
+  collectCompanyTenantUploadPaths,
+  unlinkCollectedUploadFiles,
+  removeDigitalDocsCompanyFolders,
+} = require('../lib/companyTenantFileCleanup');
 
 const SALT_ROUNDS = 10;
 
@@ -493,6 +498,9 @@ async function deleteCompany(req, res) {
     let spn = 0;
     const runDel = (sql, params) => safeDelete(client, sql, params, ++spn);
 
+    /** Snapshot file paths before any DELETE (rows still present). */
+    const uploadPathsToRemove = await collectCompanyTenantUploadPaths(client, id);
+
     await runDel(
       `DELETE FROM operative_task_photos otp
        WHERE otp.task_source = 'planning' AND otp.task_id IN (
@@ -539,6 +547,27 @@ async function deleteCompany(req, res) {
     );
     await runDel('DELETE FROM work_logs WHERE company_id = $1', cid);
 
+    /** Digital documents & signatures (DB); files removed after COMMIT via folder wipe. */
+    await runDel(
+      `DELETE FROM digital_document_signatures WHERE document_id IN (
+         SELECT id FROM digital_documents WHERE company_id = $1
+       )`,
+      cid
+    );
+    await runDel(
+      `DELETE FROM digital_document_assignments WHERE document_id IN (
+         SELECT id FROM digital_documents WHERE company_id = $1
+       )`,
+      cid
+    );
+    await runDel(
+      `DELETE FROM digital_document_audit WHERE document_id IN (
+         SELECT id FROM digital_documents WHERE company_id = $1
+       )`,
+      cid
+    );
+    await runDel('DELETE FROM digital_documents WHERE company_id = $1', cid);
+
     await runDel('DELETE FROM material_consumption WHERE company_id = $1', cid);
     await runDel('DELETE FROM materials WHERE company_id = $1', cid);
     await runDel('DELETE FROM material_categories WHERE company_id = $1', cid);
@@ -546,6 +575,12 @@ async function deleteCompany(req, res) {
 
     await runDel(
       `DELETE FROM project_assignments WHERE project_id IN (SELECT id FROM projects WHERE company_id = $1)`,
+      cid
+    );
+
+    /** Orphan qa_floors otherwise get project_id NULL when projects are removed (SET NULL FK). */
+    await runDel(
+      'DELETE FROM qa_floors WHERE project_id IN (SELECT id FROM projects WHERE company_id = $1)',
       cid
     );
 
@@ -563,6 +598,14 @@ async function deleteCompany(req, res) {
     if (!deletedRow.rows.length) {
       return res.status(404).json({ success: false, message: 'Company not found.' });
     }
+
+    try {
+      await unlinkCollectedUploadFiles(uploadPathsToRemove);
+      removeDigitalDocsCompanyFolders(id);
+    } catch (diskErr) {
+      console.error('platformAdmin deleteCompany disk cleanup:', diskErr);
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Company deleted.',

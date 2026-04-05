@@ -7,8 +7,26 @@ const fs = require('fs');
 const path = require('path');
 const { pool } = require('../db/pool');
 const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
-const { buildSignedDocumentPdf } = require('../lib/buildSignedDocumentPdf');
 const { sendSignedDocumentEmail } = require('../lib/sendCallbackRequestEmail');
+
+/**
+ * Lazy-load PDF merge (pdf-lib). If dependencies were not installed after deploy,
+ * requiring at module load would crash the whole server (502 from nginx).
+ */
+function getBuildSignedDocumentPdf() {
+  try {
+    return require('../lib/buildSignedDocumentPdf').buildSignedDocumentPdf;
+  } catch (err) {
+    if (err && err.code === 'MODULE_NOT_FOUND') {
+      const e = new Error(
+        'PDF signing is unavailable: on the server run npm install (package pdf-lib is required).'
+      );
+      e.code = 'PDF_MODULE_MISSING';
+      throw e;
+    }
+    throw err;
+  }
+}
 
 function tableMissing(err) {
   return err && err.code === '42P01';
@@ -599,6 +617,7 @@ async function downloadSignedPdf(req, res) {
        ORDER BY s.signed_at ASC`,
       [id]
     );
+    const buildSignedDocumentPdf = getBuildSignedDocumentPdf();
     const buf = await buildSignedDocumentPdf(d.rows[0], sigs.rows || []);
     const rawTitle = d.rows[0].title || 'document';
     const safeFile = String(rawTitle)
@@ -610,6 +629,9 @@ async function downloadSignedPdf(req, res) {
     res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '')}"`);
     return res.status(200).send(buf);
   } catch (err) {
+    if (err && err.code === 'PDF_MODULE_MISSING') {
+      return res.status(503).json({ success: false, message: err.message });
+    }
     if (tableMissing(err)) {
       return res.status(503).json({ success: false, message: 'Digital documents tables are missing.' });
     }
@@ -649,6 +671,7 @@ async function emailSignedPdf(req, res) {
       [id]
     );
     const docRow = d.rows[0];
+    const buildSignedDocumentPdf = getBuildSignedDocumentPdf();
     const buf = await buildSignedDocumentPdf(docRow, sigs.rows || []);
 
     await sendSignedDocumentEmail({
@@ -670,6 +693,9 @@ async function emailSignedPdf(req, res) {
       message: `Signed PDF was sent to ${managerEmail}.`,
     });
   } catch (err) {
+    if (err && err.code === 'PDF_MODULE_MISSING') {
+      return res.status(503).json({ success: false, message: err.message });
+    }
     if (err.code === 'SMTP_NOT_CONFIGURED') {
       return res.status(503).json({
         success: false,
