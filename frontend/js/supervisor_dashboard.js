@@ -152,7 +152,7 @@
       updateHeaderTitle(module);
       contentEl.innerHTML =
         '<iframe src="' +
-        iframeModuleSrc('Task_Planning.html?supervisor=1') +
+        iframeModuleSrc('supervisor_task_planning.html') +
         '" class="dashboard-qa-iframe" title="Task &amp; Planning"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');

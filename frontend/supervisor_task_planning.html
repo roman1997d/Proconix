@@ -8,7 +8,7 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
   <link rel="apple-touch-icon" href="/favicon_io/apple-touch-icon.png">
   <link rel="manifest" href="/favicon_io/site.webmanifest">
-  <title>Task &amp; Planning – Proconix</title>
+  <title>Task &amp; Planning (Supervisor) – Proconix</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
   <!-- Flatpickr for consistent date/time pickers across browsers -->
@@ -1245,6 +1245,22 @@
       height: 100%;
       object-fit: cover;
     }
+
+    .tp-supervisor-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      color: var(--tp-muted);
+      font-size: 0.85rem;
+      text-decoration: none;
+    }
+    .tp-supervisor-back:hover {
+      color: var(--tp-text);
+      border-color: rgba(148, 163, 184, 0.75);
+    }
   </style>
 </head>
 <body>
@@ -1255,7 +1271,9 @@
           <span><i class="bi bi-calendar3-event"></i> Planning</span>
         </div>
       </div>
-      <div class="tp-small d-none"></div>
+      <a href="supervisor_dashboard.html" class="tp-supervisor-back" target="_top">
+        <i class="bi bi-arrow-left-circle"></i> Back to supervisor dashboard
+      </a>
     </header>
 
     <main class="tp-layout">
@@ -1503,6 +1521,10 @@
     (function () {
       'use strict';
 
+      /** Dedicated supervisor page: read-only planning + Kanban/Gantt view (scoped on server). */
+      var SUPERVISOR_MODE = true;
+      var OPERATIVE_TOKEN_KEY = 'proconix_operative_token';
+
       var planState = {
         startDate: null,
         endDate: null,
@@ -1595,13 +1617,10 @@
         }
 
         var headers = getSessionHeaders();
-        if (headers && headers['X-Manager-Id'] && headers['X-Manager-Email']) {
-          return fetch('/api/site-snags/workspace', {
+        if (headers && headers['X-Operative-Token']) {
+          return fetch('/api/site-snags/supervisor/workspace', {
             method: 'GET',
-            headers: {
-              'X-Manager-Id': headers['X-Manager-Id'],
-              'X-Manager-Email': headers['X-Manager-Email']
-            },
+            headers: { 'X-Operative-Token': headers['X-Operative-Token'] },
             credentials: 'same-origin'
           })
             .then(function (r) {
@@ -1651,13 +1670,16 @@
       }
 
       function getSessionHeaders() {
-        var session = getManagerSession();
-        if (!session || session.manager_id == null || !session.email) return {};
-        return {
-          'X-Manager-Id': String(session.manager_id),
-          'X-Manager-Email': session.email,
-          'Content-Type': 'application/json'
-        };
+        try {
+          var tok = localStorage.getItem(OPERATIVE_TOKEN_KEY) || sessionStorage.getItem(OPERATIVE_TOKEN_KEY);
+          if (!tok) return {};
+          return {
+            'X-Operative-Token': tok,
+            'Content-Type': 'application/json'
+          };
+        } catch (_) {
+          return {};
+        }
       }
 
       function fetchJson(url, opts) {
@@ -1759,7 +1781,7 @@
 
       function loadPlanFromBackendLatest() {
         // Loads the newest plan for this manager company.
-        var listPath = '/api/planning/list';
+        var listPath = '/api/planning/supervisor/list';
         return fetchJson(listPath, { method: 'GET' }).then(function (res) {
           if (res.status < 200 || res.status >= 300) {
             throw new Error((res.data && res.data.message) || 'Failed to load plans.');
@@ -2501,81 +2523,15 @@
       }
 
       function savePlan() {
-        if (!planState.tasks.length) {
-          setError('Add at least one task before saving.');
-          return;
-        }
-        derivePlanRangeFromTasks();
-        updateFiltersOptions();
-        syncPlanToBackend().then(function () {
-          updateFiltersOptions();
-          updateAssigneeDatalist();
-          renderAssignedSelectedPills();
-          renderCalendar();
-          showToast('Plan saved to database', 'Tasks are now synced with backend.', 'success');
-        }).catch(function (err) {
-          showToast('Backend error', (err && err.message) ? err.message : 'Failed to save to database.', 'error');
-        });
+        showToast('View only', 'Planning is read-only for supervisors.', 'error');
       }
 
       function saveTaskFromForm() {
-        var task = buildTaskFromForm();
-        if (!task) return;
-
-        planState.tasks.push(task);
-        derivePlanRangeFromTasks();
-
-        syncPlanToBackend().then(function () {
-          // Reloaded from backend inside syncPlanToBackend, so IDs are now stable.
-          clearTaskFields();
-          updateFiltersOptions();
-          updateAssigneeDatalist();
-          renderAssignedSelectedPills();
-          renderCalendar();
-          showToast('Task saved to database', 'Task has been synced with backend.', 'success');
-        }).catch(function (err) {
-          showToast('Backend error', (err && err.message) ? err.message : 'Failed to save task.', 'error');
-        });
+        showToast('View only', 'Planning is read-only for supervisors.', 'error');
       }
 
       function clearCurrentPlan() {
-        var backendDeletable = planState.tasks.filter(function (t) {
-          return !isSiteSnagTask(t);
-        });
-        if (USE_BACKEND && currentPlanId && backendDeletable.length) {
-          Promise.all(backendDeletable.map(function (t) { return backendDeleteTask(t.id); }))
-            .then(function () {
-              return loadPlanFromBackendLatest();
-            })
-            .then(function () {
-              updateFiltersOptions();
-              renderCalendar();
-              showToast(
-                'Plan cleared',
-                'Planning tasks removed from the database. Site Snags pins still appear in this view.',
-                'success'
-              );
-            })
-            .catch(function (err) {
-              showToast('Backend error', (err && err.message) ? err.message : 'Failed to clear plan.', 'error');
-            });
-          return;
-        }
-
-        planState.tasks = planState.tasks.filter(function (t) {
-          return isSiteSnagTask(t);
-        });
-        mergeSiteSnagsIntoTasks().then(function () {
-          derivePlanRangeFromTasks();
-          if (!planState.tasks.length) {
-            planState.startDate = null;
-            planState.endDate = null;
-            currentPlanLabel.textContent = 'No plan saved yet';
-          }
-          updateFiltersOptions();
-          renderCalendar();
-          showToast('Plan cleared', 'Local planning tasks removed. Site Snags list refreshed.', 'success');
-        });
+        showToast('View only', 'Planning is read-only for supervisors.', 'error');
       }
 
       function applyFilters(tasks) {
@@ -2744,6 +2700,10 @@
       }
 
       function changeTaskStatus(id, newStatus) {
+        if (SUPERVISOR_MODE) {
+          showToast('View only', 'Planning is read-only for supervisors.', 'error');
+          return;
+        }
         var t = planState.tasks.find(function (x) { return String(x.id) === String(id); });
         if (!t) return;
         if (isSiteSnagTask(t)) {
@@ -2776,6 +2736,7 @@
       }
 
       calendarBody.addEventListener('change', function (e) {
+        if (SUPERVISOR_MODE) return;
         var sel = e.target.closest('select[data-task-status]');
         if (!sel) return;
         var id = sel.getAttribute('data-task-status');
@@ -2910,8 +2871,8 @@
         taskModal.classList.add('is-open');
         taskModal.setAttribute('aria-hidden', 'false');
 
-        // Apply flatpickr on modal inputs for consistent cross-browser UI
-        if (window.flatpickr) {
+        // Apply flatpickr on modal inputs for consistent cross-browser UI (manager only)
+        if (!SUPERVISOR_MODE && window.flatpickr) {
           var mStart = document.getElementById('tp-modal-start-span');
           if (mStart) {
             window.flatpickr(mStart, { dateFormat: 'Y-m-d' });
@@ -2921,10 +2882,22 @@
             window.flatpickr(mDeadline, { enableTime: true, dateFormat: 'Y-m-d H:i' });
           }
         }
+        if (SUPERVISOR_MODE) {
+          taskModalBody.classList.add('tp-supervisor-readonly');
+          ['tp-modal-start-span', 'tp-modal-deadline', 'tp-modal-assigned'].forEach(function (id) {
+            var n = document.getElementById(id);
+            if (n) n.disabled = true;
+          });
+          taskModalBody.querySelectorAll('[data-modal-priority], [data-modal-send-to-attached], [data-modal-remove-send]').forEach(function (el) {
+            el.setAttribute('disabled', 'disabled');
+            el.style.pointerEvents = 'none';
+            el.style.opacity = '0.65';
+          });
+        }
 
         if (status === 'completed' && USE_BACKEND) {
           fetchJson(
-              '/api/planning/plan-tasks/' +
+              '/api/planning/supervisor/plan-tasks/' +
                 encodeURIComponent(taskId) +
                 '/confirmation-photos'
             )
@@ -2991,6 +2964,7 @@
         taskModalBody.addEventListener('click', function (e) {
           var btn = e.target.closest('[data-modal-priority]');
           if (!btn || !currentTaskId) return;
+          if (SUPERVISOR_MODE) return;
           var value = btn.getAttribute('data-modal-priority');
           var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
           if (!t) return;
@@ -3022,6 +2996,7 @@
         taskModalBody.addEventListener('click', function (e) {
           var sendBtn = e.target.closest('[data-modal-send-to-attached]');
           if (!sendBtn || !currentTaskId) return;
+          if (SUPERVISOR_MODE) return;
           var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
           if (!t) return;
           var prev = t.sendToAssignees;
@@ -3052,6 +3027,7 @@
         taskModalBody.addEventListener('click', function (e) {
           var remBtn = e.target.closest('[data-modal-remove-send]');
           if (!remBtn || !currentTaskId) return;
+          if (SUPERVISOR_MODE) return;
           var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
           if (!t) return;
           var prev = t.sendToAssignees;
@@ -3082,6 +3058,7 @@
         taskModalBody.addEventListener('change', function (e) {
           var sel = e.target.closest('#tp-modal-assigned');
           if (!sel || !currentTaskId) return;
+          if (SUPERVISOR_MODE) return;
           var value = sel.value;
           if (!value) return;
           var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
@@ -3113,6 +3090,7 @@
       if (taskModalBody) {
         taskModalBody.addEventListener('change', function (e) {
           if (!currentTaskId) return;
+          if (SUPERVISOR_MODE) return;
           var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
           if (!t) return;
 
@@ -3203,6 +3181,10 @@
       }
 
       function updateTaskStatusFromModal(newStatus) {
+        if (SUPERVISOR_MODE) {
+          showToast('View only', 'Planning is read-only for supervisors.', 'error');
+          return;
+        }
         if (!currentTaskId) return;
         var t = planState.tasks.find(function (x) { return String(x.id) === String(currentTaskId); });
         if (!t) return;
@@ -3546,6 +3528,21 @@
       if (filterPerson) filterPerson.addEventListener('change', renderCalendar);
       if (filterPriority) filterPriority.addEventListener('change', renderCalendar);
       if (filterStatus) filterStatus.addEventListener('change', renderCalendar);
+
+      document.body.classList.add('tp-supervisor');
+      var leftCard = document.querySelector('.tp-layout > .tp-card:first-child');
+      if (leftCard) leftCard.classList.add('d-none');
+      var tt = document.querySelector('.tp-title');
+      if (tt && !tt.querySelector('.tp-supervisor-badge')) {
+        var bd = document.createElement('span');
+        bd.className = 'tp-title-badge tp-supervisor-badge';
+        bd.textContent = 'Supervisor · Kanban view';
+        tt.appendChild(bd);
+      }
+      ['tp-task-mark-progress', 'tp-task-mark-paused', 'tp-task-mark-complete', 'tp-task-delete'].forEach(function (id) {
+        var b = document.getElementById(id);
+        if (b) b.classList.add('d-none');
+      });
 
       // Initial load: use backend as source of truth.
       loadPlanFromBackendLatest().then(function () {
