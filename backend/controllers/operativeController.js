@@ -394,13 +394,13 @@ async function login(req, res) {
     let result;
     try {
       result = await pool.query(
-        'SELECT id, name, password, active, onboarding, company_id FROM users WHERE email = $1',
+        'SELECT id, name, password, active, onboarding, company_id, role, project_id FROM users WHERE email = $1',
         [email]
       );
     } catch (queryErr) {
       if (queryErr.code === '42703' || (queryErr.message && (queryErr.message.indexOf('onboarding') !== -1 || queryErr.message.indexOf('onboarded') !== -1))) {
         result = await pool.query(
-          'SELECT id, name, password, active, company_id FROM users WHERE email = $1',
+          'SELECT id, name, password, active, company_id, role, project_id FROM users WHERE email = $1',
           [email]
         );
         if (result.rows.length > 0) {
@@ -462,7 +462,13 @@ async function login(req, res) {
     return res.status(200).json({
       success: true,
       token: sessionToken,
-      user: { id: user.id, name: user.name || '', email: user.email },
+      user: {
+        id: user.id,
+        name: user.name || '',
+        email: user.email,
+        role: user.role || '',
+        project_id: user.project_id != null ? user.project_id : null,
+      },
     });
   } catch (err) {
     console.error('operativeController login error:', err.message || err);
@@ -494,13 +500,13 @@ async function loginTemp(req, res) {
     let result;
     try {
       result = await pool.query(
-        'SELECT id, name, password, active, onboarding, company_id FROM users WHERE email = $1',
+        'SELECT id, name, password, active, onboarding, company_id, role, project_id FROM users WHERE email = $1',
         [email]
       );
     } catch (queryErr) {
       if (queryErr.code === '42703' || (queryErr.message && (queryErr.message.indexOf('onboarding') !== -1 || queryErr.message.indexOf('onboarded') !== -1))) {
         result = await pool.query(
-          'SELECT id, name, password, active, company_id FROM users WHERE email = $1',
+          'SELECT id, name, password, active, company_id, role, project_id FROM users WHERE email = $1',
           [email]
         );
         if (result.rows.length > 0) result.rows[0].onboarding = 'yes';
@@ -633,7 +639,7 @@ async function setPassword(req, res) {
       }
     }
     const userRow = await pool.query(
-      'SELECT id, company_id, email, name FROM users WHERE id = $1',
+      'SELECT id, company_id, email, name, role, project_id FROM users WHERE id = $1',
       [data.userId]
     );
     const user = userRow.rows[0];
@@ -646,7 +652,13 @@ async function setPassword(req, res) {
       success: true,
       message: 'Password set successfully.',
       token: sessionToken,
-      user: { id: user.id, name: user.name || '', email: user.email },
+      user: {
+        id: user.id,
+        name: user.name || '',
+        email: user.email,
+        role: user.role || '',
+        project_id: user.project_id != null ? user.project_id : null,
+      },
     });
   } catch (err) {
     console.error('operativeController setPassword update error:', err);

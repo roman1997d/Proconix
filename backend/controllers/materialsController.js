@@ -8,6 +8,18 @@ const { pool } = require('../db/pool');
 
 function getCompanyId(req) {
   if (req.manager && req.manager.company_id != null) return req.manager.company_id;
+  if (req.supervisor && req.supervisor.company_id != null) return req.supervisor.company_id;
+  return null;
+}
+
+/** When req.supervisor is set, projectId must match their assigned project. */
+function supervisorProjectMismatch(req, projectId) {
+  if (!req.supervisor) return null;
+  const sp = req.supervisor.project_id;
+  const pid = parseInt(String(projectId), 10);
+  if (sp == null || !Number.isInteger(pid) || Number(sp) !== pid) {
+    return 'Access denied.';
+  }
   return null;
 }
 
@@ -47,6 +59,9 @@ async function getProjects(req, res) {
   if (companyId == null) {
     return res.status(403).json({ success: false, message: 'Access denied.' });
   }
+  if (req.supervisor && req.supervisor.project_id == null) {
+    return res.json({ success: true, projects: [] });
+  }
   try {
     let result;
     try {
@@ -54,13 +69,17 @@ async function getProjects(req, res) {
         `SELECT id, project_name, address FROM projects WHERE company_id = $1 AND (active IS NULL OR active = true) ORDER BY id`,
         [companyId]
       );
+      let projects = result.rows.map((r) => ({
+        id: r.id,
+        name: r.project_name || '',
+        address: r.address || '',
+      }));
+      if (req.supervisor) {
+        projects = projects.filter((p) => Number(p.id) === Number(req.supervisor.project_id));
+      }
       return res.json({
         success: true,
-        projects: result.rows.map((r) => ({
-          id: r.id,
-          name: r.project_name || '',
-          address: r.address || '',
-        })),
+        projects,
       });
     } catch (e) {
       if (e.code === '42703' || e.code === '42P01') {
@@ -68,13 +87,17 @@ async function getProjects(req, res) {
           `SELECT id, name, address FROM projects WHERE company_id = $1 ORDER BY id`,
           [companyId]
         );
+        let projects = result.rows.map((r) => ({
+          id: r.id,
+          name: r.name || '',
+          address: r.address || '',
+        }));
+        if (req.supervisor) {
+          projects = projects.filter((p) => Number(p.id) === Number(req.supervisor.project_id));
+        }
         return res.json({
           success: true,
-          projects: result.rows.map((r) => ({
-            id: r.id,
-            name: r.name || '',
-            address: r.address || '',
-          })),
+          projects,
         });
       }
       throw e;
@@ -399,6 +422,8 @@ async function getMaterials(req, res) {
   if (!projectId) {
     return res.status(400).json({ message: 'projectId is required.' });
   }
+  const supErr = supervisorProjectMismatch(req, projectId);
+  if (supErr) return res.status(403).json({ message: supErr });
   try {
     await assertProjectBelongsToCompany(projectId, companyId);
     const result = await pool.query(
@@ -659,6 +684,8 @@ async function getForecast(req, res) {
   if (!projectId) {
     return res.json({ thisWeek: 0, lastWeek: 0 });
   }
+  const supErr = supervisorProjectMismatch(req, projectId);
+  if (supErr) return res.status(403).json({ message: supErr });
   try {
     await assertProjectBelongsToCompany(projectId, companyId);
   } catch (err) {

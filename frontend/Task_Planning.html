@@ -1503,6 +1503,9 @@
     (function () {
       'use strict';
 
+      var SUPERVISOR_MODE = /(?:^|[?&])supervisor=1(?:&|$)/.test(window.location.search) || window.TASK_PLANNING_SUPERVISOR === true;
+      var OPERATIVE_TOKEN_KEY = 'proconix_operative_token';
+
       var planState = {
         startDate: null,
         endDate: null,
@@ -1595,6 +1598,22 @@
         }
 
         var headers = getSessionHeaders();
+        if (SUPERVISOR_MODE && headers && headers['X-Operative-Token']) {
+          return fetch('/api/site-snags/supervisor/workspace', {
+            method: 'GET',
+            headers: { 'X-Operative-Token': headers['X-Operative-Token'] },
+            credentials: 'same-origin'
+          })
+            .then(function (r) {
+              return r.json().catch(function () {
+                return {};
+              });
+            })
+            .then(function (data) {
+              if (data && data.success) applyWorkspace(data);
+            })
+            .catch(function () {});
+        }
         if (headers && headers['X-Manager-Id'] && headers['X-Manager-Email']) {
           return fetch('/api/site-snags/workspace', {
             method: 'GET',
@@ -1651,6 +1670,18 @@
       }
 
       function getSessionHeaders() {
+        if (SUPERVISOR_MODE) {
+          try {
+            var tok = localStorage.getItem(OPERATIVE_TOKEN_KEY) || sessionStorage.getItem(OPERATIVE_TOKEN_KEY);
+            if (!tok) return {};
+            return {
+              'X-Operative-Token': tok,
+              'Content-Type': 'application/json'
+            };
+          } catch (_) {
+            return {};
+          }
+        }
         var session = getManagerSession();
         if (!session || session.manager_id == null || !session.email) return {};
         return {
@@ -1759,7 +1790,8 @@
 
       function loadPlanFromBackendLatest() {
         // Loads the newest plan for this manager company.
-        return fetchJson('/api/planning/list', { method: 'GET' }).then(function (res) {
+        var listPath = SUPERVISOR_MODE ? '/api/planning/supervisor/list' : '/api/planning/list';
+        return fetchJson(listPath, { method: 'GET' }).then(function (res) {
           if (res.status < 200 || res.status >= 300) {
             throw new Error((res.data && res.data.message) || 'Failed to load plans.');
           }
@@ -1797,6 +1829,7 @@
       }
 
       function syncPlanToBackend() {
+        if (SUPERVISOR_MODE) return Promise.resolve(null);
         if (!USE_BACKEND) return Promise.resolve(null);
         if (!planState.tasks.length) return Promise.resolve(null);
 
@@ -2500,6 +2533,10 @@
       }
 
       function savePlan() {
+        if (SUPERVISOR_MODE) {
+          showToast('View only', 'Planning is read-only for supervisors.', 'error');
+          return;
+        }
         if (!planState.tasks.length) {
           setError('Add at least one task before saving.');
           return;
@@ -2518,6 +2555,10 @@
       }
 
       function saveTaskFromForm() {
+        if (SUPERVISOR_MODE) {
+          showToast('View only', 'Planning is read-only for supervisors.', 'error');
+          return;
+        }
         var task = buildTaskFromForm();
         if (!task) return;
 
@@ -2538,6 +2579,10 @@
       }
 
       function clearCurrentPlan() {
+        if (SUPERVISOR_MODE) {
+          showToast('View only', 'Planning is read-only for supervisors.', 'error');
+          return;
+        }
         var backendDeletable = planState.tasks.filter(function (t) {
           return !isSiteSnagTask(t);
         });
@@ -2922,7 +2967,11 @@
         }
 
         if (status === 'completed' && USE_BACKEND) {
-          fetchJson('/api/planning/plan-tasks/' + encodeURIComponent(taskId) + '/confirmation-photos')
+          fetchJson(
+              (SUPERVISOR_MODE ? '/api/planning/supervisor/plan-tasks/' : '/api/planning/plan-tasks/') +
+                encodeURIComponent(taskId) +
+                '/confirmation-photos'
+            )
             .then(function (r) {
               var wrap = document.getElementById('tp-modal-confirmation-photos');
               if (!wrap) return;
@@ -3541,6 +3590,23 @@
       if (filterPerson) filterPerson.addEventListener('change', renderCalendar);
       if (filterPriority) filterPriority.addEventListener('change', renderCalendar);
       if (filterStatus) filterStatus.addEventListener('change', renderCalendar);
+
+      if (SUPERVISOR_MODE) {
+        document.body.classList.add('tp-supervisor');
+        var leftCard = document.querySelector('.tp-layout > .tp-card:first-child');
+        if (leftCard) leftCard.classList.add('d-none');
+        var tt = document.querySelector('.tp-title');
+        if (tt && !tt.querySelector('.tp-supervisor-badge')) {
+          var bd = document.createElement('span');
+          bd.className = 'tp-title-badge tp-supervisor-badge';
+          bd.textContent = 'Supervisor · Kanban view';
+          tt.appendChild(bd);
+        }
+        ['tp-task-mark-progress', 'tp-task-mark-paused', 'tp-task-mark-complete', 'tp-task-delete'].forEach(function (id) {
+          var b = document.getElementById(id);
+          if (b) b.classList.add('d-none');
+        });
+      }
 
       // Initial load: use backend as source of truth.
       loadPlanFromBackendLatest().then(function () {

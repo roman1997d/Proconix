@@ -830,6 +830,31 @@
 
   var siteSnagsBackendTimer = null;
   var siteSnagsBackendLastError = null;
+  var SITE_SNAGS_SUPERVISOR = /(?:^|[?&])supervisor=1(?:&|$)/.test(window.location.search) || window.SITE_SNAGS_SUPERVISOR_MODE === true;
+  var OPERATIVE_TOKEN_KEY_SS = 'proconix_operative_token';
+
+  function getOperativeTokenForSnags() {
+    try {
+      return localStorage.getItem(OPERATIVE_TOKEN_KEY_SS) || sessionStorage.getItem(OPERATIVE_TOKEN_KEY_SS);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getSupervisorSessionHeadersForSnags() {
+    var t = getOperativeTokenForSnags();
+    if (!t) return null;
+    return {
+      'Content-Type': 'application/json',
+      'X-Operative-Token': t
+    };
+  }
+
+  /** Manager dashboard session OR supervisor operative token */
+  function getSiteSnagsAuthHeaders() {
+    if (SITE_SNAGS_SUPERVISOR) return getSupervisorSessionHeadersForSnags();
+    return getManagerSessionHeaders();
+  }
 
   function getManagerSessionPayload() {
     if (managerSessionFromParent && managerSessionFromParent.manager_id != null && managerSessionFromParent.email) {
@@ -859,7 +884,7 @@
 
   function siteSnagsApiEnabled() {
     if (window.SITE_SNAGS_CONFIG && window.SITE_SNAGS_CONFIG.useBackend === false) return false;
-    return !!getManagerSessionHeaders();
+    return !!getSiteSnagsAuthHeaders();
   }
 
   function siteSnagsApiUrl(path) {
@@ -898,9 +923,10 @@
 
   function flushSiteSnagsBackendPush() {
     siteSnagsBackendTimer = null;
-    var h = getManagerSessionHeaders();
+    var h = getSiteSnagsAuthHeaders();
     if (!h) return Promise.resolve();
-    var url = siteSnagsApiUrl('/api/site-snags/workspace');
+    var path = SITE_SNAGS_SUPERVISOR ? '/api/site-snags/supervisor/workspace' : '/api/site-snags/workspace';
+    var url = siteSnagsApiUrl(path);
     return fetch(url, {
       method: 'PUT',
       headers: h,
@@ -934,12 +960,13 @@
   }
 
   function hydrateSiteSnagsFromServer() {
-    var h = getManagerSessionHeaders();
+    var h = getSiteSnagsAuthHeaders();
     if (!h || (window.SITE_SNAGS_CONFIG && window.SITE_SNAGS_CONFIG.useBackend === false)) {
       updateSiteSnagsSyncBadge();
       return Promise.resolve(false);
     }
-    var url = siteSnagsApiUrl('/api/site-snags/workspace');
+    var path = SITE_SNAGS_SUPERVISOR ? '/api/site-snags/supervisor/workspace' : '/api/site-snags/workspace';
+    var url = siteSnagsApiUrl(path);
     return fetch(url, {
       method: 'GET',
       headers: {
@@ -3967,7 +3994,7 @@
   }
 
   function applyInjectedManagerSession() {
-    if (!getManagerSessionHeaders()) return;
+    if (!getSiteSnagsAuthHeaders()) return;
     hydrateSiteSnagsFromServer().then(function () {
       fillProjectSelects();
       fillPeopleAssigneeSelects();

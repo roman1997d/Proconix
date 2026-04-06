@@ -472,6 +472,169 @@ async function getPlanTaskConfirmationPhotos(req, res) {
   }
 }
 
+/**
+ * GET /api/planning/supervisor/list
+ * Same shape as listPlans but only tasks visible to this supervisor:
+ * assigned_to overlaps supervisor name or any user on the same project.
+ */
+async function listPlansForSupervisor(req, res) {
+  const companyId = req.supervisor && req.supervisor.company_id != null ? req.supervisor.company_id : null;
+  const supervisorId = req.supervisor && req.supervisor.id != null ? req.supervisor.id : null;
+  if (companyId == null || supervisorId == null) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+
+  let allowedNames = new Set();
+  try {
+    const selfRow = await pool.query('SELECT name, project_id FROM users WHERE id = $1 AND company_id = $2', [
+      supervisorId,
+      companyId,
+    ]);
+    if (!selfRow.rows.length) {
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+    const supName = (selfRow.rows[0].name && String(selfRow.rows[0].name).trim()) || '';
+    const projectId = selfRow.rows[0].project_id;
+    if (supName) allowedNames.add(supName);
+    if (projectId != null) {
+      const crew = await pool.query(
+        `SELECT name FROM users
+         WHERE company_id = $1 AND project_id = $2
+           AND (active_status IS NULL OR active_status = true)`,
+        [companyId, projectId]
+      );
+      crew.rows.forEach((row) => {
+        const n = row.name && String(row.name).trim();
+        if (n) allowedNames.add(n);
+      });
+    }
+  } catch (err) {
+    console.error('listPlansForSupervisor names:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load supervisor scope.' });
+  }
+
+  function taskVisible(t) {
+    const arr = Array.isArray(t.assigned_to) ? t.assigned_to : [];
+    if (!arr.length) return false;
+    return arr.some((a) => allowedNames.has(String(a || '').trim()));
+  }
+
+  try {
+    const plansRes = await pool.query(
+      `SELECT id, company_id, type, start_date, end_date, created_by, created_at
+       FROM planning_plans
+       WHERE company_id = $1
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [companyId]
+    );
+
+    const planIds = plansRes.rows.map((p) => p.id);
+    let tasksRes = { rows: [] };
+    if (planIds.length) {
+      tasksRes = await pool.query(
+        `SELECT
+           id, plan_id, title, description, assigned_to, priority, deadline,
+           pickup_start_date, notes, status, send_to_assignees, created_at,
+           crew_id, assignment_type
+         FROM planning_plan_tasks
+         WHERE plan_id = ANY($1::int[])
+         ORDER BY created_at DESC`,
+        [planIds]
+      );
+    }
+
+    const tasksByPlan = {};
+    tasksRes.rows.forEach((t) => {
+      if (!taskVisible(t)) return;
+      if (!tasksByPlan[t.plan_id]) tasksByPlan[t.plan_id] = [];
+      tasksByPlan[t.plan_id].push({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        assigned_to: t.assigned_to || [],
+        priority: t.priority,
+        deadline: t.deadline,
+        pickup_start_date: t.pickup_start_date,
+        notes: t.notes,
+        status: t.status,
+        send_to_assignees: t.send_to_assignees,
+        crew_id: t.crew_id != null ? t.crew_id : null,
+        assignment_type: t.assignment_type || 'names',
+      });
+    });
+
+    const plansOut = plansRes.rows
+      .map((p) => ({
+        id: p.id,
+        type: p.type,
+        start_date: p.start_date,
+        end_date: p.end_date,
+        created_by: p.created_by,
+        created_at: p.created_at,
+        tasks: tasksByPlan[p.id] || [],
+      }))
+      .filter((p) => p.tasks && p.tasks.length > 0);
+
+    return res.status(200).json({
+      success: true,
+      plans: plansOut,
+    });
+  } catch (err) {
+    console.error('listPlansForSupervisor error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to list plans.' });
+  }
+}
+
+/**
+ * GET /api/planning/supervisor/plan-tasks/:id/confirmation-photos
+ */
+async function getPlanTaskConfirmationPhotosSupervisor(req, res) {
+  const companyId = req.supervisor && req.supervisor.company_id != null ? req.supervisor.company_id : null;
+  if (companyId == null) return res.status(403).json({ success: false, message: 'Access denied.' });
+
+  const taskId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(taskId) || taskId < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid task id.' });
+  }
+
+  try {
+    const own = await pool.query(
+      `SELECT ppt.id FROM planning_plan_tasks ppt
+       INNER JOIN planning_plans pp ON pp.id = ppt.plan_id
+       WHERE ppt.id = $1 AND pp.company_id = $2`,
+      [taskId, companyId]
+    );
+    if (!own.rows.length) {
+      return res.status(404).json({ success: false, message: 'Task not found.' });
+    }
+
+    const r = await pool.query(
+      `SELECT otp.file_url, otp.user_id, otp.created_at, u.name AS user_name
+       FROM operative_task_photos otp
+       LEFT JOIN users u ON u.id = otp.user_id
+       WHERE otp.task_source = 'planning' AND otp.task_id = $1
+       ORDER BY otp.created_at ASC`,
+      [taskId]
+    );
+    return res.status(200).json({
+      success: true,
+      photos: (r.rows || []).map((row) => ({
+        file_url: row.file_url,
+        user_id: row.user_id,
+        user_name: row.user_name || null,
+        created_at: row.created_at,
+      })),
+    });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(200).json({ success: true, photos: [] });
+    }
+    console.error('getPlanTaskConfirmationPhotosSupervisor error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load confirmation photos.' });
+  }
+}
+
 module.exports = {
   createPlan,
   upsertPlanTasks,
@@ -479,5 +642,7 @@ module.exports = {
   deletePlanTask,
   listPlans,
   getPlanTaskConfirmationPhotos,
+  listPlansForSupervisor,
+  getPlanTaskConfirmationPhotosSupervisor,
 };
 

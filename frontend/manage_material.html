@@ -500,11 +500,24 @@
   'use strict';
 
   // ---- Backend config: set window.MATERIAL_USE_MOCK = true to use mock data when API is not available ----
+  var SUPERVISOR_EMBED = /(?:^|[?&])supervisor=1(?:&|$)/.test(window.location.search) || window.MATERIAL_SUPERVISOR_EMBED === true;
+  var OPERATIVE_TOKEN_KEY = 'proconix_operative_token';
   var USE_MOCK = window.MATERIAL_USE_MOCK === true;
-  var API_BASE = (window.MATERIAL_API_BASE != null ? window.MATERIAL_API_BASE : '').replace(/\/$/, '') || '/api/materials';
+  var API_BASE = SUPERVISOR_EMBED
+    ? ((window.MATERIAL_API_BASE != null ? window.MATERIAL_API_BASE : '').replace(/\/$/, '') || '/api/materials/supervisor')
+    : ((window.MATERIAL_API_BASE != null ? window.MATERIAL_API_BASE : '').replace(/\/$/, '') || '/api/materials');
   var SESSION_KEY = 'proconix_manager_session';
 
   function getSessionHeaders() {
+    if (SUPERVISOR_EMBED) {
+      try {
+        var tok = localStorage.getItem(OPERATIVE_TOKEN_KEY) || sessionStorage.getItem(OPERATIVE_TOKEN_KEY);
+        if (!tok) return {};
+        return { 'X-Operative-Token': tok };
+      } catch (e) {
+        return {};
+      }
+    }
     try {
       var raw = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
       var s = raw ? JSON.parse(raw) : null;
@@ -595,8 +608,8 @@
       categories = [{ id: 'c1', name: 'Cement' }, { id: 'c2', name: 'Timber' }, { id: 'c3', name: 'Electrical' }];
       suppliers = [{ id: 's1', name: 'BuildCo Ltd', contact: 'John', emailPhone: 'orders@buildco.co.uk', address: '' }, { id: 's2', name: 'TimberWorld', contact: 'Jane', emailPhone: '07900123456', address: '' }];
     } else {
-      if (!getSessionHeaders()['X-Manager-Id']) {
-        showToast('Log in as manager to load projects.', true);
+      if (!getSessionHeaders()['X-Manager-Id'] && !getSessionHeaders()['X-Operative-Token']) {
+        showToast(SUPERVISOR_EMBED ? 'Supervisor session required.' : 'Log in as manager to load projects.', true);
         return;
       }
       materialApi.getProjects().then(function (data) {
@@ -818,8 +831,11 @@
         '<td>' + (m.quantityUsed != null ? m.quantityUsed : '—') + '</td>' +
         '<td>' + (m.quantityRemaining != null ? m.quantityRemaining : '—') + '</td>' +
         '<td>' + escapeHtml(statusLabel) + '</td>' +
-        '<td><button type="button" class="btn btn-sm btn-outline-info me-1 btn-stock-check" data-id="' + escapeHtml(m.id) + '">Stock check</button><button type="button" class="btn btn-sm btn-outline-primary me-1 btn-edit-full" data-id="' + escapeHtml(m.id) + '">Edit full</button><button type="button" class="btn btn-sm btn-outline-secondary me-1 btn-edit-qty" data-id="' + escapeHtml(m.id) + '">Edit only qty</button><button type="button" class="btn btn-sm btn-outline-danger btn-delete" data-id="' + escapeHtml(m.id) + '" data-name="' + escapeHtml(m.name) + '">Delete</button></td></tr>';
+        '<td>' + (SUPERVISOR_EMBED
+          ? '<span class="text-muted small">View only</span>'
+          : '<button type="button" class="btn btn-sm btn-outline-info me-1 btn-stock-check" data-id="' + escapeHtml(m.id) + '">Stock check</button><button type="button" class="btn btn-sm btn-outline-primary me-1 btn-edit-full" data-id="' + escapeHtml(m.id) + '">Edit full</button><button type="button" class="btn btn-sm btn-outline-secondary me-1 btn-edit-qty" data-id="' + escapeHtml(m.id) + '">Edit only qty</button><button type="button" class="btn btn-sm btn-outline-danger btn-delete" data-id="' + escapeHtml(m.id) + '" data-name="' + escapeHtml(m.name) + '">Delete</button>') + '</td></tr>';
     }).join('');
+    if (SUPERVISOR_EMBED) return;
     tbody.querySelectorAll('.btn-stock-check').forEach(function (btn) {
       btn.addEventListener('click', function () { openStockCheckModal(btn.getAttribute('data-id')); });
     });
@@ -1429,6 +1445,23 @@
     fillMaterialCategoryDropdown('editMaterialCategory');
     fillMaterialSupplierDropdown('editMaterialSupplier');
   });
+
+  if (SUPERVISOR_EMBED) {
+    document.body.classList.add('mm-supervisor-embed');
+    var backL = document.querySelector('.mm-header-bar a.btn');
+    if (backL) {
+      backL.setAttribute('href', '/supervisor_dashboard.html');
+      backL.innerHTML = '<i class="bi bi-arrow-left-circle"></i> Back to supervisor dashboard';
+    }
+    ['modalCategory', 'modalSupplier', 'modalMaterial'].forEach(function (tid) {
+      var b = document.querySelector('[data-bs-target="#' + tid + '"]');
+      if (b) b.classList.add('d-none');
+    });
+    var exBtn = document.getElementById('btnExportExcel');
+    if (exBtn) exBtn.classList.add('d-none');
+    var openWin = document.querySelector('a[href="manage_material.html"]');
+    if (openWin) openWin.classList.add('d-none');
+  }
 
   loadProjectDropdown();
   var sel = document.getElementById('projectSelect');

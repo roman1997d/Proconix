@@ -36,10 +36,22 @@ async function getMe(req, res) {
   if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
 
   try {
-    const result = await pool.query(
-      'SELECT id, name, email, company_id, project_id FROM users WHERE id = $1',
-      [op.id]
-    );
+    let result;
+    try {
+      result = await pool.query(
+        'SELECT id, name, email, company_id, project_id, role FROM users WHERE id = $1',
+        [op.id]
+      );
+    } catch (qErr) {
+      if (qErr.code === '42703') {
+        result = await pool.query(
+          'SELECT id, name, email, company_id, project_id FROM users WHERE id = $1',
+          [op.id]
+        );
+      } else {
+        throw qErr;
+      }
+    }
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
@@ -52,6 +64,7 @@ async function getMe(req, res) {
         email: u.email || '',
         company_id: u.company_id,
         project_id: u.project_id,
+        role: u.role != null ? u.role : '',
       },
     });
   } catch (err) {

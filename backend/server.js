@@ -25,6 +25,7 @@ const planningRoutes = require('./routes/planningRoutes');
 const crewRoutes = require('./routes/crewRoutes');
 const platformAdminRoutes = require('./routes/platformAdminRoutes');
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
+const supervisorQaRoutes = require('./routes/supervisorQaRoutes');
 const digitalDocumentsRoutes = require('./routes/digitalDocumentsRoutes');
 const { metricsMiddleware } = require('./middleware/metricsMiddleware');
 const { printStartupConsoleBanner } = require('./lib/startupConsoleBanner');
@@ -117,6 +118,9 @@ app.use('/api/platform-admin', platformAdminRoutes);
 
 // Site Snags (per-company JSON state; requires site_snags_state table)
 app.use('/api/site-snags', siteSnagsRoutes);
+
+// QA for supervisors (operative session; must be before static / catch-alls if any)
+app.use('/api/supervisor/qa', supervisorQaRoutes);
 
 // API 404 – ensure all unmatched /api/* return JSON (no HTML)
 app.use('/api', (req, res) => {

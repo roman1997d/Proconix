@@ -495,4 +495,321 @@ async function putWorkspace(req, res) {
   }
 }
 
-module.exports = { getWorkspace, putWorkspace };
+/**
+ * GET workspace filtered to supervisor's assigned project (operative token).
+ */
+async function getWorkspaceSupervisor(req, res) {
+  const companyId = req.supervisor && req.supervisor.company_id != null ? req.supervisor.company_id : null;
+  const projectId = req.supervisor && req.supervisor.project_id != null ? req.supervisor.project_id : null;
+  if (companyId == null) {
+    return res.status(400).json({ success: false, message: 'Invalid supervisor session.' });
+  }
+  if (projectId == null) {
+    return res.json({
+      success: true,
+      projects: [],
+      people: [],
+      showArchived: false,
+      locations: [],
+      snags: [],
+      measurementsByLocation: {},
+      highlightsByLocation: {},
+      customCategories: [],
+      removedPresetCategories: [],
+      mockTasks: [],
+    });
+  }
+
+  let captured = null;
+  const mockRes = {
+    json: function (data) {
+      captured = data;
+    },
+    status: function () {
+      return { json: function () {} };
+    },
+  };
+
+  try {
+    await getWorkspace({ manager: { company_id: companyId } }, mockRes);
+    if (!captured || !captured.success) {
+      return res.status(500).json({ success: false, message: 'Failed to load workspace.' });
+    }
+    const base = captured;
+
+    const projects = (base.projects || []).filter((p) => Number(p.id) === Number(projectId));
+    const locations = (base.locations || []).filter((l) => String(l.projectId) === String(projectId));
+    const drawingIds = new Set(locations.map((l) => String(l.id)));
+    const snags = (base.snags || []).filter((s) => drawingIds.has(String(s.locationId)));
+    const measurementsByLocation = {};
+    const highlightsByLocation = {};
+    Object.keys(base.measurementsByLocation || {}).forEach((k) => {
+      if (drawingIds.has(String(k))) measurementsByLocation[k] = base.measurementsByLocation[k];
+    });
+    Object.keys(base.highlightsByLocation || {}).forEach((k) => {
+      if (drawingIds.has(String(k))) highlightsByLocation[k] = base.highlightsByLocation[k];
+    });
+
+    return res.json({
+      success: true,
+      projects,
+      people: base.people || [],
+      showArchived: base.showArchived,
+      locations,
+      snags,
+      measurementsByLocation,
+      highlightsByLocation,
+      customCategories: base.customCategories || [],
+      removedPresetCategories: base.removedPresetCategories || [],
+      mockTasks: buildMockTasksFromSnags(snags),
+    });
+  } catch (err) {
+    console.error('getWorkspaceSupervisor:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load workspace.' });
+  }
+}
+
+/**
+ * PUT workspace for supervisor project only (does not delete other projects' drawings).
+ */
+async function putWorkspaceSupervisor(req, res) {
+  const companyId = req.supervisor && req.supervisor.company_id != null ? req.supervisor.company_id : null;
+  const projectId = req.supervisor && req.supervisor.project_id != null ? req.supervisor.project_id : null;
+  if (companyId == null || projectId == null) {
+    return res.status(400).json({ success: false, message: 'Supervisor has no project assigned.' });
+  }
+
+  const verr = validateWorkspaceBody(req.body);
+  if (verr) return res.status(400).json({ success: false, message: verr });
+
+  const {
+    showArchived,
+    locations,
+    snags,
+    measurementsByLocation,
+    highlightsByLocation,
+    customCategories,
+    removedPresetCategories,
+  } = req.body;
+
+  for (let i = 0; i < locations.length; i++) {
+    const pid = parseInt(locations[i].projectId, 10);
+    if (!Number.isInteger(pid) || pid !== Number(projectId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'All drawings must belong to your assigned project.',
+      });
+    }
+  }
+
+  const projectNums = [];
+  locations.forEach((loc) => {
+    const pid = parseInt(loc.projectId, 10);
+    if (Number.isInteger(pid)) projectNums.push(pid);
+  });
+  const userIds = [];
+  const managerIds = [];
+  snags.forEach((s) => {
+    if (s.assigneeUserId != null && Number.isInteger(Number(s.assigneeUserId))) {
+      userIds.push(Number(s.assigneeUserId));
+    }
+    if (s.assigneeManagerId != null && Number.isInteger(Number(s.assigneeManagerId))) {
+      managerIds.push(Number(s.assigneeManagerId));
+    }
+  });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const allowedProjects = await assertProjectIdsForCompany(client, companyId, [...new Set(projectNums)]);
+    for (let i = 0; i < locations.length; i++) {
+      const loc = locations[i];
+      const pid = parseInt(loc.projectId, 10);
+      if (!Number.isInteger(pid) || !allowedProjects.has(pid)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: `Invalid or foreign project_id for drawing "${loc.name || loc.id}".`,
+        });
+      }
+    }
+
+    const okUsers = await assertUserIdsForCompany(client, companyId, [...new Set(userIds)]);
+    const okManagers = await assertManagerIdsForCompany(client, companyId, [...new Set(managerIds)]);
+    for (let i = 0; i < snags.length; i++) {
+      const s = snags[i];
+      if (s.assigneeUserId != null) {
+        const uid = Number(s.assigneeUserId);
+        if (!okUsers.has(uid)) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ success: false, message: 'Invalid assignee user id.' });
+        }
+      }
+      if (s.assigneeManagerId != null) {
+        const mid = Number(s.assigneeManagerId);
+        if (!okManagers.has(mid)) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ success: false, message: 'Invalid assignee manager id.' });
+        }
+      }
+    }
+
+    const drawingIdSet = new Set(locations.map((l) => String(l.id)));
+    for (let i = 0; i < snags.length; i++) {
+      if (!drawingIdSet.has(String(snags[i].locationId))) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, message: 'Snag references unknown drawing id.' });
+      }
+    }
+
+    const existingDr = await client.query(
+      `SELECT id FROM site_snag_drawings WHERE company_id = $1 AND project_id = $2`,
+      [companyId, projectId]
+    );
+    const oldIds = existingDr.rows.map((r) => String(r.id));
+    if (oldIds.length) {
+      await client.query(`DELETE FROM site_snag_measurements WHERE drawing_id = ANY($1::varchar[])`, [oldIds]);
+      await client.query(`DELETE FROM site_snag_highlights WHERE drawing_id = ANY($1::varchar[])`, [oldIds]);
+      await client.query(`DELETE FROM site_snags WHERE drawing_id = ANY($1::varchar[])`, [oldIds]);
+      await client.query(`DELETE FROM site_snag_drawings WHERE company_id = $1 AND project_id = $2`, [companyId, projectId]);
+    }
+
+    await client.query(
+      `INSERT INTO site_snag_prefs (company_id, show_archived) VALUES ($1, $2)
+       ON CONFLICT (company_id) DO UPDATE SET show_archived = EXCLUDED.show_archived`,
+      [companyId, !!showArchived]
+    );
+
+    const now = new Date();
+    for (let i = 0; i < locations.length; i++) {
+      const loc = locations[i];
+      const pid = parseInt(loc.projectId, 10);
+      await client.query(
+        `INSERT INTO site_snag_drawings (id, company_id, project_id, name, block, floor, image_data, pixels_to_mm, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          String(loc.id),
+          companyId,
+          pid,
+          String(loc.name || '').slice(0, 500),
+          String(loc.block || '—').slice(0, 200),
+          String(loc.floor || '—').slice(0, 200),
+          loc.imageDataUrl != null ? String(loc.imageDataUrl) : null,
+          loc.pixelsToMm != null && isFinite(Number(loc.pixelsToMm)) ? Number(loc.pixelsToMm) : 1,
+          now,
+          now,
+        ]
+      );
+    }
+
+    for (let i = 0; i < snags.length; i++) {
+      const s = snags[i];
+      const au = s.assigneeUserId != null && Number.isInteger(Number(s.assigneeUserId)) ? Number(s.assigneeUserId) : null;
+      const am = s.assigneeManagerId != null && Number.isInteger(Number(s.assigneeManagerId)) ? Number(s.assigneeManagerId) : null;
+      if (au != null && am != null) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, message: 'Snag cannot have both user and manager assignee.' });
+      }
+      await client.query(
+        `INSERT INTO site_snags (
+           id, drawing_id, nx, ny, title, description, status, category,
+           assignee_user_id, assignee_manager_id, assignee_display, target_date,
+           mock_planning_task_id, archived, photos_before, photos_after, created_at, updated_at
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16::jsonb,$17,$18)`,
+        [
+          String(s.id),
+          String(s.locationId),
+          Number(s.nx) || 0,
+          Number(s.ny) || 0,
+          String(s.title || '').slice(0, 1000),
+          s.description != null ? String(s.description) : null,
+          String(s.status || 'open').slice(0, 50),
+          s.category != null ? String(s.category).slice(0, 255) : null,
+          au,
+          am,
+          s.assignee != null ? String(s.assignee).slice(0, 500) : null,
+          normalizeTargetDateForPg(s.targetDate),
+          s.mockPlanningTaskId != null ? String(s.mockPlanningTaskId).slice(0, 100) : null,
+          !!s.archived,
+          JSON.stringify(Array.isArray(s.photosBefore) ? s.photosBefore : []),
+          JSON.stringify(Array.isArray(s.photosAfter) ? s.photosAfter : []),
+          s.createdAt ? new Date(s.createdAt) : now,
+          s.updatedAt ? new Date(s.updatedAt) : now,
+        ]
+      );
+    }
+
+    let msOrder = 0;
+    const drawKeysM = Object.keys(measurementsByLocation || {});
+    for (let di = 0; di < drawKeysM.length; di++) {
+      const drawId = drawKeysM[di];
+      const list = measurementsByLocation[drawId];
+      if (!Array.isArray(list)) continue;
+      for (let j = 0; j < list.length; j++) {
+        const m = list[j];
+        const mid = m && m.id ? String(m.id) : 'm-' + drawId + '-' + j + '-' + Date.now();
+        const payload = Object.assign({}, m, { id: mid });
+        await client.query(
+          'INSERT INTO site_snag_measurements (id, drawing_id, payload, sort_order) VALUES ($1, $2, $3::jsonb, $4)',
+          [mid, String(drawId), JSON.stringify(payload), msOrder++]
+        );
+      }
+    }
+
+    let hiOrder = 0;
+    const drawKeysH = Object.keys(highlightsByLocation || {});
+    for (let di = 0; di < drawKeysH.length; di++) {
+      const drawId = drawKeysH[di];
+      const list = highlightsByLocation[drawId];
+      if (!Array.isArray(list)) continue;
+      for (let j = 0; j < list.length; j++) {
+        const h = list[j];
+        const hid = h && h.id ? String(h.id) : 'h-' + drawId + '-' + j + '-' + Date.now();
+        const payload = Object.assign({}, h, { id: hid });
+        await client.query(
+          'INSERT INTO site_snag_highlights (id, drawing_id, payload, sort_order) VALUES ($1, $2, $3::jsonb, $4)',
+          [hid, String(drawId), JSON.stringify(payload), hiOrder++]
+        );
+      }
+    }
+
+    for (let i = 0; i < customCategories.length; i++) {
+      const n = String(customCategories[i] || '').trim();
+      if (!n) continue;
+      await client.query(
+        'INSERT INTO site_snag_custom_category (company_id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [companyId, n.slice(0, 255)]
+      );
+    }
+    for (let i = 0; i < removedPresetCategories.length; i++) {
+      const n = String(removedPresetCategories[i] || '').trim();
+      if (!n) continue;
+      await client.query(
+        'INSERT INTO site_snag_removed_preset (company_id, preset_name) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [companyId, n.slice(0, 255)]
+      );
+    }
+
+    await client.query('COMMIT');
+    return res.json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        success: false,
+        code: 'site_snags_tables_missing',
+        message: 'Site Snags tables missing. Run scripts/create_site_snags_tables.sql',
+      });
+    }
+    if (err.code === '23503') {
+      return res.status(400).json({ success: false, message: 'Foreign key violation (project or assignee).' });
+    }
+    console.error('siteSnags putWorkspaceSupervisor:', err);
+    return res.status(500).json({ success: false, message: 'Failed to save Site Snags workspace.' });
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { getWorkspace, putWorkspace, getWorkspaceSupervisor, putWorkspaceSupervisor };

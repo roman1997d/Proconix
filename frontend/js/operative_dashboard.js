@@ -1666,8 +1666,12 @@
   }
 
   function loadMe() {
-    api('/me')
+    return api('/me')
       .then(function (r) {
+        if (r.data && r.data.success && r.data.user && String(r.data.user.role || '') === 'Supervisor') {
+          window.location.replace('/supervisor_dashboard.html');
+          return Promise.reject(new Error('supervisor_redirect'));
+        }
         if (r.data.success && r.data.user) {
           var name = r.data.user.name || r.data.user.email || 'Operative';
           setLoggedInUser(name);
@@ -1676,7 +1680,8 @@
           } catch (e) {}
         }
       })
-      .catch(function () {
+      .catch(function (err) {
+        if (err && err.message === 'supervisor_redirect') return Promise.reject(err);
         var stored = null;
         try {
           var raw = localStorage.getItem(USER_KEY);
@@ -1736,10 +1741,20 @@
       });
   }
 
-  loadMe();
-  loadClockStatus();
-  loadWeekly();
-  loadProject();
-  loadTasks();
-  loadDocumentsInbox();
+  loadMe()
+    .then(function () {
+      loadClockStatus();
+      loadWeekly();
+      loadProject();
+      loadTasks();
+      loadDocumentsInbox();
+    })
+    .catch(function (err) {
+      if (err && err.message === 'supervisor_redirect') return;
+      loadClockStatus();
+      loadWeekly();
+      loadProject();
+      loadTasks();
+      loadDocumentsInbox();
+    });
 })();

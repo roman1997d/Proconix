@@ -4,6 +4,9 @@
 (function () {
   'use strict';
 
+  var QA_SUPERVISOR_MODE = /(?:^|[?&])supervisor=1(?:&|$)/.test(window.location.search) || window.QA_SUPERVISOR_MODE === true;
+  var OPERATIVE_TOKEN_KEY_QA = 'proconix_operative_token';
+
   var projectSelect = document.getElementById('qa-project');
   var currentView = 'home';
   var jobsLayoutMode = 'cards';
@@ -23,7 +26,8 @@
         dashboardLink.addEventListener('click', function (e) {
           e.preventDefault();
           var base = window.top.location.href.replace(/\/[^/]*$/, '/');
-          window.top.location.href = base + 'dashboard_manager.html';
+          var target = QA_SUPERVISOR_MODE ? 'supervisor_dashboard.html' : 'dashboard_manager.html';
+          window.top.location.href = base + target;
         });
       }
     });
@@ -31,6 +35,15 @@
 
   (function () {
     try {
+      if (QA_SUPERVISOR_MODE) {
+        var tok = localStorage.getItem(OPERATIVE_TOKEN_KEY_QA) || sessionStorage.getItem(OPERATIVE_TOKEN_KEY_QA);
+        if (tok) {
+          window.QA_CONFIG = window.QA_CONFIG || { useBackend: true, apiBase: '/api/supervisor/qa' };
+          window.QA_CONFIG.useBackend = true;
+          window.QA_CONFIG.apiBase = '/api/supervisor/qa';
+          return;
+        }
+      }
       var raw = localStorage.getItem('proconix_manager_session') || sessionStorage.getItem('proconix_manager_session');
       var session = raw ? JSON.parse(raw) : null;
       var hasSession = session && session.manager_id != null && session.email;
@@ -157,6 +170,13 @@
   })();
 
   function getQASessionHeaders() {
+    if (QA_SUPERVISOR_MODE) {
+      try {
+        var t = localStorage.getItem(OPERATIVE_TOKEN_KEY_QA) || sessionStorage.getItem(OPERATIVE_TOKEN_KEY_QA);
+        if (t) return { 'X-Operative-Token': t };
+      } catch (e) {}
+      return {};
+    }
     try {
       var raw = localStorage.getItem('proconix_manager_session') || sessionStorage.getItem('proconix_manager_session');
       var session = raw ? JSON.parse(raw) : null;
@@ -243,6 +263,23 @@
   };
 
   var qaApi = (window.QA_CONFIG && window.QA_CONFIG.useBackend) ? qaApiBackend : qaApiLocal;
+  if (QA_SUPERVISOR_MODE && window.QA_CONFIG && window.QA_CONFIG.useBackend) {
+    var _qaBack = qaApi;
+    qaApi = Object.assign({}, _qaBack, {
+      createTemplate: function () {
+        return Promise.reject(new Error('Templates are read-only for supervisors.'));
+      },
+      updateTemplate: function () {
+        return Promise.reject(new Error('Templates are read-only for supervisors.'));
+      },
+      deleteTemplate: function () {
+        return Promise.reject(new Error('Templates are read-only for supervisors.'));
+      },
+      deleteJob: function () {
+        return Promise.reject(new Error('Deleting jobs is not available for supervisors.'));
+      }
+    });
+  }
 
   function escapeHtml(s) {
     var div = document.createElement('div');
@@ -422,6 +459,60 @@
     var headers = getQASessionHeaders();
     if (loadingEl) loadingEl.classList.add('d-none');
     if (errorEl) errorEl.classList.add('d-none');
+    if (QA_SUPERVISOR_MODE) {
+      if (!headers['X-Operative-Token']) {
+        if (errorEl) {
+          errorEl.textContent = 'Supervisor session required.';
+          errorEl.classList.remove('d-none');
+        }
+        return;
+      }
+      if (loadingEl) loadingEl.classList.remove('d-none');
+      fetch('/api/operatives/me', { headers: { 'X-Operative-Token': headers['X-Operative-Token'] }, credentials: 'same-origin' })
+        .then(function (res) {
+          return res.json();
+        })
+        .then(function (meData) {
+          if (loadingEl) loadingEl.classList.add('d-none');
+          if (!meData || !meData.success || !meData.user || meData.user.project_id == null) {
+            if (errorEl) {
+              errorEl.textContent = 'No project assigned to your supervisor account.';
+              errorEl.classList.remove('d-none');
+            }
+            return;
+          }
+          var pid = String(meData.user.project_id);
+          return fetch('/api/materials/supervisor/projects', {
+            headers: { 'X-Operative-Token': headers['X-Operative-Token'] },
+            credentials: 'same-origin'
+          })
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (projData) {
+              if (errorEl) errorEl.classList.add('d-none');
+              while (sel.options.length > 1) sel.remove(1);
+              var label = 'Project #' + pid;
+              var list = (projData && projData.projects) || [];
+              if (list.length && list[0].name) label = list[0].name;
+              var opt = document.createElement('option');
+              opt.value = pid;
+              opt.textContent = label;
+              sel.appendChild(opt);
+              sel.value = pid;
+              sel.disabled = true;
+              enableModuleCards();
+            });
+        })
+        .catch(function () {
+          if (loadingEl) loadingEl.classList.add('d-none');
+          if (errorEl) {
+            errorEl.textContent = 'Could not load project.';
+            errorEl.classList.remove('d-none');
+          }
+        });
+      return;
+    }
     if (!headers['X-Manager-Id']) {
       if (errorEl) {
         errorEl.textContent = 'Log in as manager to see your company\'s projects.';
@@ -1090,9 +1181,11 @@
             '<button type="button" class="qa-job-menu-btn" aria-label="Menu" data-menu="' + escapeHtml(job.id) + '"><i data-lucide="more-vertical"></i></button>' +
             '<div class="qa-dropdown d-none" id="qa-menu-' + escapeHtml(job.id) + '">' +
               '<button type="button" data-act="view">View / update</button>' +
-              '<button type="button" data-act="dup">Duplicate</button>' +
+              (QA_SUPERVISOR_MODE
+                ? ''
+                : '<button type="button" data-act="dup">Duplicate</button>') +
               '<button type="button" data-act="arch">Archive</button>' +
-              '<button type="button" data-act="del">Delete</button>' +
+              (QA_SUPERVISOR_MODE ? '' : '<button type="button" data-act="del">Delete</button>') +
             '</div></div></div>' +
         '<span class="qa-badge ' + statusBadgeClass(st) + '">' + escapeHtml(getStatusLabel(st)) + '</span>' +
         '<p class="qa-job-card-pro__row"><i data-lucide="layers" style="width:14px;height:14px;vertical-align:middle;"></i> Level: ' + escapeHtml(job.floor || '—') + ' · ' + escapeHtml(getCostDisplay(job)) + '</p>' +
@@ -1266,4 +1359,14 @@
   loadQaProjects();
   enableModuleCards();
   iconsRefresh();
+
+  if (QA_SUPERVISOR_MODE) {
+    document.body.classList.add('qa-supervisor-mode');
+    ['qa-lib-new-template', 'qa-lib-empty-cta'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.add('d-none');
+    });
+    var tplCard = document.querySelector('#qa-module-cards [data-action="template"]');
+    if (tplCard) tplCard.classList.add('d-none');
+  }
 })();

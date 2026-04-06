@@ -7,6 +7,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireManagerAuth } = require('../middleware/requireManagerAuth');
+const { requireSupervisorAuth } = require('../middleware/requireSupervisorAuth');
 const {
   getProjects,
   getCategories,
@@ -35,6 +36,13 @@ router.put('/suppliers/:id', requireManagerAuth, updateSupplier);
 router.delete('/suppliers/:id', requireManagerAuth, deleteSupplier);
 router.get('/forecast', requireManagerAuth, getForecast);
 router.get('/', requireManagerAuth, getMaterials);
+
+// Supervisor (operative token): read-only, scoped to assigned project
+router.get('/supervisor/projects', requireSupervisorAuth, getProjects);
+router.get('/supervisor/categories', requireSupervisorAuth, getCategories);
+router.get('/supervisor/suppliers', requireSupervisorAuth, getSuppliers);
+router.get('/supervisor/forecast', requireSupervisorAuth, getForecast);
+router.get('/supervisor', requireSupervisorAuth, getMaterials);
 router.post('/', requireManagerAuth, createMaterial);
 router.put('/:id', requireManagerAuth, updateMaterial);
 router.delete('/:id', requireManagerAuth, deleteMaterial);

@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const { requireManagerAuth } = require('../middleware/requireManagerAuth');
 
+const { requireSupervisorAuth } = require('../middleware/requireSupervisorAuth');
 const {
   createPlan,
   upsertPlanTasks,
@@ -13,6 +14,8 @@ const {
   deletePlanTask,
   listPlans,
   getPlanTaskConfirmationPhotos,
+  listPlansForSupervisor,
+  getPlanTaskConfirmationPhotosSupervisor,
 } = require('../controllers/planningController');
 
 // Create plan
@@ -32,6 +35,10 @@ router.get('/plan-tasks/:id/confirmation-photos', requireManagerAuth, getPlanTas
 
 // Optional listing (for future frontend integration)
 router.get('/list', requireManagerAuth, listPlans);
+
+// Supervisor (operative token): read-only filtered list + confirmation photos
+router.get('/supervisor/list', requireSupervisorAuth, listPlansForSupervisor);
+router.get('/supervisor/plan-tasks/:id/confirmation-photos', requireSupervisorAuth, getPlanTaskConfirmationPhotosSupervisor);
 
 module.exports = router;
 

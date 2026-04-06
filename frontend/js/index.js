@@ -320,7 +320,10 @@
               }
             } catch (e) {}
             closeModal();
-            window.location.href = '/operative_dashboard.html';
+            window.location.href =
+              result.data.user && String(result.data.user.role || '') === 'Supervisor'
+                ? '/supervisor_dashboard.html'
+                : '/operative_dashboard.html';
           } else {
             showError(result.data.message || 'Invalid email or password.');
           }
@@ -419,7 +422,10 @@
               } catch (e) {}
             }
             closeModal();
-            window.location.href = '/operative_dashboard.html';
+            window.location.href =
+              result.data.user && String(result.data.user.role || '') === 'Supervisor'
+                ? '/supervisor_dashboard.html'
+                : '/operative_dashboard.html';
           } else {
             showError(result.data.message || 'Failed to set password. Please try again.');
           }

@@ -6,23 +6,43 @@
 
 const { pool } = require('../db/pool');
 
+function getQaCompanyId(req) {
+  if (req.manager && req.manager.company_id != null) return req.manager.company_id;
+  if (req.supervisor && req.supervisor.company_id != null) return req.supervisor.company_id;
+  return null;
+}
+
+/** If req.supervisor is set, projectId must match their assigned project. Returns error message or null. */
+function supervisorProjectMismatch(req, projectIdNum) {
+  if (!req.supervisor) return null;
+  const sp = req.supervisor.project_id;
+  if (sp == null) return 'No project assigned to your account.';
+  const a = parseInt(String(sp), 10);
+  const b = parseInt(String(projectIdNum), 10);
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a !== b) return 'Access denied.';
+  return null;
+}
+
 function getCreatedBy(req) {
   if (req.manager) {
     const n = [req.manager.name, req.manager.surname].filter(Boolean).join(' ').trim();
     return n || req.manager.email || '';
   }
+  if (req.supervisor && req.supervisor.name) return String(req.supervisor.name).trim();
   return '';
 }
 
 // ---- Templates (scoped by logged-in company and selected project) ----
 
 async function listTemplates(req, res) {
-  const companyId = req.manager?.company_id;
+  const companyId = getQaCompanyId(req);
   if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
   const projectId = req.query.projectId != null ? parseInt(String(req.query.projectId), 10) : NaN;
   if (!Number.isInteger(projectId) || projectId < 1) {
     return res.status(400).json({ message: 'projectId is required.' });
   }
+  const supTplErr = supervisorProjectMismatch(req, projectId);
+  if (supTplErr) return res.status(403).json({ message: supTplErr });
   try {
     const projectCheck = await pool.query(
       'SELECT id FROM projects WHERE id = $1 AND company_id = $2',
@@ -77,15 +97,19 @@ async function getTemplate(req, res) {
   if (!Number.isInteger(id) || id < 1) {
     return res.status(400).json({ message: 'Invalid template id.' });
   }
-  const companyId = req.manager?.company_id;
+  const companyId = getQaCompanyId(req);
   if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
   try {
     const tpl = await pool.query(
-      `SELECT id, name, created_at AS "createdAt", created_by AS "createdBy"
+      `SELECT id, name, project_id, created_at AS "createdAt", created_by AS "createdBy"
        FROM qa_templates WHERE id = $1 AND company_id = $2`,
       [id, companyId]
     );
     if (tpl.rows.length === 0) return res.status(404).json({ message: 'Template not found.' });
+    if (req.supervisor) {
+      const m = supervisorProjectMismatch(req, tpl.rows[0].project_id);
+      if (m) return res.status(403).json({ message: m });
+    }
     const row = tpl.rows[0];
 
     const steps = await pool.query(
@@ -279,7 +303,7 @@ async function deleteTemplate(req, res) {
 // ---- Personnel from users table (company operatives/supervisors) ----
 
 async function getPersonnel(req, res) {
-  const companyId = req.manager && req.manager.company_id;
+  const companyId = getQaCompanyId(req);
   if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
 
   try {
@@ -372,8 +396,10 @@ async function listJobs(req, res) {
   const pid = parseInt(projectId, 10);
   if (!Number.isInteger(pid)) return res.status(400).json({ message: 'Invalid projectId.' });
 
-  const companyId = req.manager && req.manager.company_id;
+  const companyId = getQaCompanyId(req);
   if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
+  const supJobErr = supervisorProjectMismatch(req, pid);
+  if (supJobErr) return res.status(403).json({ message: supJobErr });
 
   try {
     await assertProjectAccess(pool, pid, companyId);
@@ -450,7 +476,7 @@ async function getJob(req, res) {
   if (!Number.isInteger(id) || id < 1) {
     return res.status(400).json({ message: 'Invalid job id.' });
   }
-  const companyId = req.manager && req.manager.company_id;
+  const companyId = getQaCompanyId(req);
   if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
 
   try {
@@ -464,6 +490,10 @@ async function getJob(req, res) {
       [companyId, id]
     );
     if (job.rows.length === 0) return res.status(404).json({ message: 'Job not found.' });
+    if (req.supervisor) {
+      const m = supervisorProjectMismatch(req, job.rows[0].project_id);
+      if (m) return res.status(403).json({ message: m });
+    }
     const row = job.rows[0];
 
     const [tplLinks, workerUserLinks, statusRow, costRow, floorRow] = await Promise.all([
@@ -494,8 +524,10 @@ async function getNextJobNumber(req, res) {
   const pid = parseInt(projectId, 10);
   if (!Number.isInteger(pid)) return res.status(400).json({ message: 'Invalid projectId.' });
 
-  const companyId = req.manager && req.manager.company_id;
+  const companyId = getQaCompanyId(req);
   if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
+  const supNErr = supervisorProjectMismatch(req, pid);
+  if (supNErr) return res.status(403).json({ message: supNErr });
 
   try {
     await assertProjectAccess(pool, pid, companyId);
@@ -520,8 +552,10 @@ async function createJob(req, res) {
   const projectId = b.projectId != null ? parseInt(String(b.projectId), 10) : NaN;
   if (!Number.isInteger(projectId)) return res.status(400).json({ message: 'projectId is required.' });
 
-  const companyId = req.manager && req.manager.company_id;
+  const companyId = getQaCompanyId(req);
   if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
+  const supCErr = supervisorProjectMismatch(req, projectId);
+  if (supCErr) return res.status(403).json({ message: supCErr });
 
   try {
     await assertProjectAccess(pool, projectId, companyId);
@@ -617,7 +651,12 @@ async function createJob(req, res) {
     // --- Auto sync into Task & Planning (Gantt + Kanban) ---
     // Make QA jobs visible in Planning and keep them in sync on updates/deletes.
     try {
-      const managerId = req.manager && req.manager.id ? req.manager.id : null;
+      const managerId =
+        req.manager && req.manager.id
+          ? req.manager.id
+          : req.supervisor && req.supervisor.id
+            ? req.supervisor.id
+            : null;
       await syncPlanningForQaJob(companyId, jobId, managerId);
     } catch (err) {
       // Do not fail QA job creation; only log planning sync errors.
@@ -898,15 +937,19 @@ async function syncPlanningForQaJob(companyId, qaJobId, managerId) {
 async function updateJob(req, res) {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: 'Invalid job id.' });
-  const companyId = req.manager && req.manager.company_id;
+  const companyId = getQaCompanyId(req);
   if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
 
   try {
     const existing = await pool.query(
-      `SELECT j.id FROM qa_jobs j INNER JOIN projects p ON p.id = j.project_id AND p.company_id = $1 WHERE j.id = $2`,
+      `SELECT j.id, j.project_id FROM qa_jobs j INNER JOIN projects p ON p.id = j.project_id AND p.company_id = $1 WHERE j.id = $2`,
       [companyId, id]
     );
     if (existing.rows.length === 0) return res.status(404).json({ message: 'Job not found.' });
+    if (req.supervisor) {
+      const m = supervisorProjectMismatch(req, existing.rows[0].project_id);
+      if (m) return res.status(403).json({ message: m });
+    }
   } catch (e) {
     return res.status(403).json({ message: e.message || 'Access denied.' });
   }
@@ -933,7 +976,13 @@ async function updateJob(req, res) {
     );
     // Keep Planning synchronized with this QA job update.
     try {
-      await syncPlanningForQaJob(companyId, id, req.manager && req.manager.id ? req.manager.id : null);
+      const uid =
+        req.manager && req.manager.id
+          ? req.manager.id
+          : req.supervisor && req.supervisor.id
+            ? req.supervisor.id
+            : null;
+      await syncPlanningForQaJob(companyId, id, uid);
     } catch (syncErr) {
       console.error('Auto planning sync from QA updateJob failed:', syncErr);
     }
