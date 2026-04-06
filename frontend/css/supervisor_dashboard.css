@@ -1,0 +1,431 @@
+/**
+ * Supervisor Dashboard – iPadOS / iOS-native shell (tablet-first).
+ * Loaded after dashboard_manager.css + dashboard.css; scopes to body.supervisor-dashboard-ios
+ */
+
+/* ----- iOS design tokens (light) ----- */
+body.supervisor-dashboard-ios {
+  --ios-bg-grouped: #f2f2f7;
+  --ios-bg-elevated: #ffffff;
+  --ios-fill-secondary: rgba(120, 120, 128, 0.12);
+  --ios-fill-tertiary: rgba(120, 120, 128, 0.08);
+  --ios-label: #000000;
+  --ios-secondary-label: rgba(60, 60, 67, 0.6);
+  --ios-tertiary-label: rgba(60, 60, 67, 0.3);
+  --ios-separator: rgba(60, 60, 67, 0.29);
+  --ios-separator-opaque: #c6c6c8;
+  --ios-blue: #007aff;
+  --ios-blue-pressed: #0051d5;
+  --ios-sidebar-selected: rgba(0, 122, 255, 0.12);
+  --ios-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --ios-radius-lg: 12px;
+  --ios-radius-xl: 16px;
+  --ios-sidebar-w: min(280px, 32vw);
+  --ios-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --ios-touch-min: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  body.supervisor-dashboard-ios {
+    --ios-bg-grouped: #000000;
+    --ios-bg-elevated: #1c1c1e;
+    --ios-fill-secondary: rgba(120, 120, 128, 0.24);
+    --ios-fill-tertiary: rgba(120, 120, 128, 0.18);
+    --ios-label: #ffffff;
+    --ios-secondary-label: rgba(235, 235, 245, 0.6);
+    --ios-tertiary-label: rgba(235, 235, 245, 0.3);
+    --ios-separator: rgba(84, 84, 88, 0.65);
+    --ios-separator-opaque: #38383a;
+    --ios-blue: #0a84ff;
+    --ios-blue-pressed: #409cff;
+    --ios-sidebar-selected: rgba(10, 132, 255, 0.2);
+    --ios-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+}
+
+html.supervisor-dashboard-ios-root {
+  height: 100%;
+  height: -webkit-fill-available;
+}
+
+body.supervisor-dashboard-ios.dashboard-manager {
+  font-family: var(--ios-font);
+  background: var(--ios-bg-grouped);
+  color: var(--ios-label);
+  /* Safe area: top notch + bottom home indicator (horizontal handled per panel) */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-font-smoothing: antialiased;
+}
+
+body.supervisor-dashboard-ios .text-muted {
+  color: var(--ios-secondary-label) !important;
+}
+
+/* ----- Loading & access denied (iOS sheets) ----- */
+body.supervisor-dashboard-ios .dashboard-loading {
+  background: var(--ios-bg-grouped);
+  color: var(--ios-secondary-label);
+}
+
+body.supervisor-dashboard-ios .dashboard-loading-spinner {
+  border-color: var(--ios-fill-tertiary);
+  border-top-color: var(--ios-blue);
+}
+
+body.supervisor-dashboard-ios .dashboard-access-denied {
+  background: var(--ios-bg-grouped);
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+}
+
+body.supervisor-dashboard-ios .dashboard-access-denied-card {
+  background: var(--ios-bg-elevated);
+  border: 0.5px solid var(--ios-separator);
+  border-radius: var(--ios-radius-xl);
+  box-shadow: var(--ios-shadow);
+  max-width: 400px;
+}
+
+body.supervisor-dashboard-ios .dashboard-access-denied-card h2 {
+  color: var(--ios-label);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+body.supervisor-dashboard-ios .dashboard-access-denied-message {
+  color: var(--ios-secondary-label);
+  font-size: 1.0625rem;
+  line-height: 1.47;
+}
+
+body.supervisor-dashboard-ios .dashboard-access-denied .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--ios-touch-min);
+  padding: 0 20px;
+  background: var(--ios-blue);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 1.0625rem;
+  text-decoration: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ----- Sidebar: always expanded labels (iPad split-style) ----- */
+body.supervisor-dashboard-ios #dashboard-app .sidebar {
+  width: var(--ios-sidebar-w) !important;
+  min-width: var(--ios-sidebar-w);
+  background: var(--ios-bg-elevated);
+  border-right: 0.5px solid var(--ios-separator);
+  box-shadow: none;
+}
+
+body.supervisor-dashboard-ios #dashboard-app .sidebar:hover,
+body.supervisor-dashboard-ios #dashboard-app .sidebar:focus-within {
+  width: var(--ios-sidebar-w) !important;
+  box-shadow: none;
+}
+
+body.supervisor-dashboard-ios .sidebar-brand {
+  justify-content: flex-start !important;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px !important;
+  min-height: 52px;
+  border-bottom: 0.5px solid var(--ios-separator);
+}
+
+body.supervisor-dashboard-ios .sidebar-logo {
+  opacity: 1 !important;
+  max-width: 200px !important;
+  transform: none !important;
+  pointer-events: auto !important;
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+  color: var(--ios-label) !important;
+}
+
+body.supervisor-dashboard-ios .sidebar-brand-icon {
+  color: var(--ios-blue) !important;
+  font-size: 1.5rem !important;
+}
+
+body.supervisor-dashboard-ios .sidebar-nav {
+  padding: 8px 10px 12px !important;
+  gap: 2px !important;
+}
+
+body.supervisor-dashboard-ios .sidebar-item {
+  justify-content: flex-start !important;
+  gap: 12px !important;
+  padding: 12px 14px !important;
+  min-height: var(--ios-touch-min);
+  border-radius: 10px !important;
+  color: var(--ios-label) !important;
+  font-size: 1.0625rem;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+
+body.supervisor-dashboard-ios .sidebar-item span {
+  opacity: 1 !important;
+  max-width: 220px !important;
+  transform: none !important;
+  pointer-events: auto !important;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+body.supervisor-dashboard-ios .sidebar-item i {
+  color: var(--ios-blue);
+  font-size: 1.35rem;
+  width: 1.5rem;
+}
+
+body.supervisor-dashboard-ios .sidebar-item:hover {
+  filter: none !important;
+  background: var(--ios-fill-tertiary);
+  color: var(--ios-label) !important;
+}
+
+body.supervisor-dashboard-ios .sidebar-item.active {
+  background: var(--ios-sidebar-selected) !important;
+  color: var(--ios-blue) !important;
+  font-weight: 600;
+}
+
+body.supervisor-dashboard-ios .sidebar-item.active i {
+  color: var(--ios-blue) !important;
+}
+
+body.supervisor-dashboard-ios .sidebar-footer {
+  padding: 8px 10px max(12px, env(safe-area-inset-bottom)) !important;
+  border-top: 0.5px solid var(--ios-separator);
+}
+
+body.supervisor-dashboard-ios .sidebar-footer .sidebar-item {
+  color: var(--ios-secondary-label) !important;
+}
+
+body.supervisor-dashboard-ios .sidebar-footer .sidebar-item i {
+  color: var(--ios-secondary-label) !important;
+}
+
+/* Main area offset for fixed sidebar */
+body.supervisor-dashboard-ios .main-wrap {
+  padding-left: var(--ios-sidebar-w) !important;
+  background: var(--ios-bg-grouped);
+}
+
+/* ----- Header: iOS large navigation bar (blur) ----- */
+body.supervisor-dashboard-ios .dashboard-header {
+  padding: 12px 16px 10px;
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid var(--ios-separator);
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  body.supervisor-dashboard-ios .dashboard-header {
+    background: rgba(28, 28, 30, 0.72);
+  }
+}
+
+@supports not (backdrop-filter: blur(20px)) {
+  body.supervisor-dashboard-ios .dashboard-header {
+    background: var(--ios-bg-elevated);
+  }
+}
+
+body.supervisor-dashboard-ios .header-title {
+  font-size: clamp(1.25rem, 2.8vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--ios-label);
+  line-height: 1.2;
+  flex: 1;
+  min-width: 0;
+}
+
+body.supervisor-dashboard-ios .dashboard-header-right {
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+body.supervisor-dashboard-ios .dashboard-my-company {
+  background: var(--ios-fill-secondary);
+  border: none;
+  border-radius: 10px;
+  padding: 8px 12px;
+  align-items: flex-end;
+}
+
+body.supervisor-dashboard-ios .dashboard-my-company-label {
+  color: var(--ios-tertiary-label);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+body.supervisor-dashboard-ios .dashboard-my-company-name {
+  color: var(--ios-secondary-label);
+  font-size: 0.8125rem;
+}
+
+body.supervisor-dashboard-ios .dashboard-my-company-user {
+  color: var(--ios-label);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  max-width: 42vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.supervisor-dashboard-ios .btn-dashboard-logout {
+  min-height: var(--ios-touch-min);
+  min-width: var(--ios-touch-min);
+  padding: 0 16px;
+  background: var(--ios-fill-secondary);
+  border: none;
+  border-radius: 10px;
+  color: var(--ios-blue);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+body.supervisor-dashboard-ios .btn-dashboard-logout:hover {
+  background: var(--ios-fill-tertiary);
+}
+
+body.supervisor-dashboard-ios .btn-dashboard-logout:active {
+  opacity: 0.65;
+}
+
+/* ----- Content: card that holds iframe (grouped inset) ----- */
+body.supervisor-dashboard-ios #dashboard-app .dashboard-content-wrap {
+  padding-bottom: 0;
+  background: var(--ios-bg-grouped);
+}
+
+body.supervisor-dashboard-ios .dashboard-content {
+  padding: 12px 12px 16px;
+  gap: 0;
+}
+
+body.supervisor-dashboard-ios .dashboard-main.dashboard-content {
+  background: transparent;
+}
+
+/* Iframe sits inside a rounded “sheet” like an embedded app */
+body.supervisor-dashboard-ios .dashboard-qa-iframe {
+  border-radius: var(--ios-radius-lg);
+  overflow: hidden;
+  background: var(--ios-bg-elevated);
+  box-shadow: var(--ios-shadow);
+  min-height: min(70dvh, 820px);
+  min-height: min(70vh, 820px);
+}
+
+/* Coarse pointer / tablets: ensure usable iframe height */
+@media (hover: none) and (pointer: coarse) {
+  body.supervisor-dashboard-ios .dashboard-qa-iframe {
+    min-height: min(72dvh, 880px);
+  }
+}
+
+@media (min-width: 768px) {
+  body.supervisor-dashboard-ios .dashboard-content {
+    padding: 16px 20px 24px;
+  }
+
+  body.supervisor-dashboard-ios .dashboard-qa-iframe {
+    min-height: min(75dvh, 900px);
+  }
+}
+
+/* ----- Footer: fixed strip only under main column (sidebar stays full-height) ----- */
+body.supervisor-dashboard-ios #dashboard-app .dashboard-footer {
+  position: fixed;
+  left: var(--ios-sidebar-w);
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  backdrop-filter: saturate(180%) blur(16px);
+  border-top: 0.5px solid var(--ios-separator);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--ios-tertiary-label);
+  text-align: center;
+}
+
+@media (prefers-color-scheme: dark) {
+  body.supervisor-dashboard-ios #dashboard-app .dashboard-footer {
+    background: rgba(28, 28, 30, 0.92);
+  }
+}
+
+@supports not (backdrop-filter: blur(16px)) {
+  body.supervisor-dashboard-ios #dashboard-app .dashboard-footer {
+    background: var(--ios-bg-elevated);
+  }
+}
+
+body.supervisor-dashboard-ios .dashboard-footer a {
+  color: var(--ios-blue);
+}
+
+/* Space above fixed footer (matches manager dashboard pattern) */
+body.supervisor-dashboard-ios #dashboard-app .dashboard-content-wrap {
+  padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ----- Mobile drawer: iOS-style toggle ----- */
+body.supervisor-dashboard-ios .sidebar-toggle {
+  background: var(--ios-bg-elevated);
+  border: 0.5px solid var(--ios-separator);
+  border-radius: 10px;
+  color: var(--ios-blue);
+  box-shadow: var(--ios-shadow);
+}
+
+body.supervisor-dashboard-ios .sidebar-toggle:hover {
+  background: var(--ios-fill-secondary);
+}
+
+@media (max-width: 991.98px) {
+  body.supervisor-dashboard-ios .main-wrap {
+    padding-left: 0 !important;
+  }
+
+  body.supervisor-dashboard-ios .dashboard-header {
+    padding-left: max(60px, env(safe-area-inset-left));
+  }
+
+  body.supervisor-dashboard-ios #dashboard-app .dashboard-footer {
+    left: 0;
+  }
+
+  body.dashboard-manager #dashboard-app .dashboard-footer {
+    display: block !important;
+  }
+}
+
+/* ----- Reduced motion ----- */
+@media (prefers-reduced-motion: reduce) {
+  body.supervisor-dashboard-ios * {
+    transition-duration: 0.01ms !important;
+  }
+}
