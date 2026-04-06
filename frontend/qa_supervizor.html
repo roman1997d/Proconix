@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>QA – Supervisor</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f2f2f7;
+      --card: #fff;
+      --text: #000;
+      --muted: rgba(60,60,67,.6);
+      --blue: #007aff;
+      --sep: rgba(60,60,67,.29);
+      --radius: 12px;
+      --danger: #ff3b30;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #000;
+        --card: #1c1c1e;
+        --text: #fff;
+        --muted: rgba(235,235,245,.6);
+        --sep: rgba(84,84,88,.65);
+      }
+    }
+    * { box-sizing: border-box; }
+    html { height: 100%; height: -webkit-fill-available; }
+    body {
+      margin: 0;
+      min-height: 100%;
+      min-height: -webkit-fill-available;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .qsv-header {
+      padding: 12px 16px;
+      padding-top: max(12px, env(safe-area-inset-top));
+      border-bottom: 0.5px solid var(--sep);
+      background: var(--card);
+    }
+    .qsv-header h1 { font-size: 1.15rem; font-weight: 700; margin: 0 0 4px; }
+    .qsv-header .sub { font-size: 0.85rem; color: var(--muted); }
+    .qsv-nav {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px;
+      flex-wrap: wrap;
+      border-bottom: 0.5px solid var(--sep);
+      background: var(--card);
+    }
+    .qsv-nav button {
+      flex: 1;
+      min-width: 92px;
+      min-height: 44px;
+      border: 0.5px solid var(--sep);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--blue);
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .qsv-nav button.active {
+      background: rgba(0, 122, 255, 0.12);
+      border-color: var(--blue);
+    }
+    .qsv-main { padding: 12px; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+    .qsv-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      border: 0.5px solid var(--sep);
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+    .qsv-card h2 { font-size: 1rem; margin: 0 0 8px; }
+    .qsv-meta { font-size: 0.85rem; color: var(--muted); }
+    .qsv-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 44px;
+      padding: 0 14px;
+      border-radius: 10px;
+      border: 0.5px solid var(--sep);
+      background: var(--card);
+      color: var(--blue);
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    .qsv-btn.primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .qsv-btn.danger { color: var(--danger); border-color: rgba(255,59,48,.4); }
+    .qsv-btn.block { width: 100%; }
+    .qsv-label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+    .qsv-input, .qsv-select, .qsv-textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 0.5px solid var(--sep);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1rem;
+    }
+    .qsv-textarea { min-height: 88px; resize: vertical; }
+    .qsv-form-grid { display: grid; gap: 12px; }
+    .qsv-check { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+    .qsv-check input { margin-top: 4px; }
+    .qsv-step {
+      border: 0.5px solid var(--sep);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .qsv-step h3 { font-size: 0.9rem; margin: 0 0 8px; }
+    .qsv-step-desc { font-size: 0.85rem; color: var(--muted); margin-bottom: 10px; }
+    .qsv-photos { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+    .qsv-photos figure { position: relative; margin: 0; }
+    .qsv-photos img { width: 88px; height: 88px; object-fit: cover; border-radius: 8px; }
+    .qsv-photos button.del {
+      position: absolute; top: -6px; right: -6px;
+      width: 26px; height: 26px; border-radius: 50%;
+      border: none; background: rgba(0,0,0,.65); color: #fff;
+      font-size: 14px; cursor: pointer; line-height: 1;
+    }
+    .qsv-modal-bg {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4);
+      z-index: 1000; align-items: flex-end; justify-content: center;
+    }
+    .qsv-modal-bg.open { display: flex; }
+    .qsv-modal {
+      background: var(--card);
+      width: 100%; max-width: 520px;
+      max-height: 88vh;
+      overflow: auto;
+      border-radius: var(--radius) var(--radius) 0 0;
+      padding: 16px;
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+    .qsv-modal h2 { font-size: 1.1rem; margin: 0 0 12px; }
+    .qsv-toast {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,.85); color: #fff; padding: 10px 16px;
+      border-radius: 10px; font-size: 0.9rem; z-index: 2000; display: none;
+    }
+    .qsv-toast.show { display: block; }
+    .qsv-empty { text-align: center; color: var(--muted); padding: 32px 16px; }
+    .qsv-backdrop-job { display: none; position: fixed; inset: 0; z-index: 900; background: var(--bg); overflow: auto; }
+    .qsv-backdrop-job.open { display: block; }
+    .qsv-job-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+    .tpl-step-row { padding: 8px 0; border-bottom: 0.5px solid var(--sep); font-size: 0.9rem; }
+    .tpl-step-row:last-child { border-bottom: none; }
+    .d-none { display: none !important; }
+  </style>
+</head>
+<body>
+  <header class="qsv-header">
+    <h1>Quality Assurance</h1>
+    <p class="sub" id="qsvProjectLine">Loading…</p>
+  </header>
+  <nav class="qsv-nav" aria-label="QA sections">
+    <button type="button" class="active" data-view="jobs">Jobs</button>
+    <button type="button" data-view="templates">Templates</button>
+    <button type="button" data-view="newjob">New job</button>
+  </nav>
+
+  <main class="qsv-main">
+    <div id="qsvViewJobs"></div>
+    <div id="qsvViewTemplates" class="d-none"></div>
+    <div id="qsvViewNewJob" class="d-none"></div>
+  </main>
+
+  <div class="qsv-modal-bg" id="qsvTplModalBg" role="dialog" aria-modal="true">
+    <div class="qsv-modal">
+      <h2 id="qsvTplModalTitle">Template</h2>
+      <div id="qsvTplModalBody"></div>
+      <button type="button" class="qsv-btn block" id="qsvTplModalClose" style="margin-top:12px;">Close</button>
+    </div>
+  </div>
+
+  <div class="qsv-backdrop-job" id="qsvJobPanel">
+    <div class="qsv-header">
+      <div class="qsv-job-head">
+        <button type="button" class="qsv-btn" id="qsvJobBack"><i class="bi bi-chevron-left"></i> Back</button>
+        <span></span>
+      </div>
+      <h1 id="qsvJobTitle">Job</h1>
+      <p class="sub" id="qsvJobSub"></p>
+    </div>
+    <div class="qsv-main" id="qsvJobBody"></div>
+  </div>
+
+  <div class="qsv-toast" id="qsvToast"></div>
+
+  <script>
+(function () {
+  'use strict';
+  var TOKEN_KEY = 'proconix_operative_token';
+  var API = '/api/supervisor/qa';
+  var projectId = null;
+  var projectName = '';
+  var personnel = { supervisors: [], workers: [] };
+  var currentJobId = null;
+
+  function token() {
+    try {
+      return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+    } catch (e) { return null; }
+  }
+
+  function headersJson() {
+    var h = { 'Content-Type': 'application/json' };
+    var t = token();
+    if (t) h['X-Operative-Token'] = t;
+    return h;
+  }
+
+  function showToast(msg) {
+    var el = document.getElementById('qsvToast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(function () { el.classList.remove('show'); }, 2600);
+  }
+
+  function escapeHtml(s) {
+    if (s == null) return '';
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function fetchJson(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    if (!opts.headers['Content-Type'] && opts.body && typeof opts.body === 'string') {
+      opts.headers['Content-Type'] = 'application/json';
+    }
+    var t = token();
+    if (t) opts.headers['X-Operative-Token'] = t;
+    return fetch(url, opts).then(function (r) {
+      return r.text().then(function (text) {
+        var j = null;
+        try { j = text ? JSON.parse(text) : null; } catch (e) {}
+        return { ok: r.ok, status: r.status, json: j, text: text };
+      });
+    });
+  }
+
+  function initNav() {
+    document.querySelectorAll('.qsv-nav button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var v = btn.getAttribute('data-view');
+        document.querySelectorAll('.qsv-nav button').forEach(function (b) {
+          b.classList.toggle('active', b.getAttribute('data-view') === v);
+        });
+        document.getElementById('qsvViewJobs').classList.toggle('d-none', v !== 'jobs');
+        document.getElementById('qsvViewTemplates').classList.toggle('d-none', v !== 'templates');
+        document.getElementById('qsvViewNewJob').classList.toggle('d-none', v !== 'newjob');
+        if (v === 'jobs') loadJobsView();
+        if (v === 'templates') loadTemplatesView();
+        if (v === 'newjob') renderNewJobForm();
+      });
+    });
+  }
+
+  function boot() {
+    fetchJson('/api/operatives/me', { method: 'GET' }).then(function (out) {
+      if (!out.ok || !out.json || !out.json.success || !out.json.user) {
+        showToast('Please sign in as supervisor.');
+        document.getElementById('qsvProjectLine').textContent = 'Not signed in';
+        return;
+      }
+      var u = out.json.user;
+      projectId = u.project_id != null ? String(u.project_id) : null;
+      if (!projectId) {
+        document.getElementById('qsvProjectLine').textContent = 'No project assigned to your account.';
+        return;
+      }
+      return fetchJson('/api/materials/supervisor/projects', { method: 'GET' }).then(function (pr) {
+        projectName = '';
+        var list = [];
+        if (pr.ok && pr.json && pr.json.success && Array.isArray(pr.json.projects)) {
+          list = pr.json.projects;
+        }
+        var p = list.find(function (x) { return String(x.id) === projectId; });
+        if (p && p.name) projectName = p.name;
+        document.getElementById('qsvProjectLine').textContent =
+          (projectName || 'Project') + ' · #' + projectId;
+        return fetchJson(API + '/personnel', { method: 'GET' });
+      }).then(function (pe) {
+        if (pe.ok && pe.json) {
+          personnel.supervisors = pe.json.supervisors || [];
+          personnel.workers = pe.json.workers || [];
+        }
+        initNav();
+        loadJobsView();
+      });
+    }).catch(function () {
+      document.getElementById('qsvProjectLine').textContent = 'Could not load profile.';
+    });
+  }
+
+  function loadJobsView() {
+    var el = document.getElementById('qsvViewJobs');
+    if (!projectId) {
+      el.innerHTML = '<div class="qsv-empty">No project assigned.</div>';
+      return;
+    }
+    el.innerHTML = '<p class="qsv-meta">Loading jobs…</p>';
+    fetchJson(API + '/jobs?projectId=' + encodeURIComponent(projectId), { method: 'GET' }).then(function (out) {
+      if (!out.ok) {
+        el.innerHTML = '<div class="qsv-empty">Could not load jobs.</div>';
+        return;
+      }
+      var jobs = out.json || [];
+      if (!jobs.length) {
+        el.innerHTML = '<div class="qsv-empty">No QA jobs yet. Create one under <strong>New job</strong>.</div>';
+        return;
+      }
+      el.innerHTML = jobs.map(function (j) {
+        return (
+          '<article class="qsv-card" data-job-id="' + escapeHtml(j.id) + '">' +
+          '<h2>' + escapeHtml(j.jobNumber || 'Job') + '</h2>' +
+          '<p class="qsv-meta">' + escapeHtml(j.location || '—') + ' · ' + escapeHtml(j.status || '') + '</p>' +
+          '<p class="qsv-meta">Due: ' + escapeHtml((j.targetCompletionDate || '').slice(0, 10) || '—') + '</p>' +
+          '<button type="button" class="qsv-btn primary qsv-open-job" data-id="' + escapeHtml(j.id) + '">QA overview</button>' +
+          '</article>'
+        );
+      }).join('');
+      el.querySelectorAll('.qsv-open-job').forEach(function (b) {
+        b.addEventListener('click', function () {
+          openJobOverview(b.getAttribute('data-id'));
+        });
+      });
+    });
+  }
+
+  function loadTemplatesView() {
+    var el = document.getElementById('qsvViewTemplates');
+    if (!projectId) {
+      el.innerHTML = '<div class="qsv-empty">No project assigned.</div>';
+      return;
+    }
+    el.innerHTML = '<p class="qsv-meta">Loading templates…</p>';
+    fetchJson(API + '/templates?projectId=' + encodeURIComponent(projectId), { method: 'GET' }).then(function (out) {
+      if (!out.ok) {
+        el.innerHTML = '<div class="qsv-empty">Could not load templates.</div>';
+        return;
+      }
+      var list = out.json || [];
+      if (!list.length) {
+        el.innerHTML = '<div class="qsv-empty">No templates for this project.</div>';
+        return;
+      }
+      el.innerHTML =
+        '<p class="qsv-meta" style="margin-bottom:12px;">View-only — prices are hidden.</p>' +
+        list.map(function (t) {
+          var n = (t.steps && t.steps.length) || 0;
+          return (
+            '<article class="qsv-card qsv-tpl-card" data-tpl-id="' + escapeHtml(t.id) + '">' +
+            '<h2>' + escapeHtml(t.name || 'Template') + '</h2>' +
+            '<p class="qsv-meta">' + n + ' steps</p>' +
+            '<button type="button" class="qsv-btn qsv-tpl-open" data-id="' + escapeHtml(t.id) + '">View details</button>' +
+            '</article>'
+          );
+        }).join('');
+      el.querySelectorAll('.qsv-tpl-open').forEach(function (b) {
+        b.addEventListener('click', function () {
+          openTemplateModal(b.getAttribute('data-id'));
+        });
+      });
+    });
+  }
+
+  function openTemplateModal(id) {
+    fetchJson(API + '/templates/' + encodeURIComponent(id), { method: 'GET' }).then(function (out) {
+      if (!out.ok || !out.json) {
+        showToast('Could not load template');
+        return;
+      }
+      var t = out.json;
+      document.getElementById('qsvTplModalTitle').textContent = t.name || 'Template';
+      var steps = t.steps || [];
+      var body = steps.map(function (s, i) {
+        return (
+          '<div class="tpl-step-row"><strong>Step ' + (i + 1) + '</strong><br>' +
+          escapeHtml(s.description || '—') + '</div>'
+        );
+      }).join('');
+      document.getElementById('qsvTplModalBody').innerHTML = body || '<p class="qsv-meta">No steps.</p>';
+      document.getElementById('qsvTplModalBg').classList.add('open');
+    });
+  }
+
+  document.getElementById('qsvTplModalClose').addEventListener('click', function () {
+    document.getElementById('qsvTplModalBg').classList.remove('open');
+  });
+  document.getElementById('qsvTplModalBg').addEventListener('click', function (e) {
+    if (e.target === this) document.getElementById('qsvTplModalBg').classList.remove('open');
+  });
+
+  function renderNewJobForm() {
+    var el = document.getElementById('qsvViewNewJob');
+    if (!projectId) {
+      el.innerHTML = '<div class="qsv-empty">No project assigned.</div>';
+      return;
+    }
+    fetchJson(API + '/templates?projectId=' + encodeURIComponent(projectId), { method: 'GET' }).then(function (tplOut) {
+      var templates = (tplOut.ok && tplOut.json) ? tplOut.json : [];
+      var tplChecks = templates.map(function (t) {
+        return (
+          '<label class="qsv-check">' +
+          '<input type="checkbox" name="tpl" value="' + escapeHtml(t.id) + '">' +
+          '<span>' + escapeHtml(t.name) + ' <span class="qsv-meta">(' + ((t.steps && t.steps.length) || 0) + ' steps)</span></span>' +
+          '</label>'
+        );
+      }).join('');
+
+      var supOpts = (personnel.supervisors || []).map(function (s) {
+        return '<option value="' + escapeHtml(s.id) + '">' + escapeHtml(s.name) + '</option>';
+      }).join('');
+      var workerOpts = (personnel.workers || []).map(function (w) {
+        return '<option value="' + escapeHtml(w.id) + '">' + escapeHtml(w.name) + '</option>';
+      }).join('');
+
+      el.innerHTML =
+        '<div class="qsv-card">' +
+        '<p class="qsv-meta">Job number is generated automatically. Cost fields are omitted for supervisors.</p>' +
+        '<div class="qsv-form-grid">' +
+        '<div><span class="qsv-label">Floor / level</span>' +
+        '<select class="qsv-select" id="qsvNjFloor">' +
+        '<option value="">—</option><option value="ground">Ground</option><option value="1">Floor 1</option>' +
+        '<option value="2">Floor 2</option><option value="3">Floor 3</option></select></div>' +
+        '<div><span class="qsv-label">Location</span><input class="qsv-input" id="qsvNjLoc" placeholder="e.g. Building A"></div>' +
+        '<div><span class="qsv-label">Sqm</span><input class="qsv-input" id="qsvNjSqm" type="number" min="0" step="0.01"></div>' +
+        '<div><span class="qsv-label">Linear m</span><input class="qsv-input" id="qsvNjLin" type="number" min="0" step="0.01"></div>' +
+        '<div><span class="qsv-label">Specification</span><input class="qsv-input" id="qsvNjSpec"></div>' +
+        '<div><span class="qsv-label">Description</span><textarea class="qsv-textarea" id="qsvNjDesc"></textarea></div>' +
+        '<div><span class="qsv-label">Target completion</span><input class="qsv-input" id="qsvNjDate" type="date"></div>' +
+        '<div><span class="qsv-label">Supervisor (responsible)</span>' +
+        '<select class="qsv-select" id="qsvNjResp"><option value="">—</option>' + supOpts + '</select></div>' +
+        '<div><span class="qsv-label">Workers (hold Ctrl/Cmd for multiple)</span>' +
+        '<select class="qsv-select" id="qsvNjWorkers" multiple size="5" style="min-height:120px;">' + workerOpts + '</select></div>' +
+        '<div><span class="qsv-label">Templates</span>' + (tplChecks || '<p class="qsv-meta">No templates.</p>') + '</div>' +
+        '</div>' +
+        '<button type="button" class="qsv-btn primary block" id="qsvNjSubmit" style="margin-top:16px;">Create job</button>' +
+        '</div>';
+
+      document.getElementById('qsvNjSubmit').addEventListener('click', function () {
+        var wSel = document.getElementById('qsvNjWorkers');
+        var workerIds = [];
+        if (wSel) {
+          for (var i = 0; i < wSel.selectedOptions.length; i++) {
+            workerIds.push(wSel.selectedOptions[i].value);
+          }
+        }
+        var tplIds = [];
+        el.querySelectorAll('input[name="tpl"]:checked').forEach(function (c) {
+          tplIds.push(c.value);
+        });
+        var body = {
+          projectId: parseInt(projectId, 10),
+          floor: document.getElementById('qsvNjFloor').value || null,
+          location: document.getElementById('qsvNjLoc').value || null,
+          sqm: document.getElementById('qsvNjSqm').value || null,
+          linearMeters: document.getElementById('qsvNjLin').value || null,
+          specification: document.getElementById('qsvNjSpec').value || null,
+          description: document.getElementById('qsvNjDesc').value || null,
+          targetCompletionDate: document.getElementById('qsvNjDate').value || null,
+          templateIds: tplIds,
+          responsibleId: document.getElementById('qsvNjResp').value || null,
+          workerIds: workerIds,
+          status: 'new',
+          costIncluded: false
+        };
+        fetchJson(API + '/jobs', { method: 'POST', headers: headersJson(), body: JSON.stringify(body) }).then(function (out) {
+          if (!out.ok) {
+            var msg = (out.json && out.json.message) || out.text || 'Failed';
+            showToast(msg);
+            return;
+          }
+          showToast('Job created');
+          document.querySelector('.qsv-nav button[data-view="jobs"]').click();
+        }).catch(function () { showToast('Network error'); });
+      });
+    });
+  }
+
+  function evidenceKey(tid, sid) {
+    return String(tid) + '|' + String(sid);
+  }
+
+  function openJobOverview(jobId) {
+    currentJobId = jobId;
+    var panel = document.getElementById('qsvJobPanel');
+    var body = document.getElementById('qsvJobBody');
+    body.innerHTML = '<p class="qsv-meta">Loading…</p>';
+    panel.classList.add('open');
+
+    Promise.all([
+      fetchJson(API + '/jobs/' + encodeURIComponent(jobId), { method: 'GET' }),
+      fetchJson(API + '/jobs/' + encodeURIComponent(jobId) + '/step-evidence', { method: 'GET' })
+    ]).then(function (results) {
+      var jobOut = results[0];
+      var evOut = results[1];
+      if (!jobOut.ok || !jobOut.json) {
+        body.innerHTML = '<div class="qsv-empty">Could not load job.</div>';
+        return;
+      }
+      var job = jobOut.json;
+      document.getElementById('qsvJobTitle').textContent = job.jobNumber || 'Job';
+      document.getElementById('qsvJobSub').textContent =
+        [job.location, job.floor, (job.targetCompletionDate || '').slice(0, 10)].filter(Boolean).join(' · ');
+
+      var evMap = {};
+      if (evOut.ok && evOut.json && evOut.json.steps) {
+        evOut.json.steps.forEach(function (s) {
+          evMap[evidenceKey(s.templateId, s.stepId)] = s;
+        });
+      } else if (evOut.status === 503) {
+        showToast('Run DB migration: alter_qa_job_step_evidence.sql');
+      }
+
+      var statusOpts = ['new', 'active', 'completed'].map(function (st) {
+        return '<option value="' + st + '"' + ((job.status || '') === st ? ' selected' : '') + '>' + st + '</option>';
+      }).join('');
+
+      var html =
+        '<div class="qsv-card">' +
+        '<span class="qsv-label">Status</span>' +
+        '<select class="qsv-select" id="qsvJobStatus">' + statusOpts + '</select>' +
+        '<button type="button" class="qsv-btn primary block" id="qsvJobSaveStatus" style="margin-top:10px;">Update status</button>' +
+        '</div>';
+
+      var templateIds = job.templateIds || [];
+      if (!templateIds.length) {
+        body.innerHTML = html + '<div class="qsv-card"><p class="qsv-meta">No templates linked. Add templates from the manager app or recreate the job.</p></div>';
+        wireJobStatus(jobId);
+        return;
+      }
+
+      return Promise.all(templateIds.map(function (tid) {
+        return fetchJson(API + '/templates/' + encodeURIComponent(tid), { method: 'GET' }).then(function (r) {
+          return r.ok && r.json ? r.json : null;
+        });
+      })).then(function (tpls) {
+        tpls.forEach(function (tpl) {
+          if (!tpl) return;
+          html += '<div class="qsv-card"><h2>' + escapeHtml(tpl.name || 'Template') + '</h2>';
+          (tpl.steps || []).forEach(function (step, idx) {
+            var sid = String(step.id);
+            var ek = evidenceKey(tpl.id, sid);
+            var ev = evMap[ek] || { comment: '', photos: [] };
+            var photosHtml = (ev.photos || []).map(function (p) {
+              return (
+                '<figure><img src="' + escapeHtml(p.file_url) + '" alt="">' +
+                '<button type="button" class="del" data-photo-id="' + p.id + '" aria-label="Remove">&times;</button></figure>'
+              );
+            }).join('');
+            html +=
+              '<div class="qsv-step" data-tid="' + escapeHtml(tpl.id) + '" data-sid="' + escapeHtml(sid) + '">' +
+              '<h3>Step ' + (idx + 1) + '</h3>' +
+              '<div class="qsv-step-desc">' + escapeHtml(step.description || '—') + '</div>' +
+              '<span class="qsv-label">Comment</span>' +
+              '<textarea class="qsv-textarea qsv-step-comment" rows="3">' + escapeHtml(ev.comment || '') + '</textarea>' +
+              '<button type="button" class="qsv-btn block qsv-save-comment" style="margin-top:8px;">Save comment</button>' +
+              '<div class="qsv-photos">' + photosHtml + '</div>' +
+              '<input type="file" accept="image/*" capture="environment" class="qsv-photo-input d-none">' +
+              '<button type="button" class="qsv-btn qsv-add-photo"><i class="bi bi-camera"></i> Add photo</button>' +
+              '</div>';
+          });
+          html += '</div>';
+        });
+        body.innerHTML = html;
+        wireJobStatus(jobId);
+        body.querySelectorAll('.qsv-save-comment').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var step = btn.closest('.qsv-step');
+            var tid = step.getAttribute('data-tid');
+            var sid = step.getAttribute('data-sid');
+            var comment = step.querySelector('.qsv-step-comment').value;
+            fetchJson(API + '/jobs/' + encodeURIComponent(jobId) + '/step-comment', {
+              method: 'PUT',
+              headers: headersJson(),
+              body: JSON.stringify({ templateId: tid, stepId: sid, comment: comment })
+            }).then(function (out) {
+              if (!out.ok) {
+                showToast((out.json && out.json.message) || 'Save failed');
+                return;
+              }
+              showToast('Comment saved');
+            });
+          });
+        });
+        body.querySelectorAll('.qsv-add-photo').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var step = btn.closest('.qsv-step');
+            var input = step.querySelector('.qsv-photo-input');
+            input.onchange = function () {
+              var f = input.files && input.files[0];
+              if (!f) return;
+              var fd = new FormData();
+              fd.append('file', f);
+              fd.append('templateId', step.getAttribute('data-tid'));
+              fd.append('stepId', step.getAttribute('data-sid'));
+              var h = {};
+              var tok = token();
+              if (tok) h['X-Operative-Token'] = tok;
+              fetch(API + '/jobs/' + encodeURIComponent(jobId) + '/step-photos', {
+                method: 'POST',
+                headers: h,
+                body: fd
+              }).then(function (r) {
+                return r.json().then(function (j) { return { ok: r.ok, json: j }; });
+              }).then(function (out) {
+                input.value = '';
+                if (!out.ok || !out.json.success) {
+                  showToast((out.json && out.json.message) || 'Upload failed');
+                  return;
+                }
+                showToast('Photo added');
+                openJobOverview(jobId);
+              }).catch(function () { showToast('Upload failed'); });
+            };
+            input.click();
+          });
+        });
+        body.querySelectorAll('.qsv-photos button.del').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var pid = btn.getAttribute('data-photo-id');
+            fetchJson(API + '/jobs/' + encodeURIComponent(jobId) + '/step-photos/' + encodeURIComponent(pid), {
+              method: 'DELETE'
+            }).then(function (out) {
+              if (!out.ok) {
+                showToast((out.json && out.json.message) || 'Delete failed');
+                return;
+              }
+              openJobOverview(jobId);
+            });
+          });
+        });
+      });
+    });
+  }
+
+  function wireJobStatus(jobId) {
+    var btn = document.getElementById('qsvJobSaveStatus');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var st = document.getElementById('qsvJobStatus').value;
+      fetchJson(API + '/jobs/' + encodeURIComponent(jobId), {
+        method: 'PUT',
+        headers: headersJson(),
+        body: JSON.stringify({ status: st })
+      }).then(function (out) {
+        if (!out.ok) {
+          showToast((out.json && out.json.message) || 'Update failed');
+          return;
+        }
+        showToast('Status updated');
+      });
+    });
+  }
+
+  document.getElementById('qsvJobBack').addEventListener('click', function () {
+    document.getElementById('qsvJobPanel').classList.remove('open');
+    currentJobId = null;
+  });
+
+  boot();
+})();
+  </script>
+</body>
+</html>
