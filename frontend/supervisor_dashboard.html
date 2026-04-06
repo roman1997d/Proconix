@@ -36,42 +36,6 @@
   </div>
 
   <div id="dashboard-app" class="d-none">
-    <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="supervisor-sidebar">
-      <i class="bi bi-list"></i>
-    </button>
-    <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
-
-    <aside class="sidebar" id="supervisor-sidebar" aria-label="Module navigation">
-      <div class="sidebar-brand">
-        <i class="bi bi-person-badge-fill sidebar-brand-icon" aria-hidden="true"></i>
-        <span class="sidebar-logo">Proconix</span>
-      </div>
-      <nav class="sidebar-nav">
-        <a href="#" class="sidebar-item active" data-module="manage-material">
-          <i class="bi bi-box-seam-fill"></i>
-          <span>Material Management</span>
-        </a>
-        <a href="#" class="sidebar-item" data-module="task-planning">
-          <i class="bi bi-calendar3"></i>
-          <span>Task &amp; Planning</span>
-        </a>
-        <a href="#" class="sidebar-item" data-module="site-snags">
-          <i class="bi bi-pin-map-fill"></i>
-          <span>Site Snags</span>
-        </a>
-        <a href="#" class="sidebar-item" data-module="quality-assurance">
-          <i class="bi bi-clipboard-check-fill"></i>
-          <span>Quality Assurance</span>
-        </a>
-      </nav>
-      <div class="sidebar-footer">
-        <a href="/index.html" class="sidebar-item">
-          <i class="bi bi-box-arrow-left"></i>
-          <span>Back to Home</span>
-        </a>
-      </div>
-    </aside>
-
     <div class="main-wrap">
       <header class="dashboard-header">
         <h1 class="header-title" id="header-title">Material Management</h1>
@@ -94,10 +58,28 @@
       </div>
     </div>
 
-    <footer class="dashboard-footer">
-      This website was created by Roman Demian.<br>
-      If you experience any problems, please contact me at: <a href="mailto:info@proconix.uk">info@proconix.uk</a>
-    </footer>
+    <nav id="sv-tab-bar" class="sv-tab-bar" aria-label="Supervisor navigation">
+      <a href="#" class="sv-tab active" data-module="manage-material" aria-current="page">
+        <i class="bi bi-box-seam-fill" aria-hidden="true"></i>
+        <span>Materials</span>
+      </a>
+      <a href="#" class="sv-tab" data-module="task-planning">
+        <i class="bi bi-calendar3" aria-hidden="true"></i>
+        <span>Planning</span>
+      </a>
+      <a href="#" class="sv-tab" data-module="site-snags">
+        <i class="bi bi-pin-map-fill" aria-hidden="true"></i>
+        <span>Snags</span>
+      </a>
+      <a href="#" class="sv-tab" data-module="quality-assurance">
+        <i class="bi bi-clipboard-check-fill" aria-hidden="true"></i>
+        <span>QA</span>
+      </a>
+      <a href="/index.html" class="sv-tab sv-tab--home">
+        <i class="bi bi-house-fill" aria-hidden="true"></i>
+        <span>Home</span>
+      </a>
+    </nav>
   </div>
 
   <script src="js/supervisor_dashboard.js"></script>

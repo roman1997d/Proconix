@@ -20,9 +20,9 @@ body.supervisor-dashboard-ios {
   --ios-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
   --ios-radius-lg: 12px;
   --ios-radius-xl: 16px;
-  --ios-sidebar-w: min(280px, 32vw);
   --ios-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --ios-touch-min: 48px;
+  --sv-tab-inner-h: 52px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -116,109 +116,112 @@ body.supervisor-dashboard-ios .dashboard-access-denied .btn-primary {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ----- Sidebar: always expanded labels (iPad split-style) ----- */
-body.supervisor-dashboard-ios #dashboard-app .sidebar {
-  width: var(--ios-sidebar-w) !important;
-  min-width: var(--ios-sidebar-w);
-  background: var(--ios-bg-elevated);
-  border-right: 0.5px solid var(--ios-separator);
-  box-shadow: none;
+/* Stack: main column + bottom tab bar (full width, no side rail) */
+body.supervisor-dashboard-ios #dashboard-app {
+  flex-direction: column !important;
 }
 
-body.supervisor-dashboard-ios #dashboard-app .sidebar:hover,
-body.supervisor-dashboard-ios #dashboard-app .sidebar:focus-within {
-  width: var(--ios-sidebar-w) !important;
-  box-shadow: none;
-}
-
-body.supervisor-dashboard-ios .sidebar-brand {
-  justify-content: flex-start !important;
-  padding: max(12px, env(safe-area-inset-top)) 16px 12px !important;
-  min-height: 52px;
-  border-bottom: 0.5px solid var(--ios-separator);
-}
-
-body.supervisor-dashboard-ios .sidebar-logo {
-  opacity: 1 !important;
-  max-width: 200px !important;
-  transform: none !important;
-  pointer-events: auto !important;
-  font-size: 1.25rem !important;
-  font-weight: 700 !important;
-  letter-spacing: -0.03em !important;
-  color: var(--ios-label) !important;
-}
-
-body.supervisor-dashboard-ios .sidebar-brand-icon {
-  color: var(--ios-blue) !important;
-  font-size: 1.5rem !important;
-}
-
-body.supervisor-dashboard-ios .sidebar-nav {
-  padding: 8px 10px 12px !important;
-  gap: 2px !important;
-}
-
-body.supervisor-dashboard-ios .sidebar-item {
-  justify-content: flex-start !important;
-  gap: 12px !important;
-  padding: 12px 14px !important;
-  min-height: var(--ios-touch-min);
-  border-radius: 10px !important;
-  color: var(--ios-label) !important;
-  font-size: 1.0625rem;
-  font-weight: 400;
-  -webkit-font-smoothing: antialiased;
-}
-
-body.supervisor-dashboard-ios .sidebar-item span {
-  opacity: 1 !important;
-  max-width: 220px !important;
-  transform: none !important;
-  pointer-events: auto !important;
-  white-space: normal;
-  line-height: 1.25;
-}
-
-body.supervisor-dashboard-ios .sidebar-item i {
-  color: var(--ios-blue);
-  font-size: 1.35rem;
-  width: 1.5rem;
-}
-
-body.supervisor-dashboard-ios .sidebar-item:hover {
-  filter: none !important;
-  background: var(--ios-fill-tertiary);
-  color: var(--ios-label) !important;
-}
-
-body.supervisor-dashboard-ios .sidebar-item.active {
-  background: var(--ios-sidebar-selected) !important;
-  color: var(--ios-blue) !important;
-  font-weight: 600;
-}
-
-body.supervisor-dashboard-ios .sidebar-item.active i {
-  color: var(--ios-blue) !important;
-}
-
-body.supervisor-dashboard-ios .sidebar-footer {
-  padding: 8px 10px max(12px, env(safe-area-inset-bottom)) !important;
-  border-top: 0.5px solid var(--ios-separator);
-}
-
-body.supervisor-dashboard-ios .sidebar-footer .sidebar-item {
-  color: var(--ios-secondary-label) !important;
-}
-
-body.supervisor-dashboard-ios .sidebar-footer .sidebar-item i {
-  color: var(--ios-secondary-label) !important;
-}
-
-/* Main area offset for fixed sidebar */
-body.supervisor-dashboard-ios .main-wrap {
-  padding-left: var(--ios-sidebar-w) !important;
+body.supervisor-dashboard-ios #dashboard-app > .main-wrap {
+  padding-left: 0 !important;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
   background: var(--ios-bg-grouped);
+}
+
+/* ----- Bottom tab bar (in document flow — stays above home indicator) ----- */
+body.supervisor-dashboard-ios .sv-tab-bar {
+  position: relative;
+  z-index: 200;
+  flex-shrink: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: space-around;
+  min-height: calc(var(--sv-tab-inner-h) + env(safe-area-inset-bottom, 0px));
+  padding: 0 env(safe-area-inset-left, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-right, 0px);
+  margin: 0;
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  backdrop-filter: saturate(180%) blur(24px);
+  border-top: 0.5px solid var(--ios-separator);
+  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  body.supervisor-dashboard-ios .sv-tab-bar {
+    background: rgba(28, 28, 30, 0.9);
+    box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.35);
+  }
+}
+
+@supports not (backdrop-filter: blur(24px)) {
+  body.supervisor-dashboard-ios .sv-tab-bar {
+    background: var(--ios-bg-elevated);
+  }
+}
+
+body.supervisor-dashboard-ios .sv-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 2px 4px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--ios-secondary-label);
+  text-decoration: none;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+body.supervisor-dashboard-ios .sv-tab i {
+  font-size: 1.35rem;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+body.supervisor-dashboard-ios .sv-tab span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 1px;
+}
+
+body.supervisor-dashboard-ios .sv-tab:active {
+  opacity: 0.65;
+}
+
+body.supervisor-dashboard-ios .sv-tab.active {
+  color: var(--ios-blue);
+}
+
+body.supervisor-dashboard-ios .sv-tab.active i {
+  opacity: 1;
+}
+
+body.supervisor-dashboard-ios .sv-tab--home {
+  color: var(--ios-secondary-label);
+}
+
+body.supervisor-dashboard-ios .sv-tab--home i {
+  opacity: 0.85;
+}
+
+/* Hide legacy manager footer if present */
+body.supervisor-dashboard-ios #dashboard-app .dashboard-footer {
+  display: none !important;
 }
 
 /* ----- Header: iOS large navigation bar (blur) ----- */
@@ -350,76 +353,6 @@ body.supervisor-dashboard-ios .dashboard-qa-iframe {
 
   body.supervisor-dashboard-ios .dashboard-qa-iframe {
     min-height: min(75dvh, 900px);
-  }
-}
-
-/* ----- Footer: fixed strip only under main column (sidebar stays full-height) ----- */
-body.supervisor-dashboard-ios #dashboard-app .dashboard-footer {
-  position: fixed;
-  left: var(--ios-sidebar-w);
-  right: 0;
-  bottom: 0;
-  z-index: 100;
-  padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
-  background: rgba(255, 255, 255, 0.92);
-  -webkit-backdrop-filter: saturate(180%) blur(16px);
-  backdrop-filter: saturate(180%) blur(16px);
-  border-top: 0.5px solid var(--ios-separator);
-  font-size: 0.75rem;
-  line-height: 1.35;
-  color: var(--ios-tertiary-label);
-  text-align: center;
-}
-
-@media (prefers-color-scheme: dark) {
-  body.supervisor-dashboard-ios #dashboard-app .dashboard-footer {
-    background: rgba(28, 28, 30, 0.92);
-  }
-}
-
-@supports not (backdrop-filter: blur(16px)) {
-  body.supervisor-dashboard-ios #dashboard-app .dashboard-footer {
-    background: var(--ios-bg-elevated);
-  }
-}
-
-body.supervisor-dashboard-ios .dashboard-footer a {
-  color: var(--ios-blue);
-}
-
-/* Space above fixed footer (matches manager dashboard pattern) */
-body.supervisor-dashboard-ios #dashboard-app .dashboard-content-wrap {
-  padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px));
-}
-
-/* ----- Mobile drawer: iOS-style toggle ----- */
-body.supervisor-dashboard-ios .sidebar-toggle {
-  background: var(--ios-bg-elevated);
-  border: 0.5px solid var(--ios-separator);
-  border-radius: 10px;
-  color: var(--ios-blue);
-  box-shadow: var(--ios-shadow);
-}
-
-body.supervisor-dashboard-ios .sidebar-toggle:hover {
-  background: var(--ios-fill-secondary);
-}
-
-@media (max-width: 991.98px) {
-  body.supervisor-dashboard-ios .main-wrap {
-    padding-left: 0 !important;
-  }
-
-  body.supervisor-dashboard-ios .dashboard-header {
-    padding-left: max(60px, env(safe-area-inset-left));
-  }
-
-  body.supervisor-dashboard-ios #dashboard-app .dashboard-footer {
-    left: 0;
-  }
-
-  body.dashboard-manager #dashboard-app .dashboard-footer {
-    display: block !important;
   }
 }
 
