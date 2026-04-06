@@ -32,6 +32,14 @@ function getCreatedBy(req) {
   return '';
 }
 
+/** Supervisor UI: template steps without pricing fields. */
+function stepsWithoutPrices(steps) {
+  return (steps || []).map((s) => ({
+    id: s.id,
+    description: s.description || '',
+  }));
+}
+
 // ---- Templates (scoped by logged-in company and selected project) ----
 
 async function listTemplates(req, res) {
@@ -78,13 +86,16 @@ async function listTemplates(req, res) {
        ORDER BY id`,
       [companyId, projectId]
     );
-    const list = tplResult.rows.map((t) => ({
+    let list = tplResult.rows.map((t) => ({
       id: String(t.id),
       name: t.name || '',
       steps: stepsByTpl[String(t.id)] || [],
       createdAt: t.createdAt ? new Date(t.createdAt).toISOString() : null,
       createdBy: t.createdBy || '',
     }));
+    if (req.supervisor) {
+      list = list.map((t) => Object.assign({}, t, { steps: stepsWithoutPrices(t.steps) }));
+    }
     return res.status(200).json(list);
   } catch (err) {
     console.error('QA listTemplates:', err);
@@ -118,13 +129,16 @@ async function getTemplate(req, res) {
        FROM qa_template_steps WHERE template_id = $1 ORDER BY sort_order, id`,
       [id]
     );
-    const stepList = steps.rows.map((s) => ({
+    let stepList = steps.rows.map((s) => ({
       id: s.step_external_id || String(s.id),
       description: s.description || '',
       pricePerM2: s.pricePerM2 || '',
       pricePerUnit: s.pricePerUnit || '',
       pricePerLinear: s.pricePerLinear || '',
     }));
+    if (req.supervisor) {
+      stepList = stepsWithoutPrices(stepList);
+    }
 
     return res.status(200).json({
       id: String(row.id),
@@ -363,9 +377,9 @@ async function assertProjectAccess(pool, projectId, companyId) {
   if (r.rows.length === 0) throw new Error('Project not found or access denied.');
 }
 
-function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, responsibleUserId) {
+function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, responsibleUserId, forSupervisor) {
   const responsibleId = responsibleUserId != null ? String(responsibleUserId) : (row.responsible_id != null ? String(row.responsible_id) : '');
-  return {
+  const base = {
     id: String(row.id),
     projectId: String(row.project_id),
     jobNumber: row.job_number || '',
@@ -386,6 +400,12 @@ function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCo
     workerIds: workerIds || [],
     status: statusCode || 'new',
   };
+  if (forSupervisor) {
+    delete base.costIncluded;
+    delete base.costType;
+    delete base.costValue;
+  }
+  return base;
 }
 
 // ---- Jobs ----
@@ -461,7 +481,8 @@ async function listJobs(req, res) {
         row.floor_id ? floorMap[row.floor_id] : null,
         row.cost_type_id ? costMap[row.cost_type_id] : null,
         row.status_id ? statusMap[row.status_id] : null,
-        row.responsible_user_id
+        row.responsible_user_id,
+        !!req.supervisor
       )
     );
     return res.status(200).json(list);
@@ -510,7 +531,7 @@ async function getJob(req, res) {
     const floorCode = floorRow.rows[0] ? floorRow.rows[0].code : row.floor_code;
 
     return res.status(200).json(
-      jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, row.responsible_user_id)
+      jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, row.responsible_user_id, !!req.supervisor)
     );
   } catch (err) {
     console.error('QA getJob:', err);
@@ -670,7 +691,9 @@ async function createJob(req, res) {
         outWorkerIds,
         row.floor_id ? (await pool.query('SELECT code FROM qa_floors WHERE id = $1', [row.floor_id])).rows[0]?.code : row.floor_code,
         costCode,
-        statusCode
+        statusCode,
+        row.responsible_user_id,
+        !!req.supervisor
       )
     );
   } catch (err) {
@@ -993,6 +1016,254 @@ async function updateJob(req, res) {
   }
 }
 
+const MAX_QA_STEP_PHOTOS = 20;
+
+async function assertJobInSupervisorProject(req, jobId) {
+  const companyId = getQaCompanyId(req);
+  if (companyId == null) return { err: { status: 403, message: 'Access denied.' } };
+  const r = await pool.query(
+    `SELECT j.id, j.project_id
+     FROM qa_jobs j
+     INNER JOIN projects p ON p.id = j.project_id AND p.company_id = $1
+     WHERE j.id = $2`,
+    [companyId, jobId]
+  );
+  if (r.rows.length === 0) return { err: { status: 404, message: 'Job not found.' } };
+  if (req.supervisor) {
+    const m = supervisorProjectMismatch(req, r.rows[0].project_id);
+    if (m) return { err: { status: 403, message: m } };
+  }
+  return { job: r.rows[0] };
+}
+
+/**
+ * GET /api/supervisor/qa/jobs/:id/step-evidence
+ * Merged comments + photos per template step (supervisor only meaningful; manager could call too if routed).
+ */
+async function getJobStepEvidence(req, res) {
+  const jobId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(jobId) || jobId < 1) return res.status(400).json({ message: 'Invalid job id.' });
+  if (!req.supervisor) return res.status(403).json({ message: 'Supervisor access only.' });
+
+  const check = await assertJobInSupervisorProject(req, jobId);
+  if (check.err) return res.status(check.err.status).json({ message: check.err.message });
+
+  try {
+    const [evRows, phRows] = await Promise.all([
+      pool.query(
+        `SELECT template_id, step_external_id, comment, updated_at
+         FROM qa_job_step_evidence WHERE job_id = $1`,
+        [jobId]
+      ),
+      pool.query(
+        `SELECT id, template_id, step_external_id, file_url, created_at
+         FROM qa_job_step_photos WHERE job_id = $1 ORDER BY created_at ASC`,
+        [jobId]
+      ),
+    ]);
+
+    const key = (tid, sid) => `${tid}||${sid}`;
+    const map = {};
+
+    evRows.rows.forEach((row) => {
+      const k = key(row.template_id, row.step_external_id);
+      map[k] = {
+        templateId: String(row.template_id),
+        stepId: String(row.step_external_id),
+        comment: row.comment || '',
+        updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
+        photos: [],
+      };
+    });
+
+    phRows.rows.forEach((row) => {
+      const k = key(row.template_id, row.step_external_id);
+      if (!map[k]) {
+        map[k] = {
+          templateId: String(row.template_id),
+          stepId: String(row.step_external_id),
+          comment: '',
+          updatedAt: null,
+          photos: [],
+        };
+      }
+      map[k].photos.push({
+        id: row.id,
+        file_url: row.file_url,
+        createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+      });
+    });
+
+    return res.status(200).json({ steps: Object.values(map) });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        message: 'QA step evidence tables are not installed. Run scripts/alter_qa_job_step_evidence.sql',
+      });
+    }
+    console.error('QA getJobStepEvidence:', err);
+    return res.status(500).json({ message: err.message || 'Failed to load step evidence.' });
+  }
+}
+
+/**
+ * PUT /api/supervisor/qa/jobs/:id/step-comment
+ * Body: { templateId, stepId, comment }
+ */
+async function putJobStepComment(req, res) {
+  const jobId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(jobId) || jobId < 1) return res.status(400).json({ message: 'Invalid job id.' });
+  if (!req.supervisor) return res.status(403).json({ message: 'Supervisor access only.' });
+
+  const b = req.body || {};
+  const templateId = parseInt(String(b.templateId || ''), 10);
+  const stepId = (b.stepId != null && String(b.stepId).trim()) || '';
+  const comment = b.comment != null ? String(b.comment) : '';
+  if (!Number.isInteger(templateId) || templateId < 1) return res.status(400).json({ message: 'templateId is required.' });
+  if (!stepId) return res.status(400).json({ message: 'stepId is required.' });
+
+  const check = await assertJobInSupervisorProject(req, jobId);
+  if (check.err) return res.status(check.err.status).json({ message: check.err.message });
+
+  try {
+    const tplOk = await pool.query(
+      `SELECT t.id FROM qa_templates t
+       INNER JOIN qa_job_templates jt ON jt.template_id = t.id AND jt.job_id = $1
+       WHERE t.id = $2`,
+      [jobId, templateId]
+    );
+    if (tplOk.rows.length === 0) return res.status(400).json({ message: 'Template is not linked to this job.' });
+
+    const stepOk = await pool.query(
+      `SELECT 1 FROM qa_template_steps
+       WHERE template_id = $1
+         AND (step_external_id = $2 OR id::text = $2)
+       LIMIT 1`,
+      [templateId, stepId]
+    );
+    if (stepOk.rows.length === 0) return res.status(400).json({ message: 'Step does not belong to this template.' });
+
+    await pool.query(
+      `INSERT INTO qa_job_step_evidence (job_id, template_id, step_external_id, comment, updated_by_user_id)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (job_id, template_id, step_external_id)
+       DO UPDATE SET
+         comment = EXCLUDED.comment,
+         updated_at = NOW(),
+         updated_by_user_id = EXCLUDED.updated_by_user_id`,
+      [jobId, templateId, stepId, comment, req.supervisor.id]
+    );
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        message: 'QA step evidence tables are not installed. Run scripts/alter_qa_job_step_evidence.sql',
+      });
+    }
+    console.error('QA putJobStepComment:', err);
+    return res.status(500).json({ message: err.message || 'Failed to save comment.' });
+  }
+}
+
+/**
+ * POST /api/supervisor/qa/jobs/:id/step-photos (multipart: file, body templateId, stepId)
+ */
+async function postJobStepPhoto(req, res) {
+  const jobId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(jobId) || jobId < 1) return res.status(400).json({ message: 'Invalid job id.' });
+  if (!req.supervisor) return res.status(403).json({ message: 'Supervisor access only.' });
+  if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
+
+  const templateId = parseInt(String((req.body && req.body.templateId) || ''), 10);
+  const stepId = (req.body && req.body.stepId != null && String(req.body.stepId).trim()) || '';
+  if (!Number.isInteger(templateId) || templateId < 1) return res.status(400).json({ message: 'templateId is required.' });
+  if (!stepId) return res.status(400).json({ message: 'stepId is required.' });
+
+  const check = await assertJobInSupervisorProject(req, jobId);
+  if (check.err) return res.status(check.err.status).json({ message: check.err.message });
+
+  const fileUrl = (req.body && req.body.file_url) || `/uploads/task-photos/${req.file.filename}`;
+
+  try {
+    const tplOk = await pool.query(
+      `SELECT t.id FROM qa_templates t
+       INNER JOIN qa_job_templates jt ON jt.template_id = t.id AND jt.job_id = $1
+       WHERE t.id = $2`,
+      [jobId, templateId]
+    );
+    if (tplOk.rows.length === 0) return res.status(400).json({ message: 'Template is not linked to this job.' });
+
+    const stepOk = await pool.query(
+      `SELECT 1 FROM qa_template_steps
+       WHERE template_id = $1
+         AND (step_external_id = $2 OR id::text = $2)
+       LIMIT 1`,
+      [templateId, stepId]
+    );
+    if (stepOk.rows.length === 0) return res.status(400).json({ message: 'Step does not belong to this template.' });
+
+    const cnt = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM qa_job_step_photos
+       WHERE job_id = $1 AND template_id = $2 AND step_external_id = $3`,
+      [jobId, templateId, stepId]
+    );
+    if ((cnt.rows[0] && cnt.rows[0].c) >= MAX_QA_STEP_PHOTOS) {
+      return res.status(400).json({ message: `Maximum ${MAX_QA_STEP_PHOTOS} photos per step.` });
+    }
+
+    const ins = await pool.query(
+      `INSERT INTO qa_job_step_photos (job_id, template_id, step_external_id, file_url, user_id)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id, file_url, created_at`,
+      [jobId, templateId, stepId, fileUrl, req.supervisor.id]
+    );
+    const row = ins.rows[0];
+    return res.status(201).json({
+      success: true,
+      photo: {
+        id: row.id,
+        file_url: row.file_url,
+        createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+      },
+    });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        message: 'QA step evidence tables are not installed. Run scripts/alter_qa_job_step_evidence.sql',
+      });
+    }
+    console.error('QA postJobStepPhoto:', err);
+    return res.status(500).json({ message: err.message || 'Failed to upload photo.' });
+  }
+}
+
+async function deleteJobStepPhoto(req, res) {
+  const jobId = parseInt(req.params.id, 10);
+  const photoId = parseInt(req.params.photoId, 10);
+  if (!Number.isInteger(jobId) || jobId < 1) return res.status(400).json({ message: 'Invalid job id.' });
+  if (!Number.isInteger(photoId) || photoId < 1) return res.status(400).json({ message: 'Invalid photo id.' });
+  if (!req.supervisor) return res.status(403).json({ message: 'Supervisor access only.' });
+
+  const check = await assertJobInSupervisorProject(req, jobId);
+  if (check.err) return res.status(check.err.status).json({ message: check.err.message });
+
+  try {
+    const del = await pool.query(
+      'DELETE FROM qa_job_step_photos WHERE id = $1 AND job_id = $2 RETURNING id',
+      [photoId, jobId]
+    );
+    if (del.rowCount === 0) return res.status(404).json({ message: 'Photo not found.' });
+    return res.status(204).send();
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        message: 'QA step evidence tables are not installed. Run scripts/alter_qa_job_step_evidence.sql',
+      });
+    }
+    console.error('QA deleteJobStepPhoto:', err);
+    return res.status(500).json({ message: err.message || 'Failed to delete photo.' });
+  }
+}
+
 async function deleteJob(req, res) {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ message: 'Invalid job id.' });
@@ -1076,4 +1347,8 @@ module.exports = {
   createJob,
   updateJob,
   deleteJob,
+  getJobStepEvidence,
+  putJobStepComment,
+  postJobStepPhoto,
+  deleteJobStepPhoto,
 };

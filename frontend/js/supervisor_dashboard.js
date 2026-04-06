@@ -170,7 +170,7 @@
       updateHeaderTitle(module);
       contentEl.innerHTML =
         '<iframe src="' +
-        iframeModuleSrc('Quality_Assurance.html?supervisor=1') +
+        iframeModuleSrc('qa_supervizor.html') +
         '" class="dashboard-qa-iframe" title="Quality Assurance"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');

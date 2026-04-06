@@ -6,12 +6,23 @@
 const express = require('express');
 const router = express.Router();
 const { requireSupervisorAuth } = require('../middleware/requireSupervisorAuth');
+const { uploadTaskPhotoFile, injectFileUrl } = require('../utils/uploadMiddleware');
 const qa = require('../controllers/qaController');
 
 router.get('/personnel', requireSupervisorAuth, qa.getPersonnel);
 router.get('/templates', requireSupervisorAuth, qa.listTemplates);
 router.get('/templates/:id', requireSupervisorAuth, qa.getTemplate);
 router.get('/jobs/next-number', requireSupervisorAuth, qa.getNextJobNumber);
+router.get('/jobs/:id/step-evidence', requireSupervisorAuth, qa.getJobStepEvidence);
+router.put('/jobs/:id/step-comment', requireSupervisorAuth, qa.putJobStepComment);
+router.post(
+  '/jobs/:id/step-photos',
+  requireSupervisorAuth,
+  uploadTaskPhotoFile,
+  injectFileUrl('task-photos'),
+  qa.postJobStepPhoto
+);
+router.delete('/jobs/:id/step-photos/:photoId', requireSupervisorAuth, qa.deleteJobStepPhoto);
 router.get('/jobs', requireSupervisorAuth, qa.listJobs);
 router.get('/jobs/:id', requireSupervisorAuth, qa.getJob);
 router.post('/jobs', requireSupervisorAuth, qa.createJob);
