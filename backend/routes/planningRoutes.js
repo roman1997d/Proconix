@@ -7,6 +7,7 @@ const router = express.Router();
 const { requireManagerAuth } = require('../middleware/requireManagerAuth');
 
 const { requireSupervisorAuth } = require('../middleware/requireSupervisorAuth');
+const { uploadTaskPhotoFile, injectFileUrl } = require('../utils/uploadMiddleware');
 const {
   createPlan,
   upsertPlanTasks,
@@ -16,6 +17,9 @@ const {
   getPlanTaskConfirmationPhotos,
   listPlansForSupervisor,
   getPlanTaskConfirmationPhotosSupervisor,
+  listProjectOperativesForSupervisor,
+  patchPlanTaskSupervisor,
+  uploadPlanTaskPhotoSupervisor,
 } = require('../controllers/planningController');
 
 // Create plan
@@ -36,8 +40,17 @@ router.get('/plan-tasks/:id/confirmation-photos', requireManagerAuth, getPlanTas
 // Optional listing (for future frontend integration)
 router.get('/list', requireManagerAuth, listPlans);
 
-// Supervisor (operative token): read-only filtered list + confirmation photos
+// Supervisor (operative token): tasks on same project, updates, photos
 router.get('/supervisor/list', requireSupervisorAuth, listPlansForSupervisor);
+router.get('/supervisor/project-operatives', requireSupervisorAuth, listProjectOperativesForSupervisor);
+router.patch('/supervisor/plan-tasks/:id', requireSupervisorAuth, patchPlanTaskSupervisor);
+router.post(
+  '/supervisor/plan-tasks/:id/photos',
+  requireSupervisorAuth,
+  uploadTaskPhotoFile,
+  injectFileUrl('task-photos'),
+  uploadPlanTaskPhotoSupervisor
+);
 router.get('/supervisor/plan-tasks/:id/confirmation-photos', requireSupervisorAuth, getPlanTaskConfirmationPhotosSupervisor);
 
 module.exports = router;

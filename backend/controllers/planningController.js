@@ -15,8 +15,11 @@
  *   - send_to_assignees (boolean)
  */
 
+const fs = require('fs');
 const { pool } = require('../db/pool');
 const { resolveCrewAssignmentForPlanning, notifyCompany } = require('./crewController');
+
+const MAX_SUPERVISOR_TASK_PHOTOS = 10;
 
 const PRIORITIES = new Set(['low', 'medium', 'high', 'critical']);
 const STATUSES = new Set(['not_started', 'in_progress', 'paused', 'completed', 'declined']);
@@ -635,6 +638,276 @@ async function getPlanTaskConfirmationPhotosSupervisor(req, res) {
   }
 }
 
+/**
+ * Build allowed assignee names (supervisor + same-project operatives).
+ */
+async function getSupervisorScope(companyId, supervisorId) {
+  const allowedNames = new Set();
+  let projectId = null;
+  const selfRow = await pool.query('SELECT name, project_id FROM users WHERE id = $1 AND company_id = $2', [
+    supervisorId,
+    companyId,
+  ]);
+  if (!selfRow.rows.length) return { allowedNames, projectId: null };
+  const supName = (selfRow.rows[0].name && String(selfRow.rows[0].name).trim()) || '';
+  projectId = selfRow.rows[0].project_id;
+  if (supName) allowedNames.add(supName);
+  if (projectId != null) {
+    const crew = await pool.query(
+      `SELECT name FROM users
+       WHERE company_id = $1 AND project_id = $2
+         AND (active_status IS NULL OR active_status = true)`,
+      [companyId, projectId]
+    );
+    crew.rows.forEach((row) => {
+      const n = row.name && String(row.name).trim();
+      if (n) allowedNames.add(n);
+    });
+  }
+  return { allowedNames, projectId };
+}
+
+function taskVisibleToSupervisor(t, allowedNames) {
+  const arr = Array.isArray(t.assigned_to) ? t.assigned_to : [];
+  if (!arr.length) return false;
+  return arr.some((a) => allowedNames.has(String(a || '').trim()));
+}
+
+/**
+ * GET /api/planning/supervisor/project-operatives
+ * Names on the same project (for reassignment dropdown).
+ */
+async function listProjectOperativesForSupervisor(req, res) {
+  const companyId = req.supervisor && req.supervisor.company_id != null ? req.supervisor.company_id : null;
+  const supervisorId = req.supervisor && req.supervisor.id != null ? req.supervisor.id : null;
+  if (companyId == null || supervisorId == null) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  try {
+    const { projectId } = await getSupervisorScope(companyId, supervisorId);
+    if (projectId == null) {
+      return res.status(200).json({ success: true, operatives: [] });
+    }
+    const r = await pool.query(
+      `SELECT id, name, email FROM users
+       WHERE company_id = $1 AND project_id = $2
+         AND (active_status IS NULL OR active_status = true)
+       ORDER BY name ASC NULLS LAST`,
+      [companyId, projectId]
+    );
+    return res.status(200).json({
+      success: true,
+      operatives: (r.rows || []).map((row) => ({
+        id: row.id,
+        name: (row.name && String(row.name).trim()) || '',
+        email: row.email || '',
+      })),
+    });
+  } catch (err) {
+    console.error('listProjectOperativesForSupervisor:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load operatives.' });
+  }
+}
+
+/**
+ * PATCH /api/planning/supervisor/plan-tasks/:id
+ * Supervisor may update status, assigned_to (same project), notes, priority for tasks they can see.
+ */
+async function patchPlanTaskSupervisor(req, res) {
+  const companyId = req.supervisor && req.supervisor.company_id != null ? req.supervisor.company_id : null;
+  const supervisorId = req.supervisor && req.supervisor.id != null ? req.supervisor.id : null;
+  if (companyId == null || supervisorId == null) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+
+  const taskId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(taskId) || taskId < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid task id.' });
+  }
+
+  try {
+    const { allowedNames } = await getSupervisorScope(companyId, supervisorId);
+    const tr = await pool.query(
+      `SELECT ppt.id, ppt.plan_id, ppt.assigned_to, ppt.status
+       FROM planning_plan_tasks ppt
+       INNER JOIN planning_plans pp ON pp.id = ppt.plan_id
+       WHERE ppt.id = $1 AND pp.company_id = $2`,
+      [taskId, companyId]
+    );
+    if (!tr.rows.length) {
+      return res.status(404).json({ success: false, message: 'Task not found.' });
+    }
+    const row = tr.rows[0];
+    if (!taskVisibleToSupervisor(row, allowedNames)) {
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+
+    const t = req.body || {};
+    const updates = {};
+    if (t.status != null) updates.status = sanitizeStatus(t.status);
+    if (t.priority != null) updates.priority = sanitizePriority(t.priority);
+    if (t.notes != null) updates.notes = String(t.notes);
+    if (t.assigned_to != null) {
+      const arr = sanitizeTextArray(t.assigned_to);
+      if (!arr) return res.status(400).json({ success: false, message: 'assigned_to must be a non-empty array.' });
+      const r = await pool.query(
+        `SELECT name FROM users
+         WHERE company_id = $1 AND project_id = (
+           SELECT project_id FROM users WHERE id = $2 AND company_id = $1
+         )
+         AND (active_status IS NULL OR active_status = true)`,
+        [companyId, supervisorId]
+      );
+      const valid = new Set((r.rows || []).map((x) => String(x.name || '').trim()).filter(Boolean));
+      for (let i = 0; i < arr.length; i++) {
+        if (!valid.has(String(arr[i]).trim())) {
+          return res.status(400).json({ success: false, message: 'Assignee must be on the same project.' });
+        }
+      }
+      updates.assigned_to = arr;
+      updates.crew_id = null;
+      updates.assignment_type = 'names';
+    }
+    if (t.deadline != null) {
+      const dt = parseIsoTimestamp(t.deadline);
+      if (!dt) return res.status(400).json({ success: false, message: 'Invalid deadline.' });
+      updates.deadline = dt;
+    }
+    if (t.pickup_start_date != null) {
+      const ps = parseDateYYYYMMDD(t.pickup_start_date);
+      if (!ps) return res.status(400).json({ success: false, message: 'Invalid pickup_start_date.' });
+      updates.pickup_start_date = ps;
+    }
+
+    const fields = Object.keys(updates);
+    if (!fields.length) return res.status(400).json({ success: false, message: 'No valid fields to update.' });
+
+    const setParts = [];
+    const values = [];
+    let idx = 1;
+    fields.forEach((k) => {
+      setParts.push(`${k} = $${idx}`);
+      values.push(updates[k]);
+      idx++;
+    });
+    values.push(taskId);
+
+    const upd = await pool.query(
+      `UPDATE planning_plan_tasks
+       SET ${setParts.join(', ')}
+       WHERE id = $${idx}
+         AND plan_id IN (SELECT id FROM planning_plans WHERE company_id = $${idx + 1})
+       RETURNING id`,
+      [...values, companyId]
+    );
+    if (!upd.rows.length) return res.status(403).json({ success: false, message: 'Access denied.' });
+    return res.status(200).json({ success: true, task_id: upd.rows[0].id });
+  } catch (err) {
+    console.error('patchPlanTaskSupervisor:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update task.' });
+  }
+}
+
+/**
+ * POST /api/planning/supervisor/plan-tasks/:id/photos
+ * Multipart: file + body source=planning (for parity with operative upload).
+ */
+async function uploadPlanTaskPhotoSupervisor(req, res) {
+  const companyId = req.supervisor && req.supervisor.company_id != null ? req.supervisor.company_id : null;
+  const supervisorId = req.supervisor && req.supervisor.id != null ? req.supervisor.id : null;
+  if (companyId == null || supervisorId == null) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'No file uploaded.' });
+  }
+  if (!/^image\//.test(req.file.mimetype || '')) {
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(400).json({ success: false, message: 'Only image files are allowed.' });
+  }
+
+  const taskId = parseInt(req.params.id, 10);
+  const source = String((req.body && req.body.source) || '').toLowerCase();
+  const fileUrl =
+    (req.body && req.body.file_url) || `/uploads/task-photos/${req.file.filename}`;
+
+  if (!Number.isInteger(taskId) || taskId < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid task id.' });
+  }
+  if (source !== 'planning') {
+    return res.status(400).json({ success: false, message: 'Form field source=planning is required.' });
+  }
+
+  try {
+    const { allowedNames } = await getSupervisorScope(companyId, supervisorId);
+    const tr = await pool.query(
+      `SELECT ppt.id, ppt.assigned_to, ppt.status
+       FROM planning_plan_tasks ppt
+       INNER JOIN planning_plans pp ON pp.id = ppt.plan_id
+       WHERE ppt.id = $1 AND pp.company_id = $2`,
+      [taskId, companyId]
+    );
+    if (!tr.rows.length) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (_) {}
+      return res.status(404).json({ success: false, message: 'Task not found.' });
+    }
+    const row = tr.rows[0];
+    if (!taskVisibleToSupervisor(row, allowedNames)) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (_) {}
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+    if (String(row.status || '').toLowerCase() === 'declined') {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (_) {}
+      return res.status(400).json({ success: false, message: 'Cannot add photos to a declined task.' });
+    }
+
+    const cnt = await pool.query(
+      `SELECT COUNT(*)::int AS c FROM operative_task_photos
+       WHERE user_id = $1 AND task_source = $2 AND task_id = $3`,
+      [supervisorId, 'planning', taskId]
+    );
+    const n = cnt.rows[0] && cnt.rows[0].c != null ? Number(cnt.rows[0].c) : 0;
+    if (n >= MAX_SUPERVISOR_TASK_PHOTOS) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (_) {}
+      return res.status(400).json({
+        success: false,
+        message: `Maximum ${MAX_SUPERVISOR_TASK_PHOTOS} confirmation photos per task for your account.`,
+      });
+    }
+
+    await pool.query(
+      `INSERT INTO operative_task_photos (user_id, task_source, task_id, file_url) VALUES ($1, $2, $3, $4)`,
+      [supervisorId, 'planning', taskId, fileUrl]
+    );
+    return res.status(201).json({ success: true, file_url: fileUrl });
+  } catch (err) {
+    if (err.code === '42P01') {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (_) {}
+      return res.status(503).json({
+        success: false,
+        message: 'Photo storage is not set up.',
+      });
+    }
+    console.error('uploadPlanTaskPhotoSupervisor:', err);
+    try {
+      if (req.file && req.file.path) fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(500).json({ success: false, message: 'Failed to save photo.' });
+  }
+}
+
 module.exports = {
   createPlan,
   upsertPlanTasks,
@@ -644,5 +917,8 @@ module.exports = {
   getPlanTaskConfirmationPhotos,
   listPlansForSupervisor,
   getPlanTaskConfirmationPhotosSupervisor,
+  listProjectOperativesForSupervisor,
+  patchPlanTaskSupervisor,
+  uploadPlanTaskPhotoSupervisor,
 };
 

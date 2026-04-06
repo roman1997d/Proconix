@@ -23,7 +23,7 @@
 
   var moduleTitles = {
     'manage-material': 'Material Management',
-    'task-planning': 'Task & Planning',
+    'task-planning': 'Tasks',
     'site-snags': 'Site Snags',
     'quality-assurance': 'Quality Assurance',
   };
@@ -156,7 +156,7 @@
       updateHeaderTitle(module);
       contentEl.innerHTML =
         '<iframe src="' +
-        iframeModuleSrc('supervisor_task_planning.html') +
+        iframeModuleSrc('tasks_supervizor_view.html') +
         '" class="dashboard-qa-iframe" title="Task &amp; Planning"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
