@@ -92,11 +92,15 @@
 }
 
 /* ===== Dashboard app wrapper: sidebar + main in a row ===== */
+/* Fill viewport under body; min-height:0 so .dashboard-content-wrap can scroll inside flex chain */
 #dashboard-app {
   display: flex;
   flex-direction: row;
   width: 100%;
-  min-height: 100vh;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
 }
@@ -134,6 +138,7 @@
   padding-bottom: 60px; /* space for fixed footer */
   overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   overscroll-behavior-x: none;
   scrollbar-width: thin;

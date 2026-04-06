@@ -40,6 +40,7 @@
 
 /* Manager dashboard does not load styles.css — same overscroll fix as global pages */
 html {
+  height: 100%;
   overscroll-behavior: none;
 }
 
@@ -49,7 +50,12 @@ body.dashboard-manager {
   background: linear-gradient(135deg, #1F1F1F 0%, #111827 40%, #020617 100%);
   color: var(--text-primary);
   min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
+  flex-direction: column;
+  overflow: hidden;
   overscroll-behavior: none;
 }
 
