@@ -1,0 +1,112 @@
+/* Crews tab + notifications – extends Operatives module (dashboard_manager.css) */
+
+.operatives-module-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.operatives-notifications-strip {
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  padding: 0.75rem 1rem;
+}
+
+.operatives-notifications-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.operatives-notifications-item + .operatives-notifications-item {
+  margin-top: 0.35rem;
+}
+
+.operatives-main-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--divider);
+  padding-bottom: 0.5rem;
+}
+
+.operatives-main-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+
+.operatives-main-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.operatives-main-tab.is-active {
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.operatives-tab-panel {
+  min-height: 200px;
+}
+
+.crew-detail-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.crew-leader-name {
+  color: var(--accent);
+}
+
+.crew-member-row-leader {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.crew-leader-badge {
+  color: var(--accent);
+  margin-right: 0.25rem;
+}
+
+.crew-activity-summary .crew-progress-wrap {
+  flex: 1;
+  min-width: 120px;
+  max-width: 240px;
+  height: 8px;
+  background: var(--divider);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.crew-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), #22c55e);
+  border-radius: 4px;
+  transition: width 0.35s ease;
+}
+
+.crew-add-members-list {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+}
+
+.operative-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.operatives-modal-dialog-wide {
+  max-width: min(720px, calc(100vw - 2rem));
+}

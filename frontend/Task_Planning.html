@@ -673,6 +673,15 @@
       background: #22c55e;
     }
 
+    .tp-crew-preview-list {
+      margin: 0.25rem 0 0;
+      padding-left: 1.25rem;
+    }
+
+    .tp-assign-kind-row .form-check-label {
+      color: var(--tp-text);
+    }
+
     .tp-task-chip {
       border-radius: 8px;
       padding: 0.18rem 0.4rem;
@@ -1277,7 +1286,18 @@
           </div>
 
           <div class="tp-field mb-2">
-            <label>Assigned to</label>
+            <label>Assign to</label>
+            <div class="d-flex flex-wrap gap-3 mb-2 tp-assign-kind-row">
+              <label class="form-check mb-0">
+                <input class="form-check-input" type="radio" name="tp-assign-kind" id="tp-assign-kind-operative" value="operative" checked>
+                <span class="form-check-label">Operative</span>
+              </label>
+              <label class="form-check mb-0">
+                <input class="form-check-input" type="radio" name="tp-assign-kind" id="tp-assign-kind-crew" value="crew">
+                <span class="form-check-label">Crew</span>
+              </label>
+            </div>
+            <div id="tp-assign-operative-wrap">
             <div class="d-flex gap-2 align-items-center mb-1">
               <input
                 type="text"
@@ -1293,6 +1313,14 @@
             <datalist id="tp-assigned-datalist"></datalist>
             <div id="tp-assigned-selected" class="tp-pill-input mt-2" aria-live="polite"></div>
             <div class="tp-field-hint">Add one or more people.</div>
+            </div>
+            <div id="tp-assign-crew-wrap" class="d-none">
+              <label class="small text-muted" for="tp-crew-select">Crew</label>
+              <select id="tp-crew-select" class="form-select form-select-sm">
+                <option value="">Select crew…</option>
+              </select>
+              <div id="tp-crew-preview" class="tp-crew-preview mt-2 small" aria-live="polite"></div>
+            </div>
             <div class="form-switch mt-2">
               <input class="form-check-input" type="checkbox" id="tp-send-to-assignees" checked>
               <label class="form-check-label" for="tp-send-to-assignees">
@@ -1681,7 +1709,8 @@
         // - deadline (ISO TIMESTAMPTZ)
         // - pickup_start_date (YYYY-MM-DD)
         // - status, send_to_assignees
-        return {
+        // - optional crew_id (when assigning to a crew)
+        var payload = {
           title: task.title,
           description: task.description,
           // Backend requires non-empty TEXT[]; store a visible placeholder.
@@ -1693,6 +1722,10 @@
           status: task.status || 'not_started',
           send_to_assignees: task.sendToAssignees === undefined ? true : !!task.sendToAssignees
         };
+        if (task.assignmentType === 'crew' && task.crewId != null) {
+          payload.crew_id = task.crewId;
+        }
+        return payload;
       }
 
       function mapBackendTaskToUiTask(t) {
@@ -1718,7 +1751,9 @@
           time: timeStr,
           sendToAssignees: t.send_to_assignees === undefined ? true : !!t.send_to_assignees,
           notes: t.notes || null,
-          status: t.status || 'not_started'
+          status: t.status || 'not_started',
+          assignmentType: t.assignment_type === 'crew' ? 'crew' : 'operative',
+          crewId: t.crew_id != null ? t.crew_id : null
         };
       }
 
@@ -1862,6 +1897,9 @@
       var btnAddAssignee = el('tp-btn-add-assignee');
       var selectedAssignees = [];
       var operativesFromDb = [];
+      var crewsFromDb = [];
+      /** When crew is selected, member display names used for local task model before save. */
+      var crewMemberNamesForSave = [];
       var btnAddTask = el('tp-btn-add-task');
       var btnSavePlan = el('tp-btn-save-plan');
       var btnClearPlan = el('tp-btn-clear-tasks');
@@ -2182,6 +2220,102 @@
           });
       }
 
+      function loadCrewsFromDbForAssignees() {
+        var headers = getSessionHeaders();
+        if (!headers || !headers['X-Manager-Id'] || !headers['X-Manager-Email']) return Promise.resolve();
+        return fetchJson('/api/crews', { method: 'GET' })
+          .then(function (res) {
+            if (res.status < 200 || res.status >= 300) return null;
+            if (!res.data || !Array.isArray(res.data.crews)) return null;
+            crewsFromDb = res.data.crews.filter(function (c) {
+              return c && c.active !== false && c.id != null;
+            });
+            var sel = document.getElementById('tp-crew-select');
+            if (sel) {
+              var cur = sel.value;
+              sel.innerHTML = '<option value="">Select crew…</option>';
+              crewsFromDb.forEach(function (c) {
+                var opt = document.createElement('option');
+                opt.value = String(c.id);
+                opt.textContent = c.name || ('Crew #' + c.id);
+                sel.appendChild(opt);
+              });
+              if (cur) sel.value = cur;
+            }
+            return null;
+          })
+          .catch(function () {
+            crewsFromDb = [];
+            return null;
+          });
+      }
+
+      function syncAssignToKindUI() {
+        var op = document.getElementById('tp-assign-kind-operative');
+        var isCrew = op && !op.checked;
+        var ow = document.getElementById('tp-assign-operative-wrap');
+        var cw = document.getElementById('tp-assign-crew-wrap');
+        var input = document.getElementById('tp-assigned-input');
+        var btn = document.getElementById('tp-btn-add-assignee');
+        if (ow) ow.classList.toggle('d-none', isCrew);
+        if (cw) cw.classList.toggle('d-none', !isCrew);
+        if (input) input.disabled = isCrew;
+        if (btn) btn.disabled = isCrew;
+        if (isCrew) {
+          updateCrewPreviewFromSelect();
+        } else {
+          var prev = document.getElementById('tp-crew-preview');
+          if (prev) prev.innerHTML = '';
+          crewMemberNamesForSave = [];
+        }
+      }
+
+      function updateCrewPreviewFromSelect() {
+        var preview = document.getElementById('tp-crew-preview');
+        var sel = document.getElementById('tp-crew-select');
+        if (!preview || !sel) return;
+        var id = parseInt(sel.value, 10);
+        crewMemberNamesForSave = [];
+        if (!id) {
+          preview.innerHTML = '';
+          return;
+        }
+        preview.innerHTML = '<span class="text-muted">Loading…</span>';
+        fetchJson('/api/crews/' + id, { method: 'GET' })
+          .then(function (res) {
+            if (res.status < 200 || res.status >= 300 || !res.data || !res.data.success) {
+              preview.innerHTML = '<span class="text-danger">Could not load crew.</span>';
+              return;
+            }
+            var members = res.data.members || [];
+            var names = [];
+            var parts = [];
+            var leaderUid = res.data.crew && res.data.crew.leader_user_id;
+            members.forEach(function (m) {
+              if (!m || !m.name) return;
+              var n = String(m.name).trim();
+              if (m.active) names.push(n);
+              parts.push(
+                '<li>' +
+                  escapeHtml(n) +
+                  (m.user_id === leaderUid ? ' <span class="badge bg-secondary">Leader</span>' : '') +
+                  (!m.active ? ' <span class="badge bg-warning text-dark">Inactive</span>' : '') +
+                  ' — ' +
+                  escapeHtml(String(m.trade || '—')) +
+                '</li>'
+              );
+            });
+            crewMemberNamesForSave = names.filter(function (n) { return !!n; });
+            preview.innerHTML =
+              '<div class="text-muted mb-1">Team preview</div><ul class="tp-crew-preview-list mb-0">' +
+              (parts.length ? parts.join('') : '<li class="text-muted">No active members.</li>') +
+              '</ul>';
+          })
+          .catch(function () {
+            preview.innerHTML = '<span class="text-danger">Failed to load crew.</span>';
+          });
+      }
+
       function renderAssignedSelectedPills() {
         if (!assignedSelectedWrap) return;
         assignedSelectedWrap.innerHTML = '';
@@ -2248,7 +2382,27 @@
       function buildTaskFromForm() {
         var title = (el('tp-task-title').value || '').trim();
         var desc = (el('tp-task-desc').value || '').trim();
-        var assignees = getAssignees();
+        var assignKindEl = document.querySelector('input[name="tp-assign-kind"]:checked');
+        var isCrew = assignKindEl && assignKindEl.value === 'crew';
+        var assignees = [];
+        var crewIdVal = null;
+        var assignmentType = 'operative';
+        if (isCrew) {
+          var cs = el('tp-crew-select');
+          var cid = cs ? parseInt(cs.value, 10) : NaN;
+          if (!Number.isInteger(cid) || cid < 1) {
+            setError('Select a crew.');
+            return null;
+          }
+          crewIdVal = cid;
+          assignmentType = 'crew';
+          assignees = crewMemberNamesForSave.slice();
+          if (!assignees.length) {
+            assignees = ['Unassigned'];
+          }
+        } else {
+          assignees = getAssignees();
+        }
         var deadlineVal = deadlineInput.value;
         var startSpanVal = startSpanInput && startSpanInput.value;
         var sendToAssignees = !!(sendToAssigneesInput && sendToAssigneesInput.checked);
@@ -2258,7 +2412,7 @@
           setError('Title is required.');
           return null;
         }
-        if (!assignees.length) {
+        if (!isCrew && !assignees.length) {
           // Allow empty assignees (task will be saved as "Unassigned" in backend).
         }
         if (!deadlineVal) {
@@ -2295,7 +2449,7 @@
         }
         var id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
 
-        return {
+        var task = {
           id: id,
           title: title,
           description: desc,
@@ -2307,8 +2461,11 @@
           time: fmtTime(deadline),
           sendToAssignees: sendToAssignees,
           notes: notes || null,
-          status: 'not_started'
+          status: 'not_started',
+          assignmentType: assignmentType,
+          crewId: crewIdVal
         };
+        return task;
       }
 
       function clearTaskFields() {
@@ -2318,6 +2475,14 @@
         el('tp-notes').value = '';
         selectedAssignees = [];
         if (assignedInput) assignedInput.value = '';
+        var opKind = el('tp-assign-kind-operative');
+        if (opKind) opKind.checked = true;
+        var cs = el('tp-crew-select');
+        if (cs) cs.value = '';
+        crewMemberNamesForSave = [];
+        var cprev = el('tp-crew-preview');
+        if (cprev) cprev.innerHTML = '';
+        syncAssignToKindUI();
         renderAssignedSelectedPills();
         updateAssigneeDatalist();
       }
@@ -3309,6 +3474,12 @@
       }
 
       if (btnAddAssignee) btnAddAssignee.addEventListener('click', addAssigneeFromInput);
+      document.querySelectorAll('input[name="tp-assign-kind"]').forEach(function (r) {
+        r.addEventListener('change', syncAssignToKindUI);
+      });
+      var crewSel = el('tp-crew-select');
+      if (crewSel) crewSel.addEventListener('change', updateCrewPreviewFromSelect);
+      syncAssignToKindUI();
       if (btnSavePlan) btnSavePlan.addEventListener('click', saveTaskFromForm);
       if (btnClearPlan) btnClearPlan.addEventListener('click', clearCurrentPlan);
 
@@ -3380,9 +3551,11 @@
 
         // Populate assignees from DB (manager company) for "Assigned to *".
         // This is async so UI renders immediately even if backend is slow.
-        return loadOperativesFromDbForAssignees().then(function () {
-          updateAssigneeDatalist();
-        });
+        return loadOperativesFromDbForAssignees()
+          .then(function () {
+            updateAssigneeDatalist();
+            return loadCrewsFromDbForAssignees();
+          });
       }).catch(function () {
         showToast('Backend not available', 'Planning data could not be loaded.', 'error');
         updateFiltersOptions();

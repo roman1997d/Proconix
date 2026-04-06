@@ -283,6 +283,9 @@
         contentEl.classList.add('dashboard-content-fade-in');
         if (module === 'operatives') {
           loadOperativesData();
+          if (typeof window.initOperativesCrewsModule === 'function') {
+            window.initOperativesCrewsModule();
+          }
         }
         if (module === 'projects' && typeof window.initProjectsModule === 'function') {
           window.initProjectsModule();
@@ -607,6 +610,10 @@
       } else {
         actions += ' <button type="button" class="btn-operatives-icon btn-operatives-activate" data-action="operative-activate" data-id="' + escapeHtml(String(o.id)) + '" title="Activate"><i class="bi bi-play-circle"></i></button>';
       }
+      actions +=
+        ' <button type="button" class="btn-operatives-icon" data-action="operative-view" data-id="' +
+        escapeHtml(String(o.id)) +
+        '" title="View details"><i class="bi bi-eye"></i></button>';
       actions += ' <button type="button" class="btn-operatives-icon btn-operatives-delete" data-action="operative-delete" data-id="' + escapeHtml(String(o.id)) + '" data-name="' + escapeHtml(name) + '" title="Delete"><i class="bi bi-trash"></i></button>';
       html += '<tr><td>' + name + '</td><td>' + email + '</td><td>' + role + '</td><td>' + project + '</td><td>' + regDate + '</td><td><span class="status-badge ' + statusClass + '">' + active + '</span></td><td class="operatives-actions-cell">' + actions + '</td></tr>';
     }
@@ -1141,6 +1148,8 @@
       if (allowed) initDashboard();
     });
   }
+
+  window.getManagerSessionHeaders = getSessionHeaders;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

@@ -16,6 +16,7 @@
  */
 
 const { pool } = require('../db/pool');
+const { resolveCrewAssignmentForPlanning, notifyCompany } = require('./crewController');
 
 const PRIORITIES = new Set(['low', 'medium', 'high', 'critical']);
 const STATUSES = new Set(['not_started', 'in_progress', 'paused', 'completed', 'declined']);
@@ -153,7 +154,19 @@ async function upsertPlanTasks(req, res) {
       const t = tasks[i] || {};
       const title = (t.title || '').toString().trim();
       const description = t.description != null ? String(t.description) : null;
-      const assignedTo = sanitizeTextArray(t.assigned_to);
+      let assignedTo = sanitizeTextArray(t.assigned_to);
+      let crewIdVal = null;
+      let assignmentTypeVal = 'names';
+      const rawCid = t.crew_id != null ? parseInt(t.crew_id, 10) : null;
+      if (Number.isInteger(rawCid) && rawCid >= 1) {
+        const resolved = await resolveCrewAssignmentForPlanning(companyId, rawCid, assignedTo);
+        if (resolved === null) {
+          throw new Error('Invalid crew or no active members for this crew assignment.');
+        }
+        assignedTo = sanitizeTextArray(resolved.assignedTo);
+        crewIdVal = resolved.crewId;
+        assignmentTypeVal = resolved.assignmentType || 'crew';
+      }
       const priority = sanitizePriority(t.priority);
       const deadlineDt = parseIsoTimestamp(t.deadline);
       const extraInfo = t.extra_info && typeof t.extra_info === 'object' ? t.extra_info : {};
@@ -175,9 +188,9 @@ async function upsertPlanTasks(req, res) {
 
       const r = await pool.query(
         `INSERT INTO planning_plan_tasks
-          (plan_id, title, description, assigned_to, priority, deadline, pickup_start_date, notes, status, send_to_assignees, created_at)
+          (plan_id, title, description, assigned_to, priority, deadline, pickup_start_date, notes, status, send_to_assignees, created_at, crew_id, assignment_type)
          VALUES
-          ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+          ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12)
          RETURNING id`,
         [
           planId,
@@ -190,9 +203,20 @@ async function upsertPlanTasks(req, res) {
           notes,
           status,
           sendToAssignees,
+          crewIdVal,
+          assignmentTypeVal,
         ]
       );
       inserted.push(r.rows[0].id);
+      if (crewIdVal) {
+        try {
+          const gr = await pool.query(`SELECT name FROM crews WHERE id = $1 AND company_id = $2`, [crewIdVal, companyId]);
+          const cn = gr.rows[0] ? gr.rows[0].name : '';
+          await notifyCompany(companyId, `Planning task "${title}" assigned to crew "${cn}".`);
+        } catch (_) {
+          /* ignore notification errors */
+        }
+      }
     }
 
     await pool.query('COMMIT');
@@ -227,7 +251,25 @@ async function patchPlanTask(req, res) {
   const updates = {};
   if (t.title != null) updates.title = String(t.title).trim();
   if (t.description != null) updates.description = String(t.description);
-  if (t.assigned_to != null) {
+  if (Object.prototype.hasOwnProperty.call(t, 'crew_id')) {
+    if (t.crew_id == null || t.crew_id === '') {
+      updates.crew_id = null;
+      updates.assignment_type = 'names';
+    } else {
+      const cid = parseInt(t.crew_id, 10);
+      if (!Number.isInteger(cid) || cid < 1) {
+        return res.status(400).json({ success: false, message: 'Invalid crew_id.' });
+      }
+      const baseAssigned = t.assigned_to != null ? sanitizeTextArray(t.assigned_to) : null;
+      const resolved = await resolveCrewAssignmentForPlanning(companyId, cid, baseAssigned);
+      if (resolved === null) {
+        return res.status(400).json({ success: false, message: 'Invalid crew or no active members.' });
+      }
+      updates.assigned_to = resolved.assignedTo;
+      updates.crew_id = resolved.crewId;
+      updates.assignment_type = resolved.assignmentType || 'crew';
+    }
+  } else if (t.assigned_to != null) {
     const arr = sanitizeTextArray(t.assigned_to);
     if (!arr) return res.status(400).json({ success: false, message: 'assigned_to must be a non-empty array.' });
     updates.assigned_to = arr;
@@ -334,7 +376,8 @@ async function listPlans(req, res) {
       tasksRes = await pool.query(
         `SELECT
            id, plan_id, title, description, assigned_to, priority, deadline,
-           pickup_start_date, notes, status, send_to_assignees, created_at
+           pickup_start_date, notes, status, send_to_assignees, created_at,
+           crew_id, assignment_type
          FROM planning_plan_tasks
          WHERE plan_id = ANY($1::int[])
          ORDER BY created_at DESC`,
@@ -356,6 +399,8 @@ async function listPlans(req, res) {
         notes: t.notes,
         status: t.status,
         send_to_assignees: t.send_to_assignees,
+        crew_id: t.crew_id != null ? t.crew_id : null,
+        assignment_type: t.assignment_type || 'names',
       });
     });
 

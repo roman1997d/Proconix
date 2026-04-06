@@ -349,6 +349,13 @@ function getRiskManagementHtml() {
 
 function getOperativesHtml() {
   return `
+    <div class="operatives-module-root">
+    <div id="operatives-notifications-strip" class="operatives-notifications-strip d-none" role="status" aria-live="polite"></div>
+    <nav class="operatives-main-tabs" aria-label="Operatives module sections">
+      <button type="button" class="operatives-main-tab is-active" data-operatives-tab="people">Operatives</button>
+      <button type="button" class="operatives-main-tab" data-operatives-tab="crews">Crews</button>
+    </nav>
+    <div id="operatives-tab-panel-people" class="operatives-tab-panel">
     <section class="operatives-section dashboard-card">
       <div class="operatives-header">
         <h2 class="card-title">Operatives</h2>
@@ -384,6 +391,98 @@ function getOperativesHtml() {
       </div>
       <div id="operatives-feedback" class="operatives-feedback d-none" role="alert"></div>
     </section>
+    </div>
+    <div id="operatives-tab-panel-crews" class="operatives-tab-panel d-none">
+      <div id="crews-view-list" class="crews-subview">
+        <section class="operatives-section dashboard-card">
+          <div class="operatives-header">
+            <h2 class="card-title">Crews</h2>
+            <div class="operatives-actions">
+              <button type="button" class="btn-operatives btn-operatives-operative" id="crews-btn-create" aria-label="Create crew">
+                <i class="bi bi-people-fill"></i> Create New Crew
+              </button>
+            </div>
+          </div>
+          <div id="crews-table-loading" class="operatives-table-loading">Loading crews…</div>
+          <div class="operatives-table-wrap">
+            <table class="operatives-table d-none" id="crews-table" aria-label="Crews">
+              <thead>
+                <tr>
+                  <th>Crew name</th>
+                  <th>Crew leader</th>
+                  <th>Members</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="crews-tbody"></tbody>
+            </table>
+            <div id="crews-empty" class="operatives-empty d-none">No crews yet. Create one using the button above.</div>
+          </div>
+        </section>
+      </div>
+      <div id="crews-view-create" class="crews-subview d-none">
+        <section class="operatives-section dashboard-card">
+          <div class="operatives-header">
+            <h2 class="card-title">Create crew</h2>
+            <button type="button" class="btn-operatives-cancel" id="crews-create-back">Back to list</button>
+          </div>
+          <form id="form-create-crew" class="operatives-form">
+            <div class="mb-3">
+              <label class="form-label" for="crew-name">Crew name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control operatives-input" id="crew-name" required maxlength="255" placeholder="e.g. Ceiling Crew 1">
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="crew-leader">Crew leader <span class="text-danger">*</span></label>
+              <select class="form-select operatives-input" id="crew-leader" required></select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="crew-subcontractor">Subcontractor (optional)</label>
+              <input type="text" class="form-control operatives-input" id="crew-subcontractor" maxlength="255" placeholder="Company name">
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="crew-description">Description (optional)</label>
+              <textarea class="form-control operatives-input" id="crew-description" rows="3" placeholder="Short description"></textarea>
+            </div>
+            <div class="operatives-modal-actions">
+              <button type="button" class="btn-operatives-cancel" id="crews-create-cancel">Cancel</button>
+              <button type="submit" class="btn-operatives-submit">Save crew</button>
+            </div>
+          </form>
+        </section>
+      </div>
+      <div id="crews-view-detail" class="crews-subview d-none">
+        <section class="operatives-section dashboard-card">
+          <div class="operatives-header">
+            <h2 class="card-title" id="crew-detail-title">Crew</h2>
+            <div class="operatives-actions">
+              <button type="button" class="btn-operatives btn-operatives-supervisor" id="crew-btn-add-members">Add members</button>
+              <button type="button" class="btn-operatives btn-operatives-operative" id="crew-btn-edit-info">Edit crew info</button>
+              <button type="button" class="btn-operatives-cancel" id="crew-detail-back">Back to list</button>
+            </div>
+          </div>
+          <input type="hidden" id="crew-detail-id" value="">
+          <div id="crew-detail-meta" class="crew-detail-meta mb-3"></div>
+          <div class="crew-activity-summary dashboard-card mb-3" id="crew-activity-summary">
+            <h3 class="h6">Crew activity summary</h3>
+            <p class="small text-muted mb-2">Planning tasks linked to this crew.</p>
+            <div class="d-flex gap-3 align-items-center flex-wrap">
+              <span>Active tasks: <strong id="crew-sum-active">0</strong></span>
+              <span>Completed: <strong id="crew-sum-done">0</strong></span>
+              <div class="crew-progress-wrap"><div id="crew-sum-bar" class="crew-progress-bar"></div></div>
+            </div>
+          </div>
+          <h3 class="h6">Members</h3>
+          <div class="operatives-table-wrap">
+            <table class="operatives-table" id="crew-members-table" aria-label="Crew members">
+              <thead><tr><th>Name</th><th>Trade</th><th>Role in crew</th><th>Status</th><th></th></tr></thead>
+              <tbody id="crew-members-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+    </div>
 
     <!-- Confirm action modal -->
     <div id="operatives-confirm-modal" class="operatives-modal" aria-hidden="true" role="dialog">
@@ -486,6 +585,77 @@ function getOperativesHtml() {
               <div class="operatives-modal-actions">
                 <button type="button" class="btn-operatives-cancel" data-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn-operatives-submit">Add Supervisor</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-operative-detail" class="operatives-modal" aria-hidden="true" role="dialog" aria-labelledby="modal-operative-detail-title">
+      <div class="operatives-modal-backdrop" data-dismiss="modal"></div>
+      <div class="operatives-modal-dialog operatives-modal-dialog-wide">
+        <div class="operatives-modal-content">
+          <div class="operatives-modal-header">
+            <h3 id="modal-operative-detail-title" class="operatives-modal-title">Operative</h3>
+            <button type="button" class="operatives-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+          </div>
+          <div class="operatives-modal-body" id="modal-operative-detail-body"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-crew-add-members" class="operatives-modal" aria-hidden="true" role="dialog">
+      <div class="operatives-modal-backdrop" data-dismiss="modal"></div>
+      <div class="operatives-modal-dialog">
+        <div class="operatives-modal-content">
+          <div class="operatives-modal-header">
+            <h3 class="operatives-modal-title">Add members</h3>
+            <button type="button" class="operatives-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+          </div>
+          <div class="operatives-modal-body">
+            <input type="search" class="form-control operatives-input mb-2" id="crew-add-members-search" placeholder="Search by name or email…" aria-label="Search operatives">
+            <select class="form-select operatives-input mb-2" id="crew-add-members-trade"><option value="">All trades</option></select>
+            <div id="crew-add-members-list" class="crew-add-members-list"></div>
+            <div class="operatives-modal-actions mt-3">
+              <button type="button" class="btn-operatives-cancel" data-dismiss="modal">Close</button>
+              <button type="button" class="btn-operatives-submit" id="crew-add-members-confirm">Add selected</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="modal-crew-edit" class="operatives-modal" aria-hidden="true" role="dialog">
+      <div class="operatives-modal-backdrop" data-dismiss="modal"></div>
+      <div class="operatives-modal-dialog">
+        <div class="operatives-modal-content">
+          <div class="operatives-modal-header">
+            <h3 class="operatives-modal-title">Edit crew</h3>
+            <button type="button" class="operatives-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+          </div>
+          <div class="operatives-modal-body">
+            <form id="form-crew-edit">
+              <input type="hidden" id="crew-edit-id" value="">
+              <div class="mb-3">
+                <label class="form-label" for="crew-edit-name">Crew name</label>
+                <input type="text" class="form-control operatives-input" id="crew-edit-name" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="crew-edit-leader">Crew leader</label>
+                <select class="form-select operatives-input" id="crew-edit-leader" required></select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="crew-edit-sub">Subcontractor</label>
+                <input type="text" class="form-control operatives-input" id="crew-edit-sub">
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="crew-edit-desc">Description</label>
+                <textarea class="form-control operatives-input" id="crew-edit-desc" rows="3"></textarea>
+              </div>
+              <div class="operatives-modal-actions">
+                <button type="button" class="btn-operatives-cancel" data-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn-operatives-submit">Save</button>
               </div>
             </form>
           </div>
