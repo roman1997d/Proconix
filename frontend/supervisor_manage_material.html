@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/favicon_io/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png">
+  <link rel="apple-touch-icon" href="/favicon_io/apple-touch-icon.png">
+  <link rel="manifest" href="/favicon_io/site.webmanifest">
+  <title>Materials (Supervisor) – Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    .mm-header-bar { background: var(--bs-dark); color: #fff; padding: 1rem 0; }
+    .mm-card { border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .mm-table-wrap { overflow-x: auto; }
+    .mm-table th { white-space: nowrap; cursor: pointer; user-select: none; }
+    .mm-table th i.sort-icon { opacity: 0.4; }
+    .mm-table th.sorted i.sort-icon { opacity: 1; }
+    .mm-table tr.low-stock { background-color: #fff3cd; }
+    .mm-table tr.out-of-stock { background-color: #f8d7da; }
+    .toast-container-custom { z-index: 1100; }
+    .forecast-chart-wrap { height: 260px; }
+    .mm-card-clickable { cursor: pointer; transition: box-shadow 0.2s; }
+    .mm-card-clickable:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    body.mm-supervisor-embed { min-height: 100vh; }
+  </style>
+</head>
+<body class="bg-light mm-supervisor-embed">
+  <div class="toast-container position-fixed top-0 end-0 p-3 toast-container-custom" id="toastContainer"></div>
+
+  <header class="mm-header-bar">
+    <div class="container-fluid d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <h1 class="h4 mb-0">Material Management <span class="text-white-50 small">(Supervisor)</span></h1>
+      <a href="supervisor_dashboard.html" class="btn btn-light btn-sm" target="_top">
+        <i class="bi bi-arrow-left-circle"></i> Back to supervisor dashboard
+      </a>
+    </div>
+  </header>
+
+  <div class="container-fluid py-4">
+    <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+      <div class="d-flex align-items-center gap-2">
+        <label class="form-label mb-0 fw-semibold">Project / Site</label>
+        <select id="projectSelect" class="form-select form-select-lg" style="min-width: 220px;">
+          <option value="">— Select project —</option>
+        </select>
+      </div>
+      <p class="text-muted small mb-0">You can update <strong>quantity remaining</strong> only; other fields are set by your company.</p>
+    </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-3">
+        <div class="card mm-card h-100">
+          <div class="card-body">
+            <h6 class="card-subtitle text-muted mb-1">Total Stock</h6>
+            <p class="card-title h4 mb-0" id="overviewTotalStock">—</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card mm-card h-100">
+          <div class="card-body">
+            <h6 class="card-subtitle text-muted mb-1">Stock by Categories</h6>
+            <p class="card-title mb-0 small" id="overviewByCategory">—</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card mm-card mm-card-clickable h-100 border-warning" id="cardCritical" role="button" tabindex="0" aria-label="View critical materials">
+          <div class="card-body">
+            <h6 class="card-subtitle text-muted mb-1"><i class="bi bi-exclamation-triangle text-warning"></i> Critical Materials</h6>
+            <p class="card-title h4 mb-0 text-warning" id="overviewCritical">0</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="card mm-card mm-card-clickable h-100" id="cardAlerts" role="button" tabindex="0" aria-label="View alerts">
+          <div class="card-body">
+            <h6 class="card-subtitle text-muted mb-1">Alerts</h6>
+            <p class="card-title mb-0 small text-danger" id="overviewAlerts">None</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mm-card mb-4">
+      <div class="card-header bg-white">
+        <h5 class="mb-0">Material Forecast</h5>
+      </div>
+      <div class="card-body">
+        <div class="row align-items-end">
+          <div class="col-md-8">
+            <div class="forecast-chart-wrap">
+              <canvas id="forecastChart"></canvas>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <p class="mb-1"><strong>Forecasted usage this week:</strong> <span id="forecastThisWeek">—</span></p>
+            <p class="mb-1"><strong>Usage last week:</strong> <span id="forecastLastWeek">—</span></p>
+            <p class="mb-0 text-danger small" id="forecastAlert"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mm-card">
+      <div class="card-header bg-white d-flex flex-wrap align-items-center gap-2">
+        <h5 class="mb-0 me-auto">Materials</h5>
+        <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="Search by name..." style="max-width: 200px;">
+        <select id="filterCategory" class="form-select form-select-sm" style="max-width: 160px;">
+          <option value="">All categories</option>
+        </select>
+        <select id="filterStatus" class="form-select form-select-sm" style="max-width: 140px;">
+          <option value="">All statuses</option>
+          <option value="normal">Normal</option>
+          <option value="low">Low Stock</option>
+          <option value="out">Out of Stock</option>
+        </select>
+        <select id="filterSupplier" class="form-select form-select-sm" style="max-width: 160px;">
+          <option value="">All suppliers</option>
+        </select>
+        <button type="button" class="btn btn-sm btn-success" id="btnExportExcel">
+          <i class="bi bi-file-earmark-excel"></i> Export Excel
+        </button>
+      </div>
+      <div class="card-body p-0 mm-table-wrap">
+        <table class="table table-hover mb-0 mm-table" id="materialsTable">
+          <thead class="table-light">
+            <tr>
+              <th data-sort="name">Material Name <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="category">Category <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="supplier">Supplier <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="unit">Unit <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="quantityInitial">Qty Initial <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="quantityUsed">Qty Used <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="quantityRemaining">Qty Remaining <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="status">Status <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="materialsTbody">
+            <tr><td colspan="9" class="text-center text-muted py-4">Select a project to load materials.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalCritical" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-exclamation-triangle text-warning me-2"></i>Critical Materials</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">Materials below low-stock threshold or out of stock.</p>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover">
+              <thead class="table-light">
+                <tr>
+                  <th>Material</th>
+                  <th>Category</th>
+                  <th>Unit</th>
+                  <th>Remaining</th>
+                  <th>Threshold</th>
+                  <th>Status</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="modalCriticalTbody">
+                <tr><td colspan="7" class="text-center text-muted py-3">No critical materials.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalAlerts" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title text-danger"><i class="bi bi-bell-fill me-2"></i>Alerts</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover">
+              <thead class="table-light">
+                <tr>
+                  <th>Material</th>
+                  <th>Category</th>
+                  <th>Remaining</th>
+                  <th>Threshold</th>
+                  <th>Status</th>
+                  <th>Why this alert</th>
+                </tr>
+              </thead>
+              <tbody id="modalAlertsTbody">
+                <tr><td colspan="6" class="text-center text-muted py-3">No alerts.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalStockCheck" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Update remaining quantity</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="stockCheckMaterialId">
+          <p class="fw-semibold mb-3" id="stockCheckMaterialName"></p>
+          <ul class="list-group list-group-flush">
+            <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Quantity initial</span><span id="stockCheckInitial"></span></li>
+            <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Quantity used</span><span id="stockCheckUsed"></span></li>
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span class="text-muted">Quantity remaining</span>
+              <input type="number" class="form-control form-control-sm" id="stockCheckRemainingInput" min="0" step="any" style="max-width: 120px;" placeholder="0">
+            </li>
+            <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Low stock threshold</span><span id="stockCheckThreshold"></span></li>
+            <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Status</span><span id="stockCheckStatus"></span></li>
+          </ul>
+          <p class="mt-3 mb-0 small text-muted" id="stockCheckMessage"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" id="btnStockCheckUpdate">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <script>
+(function () {
+  'use strict';
+
+  var OPERATIVE_TOKEN_KEY = 'proconix_operative_token';
+  var USE_MOCK = window.MATERIAL_USE_MOCK === true;
+  var API_BASE = (window.MATERIAL_API_BASE != null ? String(window.MATERIAL_API_BASE) : '/api/materials/supervisor').replace(/\/$/, '');
+
+  function getSessionHeaders() {
+    try {
+      var tok = localStorage.getItem(OPERATIVE_TOKEN_KEY) || sessionStorage.getItem(OPERATIVE_TOKEN_KEY);
+      if (!tok) return {};
+      return { 'X-Operative-Token': tok };
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function materialFetch(path, opts) {
+    opts = opts || {};
+    var url = API_BASE + (path.charAt(0) === '/' ? path : '/' + path);
+    opts.headers = Object.assign({}, getSessionHeaders(), opts.headers || {});
+    return fetch(url, opts).then(function (res) {
+      if (res.status === 401) return res.text().then(function () { throw new Error('Session expired. Please log in again.'); });
+      if (!res.ok) return res.text().then(function (t) { throw new Error(t || 'Request failed'); });
+      if (res.status === 204) return null;
+      return res.json();
+    });
+  }
+
+  var svApi = {
+    getProjects: function () { return materialFetch('/projects'); },
+    getMaterials: function (projectId) { return materialFetch('?projectId=' + encodeURIComponent(projectId)); },
+    getCategories: function () { return materialFetch('/categories'); },
+    getSuppliers: function () { return materialFetch('/suppliers'); },
+    getForecast: function (projectId) { return materialFetch('/forecast?projectId=' + encodeURIComponent(projectId)).catch(function () { return { thisWeek: 0, lastWeek: 0 }; }); },
+    patchRemaining: function (id, body) {
+      return materialFetch('/' + encodeURIComponent(id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    }
+  };
+
+  function normalizeMaterial(m) {
+    var id = m.id != null ? String(m.id) : '';
+    var cat = m.category != null ? String(m.category) : (m.categoryName || '');
+    var catId = m.categoryId != null ? String(m.categoryId) : (m.category ? m.category : '');
+    var supId = m.supplierId != null ? String(m.supplierId) : '';
+    return {
+      id: id,
+      name: m.name || '',
+      categoryId: catId,
+      categoryName: cat || m.categoryName || '',
+      supplierId: supId,
+      supplierName: m.supplierName || '',
+      unit: m.unit || 'kg',
+      quantityInitial: Number(m.quantityInitial) || 0,
+      quantityUsed: Number(m.quantityUsed) || 0,
+      quantityRemaining: m.quantityRemaining != null ? Number(m.quantityRemaining) : (Number(m.quantityInitial) || 0) - (Number(m.quantityUsed) || 0),
+      lowStockThreshold: m.lowStockThreshold != null ? Number(m.lowStockThreshold) : null,
+      status: m.status || 'normal',
+      emailNotify: !!m.emailNotify
+    };
+  }
+
+  var projects = [];
+  var categories = [];
+  var suppliers = [];
+  var materials = [];
+  var forecastThisWeek = 0;
+  var forecastLastWeek = 0;
+  var sortKey = '';
+  var sortDir = 1;
+  var chartInstance = null;
+  var currentProjectId = null;
+
+  function getProjectMaterialsMock(projectId) {
+    if (!projectId) return [];
+    return [
+      { id: 'm1', name: 'Portland Cement', categoryId: 'c1', categoryName: 'Cement', supplierId: 's1', supplierName: 'BuildCo Ltd', unit: 'kg', quantityInitial: 5000, quantityUsed: 3200, quantityRemaining: 1800, lowStockThreshold: 500, status: 'normal', emailNotify: true },
+      { id: 'm2', name: 'Timber 2x4', categoryId: 'c2', categoryName: 'Timber', supplierId: 's2', supplierName: 'TimberWorld', unit: 'm', quantityInitial: 200, quantityUsed: 180, quantityRemaining: 20, lowStockThreshold: 50, status: 'low', emailNotify: false }
+    ];
+  }
+  function getForecastMock(projectId) { return projectId ? { thisWeek: 420, lastWeek: 380 } : { thisWeek: 0, lastWeek: 0 }; }
+
+  function showToast(message, isError) {
+    var container = document.getElementById('toastContainer');
+    if (!container) return;
+    var toast = document.createElement('div');
+    toast.className = 'toast align-items-center text-bg-' + (isError ? 'danger' : 'success') + ' border-0';
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = '<div class="d-flex"><div class="toast-body">' + escapeHtml(message) + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+    container.appendChild(toast);
+    var bsToast = new bootstrap.Toast(toast, { delay: 4000 });
+    bsToast.show();
+    toast.addEventListener('hidden.bs.toast', function () { toast.remove(); });
+  }
+  function escapeHtml(s) { if (s == null) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function loadProjectDropdown() {
+    var sel = document.getElementById('projectSelect');
+    if (!sel) return;
+    if (USE_MOCK) {
+      projects = [{ id: 'p1', name: 'Site Alpha' }];
+      categories = [{ id: 'c1', name: 'Cement' }];
+      suppliers = [{ id: 's1', name: 'BuildCo Ltd' }];
+      while (sel.options.length > 1) sel.remove(1);
+      projects.forEach(function (p) { sel.appendChild(new Option(p.name, p.id)); });
+      if (projects.length === 1) {
+        sel.value = projects[0].id;
+        currentProjectId = projects[0].id;
+        loadMaterialsForProject(currentProjectId);
+      }
+      populateCategoryFilter();
+      populateSupplierFilter();
+      return;
+    } else {
+      if (!getSessionHeaders()['X-Operative-Token']) {
+        showToast('Supervisor session required.', true);
+        return;
+      }
+      svApi.getProjects().then(function (data) {
+        projects = (data && data.projects) ? data.projects.map(function (p) { return { id: String(p.id), name: p.name || '', address: p.address || '' }; }) : [];
+        while (sel.options.length > 1) sel.remove(1);
+        projects.forEach(function (p) { sel.appendChild(new Option(p.name || ('Project #' + p.id), p.id)); });
+        if (projects.length === 1) {
+          sel.value = projects[0].id;
+          currentProjectId = projects[0].id;
+          loadMaterialsForProject(currentProjectId);
+        }
+      }).catch(function (err) { showToast(err.message || 'Could not load projects.', true); });
+      svApi.getCategories().then(function (list) {
+        categories = Array.isArray(list) ? list.map(function (c) { return { id: String(c.id), name: c.name || '', description: c.description || '' }; }) : [];
+        populateCategoryFilter();
+      }).catch(function () { categories = []; populateCategoryFilter(); });
+      svApi.getSuppliers().then(function (list) {
+        suppliers = Array.isArray(list) ? list.map(function (s) { return { id: String(s.id), name: s.name || '', contact: s.contact || '', emailPhone: s.email || s.phone || s.emailPhone || '', address: s.address || '' }; }) : [];
+        populateSupplierFilter();
+      }).catch(function () { suppliers = []; populateSupplierFilter(); });
+      return;
+    }
+  }
+
+  function loadMaterialsForProject(projectId) {
+    if (!projectId) {
+      materials = [];
+      forecastThisWeek = 0;
+      forecastLastWeek = 0;
+      renderOverview();
+      renderForecast();
+      renderTable();
+      populateCategoryFilter();
+      populateSupplierFilter();
+      return;
+    }
+    if (USE_MOCK) {
+      materials = getProjectMaterialsMock(projectId);
+      var fc = getForecastMock(projectId);
+      forecastThisWeek = fc.thisWeek;
+      forecastLastWeek = fc.lastWeek;
+    } else {
+      Promise.all([svApi.getMaterials(projectId), svApi.getForecast(projectId)]).then(function (results) {
+        var list = results[0];
+        var fc = results[1] || {};
+        materials = Array.isArray(list) ? list.map(normalizeMaterial) : [];
+        forecastThisWeek = Number(fc.thisWeek) || 0;
+        forecastLastWeek = Number(fc.lastWeek) || 0;
+        renderOverview();
+        renderForecast();
+        renderTable();
+        populateCategoryFilter();
+        populateSupplierFilter();
+      }).catch(function (err) {
+        showToast(err.message || 'Could not load materials.', true);
+        materials = [];
+        forecastThisWeek = 0;
+        forecastLastWeek = 0;
+        renderOverview();
+        renderForecast();
+        renderTable();
+      });
+      return;
+    }
+    renderOverview();
+    renderForecast();
+    renderTable();
+    populateCategoryFilter();
+    populateSupplierFilter();
+  }
+
+  function renderOverview() {
+    var total = 0;
+    var byCat = {};
+    var critical = 0;
+    var alertNames = [];
+    materials.forEach(function (m) {
+      total += m.quantityRemaining || 0;
+      var cat = m.categoryName || 'Uncategorised';
+      byCat[cat] = (byCat[cat] || 0) + (m.quantityRemaining || 0);
+      if (m.status === 'low' || m.status === 'out') {
+        critical++;
+        alertNames.push(m.name);
+      }
+    });
+    document.getElementById('overviewTotalStock').textContent = total.toLocaleString();
+    document.getElementById('overviewByCategory').innerHTML = Object.keys(byCat).length ? Object.entries(byCat).map(function (e) { return e[0] + ': ' + e[1].toLocaleString(); }).join(' · ') : '—';
+    document.getElementById('overviewCritical').textContent = critical;
+    document.getElementById('overviewAlerts').textContent = alertNames.length ? alertNames.join(', ') : 'None';
+  }
+
+  function getCriticalMaterialsWithReason() {
+    return materials.filter(function (m) { return m.status === 'low' || m.status === 'out'; }).map(function (m) {
+      var reason = m.status === 'out'
+        ? 'Out of stock: remaining quantity is 0.'
+        : 'Low stock: remaining (' + (m.quantityRemaining != null ? m.quantityRemaining : 0) + ') is at or below threshold (' + (m.lowStockThreshold != null ? m.lowStockThreshold : 0) + ').';
+      return { m: m, reason: reason };
+    });
+  }
+
+  function openCriticalModal() {
+    var list = getCriticalMaterialsWithReason();
+    var tbody = document.getElementById('modalCriticalTbody');
+    if (!tbody) return;
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">No critical materials.</td></tr>';
+    } else {
+      tbody.innerHTML = list.map(function (item) {
+        var m = item.m;
+        var statusLabel = m.status === 'out' ? 'Out of Stock' : 'Low Stock';
+        var statusClass = m.status === 'out' ? 'text-danger' : 'text-warning';
+        return '<tr>' +
+          '<td>' + escapeHtml(m.name) + '</td>' +
+          '<td>' + escapeHtml(m.categoryName || '—') + '</td>' +
+          '<td>' + escapeHtml(m.unit || '—') + '</td>' +
+          '<td>' + (m.quantityRemaining != null ? m.quantityRemaining : '—') + '</td>' +
+          '<td>' + (m.lowStockThreshold != null ? m.lowStockThreshold : '—') + '</td>' +
+          '<td><span class="' + statusClass + '">' + escapeHtml(statusLabel) + '</span></td>' +
+          '<td class="small">' + escapeHtml(item.reason) + '</td></tr>';
+      }).join('');
+    }
+    new bootstrap.Modal(document.getElementById('modalCritical')).show();
+  }
+
+  function openAlertsModal() {
+    var list = getCriticalMaterialsWithReason();
+    var tbody = document.getElementById('modalAlertsTbody');
+    if (!tbody) return;
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">No alerts.</td></tr>';
+    } else {
+      tbody.innerHTML = list.map(function (item) {
+        var m = item.m;
+        var statusLabel = m.status === 'out' ? 'Out of Stock' : 'Low Stock';
+        var statusClass = m.status === 'out' ? 'text-danger' : 'text-warning';
+        return '<tr>' +
+          '<td>' + escapeHtml(m.name) + '</td>' +
+          '<td>' + escapeHtml(m.categoryName || '—') + '</td>' +
+          '<td>' + (m.quantityRemaining != null ? m.quantityRemaining : '—') + '</td>' +
+          '<td>' + (m.lowStockThreshold != null ? m.lowStockThreshold : '—') + '</td>' +
+          '<td><span class="' + statusClass + '">' + escapeHtml(statusLabel) + '</span></td>' +
+          '<td class="small">' + escapeHtml(item.reason) + '</td></tr>';
+      }).join('');
+    }
+    new bootstrap.Modal(document.getElementById('modalAlerts')).show();
+  }
+
+  function renderForecast() {
+    document.getElementById('forecastThisWeek').textContent = forecastThisWeek.toLocaleString();
+    document.getElementById('forecastLastWeek').textContent = forecastLastWeek.toLocaleString();
+    var totalRemaining = materials.reduce(function (sum, m) { return sum + (m.quantityRemaining || 0); }, 0);
+    var alertEl = document.getElementById('forecastAlert');
+    if (forecastThisWeek > totalRemaining && totalRemaining > 0) {
+      alertEl.textContent = 'Forecasted usage this week (' + forecastThisWeek + ') exceeds available stock (' + totalRemaining + '). Consider reordering.';
+    } else {
+      alertEl.textContent = '';
+    }
+    if (chartInstance) {
+      chartInstance.data.datasets[0].data = [forecastLastWeek, forecastThisWeek];
+      chartInstance.update();
+    } else {
+      var ctx = document.getElementById('forecastChart');
+      if (ctx) {
+        chartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: ['Last week (actual)', 'This week (forecast)'],
+            datasets: [{ label: 'Usage', data: [forecastLastWeek, forecastThisWeek], backgroundColor: ['rgba(100,100,100,0.6)', 'rgba(13,110,253,0.6)'] }]
+          },
+          options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
+      }
+    }
+  }
+
+  function getFilteredMaterials() {
+    var search = (document.getElementById('filterSearch') && document.getElementById('filterSearch').value || '').toLowerCase();
+    var cat = document.getElementById('filterCategory') && document.getElementById('filterCategory').value;
+    var status = document.getElementById('filterStatus') && document.getElementById('filterStatus').value;
+    var supplier = document.getElementById('filterSupplier') && document.getElementById('filterSupplier').value;
+    var list = materials.filter(function (m) {
+      if (search && (m.name || '').toLowerCase().indexOf(search) === -1) return false;
+      if (cat && m.categoryId !== cat) return false;
+      if (status && m.status !== status) return false;
+      if (supplier && m.supplierId !== supplier) return false;
+      return true;
+    });
+    if (sortKey) {
+      list.sort(function (a, b) {
+        var va = a[sortKey];
+        var vb = b[sortKey];
+        if (typeof va === 'number' && typeof vb === 'number') return sortDir * (va - vb);
+        return sortDir * String(va || '').localeCompare(String(vb || ''));
+      });
+    }
+    return list;
+  }
+
+  function renderTable() {
+    var tbody = document.getElementById('materialsTbody');
+    if (!tbody) return;
+    var list = getFilteredMaterials();
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No materials match the filters.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(function (m) {
+      var rowClass = m.status === 'out' ? 'out-of-stock' : (m.status === 'low' ? 'low-stock' : '');
+      var statusLabel = m.status === 'out' ? 'Out of Stock' : (m.status === 'low' ? 'Low Stock' : 'Normal');
+      return '<tr class="' + rowClass + '" data-id="' + escapeHtml(m.id) + '">' +
+        '<td>' + escapeHtml(m.name) + '</td>' +
+        '<td>' + escapeHtml(m.categoryName || '—') + '</td>' +
+        '<td>' + escapeHtml(m.supplierName || '—') + '</td>' +
+        '<td>' + escapeHtml(m.unit || '—') + '</td>' +
+        '<td>' + (m.quantityInitial != null ? m.quantityInitial : '—') + '</td>' +
+        '<td>' + (m.quantityUsed != null ? m.quantityUsed : '—') + '</td>' +
+        '<td>' + (m.quantityRemaining != null ? m.quantityRemaining : '—') + '</td>' +
+        '<td>' + escapeHtml(statusLabel) + '</td>' +
+        '<td><button type="button" class="btn btn-sm btn-outline-primary btn-stock-check" data-id="' + escapeHtml(m.id) + '">Edit remaining qty</button></td></tr>';
+    }).join('');
+    tbody.querySelectorAll('.btn-stock-check').forEach(function (btn) {
+      btn.addEventListener('click', function () { openStockCheckModal(btn.getAttribute('data-id')); });
+    });
+  }
+
+  function populateCategoryFilter() {
+    var sel = document.getElementById('filterCategory');
+    if (!sel) return;
+    var v = sel.value;
+    sel.innerHTML = '<option value="">All categories</option>';
+    categories.forEach(function (c) { sel.appendChild(new Option(c.name, c.id)); });
+    sel.value = v;
+  }
+
+  function populateSupplierFilter() {
+    var sel = document.getElementById('filterSupplier');
+    if (!sel) return;
+    var v = sel.value;
+    sel.innerHTML = '<option value="">All suppliers</option>';
+    suppliers.forEach(function (s) { sel.appendChild(new Option(s.name, s.id)); });
+    sel.value = v;
+  }
+
+  function openStockCheckModal(id) {
+    var m = materials.find(function (x) { return x.id === id; });
+    if (!m) return;
+    document.getElementById('stockCheckMaterialId').value = m.id;
+    document.getElementById('stockCheckMaterialName').textContent = m.name || 'Material';
+    document.getElementById('stockCheckInitial').textContent = m.quantityInitial != null ? m.quantityInitial : '—';
+    document.getElementById('stockCheckUsed').textContent = m.quantityUsed != null ? m.quantityUsed : '—';
+    document.getElementById('stockCheckRemainingInput').value = m.quantityRemaining != null ? m.quantityRemaining : '';
+    document.getElementById('stockCheckThreshold').textContent = m.lowStockThreshold != null ? m.lowStockThreshold : '—';
+    var statusLabel = m.status === 'out' ? 'Out of Stock' : (m.status === 'low' ? 'Low Stock' : 'Normal');
+    var statusEl = document.getElementById('stockCheckStatus');
+    statusEl.textContent = statusLabel;
+    statusEl.className = m.status === 'out' ? 'text-danger fw-semibold' : (m.status === 'low' ? 'text-warning fw-semibold' : 'text-success');
+    var msg = m.status === 'out'
+      ? 'Stock is exhausted. Reorder as soon as possible.'
+      : (m.status === 'low' ? 'Remaining is at or below threshold. Consider reordering.' : 'Stock level is OK.');
+    document.getElementById('stockCheckMessage').textContent = msg;
+    new bootstrap.Modal(document.getElementById('modalStockCheck')).show();
+  }
+
+  function exportExcel() {
+    var list = getFilteredMaterials();
+    if (list.length === 0) {
+      showToast('No data to export.', true);
+      return;
+    }
+    var rows = [
+      ['Material Name', 'Category', 'Supplier', 'Unit', 'Quantity Initial', 'Quantity Used', 'Quantity Remaining', 'Status']
+    ];
+    list.forEach(function (m) {
+      rows.push([
+        m.name || '',
+        m.categoryName || '',
+        m.supplierName || '',
+        m.unit || '',
+        m.quantityInitial != null ? m.quantityInitial : '',
+        m.quantityUsed != null ? m.quantityUsed : '',
+        m.quantityRemaining != null ? m.quantityRemaining : '',
+        m.status === 'out' ? 'Out of Stock' : (m.status === 'low' ? 'Low Stock' : 'Normal')
+      ]);
+    });
+    var wb = XLSX.utils.book_new();
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, 'Materials');
+    XLSX.writeFile(wb, 'materials_export.xlsx');
+    showToast('Excel file downloaded.');
+  }
+
+  document.getElementById('btnStockCheckUpdate').addEventListener('click', function () {
+    var id = document.getElementById('stockCheckMaterialId').value;
+    var m = materials.find(function (x) { return x.id === id; });
+    if (!m) return;
+    var initial = m.quantityInitial != null ? m.quantityInitial : 0;
+    var newRemaining = parseFloat(document.getElementById('stockCheckRemainingInput').value);
+    if (isNaN(newRemaining) || newRemaining < 0) {
+      showToast('Quantity remaining must be a number ≥ 0.', true);
+      return;
+    }
+    if (newRemaining > initial) {
+      showToast('Quantity remaining cannot exceed quantity initial.', true);
+      return;
+    }
+    if (USE_MOCK) {
+      m.quantityUsed = initial - newRemaining;
+      m.quantityRemaining = newRemaining;
+      m.status = newRemaining <= 0 ? 'out' : (m.lowStockThreshold != null && m.lowStockThreshold > 0 && newRemaining <= m.lowStockThreshold ? 'low' : 'normal');
+      bootstrap.Modal.getInstance(document.getElementById('modalStockCheck')).hide();
+      showToast('Quantity remaining updated.');
+      renderOverview();
+      renderTable();
+      renderForecast();
+    } else {
+      svApi.patchRemaining(id, { quantityRemaining: newRemaining }).then(function () {
+        bootstrap.Modal.getInstance(document.getElementById('modalStockCheck')).hide();
+        showToast('Quantity remaining updated.');
+        loadMaterialsForProject(currentProjectId);
+      }).catch(function (err) { showToast(err.message || 'Update failed.', true); });
+    }
+  });
+
+  document.getElementById('projectSelect').addEventListener('change', function () {
+    currentProjectId = this.value || null;
+    loadMaterialsForProject(currentProjectId);
+  });
+
+  document.getElementById('cardCritical').addEventListener('click', openCriticalModal);
+  document.getElementById('cardCritical').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCriticalModal(); } });
+  document.getElementById('cardAlerts').addEventListener('click', openAlertsModal);
+  document.getElementById('cardAlerts').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAlertsModal(); } });
+
+  document.getElementById('filterSearch').addEventListener('input', renderTable);
+  document.getElementById('filterCategory').addEventListener('change', renderTable);
+  document.getElementById('filterStatus').addEventListener('change', renderTable);
+  document.getElementById('filterSupplier').addEventListener('change', renderTable);
+  document.getElementById('btnExportExcel').addEventListener('click', exportExcel);
+
+  document.querySelectorAll('#materialsTable th[data-sort]').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var key = this.getAttribute('data-sort');
+      sortDir = (sortKey === key ? -sortDir : 1);
+      sortKey = key;
+      document.querySelectorAll('#materialsTable th[data-sort]').forEach(function (t) { t.classList.remove('sorted'); });
+      this.classList.add('sorted');
+      renderTable();
+    });
+  });
+
+  loadProjectDropdown();
+  var sel = document.getElementById('projectSelect');
+  if (sel && sel.value) { currentProjectId = sel.value; loadMaterialsForProject(currentProjectId); }
+})();
+  </script>
+</body>
+</html>

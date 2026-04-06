@@ -180,7 +180,7 @@
       updateHeaderTitle(module);
       contentEl.innerHTML =
         '<iframe src="' +
-        iframeModuleSrc('manage_material.html?supervisor=1') +
+        iframeModuleSrc('supervisor_manage_material.html') +
         '" class="dashboard-qa-iframe" title="Material Management"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');

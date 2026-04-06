@@ -645,6 +645,82 @@ async function updateMaterial(req, res) {
   }
 }
 
+/**
+ * PATCH /api/materials/supervisor/:id
+ * Supervisor may only adjust quantity remaining (and derived quantity_used) on their project.
+ */
+async function patchSupervisorMaterialRemaining(req, res) {
+  if (!req.supervisor) {
+    return res.status(403).json({ message: 'Access denied.' });
+  }
+  const companyId = getCompanyId(req);
+  if (companyId == null) {
+    return res.status(403).json({ message: 'Access denied.' });
+  }
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ message: 'Invalid material id.' });
+  }
+  const body = req.body || {};
+  if (body.quantityRemaining === undefined || body.quantityRemaining === null) {
+    return res.status(400).json({ message: 'quantityRemaining is required.' });
+  }
+  const quantityRemainingIn = parseFloat(body.quantityRemaining);
+  if (!Number.isFinite(quantityRemainingIn) || quantityRemainingIn < 0) {
+    return res.status(400).json({ message: 'quantityRemaining must be a number ≥ 0.' });
+  }
+
+  try {
+    const existing = await pool.query(
+      `SELECT id, project_id, quantity_initial, quantity_used, low_stock_threshold
+       FROM materials WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`,
+      [id, companyId]
+    );
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ message: 'Material not found.' });
+    }
+    const row = existing.rows[0];
+    const supM = supervisorProjectMismatch(req, row.project_id);
+    if (supM) return res.status(403).json({ message: supM });
+
+    const quantityInitial = Number(row.quantity_initial);
+    if (quantityRemainingIn > quantityInitial) {
+      return res.status(400).json({ message: 'Quantity remaining cannot exceed quantity initial.' });
+    }
+    const quantityRemaining = quantityRemainingIn;
+    const quantityUsed = quantityInitial - quantityRemaining;
+    const lowStockThreshold = row.low_stock_threshold != null ? Number(row.low_stock_threshold) : null;
+    const status = computeStatus(quantityRemaining, lowStockThreshold);
+    const updatedByName = (req.supervisor.name && String(req.supervisor.name).trim()) || 'Supervisor';
+    const updatedById = req.supervisor.id;
+
+    await pool.query(
+      `UPDATE materials SET
+        quantity_used = $1,
+        quantity_remaining = $2,
+        status = $3,
+        updated_at = NOW(),
+        updated_by_id = $4,
+        updated_by_name = $5
+       WHERE id = $6 AND company_id = $7 AND deleted_at IS NULL`,
+      [quantityUsed, quantityRemaining, status, updatedById, updatedByName, id, companyId]
+    );
+    await recordConsumptionSnapshot(id, row.project_id, companyId, quantityRemaining);
+
+    return res.status(200).json({
+      id: String(id),
+      quantityInitial,
+      quantityUsed,
+      quantityRemaining,
+      lowStockThreshold,
+      status,
+    });
+  } catch (err) {
+    console.error('materials patchSupervisorMaterialRemaining:', err);
+    return res.status(500).json({ message: err.message || 'Failed to update material.' });
+  }
+}
+
 /** DELETE /api/materials/:id (soft delete) */
 async function deleteMaterial(req, res) {
   const companyId = getCompanyId(req);
@@ -742,6 +818,7 @@ module.exports = {
   getMaterials,
   createMaterial,
   updateMaterial,
+  patchSupervisorMaterialRemaining,
   deleteMaterial,
   getForecast,
 };

@@ -21,6 +21,7 @@ const {
   getMaterials,
   createMaterial,
   updateMaterial,
+  patchSupervisorMaterialRemaining,
   deleteMaterial,
   getForecast,
 } = require('../controllers/materialsController');
@@ -43,6 +44,7 @@ router.get('/supervisor/categories', requireSupervisorAuth, getCategories);
 router.get('/supervisor/suppliers', requireSupervisorAuth, getSuppliers);
 router.get('/supervisor/forecast', requireSupervisorAuth, getForecast);
 router.get('/supervisor', requireSupervisorAuth, getMaterials);
+router.patch('/supervisor/:id', requireSupervisorAuth, patchSupervisorMaterialRemaining);
 router.post('/', requireManagerAuth, createMaterial);
 router.put('/:id', requireManagerAuth, updateMaterial);
 router.delete('/:id', requireManagerAuth, deleteMaterial);
