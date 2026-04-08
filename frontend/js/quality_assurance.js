@@ -2062,12 +2062,23 @@
     return String(x);
   }
 
+  function formatQaDateTime(iso) {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+    } catch (e) {
+      return '—';
+    }
+  }
+
   /**
    * @param {object} [bookedStepQuantities] - from GET job: sums from approved Work Logs (QA price work) per step key
+   * @param {object} [bookedStepDetails] - per step key: [{ workerName, submittedAt, approvedAt, amount, ... }]
    */
-  function formatJobStepQuantitiesReadonly(job, templates, bookedStepQuantities) {
+  function formatJobStepQuantitiesReadonly(job, templates, bookedStepQuantities, bookedStepDetails) {
     var sq = job.stepQuantities && typeof job.stepQuantities === 'object' ? job.stepQuantities : {};
     var booked = bookedStepQuantities && typeof bookedStepQuantities === 'object' ? bookedStepQuantities : {};
+    var details = bookedStepDetails && typeof bookedStepDetails === 'object' ? bookedStepDetails : {};
     var lines = [];
     var tplById = {};
     (templates || []).forEach(function (t) { tplById[String(t.id)] = t; });
@@ -2124,6 +2135,26 @@
         }
         if (!dimLines.length) return;
         var title = 'Step ' + (idx + 1) + (s.description ? ' — ' + String(s.description).trim() : '');
+        var stepBookings = details[key] && Array.isArray(details[key]) ? details[key] : [];
+        var bookingHtml = '';
+        if (stepBookings.length) {
+          bookingHtml =
+            '<ul class="qa-step-booking-list">' +
+            stepBookings
+              .map(function (bk) {
+                var parts = [
+                  'Booked by <strong>' + escapeHtml(bk.workerName || '—') + '</strong>',
+                  'Submitted: ' + escapeHtml(formatQaDateTime(bk.submittedAt)),
+                  'Approved: ' + escapeHtml(formatQaDateTime(bk.approvedAt)),
+                ];
+                if (bk.amount != null && !isNaN(Number(bk.amount)) && Number(bk.amount) > 0) {
+                  parts.push('Step <strong>£' + Number(bk.amount).toFixed(2) + '</strong>');
+                }
+                return '<li class="qa-step-booking-item">' + parts.join(' · ') + '</li>';
+              })
+              .join('') +
+            '</ul>';
+        }
         lines.push(
           '<div class="qa-step-qty-block"><strong>' +
             escapeHtml(title) +
@@ -2133,6 +2164,7 @@
                 return '<div class="qa-step-qty-dim">' + escapeHtml(line) + '</div>';
               })
               .join('') +
+            bookingHtml +
             '</div>'
         );
       });
@@ -2140,7 +2172,7 @@
     if (!lines.length) return '';
     return (
       '<dt>Quantities per step</dt><dd class="qa-dl__preline qa-dl__step-qty">' +
-      '<p class="qa-message" style="margin:0 0 8px;">Booked totals include only entries from <strong>approved</strong> Work Logs (QA price work).</p>' +
+      '<p class="qa-message" style="margin:0 0 8px;">Booked totals and booking lines are from <strong>approved</strong> Work Logs only (QA price work). Each line shows operative name, submitted time, and approval time.</p>' +
       lines.join('') +
       '</dd>'
     );
@@ -2175,15 +2207,43 @@
       var descStr = String(freshJob.description || '').trim();
       var jtStr = String(freshJob.jobTitle || '').trim();
       var priceEst = getJobTemplatePriceEstimate(freshJob, templates);
-      var estRow =
-        priceEst && (priceEst.mode === 'perStep' || priceEst.total > 0 || priceEst.sumM2 > 0 || priceEst.sumLin > 0 || priceEst.sumUnit > 0)
-          ? '<dt>Template price estimate</dt><dd>£' +
-            (priceEst.total != null ? priceEst.total : 0).toFixed(2) +
-            (priceEst.total > 0 ? '' : ' (add step quantities if rates apply)') +
-            '</dd>'
-          : '';
+      var alreadyPaid =
+        freshJob.templatePriceAlreadyPaid != null && !isNaN(Number(freshJob.templatePriceAlreadyPaid))
+          ? Number(freshJob.templatePriceAlreadyPaid)
+          : 0;
+      var hasEst =
+        priceEst &&
+        (priceEst.mode === 'perStep' ||
+          priceEst.total > 0 ||
+          priceEst.sumM2 > 0 ||
+          priceEst.sumLin > 0 ||
+          priceEst.sumUnit > 0);
+      var estTotal = hasEst && priceEst.total != null ? priceEst.total : 0;
+      var remainingEst = hasEst ? Math.max(0, estTotal - alreadyPaid) : null;
+      var estRow = '';
+      if (hasEst || alreadyPaid > 0) {
+        estRow =
+          '<dt>Template price estimate</dt><dd class="qa-dl__preline qa-dl__price-est">' +
+          (hasEst
+            ? '<div class="qa-price-est-row"><span class="qa-price-est-label">Estimate</span> <strong>£' +
+              estTotal.toFixed(2) +
+              '</strong>' +
+              (estTotal <= 0 ? ' <span class="qa-muted">(add step quantities if rates apply)</span>' : '') +
+              '</div>'
+            : '<div class="qa-price-est-row"><span class="qa-price-est-label">Estimate</span> <span class="qa-muted">—</span></div>') +
+          '<div class="qa-price-est-row"><span class="qa-price-est-label">Already paid</span> <strong>£' +
+          alreadyPaid.toFixed(2) +
+          '</strong> <span class="qa-muted">(approved Work Logs, QA price work)</span></div>' +
+          (hasEst
+            ? '<div class="qa-price-est-row"><span class="qa-price-est-label">Remaining</span> <strong>£' +
+              (remainingEst != null ? remainingEst.toFixed(2) : '0.00') +
+              '</strong> <span class="qa-muted">(estimate − paid)</span></div>'
+            : '<div class="qa-price-est-row"><span class="qa-price-est-label">Remaining</span> <span class="qa-muted">—</span> <span class="qa-muted">(add template quantities to compare)</span></div>') +
+          '</dd>';
+      }
       var booked = freshJob.bookedStepQuantities;
-      var stepQtyRow = formatJobStepQuantitiesReadonly(freshJob, templates, booked);
+      var bookedDet = freshJob.bookedStepDetails;
+      var stepQtyRow = formatJobStepQuantitiesReadonly(freshJob, templates, booked, bookedDet);
       var html =
         '<dl class="qa-dl">' +
         '<dt>Job title</dt><dd>' + (jtStr ? escapeHtml(jtStr) : '—') + '</dd>' +

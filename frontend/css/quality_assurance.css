@@ -1247,6 +1247,47 @@
   line-height: 1.45;
 }
 
+.qa-muted {
+  color: var(--qa-muted);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.qa-dl__price-est .qa-price-est-row {
+  margin-top: 0.35rem;
+}
+
+.qa-dl__price-est .qa-price-est-row:first-child {
+  margin-top: 0;
+}
+
+.qa-price-est-label {
+  display: inline-block;
+  min-width: 7.5rem;
+  color: var(--qa-muted);
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.qa-step-booking-list {
+  margin: 0.5rem 0 0;
+  padding: 0.4rem 0 0.15rem 1rem;
+  border-left: 3px solid var(--qa-primary);
+  list-style: none;
+}
+
+.qa-step-booking-item {
+  font-size: 0.8125rem;
+  color: var(--qa-text-strong);
+  margin-bottom: 0.35rem;
+  line-height: 1.4;
+}
+
+.qa-step-booking-item:last-child {
+  margin-bottom: 0;
+}
+
 .qa-dl dt:first-child {
   margin-top: 0;
 }

@@ -489,42 +489,160 @@ function mergeBookedStepQuantityMaps(into, sq) {
   }
 }
 
-/** Sum approved Work Logs QA price work for one QA job id (company-scoped). */
-async function fetchApprovedBookedStepQuantities(companyId, qaJobId) {
-  const qaIdStr = String(qaJobId);
-  const merged = {};
-  let rows;
+function computeEntryMoneyForTemplates(sq, templateIds, stepsByTemplate) {
+  const perKey = {};
+  let total = 0;
+  if (!sq || typeof sq !== 'object') return { perKey, total: 0 };
+  for (const tid of templateIds) {
+    const steps = stepsByTemplate.get(tid) || [];
+    for (const s of steps) {
+      const sid =
+        s.step_external_id != null && String(s.step_external_id).trim() !== ''
+          ? String(s.step_external_id)
+          : String(s.id);
+      const key = `${tid}:${sid}`;
+      const q = sq[key];
+      if (!q || typeof q !== 'object') continue;
+      const pm2 = parseFloat(s.price_per_m2);
+      const plin = parseFloat(s.price_per_linear);
+      const pun = parseFloat(s.price_per_unit);
+      const m2 = parseFloat(q.m2);
+      const lin = parseFloat(q.linear);
+      const un = parseFloat(q.units);
+      let line = 0;
+      if (pm2 > 0 && m2 === m2) line += pm2 * m2;
+      if (plin > 0 && lin === lin) line += plin * lin;
+      if (pun > 0 && un === un) line += pun * un;
+      if (line > 0) {
+        perKey[key] = Math.round(line * 100) / 100;
+        total += line;
+      }
+    }
+  }
+  return { perKey, total: Math.round(total * 100) / 100 };
+}
+
+async function loadStepsByTemplateForQaJob(qaJobId) {
+  const tplRes = await pool.query(
+    'SELECT template_id FROM qa_job_templates WHERE job_id = $1 ORDER BY template_id',
+    [qaJobId]
+  );
+  const templateIds = tplRes.rows.map((r) => r.template_id);
+  if (templateIds.length === 0) return { templateIds: [], stepsByTemplate: new Map() };
+  const stepRows = await pool.query(
+    `SELECT template_id, id, step_external_id, price_per_m2, price_per_unit, price_per_linear
+     FROM qa_template_steps WHERE template_id = ANY($1::int[])`,
+    [templateIds]
+  );
+  const stepsByTemplate = new Map();
+  for (const s of stepRows.rows) {
+    if (!stepsByTemplate.has(s.template_id)) stepsByTemplate.set(s.template_id, []);
+    stepsByTemplate.get(s.template_id).push(s);
+  }
+  return { templateIds, stepsByTemplate };
+}
+
+/**
+ * Approved Work Logs QA price work: merged quantities, per-step booking lines, total £ paid.
+ */
+async function fetchApprovedQaPriceWorkFullData(companyId, qaJobId) {
+  const empty = {
+    bookedStepQuantities: {},
+    bookedStepDetails: {},
+    templatePriceAlreadyPaid: 0,
+  };
+  let stepsInfo;
   try {
-    rows = await pool.query(
-      `SELECT timesheet_jobs FROM work_logs
+    stepsInfo = await loadStepsByTemplateForQaJob(qaJobId);
+  } catch (e) {
+    if (e && e.code === '42P01') return empty;
+    throw e;
+  }
+  const { templateIds, stepsByTemplate } = stepsInfo;
+  if (templateIds.length === 0) return empty;
+
+  let wlRows;
+  try {
+    wlRows = await pool.query(
+      `SELECT id, worker_name, submitted_at, updated_at, timesheet_jobs
+       FROM work_logs
        WHERE company_id = $1 AND LOWER(status) = 'approved' AND (archived IS NOT TRUE)
-         AND timesheet_jobs IS NOT NULL`,
+         AND timesheet_jobs IS NOT NULL
+       ORDER BY updated_at DESC`,
       [companyId]
     );
   } catch (e) {
-    if (e && (e.code === '42P01' || e.code === '42703')) return {};
+    if (e && (e.code === '42P01' || e.code === '42703')) return empty;
     throw e;
   }
-  for (const row of rows.rows) {
+
+  const merged = {};
+  const details = {};
+  let alreadyPaid = 0;
+  const qaIdStr = String(qaJobId);
+
+  for (const row of wlRows.rows) {
     const ts = parseWorkLogsTimesheetJobs(row.timesheet_jobs);
     if (!Array.isArray(ts)) continue;
     for (const block of ts) {
       if (!block || block.type !== 'qa_price_work' || !Array.isArray(block.entries)) continue;
       for (const ent of block.entries) {
         if (String(ent.qaJobId) !== qaIdStr) continue;
-        mergeBookedStepQuantityMaps(merged, ent.stepQuantities);
+        const sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
+        mergeBookedStepQuantityMaps(merged, sq);
+        const { perKey, total } = computeEntryMoneyForTemplates(sq, templateIds, stepsByTemplate);
+        alreadyPaid += total;
+
+        const workerName = (row.worker_name && String(row.worker_name).trim()) || '—';
+        const submittedAt = row.submitted_at ? new Date(row.submitted_at).toISOString() : null;
+        const approvedAt = row.updated_at ? new Date(row.updated_at).toISOString() : null;
+
+        const keys = new Set([...Object.keys(perKey), ...Object.keys(sq)]);
+        for (const key of keys) {
+          const amt = perKey[key] || 0;
+          const qk = sq[key] || {};
+          const m2 = parseFloat(qk.m2) || 0;
+          const lin = parseFloat(qk.linear) || 0;
+          const un = parseFloat(qk.units) || 0;
+          if (amt <= 0 && m2 === 0 && lin === 0 && un === 0) continue;
+          if (!details[key]) details[key] = [];
+          details[key].push({
+            workerName,
+            submittedAt,
+            approvedAt,
+            m2: Math.round(m2 * 100) / 100,
+            linear: Math.round(lin * 100) / 100,
+            units: Math.round(un * 100) / 100,
+            amount: amt,
+          });
+        }
       }
     }
   }
-  const out = {};
+
+  const bookedStepQuantities = {};
   for (const [k, v] of Object.entries(merged)) {
-    out[k] = {
+    bookedStepQuantities[k] = {
       m2: Math.round(v.m2 * 100) / 100,
       linear: Math.round(v.linear * 100) / 100,
       units: Math.round(v.units * 100) / 100,
     };
   }
-  return out;
+
+  for (const k of Object.keys(details)) {
+    details[k].sort((a, b) => {
+      const tb = new Date(b.approvedAt || b.submittedAt || 0).getTime();
+      const ta = new Date(a.approvedAt || a.submittedAt || 0).getTime();
+      return tb - ta;
+    });
+  }
+
+  alreadyPaid = Math.round(alreadyPaid * 100) / 100;
+  return {
+    bookedStepQuantities,
+    bookedStepDetails: details,
+    templatePriceAlreadyPaid: alreadyPaid,
+  };
 }
 
 function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, responsibleUserId, forSupervisor, crewIds) {
@@ -775,9 +893,14 @@ async function getJob(req, res) {
       crewIds
     );
     try {
-      payload.bookedStepQuantities = await fetchApprovedBookedStepQuantities(companyId, id);
+      const qaPrice = await fetchApprovedQaPriceWorkFullData(companyId, id);
+      payload.bookedStepQuantities = qaPrice.bookedStepQuantities;
+      payload.bookedStepDetails = qaPrice.bookedStepDetails;
+      payload.templatePriceAlreadyPaid = qaPrice.templatePriceAlreadyPaid;
     } catch (e) {
       payload.bookedStepQuantities = {};
+      payload.bookedStepDetails = {};
+      payload.templatePriceAlreadyPaid = 0;
     }
     return res.status(200).json(payload);
   } catch (err) {
