@@ -15,6 +15,31 @@
   var searchTimers = {};
   var openJobMenuId = null;
 
+  /** Mirrors backend compact job numbers for offline QA demo. */
+  var QA_MAX_COMPACT_SEQ = 26 * 99;
+  function qaVirtualSeqFromJobNumber(jn) {
+    if (!jn) return 0;
+    var s = String(jn).trim();
+    var m = /^([A-Za-z])(\d{2})$/.exec(s);
+    if (m) {
+      var li = m[1].toUpperCase().charCodeAt(0) - 65;
+      var n = parseInt(m[2], 10);
+      if (li >= 0 && li <= 25 && n >= 1 && n <= 99) return li * 99 + n;
+    }
+    var leg = /^J-0*(\d+)$/i.exec(s);
+    if (leg) return QA_MAX_COMPACT_SEQ + parseInt(leg[1], 10);
+    return 0;
+  }
+  function qaFormatSeqToJobNumber(seq) {
+    if (!seq || seq < 1) seq = 1;
+    if (seq > QA_MAX_COMPACT_SEQ) {
+      return 'J-' + String(seq - QA_MAX_COMPACT_SEQ).padStart(6, '0');
+    }
+    var letterIndex = Math.floor((seq - 1) / 99);
+    var num = ((seq - 1) % 99) + 1;
+    return String.fromCharCode(65 + letterIndex) + String(num).padStart(2, '0');
+  }
+
   function iconsRefresh() {
     if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
   }
@@ -162,12 +187,12 @@
         return Promise.resolve();
       },
       getNextJobNumber: function () {
-        var max = 0;
+        var maxSeq = 0;
         _jobs.forEach(function (j) {
-          var num = parseInt((j.jobNumber || '').replace(/^J-0*/, ''), 10);
-          if (!isNaN(num) && num > max) max = num;
+          var v = qaVirtualSeqFromJobNumber(j.jobNumber);
+          if (v > maxSeq) maxSeq = v;
         });
-        return Promise.resolve('J-' + String(max + 1).padStart(6, '0'));
+        return Promise.resolve(qaFormatSeqToJobNumber(maxSeq + 1));
       }
     };
   })();
@@ -262,15 +287,10 @@
     deleteJob: function (id) { return qaFetch('/jobs/' + encodeURIComponent(id), { method: 'DELETE' }); },
     getNextJobNumber: function () {
       var projectId = projectSelect && projectSelect.value;
-      if (!projectId) return Promise.resolve('J-000001');
-      return qaApiBackend.getJobs(projectId).then(function (jobs) {
-        var max = 0;
-        (jobs || []).forEach(function (j) {
-          var num = parseInt((j.jobNumber || '').replace(/^J-0*/, ''), 10);
-          if (!isNaN(num) && num > max) max = num;
-        });
-        return 'J-' + String(max + 1).padStart(6, '0');
-      }, function () { return 'J-000001'; });
+      if (!projectId) return Promise.resolve('A01');
+      return qaFetch('/jobs/next-number?projectId=' + encodeURIComponent(projectId)).then(function (d) {
+        return (d && d.jobNumber) ? d.jobNumber : 'A01';
+      }, function () { return 'A01'; });
     }
   };
 
@@ -299,8 +319,7 @@
     return div.innerHTML;
   }
 
-  /** Human-facing job title for list/drawer: specification, else first line of description. */
-  function jobSideTitle(job) {
+  function jobSpecificationOrDescSummary(job) {
     if (!job) return '';
     var spec = String(job.specification || '').trim();
     if (spec) return spec;
@@ -308,6 +327,14 @@
     if (!desc) return '';
     var line = desc.split(/\r?\n/)[0].trim();
     return line || '';
+  }
+
+  /** Human-facing line: job title, else specification / description summary. */
+  function jobSideTitle(job) {
+    if (!job) return '';
+    var jt = String(job.jobTitle || '').trim();
+    if (jt) return jt;
+    return jobSpecificationOrDescSummary(job);
   }
 
   function templateLabelForStep(templates, templateId) {
@@ -537,6 +564,7 @@
       var o = projectSelect.options[projectSelect.selectedIndex];
       document.getElementById('qa-job-create-project-label').textContent = o ? o.text : '';
       rebuildJobFloorSelect(false);
+      refreshJobNumberPreview();
       switchJobTab('details');
       refreshJobTemplatesList();
       renderWorkersList(document.getElementById('qa-worker-category').value);
@@ -588,6 +616,19 @@
       var ok = Array.prototype.some.call(floorSel.options, function (opt) { return opt.value === prev; });
       floorSel.value = ok ? prev : '';
     }
+  }
+
+  function refreshJobNumberPreview() {
+    var el = document.getElementById('qa-job-number-preview');
+    if (!el) return;
+    if (!projectSelect || !projectSelect.value) {
+      el.textContent = '—';
+      return;
+    }
+    el.textContent = '…';
+    qaApi.getNextJobNumber().then(function (num) {
+      el.textContent = num || '—';
+    }).catch(function () { el.textContent = '—'; });
   }
 
   /* ——— Project load ——— */
@@ -720,6 +761,7 @@
   projectSelect.addEventListener('change', function () {
     enableModuleCards();
     rebuildJobFloorSelect(false);
+    if (currentView === 'job-create') refreshJobNumberPreview();
     if (currentView === 'jobs') renderJobsOverview(true);
     if (currentView === 'templates') renderTemplateLibrary();
   });
@@ -1195,30 +1237,33 @@
     else if (costType === 'price') costValue = (document.getElementById('qa-job-total-price') && document.getElementById('qa-job-total-price').value) || '';
     var targetDate = (document.getElementById('qa-job-target-date') && document.getElementById('qa-job-target-date').value) || '';
     var createdBy = (typeof window.qaCurrentUserName === 'string' && window.qaCurrentUserName.trim()) ? window.qaCurrentUserName.trim() : '';
-    qaApi.getNextJobNumber().then(function (jobNumber) {
-      var job = {
-        projectId: projectId,
-        jobNumber: jobNumber,
-        floor: (document.getElementById('qa-job-floor') && document.getElementById('qa-job-floor').value) || '',
-        location: (document.getElementById('qa-job-location') && document.getElementById('qa-job-location').value) || '',
-        sqm: (document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value) || '',
-        linearMeters: (document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value) || '',
-        specification: (document.getElementById('qa-job-spec') && document.getElementById('qa-job-spec').value) || '',
-        description: (document.getElementById('qa-job-description') && document.getElementById('qa-job-description').value) || '',
-        targetCompletionDate: targetDate,
-        createdAt: new Date().toISOString(),
-        createdBy: createdBy,
-        templateIds: templateIds,
-        costIncluded: !!includeCost,
-        costType: costType,
-        costValue: costValue,
-        responsibleId: (document.getElementById('qa-job-responsible') && document.getElementById('qa-job-responsible').value) || '',
-        workerIds: workerIds,
-        status: 'new',
-        notes: ''
-      };
-      return qaApi.createJob(job);
-    }).then(function () {
+    var jobTitle = (document.getElementById('qa-job-title') && document.getElementById('qa-job-title').value || '').trim();
+    if (!jobTitle) {
+      showToast('Job title is required.', 'error');
+      return;
+    }
+    var job = {
+      projectId: projectId,
+      jobTitle: jobTitle,
+      floor: (document.getElementById('qa-job-floor') && document.getElementById('qa-job-floor').value) || '',
+      location: (document.getElementById('qa-job-location') && document.getElementById('qa-job-location').value) || '',
+      sqm: (document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value) || '',
+      linearMeters: (document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value) || '',
+      specification: (document.getElementById('qa-job-spec') && document.getElementById('qa-job-spec').value) || '',
+      description: (document.getElementById('qa-job-description') && document.getElementById('qa-job-description').value) || '',
+      targetCompletionDate: targetDate,
+      createdAt: new Date().toISOString(),
+      createdBy: createdBy,
+      templateIds: templateIds,
+      costIncluded: !!includeCost,
+      costType: costType,
+      costValue: costValue,
+      responsibleId: (document.getElementById('qa-job-responsible') && document.getElementById('qa-job-responsible').value) || '',
+      workerIds: workerIds,
+      status: 'new',
+      notes: ''
+    };
+    qaApi.createJob(job).then(function () {
       showToast('Job created.', 'success');
       showView('home');
     }).catch(function (err) {
@@ -1245,7 +1290,9 @@
         var num = (j.jobNumber || '').toLowerCase();
         var loc = (j.location || '').toLowerCase();
         var spec = (j.specification || '').toLowerCase();
-        return num.indexOf(f.search) !== -1 || loc.indexOf(f.search) !== -1 || spec.indexOf(f.search) !== -1;
+        var jt = (j.jobTitle || '').toLowerCase();
+        return num.indexOf(f.search) !== -1 || loc.indexOf(f.search) !== -1 || spec.indexOf(f.search) !== -1
+          || jt.indexOf(f.search) !== -1;
       });
     }
     if (f.floor) jobs = jobs.filter(function (j) { return (j.floor || '') === f.floor; });
@@ -1321,8 +1368,16 @@
     var listEl = document.getElementById('qa-view-jobs-list');
     listEl.innerHTML = '';
     jobs.forEach(function (job) {
-      var title = escapeHtml(job.jobNumber || job.location || 'Job');
-      var sideTit = jobSideTitle(job);
+      var hasJT = String(job.jobTitle || '').trim();
+      var title = escapeHtml(hasJT || job.jobNumber || job.location || 'Job');
+      var refLine = (hasJT && job.jobNumber) ? '<p class="qa-job-card-pro__ref">' + escapeHtml(job.jobNumber) + '</p>' : '';
+      var specExtra = '';
+      var sum = jobSpecificationOrDescSummary(job);
+      if (hasJT) {
+        if (sum && sum !== hasJT) specExtra = '<p class="qa-job-card-pro__jobtitle">' + escapeHtml(sum) + '</p>';
+      } else if (sum) {
+        specExtra = '<p class="qa-job-card-pro__jobtitle">' + escapeHtml(sum) + '</p>';
+      }
       var st = job.status || 'new';
       var card = document.createElement('article');
       card.className = 'qa-job-card-pro';
@@ -1330,7 +1385,8 @@
       card.innerHTML =
         '<div class="qa-job-card-pro__top">' +
           '<div><h3 class="qa-job-card-pro__title">' + title + '</h3>' +
-          (sideTit ? '<p class="qa-job-card-pro__jobtitle">' + escapeHtml(sideTit) + '</p>' : '') +
+          refLine +
+          specExtra +
           '<p class="qa-job-card-pro__meta">' + escapeHtml(job.location || '—') + '</p></div>' +
           '<div class="qa-job-menu-wrap">' +
             '<button type="button" class="qa-job-menu-btn" aria-label="Menu" data-menu="' + escapeHtml(job.id) + '"><i data-lucide="more-vertical"></i></button>' +
@@ -1385,7 +1441,7 @@
   function renderJobsTable(jobs, templates, projectId) {
     var tableWrap = document.getElementById('qa-view-jobs-table-wrap');
     var rows = jobs.map(function (job) {
-      var sideTit = jobSideTitle(job);
+      var rowSub = String(job.jobTitle || '').trim() || jobSpecificationOrDescSummary(job);
       var photoCell =
         job.stepPhotoCount > 0
           ? '<span class="qa-tbl-photo-cell">' +
@@ -1399,7 +1455,7 @@
       return '<tr data-id="' + escapeHtml(job.id) + '">' +
         '<td>' +
         escapeHtml(job.jobNumber || '—') +
-        (sideTit ? '<br><span class="qa-tbl-subtitle">' + escapeHtml(sideTit) + '</span>' : '') +
+        (rowSub ? '<br><span class="qa-tbl-subtitle">' + escapeHtml(rowSub) + '</span>' : '') +
         '</td>' +
         '<td><span class="qa-badge ' + statusBadgeClass(job.status) + '">' + escapeHtml(getStatusLabel(job.status)) + '</span></td>' +
         '<td>' + escapeHtml(job.floor || '—') + '</td>' +
@@ -1456,15 +1512,16 @@
   });
 
   function duplicateJob(job, projectId) {
-    qaApi.getNextJobNumber().then(function (num) {
-      var copy = Object.assign({}, job);
-      delete copy.id;
-      copy.jobNumber = num;
-      copy.status = 'new';
-      copy.createdAt = new Date().toISOString();
-      copy.notes = (copy.notes || '') + '\n[Duplicated from ' + (job.jobNumber || '') + ']';
-      return qaApi.createJob(copy);
-    }).then(function () {
+    var copy = Object.assign({}, job);
+    delete copy.id;
+    delete copy.jobNumber;
+    copy.status = 'new';
+    copy.createdAt = new Date().toISOString();
+    copy.notes = (copy.notes || '') + '\n[Duplicated from ' + (job.jobNumber || '') + ']';
+    if (!(copy.jobTitle && String(copy.jobTitle).trim())) {
+      copy.jobTitle = ((job.jobNumber || job.id || 'Job') + ' (copy)').slice(0, 500);
+    }
+    qaApi.createJob(copy).then(function () {
       showToast('Job duplicated.', 'success');
       renderJobsOverview(false);
     }).catch(function (e) { showToast(e.message || 'Failed', 'error'); });
@@ -1511,9 +1568,11 @@
       var tplNames = getTemplateNames(templates, job.templateIds || []);
       var specStr = String(job.specification || '').trim();
       var descStr = String(job.description || '').trim();
+      var jtStr = String(job.jobTitle || '').trim();
       var html =
         '<dl class="qa-dl">' +
-        '<dt>Job number</dt><dd>' + escapeHtml(job.jobNumber || '—') + '</dd>' +
+        '<dt>Job title</dt><dd>' + (jtStr ? escapeHtml(jtStr) : '—') + '</dd>' +
+        '<dt>Job reference</dt><dd>' + escapeHtml(job.jobNumber || '—') + '</dd>' +
         '<dt>Specification</dt><dd>' + (specStr ? escapeHtml(specStr) : '—') + '</dd>' +
         '<dt>Description</dt><dd class="qa-dl__preline">' + (descStr ? escapeHtml(descStr) : '—') + '</dd>' +
         '<dt>Location</dt><dd>' + escapeHtml(job.location || '—') + '</dd>' +

@@ -128,7 +128,15 @@
         </nav>
         <div class="qa-tab-panel" id="qa-job-panel-details" role="tabpanel">
           <div class="qa-form-grid">
-            <p class="qa-message">Job number will be auto-generated.</p>
+            <div>
+              <label class="qa-label" for="qa-job-title">Job title</label>
+              <input type="text" id="qa-job-title" class="qa-input" placeholder="e.g. Lobby drylining" maxlength="500" autocomplete="off">
+            </div>
+            <div>
+              <span class="qa-label">Job reference</span>
+              <p class="qa-inp-hint" id="qa-job-number-preview" aria-live="polite">—</p>
+              <p class="qa-message" style="margin-top:0.35rem;">Assigned automatically (letter + two digits, e.g. A01) when you create the job.</p>
+            </div>
             <div>
               <label class="qa-label" for="qa-job-floor">Floor / Level</label>
               <select id="qa-job-floor" class="qa-select" aria-label="Select floor">

@@ -323,7 +323,8 @@
       el.innerHTML = jobs.map(function (j) {
         return (
           '<article class="qsv-card" data-job-id="' + escapeHtml(j.id) + '">' +
-          '<h2>' + escapeHtml(j.jobNumber || 'Job') + '</h2>' +
+          '<h2>' + escapeHtml(j.jobTitle || j.jobNumber || 'Job') + '</h2>' +
+          ( j.jobTitle && j.jobNumber ? '<p class="qsv-meta">Ref: ' + escapeHtml(j.jobNumber) + '</p>' : '' ) +
           '<p class="qsv-meta">' + escapeHtml(j.location || '—') + ' · ' + escapeHtml(j.status || '') + '</p>' +
           '<p class="qsv-meta">Due: ' + escapeHtml((j.targetCompletionDate || '').slice(0, 10) || '—') + '</p>' +
           '<button type="button" class="qsv-btn primary qsv-open-job" data-id="' + escapeHtml(j.id) + '">QA overview</button>' +
@@ -428,8 +429,10 @@
 
       el.innerHTML =
         '<div class="qsv-card">' +
-        '<p class="qsv-meta">Job number is generated automatically. Cost fields are omitted for supervisors.</p>' +
+        '<p class="qsv-meta">Job reference (e.g. A01) is assigned automatically. Cost fields are omitted for supervisors.</p>' +
         '<div class="qsv-form-grid">' +
+        '<div><span class="qsv-label">Job title</span>' +
+        '<input class="qsv-input" id="qsvNjTitle" maxlength="500" placeholder="e.g. Lobby drylining"></div>' +
         '<div><span class="qsv-label">Floor / level</span>' +
         '<select class="qsv-select" id="qsvNjFloor">' +
         '<option value="">—</option><option value="ground">Ground</option><option value="1">Floor 1</option>' +
@@ -450,6 +453,11 @@
         '</div>';
 
       document.getElementById('qsvNjSubmit').addEventListener('click', function () {
+        var jobTitle = (document.getElementById('qsvNjTitle') && document.getElementById('qsvNjTitle').value || '').trim();
+        if (!jobTitle) {
+          showToast('Job title is required.');
+          return;
+        }
         var wSel = document.getElementById('qsvNjWorkers');
         var workerIds = [];
         if (wSel) {
@@ -463,6 +471,7 @@
         });
         var body = {
           projectId: parseInt(projectId, 10),
+          jobTitle: jobTitle,
           floor: document.getElementById('qsvNjFloor').value || null,
           location: document.getElementById('qsvNjLoc').value || null,
           sqm: document.getElementById('qsvNjSqm').value || null,
@@ -513,7 +522,12 @@
       var job = jobOut.json;
       document.getElementById('qsvJobTitle').textContent = job.jobNumber || 'Job';
       document.getElementById('qsvJobSub').textContent =
-        [job.location, job.floor, (job.targetCompletionDate || '').slice(0, 10)].filter(Boolean).join(' · ');
+        [
+          (job.jobTitle && String(job.jobTitle).trim()) || '',
+          job.location,
+          job.floor,
+          (job.targetCompletionDate || '').slice(0, 10)
+        ].filter(Boolean).join(' · ');
 
       var evMap = {};
       var operativePhotos = [];

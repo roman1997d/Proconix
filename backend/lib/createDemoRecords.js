@@ -782,14 +782,15 @@ async function runCreateDemoRecords(client, options) {
         const floorId = floorByKey[fk];
         const jr = await client.query(
           `INSERT INTO qa_jobs (
-            project_id, job_number, floor_id, floor_code, location, sqm, specification, description,
+            project_id, job_number, job_title, floor_id, floor_code, location, sqm, specification, description,
             target_completion_date, cost_included, cost_type_id, cost_value,
             responsible_id, status_id, created_by
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_DATE + 25, true, $9, $10, $11, $12, $13)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_DATE + 25, true, $10, $11, $12, $13, $14)
           RETURNING id`,
           [
             projId,
             jobNumber,
+            `Demo job ${jobNumber}`,
             floorId,
             floorCode,
             location,

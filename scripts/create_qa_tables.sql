@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS qa_jobs (
   id                     SERIAL PRIMARY KEY,
   project_id             INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   job_number             VARCHAR(50) NOT NULL,
+  job_title              VARCHAR(500),
   floor_id               INT REFERENCES qa_floors(id),
   floor_code             VARCHAR(50),
   location               VARCHAR(500),

@@ -253,6 +253,15 @@
   margin-top: 0.5rem;
 }
 
+.qa-inp-hint {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--qa-text-strong);
+  margin: 0.15rem 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .qa-empty-hint {
   margin-top: 1rem;
   padding: 1rem 1.25rem;
@@ -508,6 +517,14 @@
   font-size: 1rem;
   margin: 0;
   color: var(--qa-text-strong);
+}
+
+.qa-job-card-pro__ref {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--qa-muted);
+  margin: 0.15rem 0 0;
+  letter-spacing: 0.03em;
 }
 
 .qa-job-card-pro__jobtitle {

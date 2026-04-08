@@ -33,6 +33,49 @@ function getCreatedBy(req) {
   return '';
 }
 
+/** Compact QA job numbers: A01–A99, B01–B99, … Z99, then J-000001+ for overflow / legacy tail. */
+const COMPACT_JOB_NUM_REGEX = /^([A-Za-z])(\d{2})$/;
+const MAX_COMPACT_SEQ = 26 * 99;
+
+function seqFromCompactJobNumber(jobNumber) {
+  if (!jobNumber) return 0;
+  const m = COMPACT_JOB_NUM_REGEX.exec(String(jobNumber).trim());
+  if (!m) return 0;
+  const li = m[1].toUpperCase().charCodeAt(0) - 65;
+  const n = parseInt(m[2], 10);
+  if (li < 0 || li > 25 || n < 1 || n > 99) return 0;
+  return li * 99 + n;
+}
+
+function virtualSeqFromJobNumber(jobNumber) {
+  if (!jobNumber) return 0;
+  const c = seqFromCompactJobNumber(jobNumber);
+  if (c > 0) return c;
+  const legacy = /^J-0*(\d+)$/i.exec(String(jobNumber).trim());
+  if (legacy) return MAX_COMPACT_SEQ + parseInt(legacy[1], 10);
+  return 0;
+}
+
+function formatCompactJobNumberFromSeq(seq) {
+  if (!Number.isInteger(seq) || seq < 1) seq = 1;
+  if (seq > MAX_COMPACT_SEQ) {
+    return `J-${String(seq - MAX_COMPACT_SEQ).padStart(6, '0')}`;
+  }
+  const letterIndex = Math.floor((seq - 1) / 99);
+  const num = ((seq - 1) % 99) + 1;
+  return String.fromCharCode(65 + letterIndex) + String(num).padStart(2, '0');
+}
+
+async function allocateNextJobNumber(poolConn, projectId) {
+  const r = await poolConn.query('SELECT job_number FROM qa_jobs WHERE project_id = $1', [projectId]);
+  let maxSeq = 0;
+  for (const row of r.rows || []) {
+    const v = virtualSeqFromJobNumber(row.job_number);
+    if (v > maxSeq) maxSeq = v;
+  }
+  return formatCompactJobNumberFromSeq(maxSeq + 1);
+}
+
 /** Supervisor UI: template steps without pricing fields. */
 function stepsWithoutPrices(steps) {
   return (steps || []).map((s) => ({
@@ -384,6 +427,7 @@ function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCo
     id: String(row.id),
     projectId: String(row.project_id),
     jobNumber: row.job_number || '',
+    jobTitle: row.job_title || '',
     floor: floorCode || row.floor_code || '',
     location: row.location || '',
     sqm: row.sqm || '',
@@ -430,7 +474,7 @@ async function listJobs(req, res) {
 
   try {
     const jobs = await pool.query(
-      `SELECT j.id, j.project_id, j.job_number, j.floor_id, j.floor_code, j.location, j.sqm, j.linear_meters,
+      `SELECT j.id, j.project_id, j.job_number, j.job_title, j.floor_id, j.floor_code, j.location, j.sqm, j.linear_meters,
               j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
               j.cost_value, j.responsible_id, j.responsible_user_id, j.status_id, j.created_at, j.created_by
        FROM qa_jobs j
@@ -571,7 +615,7 @@ async function getJob(req, res) {
 
   try {
     const job = await pool.query(
-      `SELECT j.id, j.project_id, j.job_number, j.floor_id, j.floor_code, j.location, j.sqm, j.linear_meters,
+      `SELECT j.id, j.project_id, j.job_number, j.job_title, j.floor_id, j.floor_code, j.location, j.sqm, j.linear_meters,
               j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
               j.cost_value, j.responsible_id, j.responsible_user_id, j.status_id, j.created_at, j.created_by
        FROM qa_jobs j
@@ -621,16 +665,7 @@ async function getNextJobNumber(req, res) {
 
   try {
     await assertProjectAccess(pool, pid, companyId);
-    const r = await pool.query(
-      `SELECT job_number FROM qa_jobs WHERE project_id = $1 ORDER BY id DESC LIMIT 1`,
-      [pid]
-    );
-    let next = 1;
-    if (r.rows.length > 0 && r.rows[0].job_number) {
-      const m = /^J-0*(\d+)$/.exec(r.rows[0].job_number);
-      if (m) next = parseInt(m[1], 10) + 1;
-    }
-    const jobNumber = 'J-' + String(next).padStart(6, '0');
+    const jobNumber = await allocateNextJobNumber(pool, pid);
     return res.status(200).json({ jobNumber });
   } catch (e) {
     return res.status(403).json({ message: e.message || 'Access denied.' });
@@ -654,6 +689,9 @@ async function createJob(req, res) {
   }
 
   const jobNumber = (b.jobNumber && String(b.jobNumber).trim()) || null;
+  const jobTitle = b.jobTitle != null ? String(b.jobTitle).trim() : '';
+  if (!jobTitle) return res.status(400).json({ message: 'Job title is required.' });
+
   const statusCode = (b.status && String(b.status)) || 'new';
   const statusId = await getStatusIdByCode(statusCode);
   if (!statusId) return res.status(400).json({ message: 'Invalid status.' });
@@ -666,12 +704,7 @@ async function createJob(req, res) {
 
   let finalJobNumber = jobNumber && String(jobNumber).trim() ? String(jobNumber).trim() : null;
   if (!finalJobNumber) {
-    const r = await pool.query('SELECT job_number FROM qa_jobs WHERE project_id = $1 ORDER BY id DESC LIMIT 1', [projectId]);
-    if (r.rows.length === 0) finalJobNumber = 'J-000001';
-    else {
-      const m = /^J-0*(\d+)$/.exec(r.rows[0].job_number);
-      finalJobNumber = 'J-' + String((m ? parseInt(m[1], 10) : 0) + 1).padStart(6, '0');
-    }
+    finalJobNumber = await allocateNextJobNumber(pool, projectId);
   }
 
   const responsibleUserId = b.responsibleId ? parseInt(String(b.responsibleId), 10) : null;
@@ -692,16 +725,17 @@ async function createJob(req, res) {
   try {
     const insert = await pool.query(
       `INSERT INTO qa_jobs (
-        project_id, job_number, floor_id, floor_code, location, sqm, linear_meters,
+        project_id, job_number, job_title, floor_id, floor_code, location, sqm, linear_meters,
         specification, description, target_completion_date, cost_included, cost_type_id, cost_value,
         responsible_user_id, status_id, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-      RETURNING id, project_id, job_number, floor_id, floor_code, location, sqm, linear_meters,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      RETURNING id, project_id, job_number, job_title, floor_id, floor_code, location, sqm, linear_meters,
         specification, description, target_completion_date, cost_included, cost_type_id, cost_value,
         responsible_user_id, status_id, created_at, created_by`,
       [
         projectId,
         finalJobNumber,
+        jobTitle,
         floorId,
         floorRaw || null,
         (b.location != null && String(b.location)) || null,
@@ -767,6 +801,11 @@ async function createJob(req, res) {
     );
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ message: 'Job number already exists for this project.' });
+    if (err.code === '42703' && /job_title/i.test(err.message || '')) {
+      return res.status(503).json({
+        message: 'Database missing job_title column. Run: psql ... -f scripts/alter_qa_jobs_job_title.sql',
+      });
+    }
     console.error('QA createJob:', err);
     return res.status(500).json({ message: err.message || 'Failed to create job.' });
   }
@@ -814,6 +853,7 @@ async function syncPlanningForQaJob(companyId, qaJobId, managerId) {
         j.id,
         j.project_id,
         j.job_number,
+        j.job_title,
         j.floor_code,
         j.location,
         j.specification,
@@ -896,7 +936,12 @@ async function syncPlanningForQaJob(companyId, qaJobId, managerId) {
   }
 
   // Build planning task fields.
-  const title = qa.job_number ? String(qa.job_number) : `QA-${qaJobId}`;
+  const title =
+    qa.job_title && String(qa.job_title).trim()
+      ? `${String(qa.job_title).trim()} [${qa.job_number || qaJobId}]`
+      : qa.job_number
+        ? String(qa.job_number)
+        : `QA-${qaJobId}`;
   const descBits = [];
   if (qa.floor_code) descBits.push('Floor: ' + qa.floor_code);
   if (qa.location) descBits.push('Location: ' + qa.location);

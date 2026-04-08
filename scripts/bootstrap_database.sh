@@ -92,6 +92,7 @@ SQL_FILES=(
   scripts/qa_templates_add_company_project.sql
   scripts/seed_qa_lookup.sql
   scripts/qa_jobs_use_users.sql
+  scripts/alter_qa_jobs_job_title.sql
   scripts/create_proconix_admin_table.sql
   scripts/create_site_snags_tables.sql
 )
