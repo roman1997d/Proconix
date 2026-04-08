@@ -1473,6 +1473,24 @@
     return v != null && String(v).trim() !== '' && n === n && n > 0;
   }
 
+  /** Human-readable step titles for manager Work Logs (matches op-pwb-step-title; template name only if multiple templates). */
+  function buildStepLabelsForPwbJob(job) {
+    var labels = {};
+    if (!job || !Array.isArray(job.templates)) return labels;
+    var multiTpl = job.templates.length > 1;
+    job.templates.forEach(function (tpl) {
+      var tname = (tpl && tpl.name && String(tpl.name).trim()) || '';
+      var steps = tpl && Array.isArray(tpl.steps) ? tpl.steps : [];
+      steps.forEach(function (s, idx) {
+        var key = s.key || String(tpl.id) + ':' + String(s.stepId != null ? s.stepId : s.dbStepId);
+        var desc = (s.description && String(s.description).trim()) || '';
+        var stepPart = 'Step ' + (idx + 1) + (desc ? ' — ' + desc : '');
+        labels[key] = multiTpl && tname ? tname + ' — ' + stepPart : stepPart;
+      });
+    });
+    return labels;
+  }
+
   function openPriceWorkBuilderModal() {
     setWorklogFlow('price');
     var loadingEl = document.getElementById('op-pwb-loading');
@@ -1609,6 +1627,7 @@
         jobNumber: pwbCurrentJob.jobNumber != null ? String(pwbCurrentJob.jobNumber) : '',
         jobTitle: (pwbCurrentJob.jobTitle && String(pwbCurrentJob.jobTitle).trim()) || '',
         stepQuantities: stepQuantities,
+        stepLabels: buildStepLabelsForPwbJob(pwbCurrentJob),
       });
       pwbQueue.shift();
       pwbCurrentJob = null;

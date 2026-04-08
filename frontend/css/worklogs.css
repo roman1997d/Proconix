@@ -439,6 +439,10 @@
   font-size: 0.9rem;
   color: var(--text-primary);
 }
+.worklogs-qa-price-step-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
 .worklogs-qa-price-key {
   font-family: ui-monospace, monospace;
   font-size: 0.85rem;

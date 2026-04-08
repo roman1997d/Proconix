@@ -193,6 +193,7 @@
         (jt ? ' — ' + escapeHtml(jt) : '') +
         '</div>';
       var sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
+      var stepLabels = ent.stepLabels && typeof ent.stepLabels === 'object' ? ent.stepLabels : {};
       var keys = Object.keys(sq);
       if (!keys.length) {
         html += '<p class="worklogs-qa-price-empty">No step quantities recorded.</p>';
@@ -205,7 +206,14 @@
           if (q.linear != null && String(q.linear).trim() !== '') parts.push('linear m: ' + escapeHtml(String(q.linear)));
           if (q.units != null && String(q.units).trim() !== '') parts.push('units: ' + escapeHtml(String(q.units)));
           if (parts.length) {
-            lines.push('<li><span class="worklogs-qa-price-key">' + escapeHtml(k) + '</span> — ' + parts.join(', ') + '</li>');
+            var display = stepLabels[k] || k;
+            lines.push(
+              '<li><span class="worklogs-qa-price-step-name">' +
+                escapeHtml(display) +
+                '</span> — ' +
+                parts.join(', ') +
+                '</li>'
+            );
           }
         });
         if (lines.length) {
