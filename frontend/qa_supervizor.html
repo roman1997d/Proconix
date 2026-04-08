@@ -516,12 +516,16 @@
         [job.location, job.floor, (job.targetCompletionDate || '').slice(0, 10)].filter(Boolean).join(' · ');
 
       var evMap = {};
+      var operativePhotos = [];
       if (evOut.ok && evOut.json && evOut.json.steps) {
         evOut.json.steps.forEach(function (s) {
           evMap[evidenceKey(s.templateId, s.stepId)] = s;
         });
       } else if (evOut.status === 503) {
         showToast('Run DB migration: alter_qa_job_step_evidence.sql');
+      }
+      if (evOut.ok && evOut.json && Array.isArray(evOut.json.operativePhotos)) {
+        operativePhotos = evOut.json.operativePhotos;
       }
 
       var statusOpts = ['new', 'active', 'completed'].map(function (st) {
@@ -534,6 +538,18 @@
         '<select class="qsv-select" id="qsvJobStatus">' + statusOpts + '</select>' +
         '<button type="button" class="qsv-btn primary block" id="qsvJobSaveStatus" style="margin-top:10px;">Update status</button>' +
         '</div>';
+
+      if (operativePhotos.length) {
+        var opFigs = operativePhotos.map(function (p) {
+          return '<figure class="qsv-op-fig"><img src="' + escapeHtml(p.file_url || '') + '" alt=""></figure>';
+        }).join('');
+        html +=
+          '<div class="qsv-card">' +
+          '<h2>Operative photos</h2>' +
+          '<p class="qsv-meta">From the operative app (planning task). These are separate from per-step QA photos.</p>' +
+          '<div class="qsv-photos qsv-op-photos">' + opFigs + '</div>' +
+          '</div>';
+      }
 
       var templateIds = job.templateIds || [];
       if (!templateIds.length) {

@@ -113,7 +113,7 @@
         return Promise.resolve(created);
       },
       getJobStepEvidence: function () {
-        return Promise.resolve({ steps: [] });
+        return Promise.resolve({ steps: [], operativePhotos: [] });
       },
       updateTemplate: function (id, data) {
         var idx = _templates.findIndex(function (x) { return x.id === id; });
@@ -250,8 +250,12 @@
     getJob: function (id) { return qaFetch('/jobs/' + encodeURIComponent(id)).then(function (j) { return j || null; }, function () { return null; }); },
     getJobStepEvidence: function (id) {
       return qaFetch('/jobs/' + encodeURIComponent(id) + '/step-evidence').then(function (d) {
-        return d && d.steps ? d : { steps: [] };
-      }, function () { return { steps: [] }; });
+        if (!d || typeof d !== 'object') return { steps: [], operativePhotos: [] };
+        return {
+          steps: Array.isArray(d.steps) ? d.steps : [],
+          operativePhotos: Array.isArray(d.operativePhotos) ? d.operativePhotos : [],
+        };
+      }, function () { return { steps: [], operativePhotos: [] }; });
     },
     createJob: function (data) { return qaFetch('/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); },
     updateJob: function (id, data) { return qaFetch('/jobs/' + encodeURIComponent(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); },
@@ -318,20 +322,11 @@
     return s ? String(s.description || '').trim() : '';
   }
 
-  function buildJobEvidenceSection(steps, templates) {
+  function buildJobEvidenceSection(steps, templates, operativePhotos) {
     var list = steps || [];
-    if (!list.length) {
-      return (
-        '<div class="qa-job-evidence">' +
-        '<h4 class="qa-job-evidence__title">Site evidence</h4>' +
-        '<p class="qa-job-evidence__empty">No photos or comments on template steps yet.</p>' +
-        '</div>'
-      );
-    }
-    var blocks = list.map(function (st) {
-      var tplName = templateLabelForStep(templates, st.templateId);
-      var stepDesc = stepDescriptionForStep(templates, st.templateId, st.stepId);
-      var photos = (st.photos || [])
+    var opList = operativePhotos || [];
+    function photosHtml(photos) {
+      return (photos || [])
         .map(function (p) {
           var u = p.file_url || '';
           if (!u) return '';
@@ -344,6 +339,28 @@
           );
         })
         .join('');
+    }
+    var opBlock = '';
+    if (opList.length) {
+      var oph = photosHtml(opList);
+      opBlock =
+        '<div class="qa-job-evidence__block qa-job-evidence__block--operative">' +
+        '<div class="qa-job-evidence__block-head">Operative confirmation (task photos)</div>' +
+        (oph ? '<div class="qa-job-evidence__photos">' + oph + '</div>' : '') +
+        '</div>';
+    }
+    if (!list.length && !opList.length) {
+      return (
+        '<div class="qa-job-evidence">' +
+        '<h4 class="qa-job-evidence__title">Site evidence</h4>' +
+        '<p class="qa-job-evidence__empty">No photos or comments on template steps yet.</p>' +
+        '</div>'
+      );
+    }
+    var blocks = list.map(function (st) {
+      var tplName = templateLabelForStep(templates, st.templateId);
+      var stepDesc = stepDescriptionForStep(templates, st.templateId, st.stepId);
+      var photos = photosHtml(st.photos || []);
       var comment = (st.comment || '').trim();
       var head =
         escapeHtml(tplName || 'Template ' + st.templateId) +
@@ -363,6 +380,7 @@
     return (
       '<div class="qa-job-evidence">' +
       '<h4 class="qa-job-evidence__title">Site evidence (step photos &amp; comments)</h4>' +
+      opBlock +
       blocks +
       '</div>'
     );
@@ -1484,10 +1502,12 @@
     document.getElementById('qa-job-drawer-notes').value = job.notes || '';
     var workerNames = getWorkerNames(job.workerIds || []);
     var projId = job.projectId || (projectSelect && projectSelect.value);
-    var evFn = typeof qaApi.getJobStepEvidence === 'function' ? qaApi.getJobStepEvidence(job.id) : Promise.resolve({ steps: [] });
+    var evFn = typeof qaApi.getJobStepEvidence === 'function'
+      ? qaApi.getJobStepEvidence(job.id)
+      : Promise.resolve({ steps: [], operativePhotos: [] });
     Promise.all([qaApi.getTemplates(projId), evFn]).then(function (results) {
       var templates = results[0] || [];
-      var evPayload = results[1] || { steps: [] };
+      var evPayload = results[1] || { steps: [], operativePhotos: [] };
       var tplNames = getTemplateNames(templates, job.templateIds || []);
       var specStr = String(job.specification || '').trim();
       var descStr = String(job.description || '').trim();
@@ -1503,7 +1523,7 @@
         '<dt>Templates</dt><dd>' + (tplNames.length ? tplNames.map(escapeHtml).join(', ') : '—') + '</dd>' +
         '<dt>Team</dt><dd>' + escapeHtml(getSupervisorName(job.responsibleId)) + ' · ' + (workerNames.length ? workerNames.map(escapeHtml).join(', ') : '—') + '</dd>' +
         '</dl>' +
-        buildJobEvidenceSection(evPayload.steps, templates);
+        buildJobEvidenceSection(evPayload.steps, templates, evPayload.operativePhotos || []);
       document.getElementById('qa-job-drawer-readonly').innerHTML = html;
       openLayer(layerJob, true);
       iconsRefresh();

@@ -465,7 +465,7 @@ async function listJobs(req, res) {
       (async () => {
         if (!jobIds.length) return { counts: {}, previews: {} };
         try {
-          const [cntRes, prevRes] = await Promise.all([
+          const [cntRes, prevRes, opCntRes, opPrevRes] = await Promise.all([
             pool.query(
               `SELECT job_id, COUNT(*)::int AS c FROM qa_job_step_photos WHERE job_id = ANY($1) GROUP BY job_id`,
               [jobIds]
@@ -476,6 +476,34 @@ async function listJobs(req, res) {
                ORDER BY job_id, created_at DESC`,
               [jobIds]
             ),
+            pool
+              .query(
+                `SELECT ppt.qa_job_id AS job_id, COUNT(*)::int AS c
+                 FROM operative_task_photos otp
+                 INNER JOIN planning_plan_tasks ppt ON ppt.id = otp.task_id
+                 WHERE otp.task_source = 'planning'
+                   AND ppt.qa_job_id = ANY($1)
+                 GROUP BY ppt.qa_job_id`,
+                [jobIds]
+              )
+              .catch((e) => {
+                if (e.code === '42P01' || e.code === '42703') return { rows: [] };
+                throw e;
+              }),
+            pool
+              .query(
+                `SELECT DISTINCT ON (ppt.qa_job_id) ppt.qa_job_id AS job_id, otp.file_url AS file_url
+                 FROM operative_task_photos otp
+                 INNER JOIN planning_plan_tasks ppt ON ppt.id = otp.task_id
+                 WHERE otp.task_source = 'planning'
+                   AND ppt.qa_job_id = ANY($1)
+                 ORDER BY ppt.qa_job_id, otp.created_at DESC`,
+                [jobIds]
+              )
+              .catch((e) => {
+                if (e.code === '42P01' || e.code === '42703') return { rows: [] };
+                throw e;
+              }),
           ]);
           const counts = {};
           const previews = {};
@@ -484,6 +512,14 @@ async function listJobs(req, res) {
           });
           prevRes.rows.forEach((r) => {
             previews[r.job_id] = r.file_url;
+          });
+          (opCntRes.rows || []).forEach((r) => {
+            counts[r.job_id] = (counts[r.job_id] || 0) + r.c;
+          });
+          (opPrevRes.rows || []).forEach((r) => {
+            if (previews[r.job_id] == null || previews[r.job_id] === '') {
+              previews[r.job_id] = r.file_url;
+            }
           });
           return { counts, previews };
         } catch (e) {
@@ -1129,7 +1165,29 @@ async function getJobStepEvidence(req, res) {
       });
     });
 
-    return res.status(200).json({ steps: Object.values(map) });
+    /** Task confirmation photos from operatives (planning task linked via qa_job_id). */
+    let operativePhotos = [];
+    try {
+      const opPh = await pool.query(
+        `SELECT otp.id, otp.file_url, otp.created_at
+         FROM operative_task_photos otp
+         INNER JOIN planning_plan_tasks ppt ON ppt.id = otp.task_id
+         WHERE otp.task_source = 'planning'
+           AND ppt.qa_job_id = $1
+         ORDER BY otp.created_at ASC`,
+        [jobId]
+      );
+      operativePhotos = (opPh.rows || []).map((row) => ({
+        id: row.id,
+        file_url: row.file_url,
+        createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+        source: 'operative_task',
+      }));
+    } catch (opErr) {
+      if (opErr.code !== '42P01' && opErr.code !== '42703') throw opErr;
+    }
+
+    return res.status(200).json({ steps: Object.values(map), operativePhotos });
   } catch (err) {
     if (err.code === '42P01') {
       return res.status(503).json({
