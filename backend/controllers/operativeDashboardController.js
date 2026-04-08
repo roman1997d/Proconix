@@ -1078,6 +1078,200 @@ async function nextJobDisplayId(companyId) {
   }
 }
 
+// ---- QA price work: remaining quantities (job totals − approved Work Logs) ----
+
+function parseQaJobStepQuantitiesRaw(raw) {
+  if (raw == null) return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  try {
+    return JSON.parse(String(raw));
+  } catch {
+    return {};
+  }
+}
+
+function parseWorkLogsTimesheetJson(val) {
+  if (val == null) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'object') return [];
+  try {
+    const p = JSON.parse(val || '[]');
+    return Array.isArray(p) ? p : [];
+  } catch {
+    return [];
+  }
+}
+
+function mergeBookedStepQtyAggregate(into, sq) {
+  if (!sq || typeof sq !== 'object') return;
+  for (const [k, v] of Object.entries(sq)) {
+    if (!v || typeof v !== 'object') continue;
+    if (!into[k]) into[k] = { m2: 0, linear: 0, units: 0 };
+    into[k].m2 += parseFloat(v.m2) || 0;
+    into[k].linear += parseFloat(v.linear) || 0;
+    into[k].units += parseFloat(v.units) || 0;
+  }
+}
+
+async function getApprovedBookedAggregatesForQaJob(companyId, qaJobId) {
+  const merged = {};
+  const qaIdStr = String(qaJobId);
+  let rows;
+  try {
+    rows = await pool.query(
+      `SELECT timesheet_jobs FROM work_logs
+       WHERE company_id = $1 AND LOWER(status) = 'approved' AND (archived IS NOT TRUE)
+         AND timesheet_jobs IS NOT NULL`,
+      [companyId]
+    );
+  } catch (e) {
+    if (e && (e.code === '42P01' || e.code === '42703')) return {};
+    throw e;
+  }
+  for (const row of rows.rows) {
+    const ts = parseWorkLogsTimesheetJson(row.timesheet_jobs);
+    for (const block of ts) {
+      if (!block || block.type !== 'qa_price_work' || !Array.isArray(block.entries)) continue;
+      for (const ent of block.entries) {
+        if (String(ent.qaJobId) !== qaIdStr) continue;
+        mergeBookedStepQtyAggregate(merged, ent.stepQuantities);
+      }
+    }
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(merged)) {
+    out[k] = {
+      m2: Math.round(v.m2 * 100) / 100,
+      linear: Math.round(v.linear * 100) / 100,
+      units: Math.round(v.units * 100) / 100,
+    };
+  }
+  return out;
+}
+
+function computeRemainingStepQuantities(jobSq, bookedSq) {
+  const jobSqNorm = jobSq && typeof jobSq === 'object' ? jobSq : {};
+  const bookedSqNorm = bookedSq && typeof bookedSq === 'object' ? bookedSq : {};
+  const keys = new Set([...Object.keys(jobSqNorm), ...Object.keys(bookedSqNorm)]);
+  const out = {};
+  for (const key of keys) {
+    const j = jobSqNorm[key] || {};
+    const b = bookedSqNorm[key] || { m2: 0, linear: 0, units: 0 };
+    const bm = typeof b.m2 === 'number' ? b.m2 : parseFloat(b.m2) || 0;
+    const bl = typeof b.linear === 'number' ? b.linear : parseFloat(b.linear) || 0;
+    const bu = typeof b.units === 'number' ? b.units : parseFloat(b.units) || 0;
+    const o = {};
+    const dims = ['m2', 'linear', 'units'];
+    const bookedDims = [bm, bl, bu];
+    dims.forEach((dim, i) => {
+      const jv = parseFloat(j[dim]);
+      const hasCap = j[dim] != null && String(j[dim]).trim() !== '' && !isNaN(jv);
+      if (hasCap) {
+        o[dim] = Math.max(0, Math.round((jv - bookedDims[i]) * 100) / 100);
+      } else {
+        o[dim] = null;
+      }
+    });
+    out[key] = o;
+  }
+  return out;
+}
+
+async function getRemainingStepQuantitiesForQaJob(companyId, qaJobId) {
+  let sqRow;
+  try {
+    sqRow = await pool.query('SELECT step_quantities FROM qa_jobs WHERE id = $1', [qaJobId]);
+  } catch (e) {
+    if (e && e.code === '42703') return {};
+    throw e;
+  }
+  const jobSq = sqRow.rows[0] ? parseQaJobStepQuantitiesRaw(sqRow.rows[0].step_quantities) : {};
+  const booked = await getApprovedBookedAggregatesForQaJob(companyId, qaJobId);
+  return computeRemainingStepQuantities(jobSq, booked);
+}
+
+async function assertOperativeOnQaJob(qaJobId, projectId, userId) {
+  try {
+    const r = await pool.query(
+      `SELECT 1 FROM qa_jobs j
+       WHERE j.id = $1 AND j.project_id = $2
+         AND (
+           EXISTS (SELECT 1 FROM qa_job_user_workers w WHERE w.job_id = j.id AND w.user_id = $3)
+           OR EXISTS (
+             SELECT 1 FROM qa_job_crews jc
+             INNER JOIN crew_members cm ON cm.crew_id = jc.crew_id AND cm.user_id = $3
+             WHERE jc.job_id = j.id
+           )
+         )`,
+      [qaJobId, projectId, userId]
+    );
+    return r.rows.length > 0;
+  } catch (e) {
+    if (e.code === '42P01') {
+      const r2 = await pool.query(
+        `SELECT 1 FROM qa_jobs j
+         WHERE j.id = $1 AND j.project_id = $2
+           AND EXISTS (SELECT 1 FROM qa_job_user_workers w WHERE w.job_id = j.id AND w.user_id = $3)`,
+        [qaJobId, projectId, userId]
+      );
+      return r2.rows.length > 0;
+    }
+    throw e;
+  }
+}
+
+function mergePriceWorkStepQuantities(entries) {
+  const merged = {};
+  for (const ent of entries) {
+    mergeBookedStepQtyAggregate(merged, ent.stepQuantities || {});
+  }
+  return merged;
+}
+
+async function validatePriceWorkJobsAgainstRemaining(companyId, projectId, userId, priceWorkJobs) {
+  if (!Array.isArray(priceWorkJobs) || priceWorkJobs.length === 0) return { ok: true };
+  const byJob = new Map();
+  for (const ent of priceWorkJobs) {
+    const jid = parseInt(String(ent && ent.qaJobId != null ? ent.qaJobId : ''), 10);
+    if (!Number.isInteger(jid)) {
+      return { ok: false, message: 'Invalid QA job reference in price work.' };
+    }
+    if (!byJob.has(jid)) byJob.set(jid, []);
+    byJob.get(jid).push(ent);
+  }
+  for (const [qaJobId, entries] of byJob) {
+    const allowed = await assertOperativeOnQaJob(qaJobId, projectId, userId);
+    if (!allowed) {
+      return { ok: false, message: 'You are not assigned to one of the QA jobs in this submission.' };
+    }
+    const remaining = await getRemainingStepQuantitiesForQaJob(companyId, qaJobId);
+    const mergedSq = mergePriceWorkStepQuantities(entries);
+    for (const key of Object.keys(mergedSq)) {
+      const q = mergedSq[key] || {};
+      const rem = remaining[key] || {};
+      const dims = [
+        { dim: 'm2', label: 'm²' },
+        { dim: 'linear', label: 'linear m' },
+        { dim: 'units', label: 'units' },
+      ];
+      for (const { dim, label } of dims) {
+        if (q[dim] == null || String(q[dim]).trim() === '') continue;
+        const val = parseFloat(q[dim]);
+        if (isNaN(val)) continue;
+        const r = rem[dim];
+        if (r == null) continue;
+        if (val > r + 1e-6) {
+          return {
+            ok: false,
+            message: `Quantity exceeds remaining allowance for this QA job (${label}: max ${r}).`,
+          };
+        }
+      }
+    }
+  }
+  return { ok: true };
+}
+
 /**
  * POST /api/operatives/work-log
  * Create work log. Project/Site is taken from operative's assignment (read-only); body must not send project.
@@ -1104,6 +1298,9 @@ async function listQaAssignedJobsForOperative(req, res) {
     if (!userRow.rows.length) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
+    let companyIdForQa = userRow.rows[0].company_id;
+    if (companyIdForQa != null) companyIdForQa = parseInt(String(companyIdForQa), 10);
+    if (!Number.isInteger(companyIdForQa)) companyIdForQa = null;
     projectId = userRow.rows[0].project_id;
     if (projectId == null) {
       try {
@@ -1123,6 +1320,18 @@ async function listQaAssignedJobsForOperative(req, res) {
     const pid = parseInt(String(projectId), 10);
     if (!Number.isInteger(pid)) {
       return res.status(200).json({ success: true, jobs: [] });
+    }
+
+    if (companyIdForQa == null) {
+      try {
+        const pr = await pool.query('SELECT company_id FROM projects WHERE id = $1', [pid]);
+        if (pr.rows[0] && pr.rows[0].company_id != null) {
+          const cid = parseInt(String(pr.rows[0].company_id), 10);
+          if (Number.isInteger(cid)) companyIdForQa = cid;
+        }
+      } catch (_) {
+        /* ignore */
+      }
     }
 
     let jobRows = [];
@@ -1195,12 +1404,21 @@ async function listQaAssignedJobsForOperative(req, res) {
         });
         templates.push({ id: String(tid), name: (tname && String(tname).trim()) || '', steps });
       }
-      jobs.push({
+      const jobPayload = {
         id: String(jobId),
         jobNumber: row.job_number || '',
         jobTitle: (row.job_title && String(row.job_title).trim()) || '',
         templates,
-      });
+        remainingStepQuantities: {},
+      };
+      if (companyIdForQa != null) {
+        try {
+          jobPayload.remainingStepQuantities = await getRemainingStepQuantitiesForQaJob(companyIdForQa, jobId);
+        } catch (_) {
+          jobPayload.remainingStepQuantities = {};
+        }
+      }
+      jobs.push(jobPayload);
     }
 
     return res.status(200).json({ success: true, jobs });
@@ -1268,6 +1486,18 @@ async function createWorkLog(req, res) {
       });
     }
 
+    if (companyId == null) {
+      try {
+        const pr = await pool.query('SELECT company_id FROM projects WHERE id = $1', [projectId]);
+        if (pr.rows[0] && pr.rows[0].company_id != null) {
+          const cid = parseInt(String(pr.rows[0].company_id), 10);
+          if (Number.isInteger(cid)) companyId = cid;
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    }
+
     let projectName = null;
     try {
       const projRow = await pool.query(
@@ -1302,6 +1532,10 @@ async function createWorkLog(req, res) {
     const priceWorkJobs = Array.isArray(b.priceWorkJobs) ? b.priceWorkJobs : [];
     let timesheetPayload = Array.isArray(timesheetJobs) ? timesheetJobs.slice() : [];
     if (priceWorkJobs.length) {
+      const v = await validatePriceWorkJobsAgainstRemaining(companyId, projectId, op.id, priceWorkJobs);
+      if (!v.ok) {
+        return res.status(400).json({ success: false, message: v.message || 'Invalid QA price work quantities.' });
+      }
       timesheetPayload.push({ type: 'qa_price_work', entries: priceWorkJobs });
     }
 

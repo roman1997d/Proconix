@@ -1491,6 +1491,67 @@
     return labels;
   }
 
+  /** Remaining caps for this job: API remaining minus other pending entries for same QA job in this work log. */
+  function getEffectiveRemainingForPwbJob(job) {
+    var base = (job && job.remainingStepQuantities) || {};
+    var out = {};
+    Object.keys(base).forEach(function (k) {
+      var b = base[k] || {};
+      out[k] = {
+        m2: b.m2 != null && !isNaN(Number(b.m2)) ? Number(b.m2) : null,
+        linear: b.linear != null && !isNaN(Number(b.linear)) ? Number(b.linear) : null,
+        units: b.units != null && !isNaN(Number(b.units)) ? Number(b.units) : null,
+      };
+    });
+    pendingPriceWorkEntries.forEach(function (ent) {
+      if (!job || String(ent.qaJobId) !== String(job.id)) return;
+      var sq = ent.stepQuantities || {};
+      Object.keys(sq).forEach(function (k) {
+        if (!out[k]) out[k] = { m2: null, linear: null, units: null };
+        var q = sq[k] || {};
+        ['m2', 'linear', 'units'].forEach(function (dim) {
+          if (out[k][dim] == null) return;
+          var raw = q[dim];
+          if (raw == null || String(raw).trim() === '') return;
+          var sub = parseFloat(raw);
+          if (isNaN(sub)) return;
+          out[k][dim] = Math.max(0, Math.round((out[k][dim] - sub) * 100) / 100);
+        });
+      });
+    });
+    return out;
+  }
+
+  function validatePwbStepQuantities(job, sq, feedbackEl) {
+    var remMap = getEffectiveRemainingForPwbJob(job);
+    var dimLabels = { m2: 'm²', linear: 'linear m', units: 'units' };
+    var dims = ['m2', 'linear', 'units'];
+    for (var k in sq) {
+      if (!Object.prototype.hasOwnProperty.call(sq, k)) continue;
+      var q = sq[k] || {};
+      var r = remMap[k] || { m2: null, linear: null, units: null };
+      for (var di = 0; di < dims.length; di++) {
+        var dim = dims[di];
+        if (!Object.prototype.hasOwnProperty.call(q, dim)) continue;
+        var raw = q[dim];
+        if (raw == null || String(raw).trim() === '') continue;
+        var val = parseFloat(raw);
+        if (isNaN(val)) continue;
+        if (r[dim] != null && val > r[dim] + 1e-6) {
+          if (feedbackEl) {
+            showFeedback(
+              feedbackEl,
+              'Quantity exceeds remaining for ' + dimLabels[dim] + ' on this job (maximum ' + r[dim] + ').',
+              true
+            );
+          }
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
   function openPriceWorkBuilderModal() {
     setWorklogFlow('price');
     var loadingEl = document.getElementById('op-pwb-loading');
@@ -1555,6 +1616,7 @@
       var jt = (job.jobTitle && String(job.jobTitle).trim()) || 'QA job';
       labelEl.textContent = 'Job ' + jn + ' — ' + jt;
     }
+    var remMap = getEffectiveRemainingForPwbJob(job);
     var parts = [];
     var templates = Array.isArray(job.templates) ? job.templates : [];
     templates.forEach(function (tpl) {
@@ -1569,27 +1631,55 @@
         var desc = (s.description && String(s.description).trim()) || '';
         var title = 'Step ' + (idx + 1) + (desc ? ' — ' + desc : '');
         var key = s.key || String(tpl.id) + ':' + String(s.stepId != null ? s.stepId : s.dbStepId);
+        var rem = remMap[key] || { m2: null, linear: null, units: null };
         parts.push('<div class="op-pwb-step" data-pwb-step-key="' + escapeHtml(key) + '">');
         parts.push('<div class="op-pwb-step-title">' + escapeHtml(title) + '</div>');
         if (hasM2) {
+          var maxM2 = rem.m2 != null ? ' max="' + String(rem.m2) + '"' : '';
+          var hintM2 =
+            rem.m2 != null
+              ? '<span class="op-pwb-rem-hint">Remaining: ' + escapeHtml(String(rem.m2)) + ' m²</span>'
+              : '';
           parts.push(
             '<div class="op-field"><label>m²</label><input type="number" min="0" step="0.01" class="op-pwb-inp" data-pwb-key="' +
               escapeHtml(key) +
-              '" data-pwb-dim="m2" placeholder="0"></div>'
+              '" data-pwb-dim="m2" placeholder="0"' +
+              maxM2 +
+              '>' +
+              hintM2 +
+              '</div>'
           );
         }
         if (hasLin) {
+          var maxL = rem.linear != null ? ' max="' + String(rem.linear) + '"' : '';
+          var hintL =
+            rem.linear != null
+              ? '<span class="op-pwb-rem-hint">Remaining: ' + escapeHtml(String(rem.linear)) + ' m</span>'
+              : '';
           parts.push(
             '<div class="op-field"><label>Linear (m)</label><input type="number" min="0" step="0.01" class="op-pwb-inp" data-pwb-key="' +
               escapeHtml(key) +
-              '" data-pwb-dim="linear" placeholder="0"></div>'
+              '" data-pwb-dim="linear" placeholder="0"' +
+              maxL +
+              '>' +
+              hintL +
+              '</div>'
           );
         }
         if (hasUn) {
+          var maxU = rem.units != null ? ' max="' + String(rem.units) + '"' : '';
+          var hintU =
+            rem.units != null
+              ? '<span class="op-pwb-rem-hint">Remaining: ' + escapeHtml(String(rem.units)) + ' units</span>'
+              : '';
           parts.push(
             '<div class="op-field"><label>Units</label><input type="number" min="0" step="1" class="op-pwb-inp" data-pwb-key="' +
               escapeHtml(key) +
-              '" data-pwb-dim="units" placeholder="0"></div>'
+              '" data-pwb-dim="units" placeholder="0"' +
+              maxU +
+              '>' +
+              hintU +
+              '</div>'
           );
         }
         parts.push('</div>');
@@ -1622,6 +1712,7 @@
       hideFeedback(feedback);
       if (!pwbCurrentJob) return;
       var stepQuantities = collectPwbStepQuantities();
+      if (!validatePwbStepQuantities(pwbCurrentJob, stepQuantities, feedback)) return;
       pendingPriceWorkEntries.push({
         qaJobId: String(pwbCurrentJob.id),
         jobNumber: pwbCurrentJob.jobNumber != null ? String(pwbCurrentJob.jobNumber) : '',

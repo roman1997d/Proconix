@@ -1020,6 +1020,12 @@ a.op-doc-row:active {
   font-size: 0.85rem;
   color: var(--op-text-muted);
 }
+.op-pwb-rem-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--op-text-muted);
+  margin-top: 4px;
+}
 
 .d-none { display: none !important; }
 
