@@ -8,6 +8,10 @@ const express = require('express');
 const router = express.Router();
 const { requireManagerAuth } = require('../middleware/requireManagerAuth');
 const qa = require('../controllers/qaController');
+const supervisorQaRoutes = require('./supervisorQaRoutes');
+
+// Site supervisor QA (operative token) — MUST be first so /api/supervisor/qa/* is never confused with /api/jobs etc.
+router.use('/supervisor/qa', supervisorQaRoutes);
 
 // Personnel (supervisors + workers for manager's company) – before /templates
 router.get('/personnel', requireManagerAuth, qa.getPersonnel);
@@ -22,6 +26,7 @@ router.delete('/templates/:id', requireManagerAuth, qa.deleteTemplate);
 // Jobs – next-number before :id so it is matched literally
 router.get('/jobs/next-number', requireManagerAuth, qa.getNextJobNumber);
 router.get('/jobs', requireManagerAuth, qa.listJobs);
+router.get('/jobs/:id/step-evidence', requireManagerAuth, qa.getJobStepEvidence);
 router.get('/jobs/:id', requireManagerAuth, qa.getJob);
 router.post('/jobs', requireManagerAuth, qa.createJob);
 router.put('/jobs/:id', requireManagerAuth, qa.updateJob);

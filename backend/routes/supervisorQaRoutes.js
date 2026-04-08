@@ -9,6 +9,11 @@ const { requireSupervisorAuth } = require('../middleware/requireSupervisorAuth')
 const { uploadTaskPhotoFile, injectFileUrl } = require('../utils/uploadMiddleware');
 const qa = require('../controllers/qaController');
 
+/** No auth — use to verify routing: GET /api/supervisor/qa/_ping */
+router.get('/_ping', (req, res) => {
+  res.json({ ok: true, service: 'supervisor-qa' });
+});
+
 router.get('/personnel', requireSupervisorAuth, qa.getPersonnel);
 router.get('/templates', requireSupervisorAuth, qa.listTemplates);
 router.get('/templates/:id', requireSupervisorAuth, qa.getTemplate);

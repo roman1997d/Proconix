@@ -112,6 +112,9 @@
         saveTemplates();
         return Promise.resolve(created);
       },
+      getJobStepEvidence: function () {
+        return Promise.resolve({ steps: [] });
+      },
       updateTemplate: function (id, data) {
         var idx = _templates.findIndex(function (x) { return x.id === id; });
         if (idx === -1) return Promise.reject(new Error('Template not found'));
@@ -245,6 +248,11 @@
     deleteTemplate: function (id) { return qaFetch('/templates/' + encodeURIComponent(id), { method: 'DELETE' }); },
     getJobs: function (projectId) { return qaFetch('/jobs?projectId=' + encodeURIComponent(projectId)); },
     getJob: function (id) { return qaFetch('/jobs/' + encodeURIComponent(id)).then(function (j) { return j || null; }, function () { return null; }); },
+    getJobStepEvidence: function (id) {
+      return qaFetch('/jobs/' + encodeURIComponent(id) + '/step-evidence').then(function (d) {
+        return d && d.steps ? d : { steps: [] };
+      }, function () { return { steps: [] }; });
+    },
     createJob: function (data) { return qaFetch('/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); },
     updateJob: function (id, data) { return qaFetch('/jobs/' + encodeURIComponent(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); },
     deleteJob: function (id) { return qaFetch('/jobs/' + encodeURIComponent(id), { method: 'DELETE' }); },
@@ -285,6 +293,79 @@
     var div = document.createElement('div');
     div.textContent = s == null ? '' : String(s);
     return div.innerHTML;
+  }
+
+  /** Human-facing job title for list/drawer: specification, else first line of description. */
+  function jobSideTitle(job) {
+    if (!job) return '';
+    var spec = String(job.specification || '').trim();
+    if (spec) return spec;
+    var desc = String(job.description || '').trim();
+    if (!desc) return '';
+    var line = desc.split(/\r?\n/)[0].trim();
+    return line || '';
+  }
+
+  function templateLabelForStep(templates, templateId) {
+    var t = (templates || []).find(function (x) { return String(x.id) === String(templateId); });
+    return t ? String(t.name || '').trim() : '';
+  }
+
+  function stepDescriptionForStep(templates, templateId, stepId) {
+    var t = (templates || []).find(function (x) { return String(x.id) === String(templateId); });
+    if (!t || !t.steps) return '';
+    var s = t.steps.find(function (z) { return String(z.id) === String(stepId); });
+    return s ? String(s.description || '').trim() : '';
+  }
+
+  function buildJobEvidenceSection(steps, templates) {
+    var list = steps || [];
+    if (!list.length) {
+      return (
+        '<div class="qa-job-evidence">' +
+        '<h4 class="qa-job-evidence__title">Site evidence</h4>' +
+        '<p class="qa-job-evidence__empty">No photos or comments on template steps yet.</p>' +
+        '</div>'
+      );
+    }
+    var blocks = list.map(function (st) {
+      var tplName = templateLabelForStep(templates, st.templateId);
+      var stepDesc = stepDescriptionForStep(templates, st.templateId, st.stepId);
+      var photos = (st.photos || [])
+        .map(function (p) {
+          var u = p.file_url || '';
+          if (!u) return '';
+          return (
+            '<a href="' +
+            escapeHtml(u) +
+            '" target="_blank" rel="noopener" class="qa-job-evidence__photo-link"><img src="' +
+            escapeHtml(u) +
+            '" alt="" loading="lazy" class="qa-job-evidence__thumb"></a>'
+          );
+        })
+        .join('');
+      var comment = (st.comment || '').trim();
+      var head =
+        escapeHtml(tplName || 'Template ' + st.templateId) +
+        (stepDesc
+          ? ' — ' + escapeHtml(stepDesc.length > 140 ? stepDesc.slice(0, 140) + '…' : stepDesc)
+          : '');
+      return (
+        '<div class="qa-job-evidence__block">' +
+        '<div class="qa-job-evidence__block-head">' +
+        head +
+        '</div>' +
+        (comment ? '<div class="qa-job-evidence__comment">' + escapeHtml(comment) + '</div>' : '') +
+        (photos ? '<div class="qa-job-evidence__photos">' + photos + '</div>' : '') +
+        '</div>'
+      );
+    }).join('');
+    return (
+      '<div class="qa-job-evidence">' +
+      '<h4 class="qa-job-evidence__title">Site evidence (step photos &amp; comments)</h4>' +
+      blocks +
+      '</div>'
+    );
   }
 
   function generateStepId() {
@@ -437,6 +518,7 @@
     if (name === 'job-create') {
       var o = projectSelect.options[projectSelect.selectedIndex];
       document.getElementById('qa-job-create-project-label').textContent = o ? o.text : '';
+      rebuildJobFloorSelect(false);
       switchJobTab('details');
       refreshJobTemplatesList();
       renderWorkersList(document.getElementById('qa-worker-category').value);
@@ -447,6 +529,46 @@
       document.getElementById('qa-jobs-page-title').textContent = 'QA Jobs — ' + (opt ? opt.text.split('–')[0].trim() : '—');
       document.getElementById('qa-jobs-project-sub').textContent = opt ? opt.text : '';
       renderJobsOverview(true);
+    }
+  }
+
+  /**
+   * Floor / level options for Create QA Job: match project's number_of_floors (My Projects).
+   * N storeys → Ground + Floor 1 … Floor (N−1). If unset, fall back to Ground + Floors 1–3.
+   */
+  function rebuildJobFloorSelect(preserveValue) {
+    var floorSel = document.getElementById('qa-job-floor');
+    if (!floorSel || !projectSelect) return;
+    var projOpt = projectSelect.selectedIndex >= 0 ? projectSelect.options[projectSelect.selectedIndex] : null;
+    var raw = projOpt && projOpt.getAttribute('data-floors');
+    var parsed = raw != null && raw !== '' ? parseInt(raw, 10) : NaN;
+    var totalStoreys = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    var prev = preserveValue ? floorSel.value : '';
+    floorSel.innerHTML = '';
+    var ph = document.createElement('option');
+    ph.value = '';
+    ph.textContent = '— Select —';
+    floorSel.appendChild(ph);
+    function addOpt(value, label) {
+      var o = document.createElement('option');
+      o.value = value;
+      o.textContent = label;
+      floorSel.appendChild(o);
+    }
+    if (totalStoreys == null) {
+      addOpt('ground', 'Ground');
+      addOpt('1', 'Floor 1');
+      addOpt('2', 'Floor 2');
+      addOpt('3', 'Floor 3');
+    } else {
+      addOpt('ground', 'Ground');
+      for (var j = 1; j < totalStoreys; j++) {
+        addOpt(String(j), 'Floor ' + j);
+      }
+    }
+    if (preserveValue && prev) {
+      var ok = Array.prototype.some.call(floorSel.options, function (opt) { return opt.value === prev; });
+      floorSel.value = ok ? prev : '';
     }
   }
 
@@ -498,10 +620,16 @@
               var opt = document.createElement('option');
               opt.value = pid;
               opt.textContent = label;
+              var p0 = list[0];
+              if (p0 && p0.number_of_floors != null && p0.number_of_floors !== '') {
+                var ns = parseInt(p0.number_of_floors, 10);
+                if (Number.isInteger(ns) && ns > 0) opt.setAttribute('data-floors', String(ns));
+              }
               sel.appendChild(opt);
               sel.value = pid;
               sel.disabled = true;
               enableModuleCards();
+              if (currentView === 'job-create') rebuildJobFloorSelect(false);
             });
         })
         .catch(function () {
@@ -542,9 +670,15 @@
           var opt = document.createElement('option');
           opt.value = String(p.id);
           opt.textContent = label;
+          var nf = p.number_of_floors;
+          if (nf != null && nf !== '') {
+            var n = parseInt(nf, 10);
+            if (Number.isInteger(n) && n > 0) opt.setAttribute('data-floors', String(n));
+          }
           sel.appendChild(opt);
         });
         enableModuleCards();
+        if (currentView === 'job-create') rebuildJobFloorSelect(false);
       })
       .catch(function () {
         if (loadingEl) loadingEl.classList.add('d-none');
@@ -567,6 +701,7 @@
 
   projectSelect.addEventListener('change', function () {
     enableModuleCards();
+    rebuildJobFloorSelect(false);
     if (currentView === 'jobs') renderJobsOverview(true);
     if (currentView === 'templates') renderTemplateLibrary();
   });
@@ -1169,6 +1304,7 @@
     listEl.innerHTML = '';
     jobs.forEach(function (job) {
       var title = escapeHtml(job.jobNumber || job.location || 'Job');
+      var sideTit = jobSideTitle(job);
       var st = job.status || 'new';
       var card = document.createElement('article');
       card.className = 'qa-job-card-pro';
@@ -1176,6 +1312,7 @@
       card.innerHTML =
         '<div class="qa-job-card-pro__top">' +
           '<div><h3 class="qa-job-card-pro__title">' + title + '</h3>' +
+          (sideTit ? '<p class="qa-job-card-pro__jobtitle">' + escapeHtml(sideTit) + '</p>' : '') +
           '<p class="qa-job-card-pro__meta">' + escapeHtml(job.location || '—') + '</p></div>' +
           '<div class="qa-job-menu-wrap">' +
             '<button type="button" class="qa-job-menu-btn" aria-label="Menu" data-menu="' + escapeHtml(job.id) + '"><i data-lucide="more-vertical"></i></button>' +
@@ -1190,7 +1327,20 @@
         '<span class="qa-badge ' + statusBadgeClass(st) + '">' + escapeHtml(getStatusLabel(st)) + '</span>' +
         '<p class="qa-job-card-pro__row"><i data-lucide="layers" style="width:14px;height:14px;vertical-align:middle;"></i> Level: ' + escapeHtml(job.floor || '—') + ' · ' + escapeHtml(getCostDisplay(job)) + '</p>' +
         '<p class="qa-job-card-pro__row"><i data-lucide="calendar" style="width:14px;height:14px;vertical-align:middle;"></i> Due: ' + escapeHtml(formatJobDate(job.targetCompletionDate)) + '</p>' +
-        '<p class="qa-job-card-pro__row">Supervisor: ' + escapeHtml(getSupervisorName(job.responsibleId)) + ' · Workers: ' + (job.workerIds ? job.workerIds.length : 0) + '</p>';
+        '<p class="qa-job-card-pro__row">Supervisor: ' + escapeHtml(getSupervisorName(job.responsibleId)) + ' · Workers: ' + (job.workerIds ? job.workerIds.length : 0) + '</p>' +
+        (job.stepPhotoCount > 0
+          ? '<div class="qa-job-card-pro__photos">' +
+            (job.stepPhotoPreviewUrl
+              ? '<img src="' +
+                escapeHtml(job.stepPhotoPreviewUrl) +
+                '" alt="" class="qa-job-card-pro__photo-prev" loading="lazy" width="56" height="56">'
+              : '') +
+            '<span class="qa-job-card-pro__photo-count"><i data-lucide="image" style="width:14px;height:14px;vertical-align:middle;"></i> ' +
+            escapeHtml(String(job.stepPhotoCount)) +
+            ' photo' +
+            (job.stepPhotoCount === 1 ? '' : 's') +
+            '</span></div>'
+          : '');
       listEl.appendChild(card);
 
       var menuBtn = card.querySelector('.qa-job-menu-btn');
@@ -1217,16 +1367,34 @@
   function renderJobsTable(jobs, templates, projectId) {
     var tableWrap = document.getElementById('qa-view-jobs-table-wrap');
     var rows = jobs.map(function (job) {
+      var sideTit = jobSideTitle(job);
+      var photoCell =
+        job.stepPhotoCount > 0
+          ? '<span class="qa-tbl-photo-cell">' +
+            (job.stepPhotoPreviewUrl
+              ? '<img src="' + escapeHtml(job.stepPhotoPreviewUrl) + '" alt="" class="qa-tbl-photo-thumb" width="40" height="40" loading="lazy">'
+              : '') +
+            '<span class="qa-tbl-photo-num">' +
+            escapeHtml(String(job.stepPhotoCount)) +
+            '</span></span>'
+          : '—';
       return '<tr data-id="' + escapeHtml(job.id) + '">' +
-        '<td>' + escapeHtml(job.jobNumber || '—') + '</td>' +
+        '<td>' +
+        escapeHtml(job.jobNumber || '—') +
+        (sideTit ? '<br><span class="qa-tbl-subtitle">' + escapeHtml(sideTit) + '</span>' : '') +
+        '</td>' +
         '<td><span class="qa-badge ' + statusBadgeClass(job.status) + '">' + escapeHtml(getStatusLabel(job.status)) + '</span></td>' +
         '<td>' + escapeHtml(job.floor || '—') + '</td>' +
         '<td>' + escapeHtml(getCostDisplay(job)) + '</td>' +
         '<td>' + escapeHtml(formatJobDate(job.targetCompletionDate)) + '</td>' +
+        '<td>' + photoCell + '</td>' +
         '<td><button type="button" class="qa-btn qa-btn--ghost qa-btn--sm qa-tbl-open" data-id="' + escapeHtml(job.id) + '">Open</button></td>' +
         '</tr>';
     }).join('');
-    tableWrap.innerHTML = '<table class="qa-table"><thead><tr><th>Title</th><th>Status</th><th>Level</th><th>Cost</th><th>Deadline</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    tableWrap.innerHTML =
+      '<table class="qa-table"><thead><tr><th>Title</th><th>Status</th><th>Level</th><th>Cost</th><th>Deadline</th><th>Photos</th><th>Actions</th></tr></thead><tbody>' +
+      rows +
+      '</tbody></table>';
     tableWrap.querySelectorAll('.qa-tbl-open').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var id = btn.getAttribute('data-id');
@@ -1306,22 +1474,36 @@
   function openJobDrawer(job) {
     document.getElementById('qa-job-panel-id').value = job.id;
     document.getElementById('qa-job-drawer-title').textContent = job.jobNumber || 'Job';
+    var subEl = document.getElementById('qa-job-drawer-subtitle');
+    var sideTit = jobSideTitle(job);
+    var drawerEl = document.getElementById('qa-job-drawer');
+    subEl.textContent = sideTit;
+    if (sideTit) drawerEl.setAttribute('aria-describedby', 'qa-job-drawer-subtitle');
+    else drawerEl.removeAttribute('aria-describedby');
     document.getElementById('qa-job-drawer-status').value = job.status || 'new';
     document.getElementById('qa-job-drawer-notes').value = job.notes || '';
     var workerNames = getWorkerNames(job.workerIds || []);
     var projId = job.projectId || (projectSelect && projectSelect.value);
-    qaApi.getTemplates(projId).then(function (templates) {
+    var evFn = typeof qaApi.getJobStepEvidence === 'function' ? qaApi.getJobStepEvidence(job.id) : Promise.resolve({ steps: [] });
+    Promise.all([qaApi.getTemplates(projId), evFn]).then(function (results) {
+      var templates = results[0] || [];
+      var evPayload = results[1] || { steps: [] };
       var tplNames = getTemplateNames(templates, job.templateIds || []);
+      var specStr = String(job.specification || '').trim();
+      var descStr = String(job.description || '').trim();
       var html =
         '<dl class="qa-dl">' +
         '<dt>Job number</dt><dd>' + escapeHtml(job.jobNumber || '—') + '</dd>' +
+        '<dt>Specification</dt><dd>' + (specStr ? escapeHtml(specStr) : '—') + '</dd>' +
+        '<dt>Description</dt><dd class="qa-dl__preline">' + (descStr ? escapeHtml(descStr) : '—') + '</dd>' +
         '<dt>Location</dt><dd>' + escapeHtml(job.location || '—') + '</dd>' +
         '<dt>Floor</dt><dd>' + escapeHtml(job.floor || '—') + '</dd>' +
         '<dt>Cost</dt><dd>' + escapeHtml(getCostDisplay(job)) + '</dd>' +
         '<dt>Target</dt><dd>' + escapeHtml(formatJobDate(job.targetCompletionDate)) + '</dd>' +
         '<dt>Templates</dt><dd>' + (tplNames.length ? tplNames.map(escapeHtml).join(', ') : '—') + '</dd>' +
         '<dt>Team</dt><dd>' + escapeHtml(getSupervisorName(job.responsibleId)) + ' · ' + (workerNames.length ? workerNames.map(escapeHtml).join(', ') : '—') + '</dd>' +
-        '</dl>';
+        '</dl>' +
+        buildJobEvidenceSection(evPayload.steps, templates);
       document.getElementById('qa-job-drawer-readonly').innerHTML = html;
       openLayer(layerJob, true);
       iconsRefresh();

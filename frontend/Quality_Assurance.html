@@ -133,10 +133,6 @@
               <label class="qa-label" for="qa-job-floor">Floor / Level</label>
               <select id="qa-job-floor" class="qa-select" aria-label="Select floor">
                 <option value="">— Select —</option>
-                <option value="ground">Ground</option>
-                <option value="1">Floor 1</option>
-                <option value="2">Floor 2</option>
-                <option value="3">Floor 3</option>
               </select>
             </div>
             <div>
@@ -344,7 +340,10 @@
     <div class="qa-drawer-backdrop" id="qa-job-drawer-backdrop"></div>
     <aside class="qa-drawer" id="qa-job-drawer" aria-labelledby="qa-job-drawer-title">
       <div class="qa-drawer__header">
-        <h2 class="qa-drawer__title" id="qa-job-drawer-title">Job</h2>
+        <div class="qa-drawer__heading">
+          <h2 class="qa-drawer__title" id="qa-job-drawer-title">Job</h2>
+          <p class="qa-drawer__subtitle" id="qa-job-drawer-subtitle"></p>
+        </div>
         <button type="button" class="qa-btn qa-btn--ghost qa-btn--icon" id="qa-job-drawer-close" aria-label="Close"><i data-lucide="x"></i></button>
       </div>
       <div class="qa-drawer__body">

@@ -66,13 +66,14 @@ async function getProjects(req, res) {
     let result;
     try {
       result = await pool.query(
-        `SELECT id, project_name, address FROM projects WHERE company_id = $1 AND (active IS NULL OR active = true) ORDER BY id`,
+        `SELECT id, project_name, address, number_of_floors FROM projects WHERE company_id = $1 AND (active IS NULL OR active = true) ORDER BY id`,
         [companyId]
       );
       let projects = result.rows.map((r) => ({
         id: r.id,
         name: r.project_name || '',
         address: r.address || '',
+        number_of_floors: r.number_of_floors != null ? Number(r.number_of_floors) : null,
       }));
       if (req.supervisor) {
         projects = projects.filter((p) => Number(p.id) === Number(req.supervisor.project_id));
@@ -91,6 +92,7 @@ async function getProjects(req, res) {
           id: r.id,
           name: r.name || '',
           address: r.address || '',
+          number_of_floors: null,
         }));
         if (req.supervisor) {
           projects = projects.filter((p) => Number(p.id) === Number(req.supervisor.project_id));

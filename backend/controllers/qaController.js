@@ -459,9 +459,38 @@ async function listJobs(req, res) {
     }
 
     const jobIds = jobs.rows.map((j) => j.id);
-    const [tplLinks, workerUserLinks] = await Promise.all([
+    const [tplLinks, workerUserLinks, photoAgg] = await Promise.all([
       jobIds.length ? pool.query('SELECT job_id, template_id FROM qa_job_templates WHERE job_id = ANY($1)', [jobIds]) : { rows: [] },
       jobIds.length ? pool.query('SELECT job_id, user_id FROM qa_job_user_workers WHERE job_id = ANY($1)', [jobIds]).catch(() => ({ rows: [] })) : { rows: [] },
+      (async () => {
+        if (!jobIds.length) return { counts: {}, previews: {} };
+        try {
+          const [cntRes, prevRes] = await Promise.all([
+            pool.query(
+              `SELECT job_id, COUNT(*)::int AS c FROM qa_job_step_photos WHERE job_id = ANY($1) GROUP BY job_id`,
+              [jobIds]
+            ),
+            pool.query(
+              `SELECT DISTINCT ON (job_id) job_id, file_url AS file_url
+               FROM qa_job_step_photos WHERE job_id = ANY($1)
+               ORDER BY job_id, created_at DESC`,
+              [jobIds]
+            ),
+          ]);
+          const counts = {};
+          const previews = {};
+          cntRes.rows.forEach((r) => {
+            counts[r.job_id] = r.c;
+          });
+          prevRes.rows.forEach((r) => {
+            previews[r.job_id] = r.file_url;
+          });
+          return { counts, previews };
+        } catch (e) {
+          if (e.code === '42P01') return { counts: {}, previews: {} };
+          throw e;
+        }
+      })(),
     ]);
     const tplByJob = {};
     const workerByJob = {};
@@ -474,8 +503,8 @@ async function listJobs(req, res) {
       workerByJob[r.job_id].push(String(r.user_id));
     });
 
-    const list = jobs.rows.map((row) =>
-      jobRowToJson(
+    const list = jobs.rows.map((row) => {
+      const j = jobRowToJson(
         row,
         tplByJob[row.id] || [],
         workerByJob[row.id] || [],
@@ -484,8 +513,11 @@ async function listJobs(req, res) {
         row.status_id ? statusMap[row.status_id] : null,
         row.responsible_user_id,
         !!req.supervisor
-      )
-    );
+      );
+      j.stepPhotoCount = photoAgg.counts[row.id] || 0;
+      j.stepPhotoPreviewUrl = photoAgg.previews[row.id] || null;
+      return j;
+    });
     return res.status(200).json(list);
   } catch (err) {
     console.error('QA listJobs:', err);
@@ -1038,13 +1070,15 @@ async function assertJobInSupervisorProject(req, jobId) {
 }
 
 /**
- * GET /api/supervisor/qa/jobs/:id/step-evidence
- * Merged comments + photos per template step (supervisor only meaningful; manager could call too if routed).
+ * GET /api/jobs/:id/step-evidence (manager) or /api/supervisor/qa/jobs/:id/step-evidence (supervisor).
+ * Merged comments + photos per template step.
  */
 async function getJobStepEvidence(req, res) {
   const jobId = parseInt(req.params.id, 10);
   if (!Number.isInteger(jobId) || jobId < 1) return res.status(400).json({ message: 'Invalid job id.' });
-  if (!req.supervisor) return res.status(403).json({ message: 'Supervisor access only.' });
+  if (!req.manager && !req.supervisor) {
+    return res.status(403).json({ message: 'Access denied.' });
+  }
 
   const check = await assertJobInSupervisorProject(req, jobId);
   if (check.err) return res.status(check.err.status).json({ message: check.err.message });

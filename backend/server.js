@@ -25,7 +25,6 @@ const planningRoutes = require('./routes/planningRoutes');
 const crewRoutes = require('./routes/crewRoutes');
 const platformAdminRoutes = require('./routes/platformAdminRoutes');
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
-const supervisorQaRoutes = require('./routes/supervisorQaRoutes');
 const digitalDocumentsRoutes = require('./routes/digitalDocumentsRoutes');
 const { metricsMiddleware } = require('./middleware/metricsMiddleware');
 const { printStartupConsoleBanner } = require('./lib/startupConsoleBanner');
@@ -104,10 +103,7 @@ app.use('/api/documents', digitalDocumentsRoutes);
 // Crews — same as documents: must be BEFORE `app.use('/api', qaRoutes)` so /api/crews/* is not lost.
 app.use('/api/crews', crewRoutes);
 
-// Supervisor QA (operative token) — BEFORE `app.use('/api', qaRoutes)` so /api/supervisor/qa/* is never swallowed.
-app.use('/api/supervisor/qa', supervisorQaRoutes);
-
-// Quality Assurance (templates, jobs) – GET/POST/PUT/DELETE /api/templates, /api/jobs
+// Quality Assurance (templates, jobs, and /api/supervisor/qa/* via qaRoutes)
 app.use('/api', qaRoutes);
 
 // Material Management – GET/POST/PUT/DELETE under /api/materials
@@ -124,7 +120,12 @@ app.use('/api/site-snags', siteSnagsRoutes);
 
 // API 404 – ensure all unmatched /api/* return JSON (no HTML)
 app.use('/api', (req, res) => {
-  res.status(404).json({ message: 'API endpoint not found.', path: req.path });
+  res.status(404).json({
+    message: 'API endpoint not found.',
+    path: req.path,
+    originalUrl: req.originalUrl,
+    method: req.method,
+  });
 });
 
 // Uploaded files (issues, documents) – served from backend/uploads
