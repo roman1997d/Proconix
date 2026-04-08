@@ -754,6 +754,8 @@
 
   // ----- Log Work (list from API GET /work-log) -----
   var modalWorklog = document.getElementById('op-modal-worklog');
+  var modalPriceWorkBuilder = document.getElementById('op-modal-price-work-builder');
+  var formPwbJob = document.getElementById('op-form-pwb-job');
   var formWorklog = document.getElementById('op-form-worklog');
   var worklogListEl = document.getElementById('op-worklog-list');
   var documentInputEl = document.getElementById('op-wl-document');
@@ -1459,6 +1461,168 @@
   var currentWorklogProject = null;
   var pendingWorklogPhotoUrls = [];
   var pendingWorklogTimesheetJobs = [];
+  /** @type {Array<{ qaJobId: string, jobNumber: string, jobTitle: string, stepQuantities: object }>} */
+  var pendingPriceWorkEntries = [];
+  /** @type {Array<object>} */
+  var pwbQueue = [];
+  /** @type {object|null} */
+  var pwbCurrentJob = null;
+
+  function hasPositiveStepRate(v) {
+    var n = parseFloat(v);
+    return v != null && String(v).trim() !== '' && n === n && n > 0;
+  }
+
+  function openPriceWorkBuilderModal() {
+    setWorklogFlow('price');
+    var loadingEl = document.getElementById('op-pwb-loading');
+    var emptyEl = document.getElementById('op-pwb-empty');
+    var formEl = document.getElementById('op-form-pwb-job');
+    var stepsEl = document.getElementById('op-pwb-steps');
+    var feedback = document.getElementById('op-pwb-feedback');
+    if (!modalPriceWorkBuilder) return;
+    hideFeedback(feedback);
+    pwbCurrentJob = null;
+    if (stepsEl) stepsEl.innerHTML = '';
+    if (emptyEl) {
+      emptyEl.classList.add('d-none');
+      emptyEl.textContent = '';
+    }
+    if (loadingEl) loadingEl.classList.remove('d-none');
+    if (formEl) formEl.classList.add('d-none');
+    openModal(modalPriceWorkBuilder);
+
+    api('/qa/assigned-jobs')
+      .then(function (r) {
+        if (loadingEl) loadingEl.classList.add('d-none');
+        var all = r.data && r.data.success && Array.isArray(r.data.jobs) ? r.data.jobs : [];
+        pwbQueue = all.filter(function (j) {
+          return !pendingPriceWorkEntries.some(function (e) {
+            return String(e.qaJobId) === String(j.id);
+          });
+        });
+        if (!pwbQueue.length) {
+          if (emptyEl) {
+            emptyEl.classList.remove('d-none');
+            emptyEl.innerHTML =
+              all.length === 0
+                ? '<p class="op-text-muted">No QA jobs are assigned to you on this project.</p>'
+                : '<p class="op-text-muted">You have already entered quantities for all assigned QA jobs in this work log. Submit when ready, or start a new work log to enter again.</p>';
+          }
+          return;
+        }
+        renderPwbCurrentJob();
+      })
+      .catch(function () {
+        if (loadingEl) loadingEl.classList.add('d-none');
+        if (emptyEl) {
+          emptyEl.classList.remove('d-none');
+          emptyEl.innerHTML = '<p class="op-text-muted">Could not load QA jobs. Try again.</p>';
+        }
+      });
+  }
+
+  function renderPwbCurrentJob() {
+    var job = pwbQueue[0];
+    var labelEl = document.getElementById('op-pwb-job-label');
+    var stepsEl = document.getElementById('op-pwb-steps');
+    var formEl = document.getElementById('op-form-pwb-job');
+    var submitBtn = document.getElementById('op-pwb-submit');
+    var emptyEl = document.getElementById('op-pwb-empty');
+    if (!job || !stepsEl || !formEl) return;
+    if (emptyEl) emptyEl.classList.add('d-none');
+    pwbCurrentJob = job;
+    if (labelEl) {
+      var jn = job.jobNumber != null && String(job.jobNumber).trim() !== '' ? String(job.jobNumber) : job.id;
+      var jt = (job.jobTitle && String(job.jobTitle).trim()) || 'QA job';
+      labelEl.textContent = 'Job ' + jn + ' — ' + jt;
+    }
+    var parts = [];
+    var templates = Array.isArray(job.templates) ? job.templates : [];
+    templates.forEach(function (tpl) {
+      var tname = (tpl && tpl.name && String(tpl.name).trim()) || 'Template';
+      parts.push('<div class="op-pwb-template-title">' + escapeHtml(tname) + '</div>');
+      var steps = tpl && Array.isArray(tpl.steps) ? tpl.steps : [];
+      steps.forEach(function (s, idx) {
+        var hasM2 = hasPositiveStepRate(s.pricePerM2);
+        var hasLin = hasPositiveStepRate(s.pricePerLinear);
+        var hasUn = hasPositiveStepRate(s.pricePerUnit);
+        if (!hasM2 && !hasLin && !hasUn) return;
+        var desc = (s.description && String(s.description).trim()) || '';
+        var title = 'Step ' + (idx + 1) + (desc ? ' — ' + desc : '');
+        var key = s.key || String(tpl.id) + ':' + String(s.stepId != null ? s.stepId : s.dbStepId);
+        parts.push('<div class="op-pwb-step" data-pwb-step-key="' + escapeHtml(key) + '">');
+        parts.push('<div class="op-pwb-step-title">' + escapeHtml(title) + '</div>');
+        if (hasM2) {
+          parts.push(
+            '<div class="op-field"><label>m²</label><input type="number" min="0" step="0.01" class="op-pwb-inp" data-pwb-key="' +
+              escapeHtml(key) +
+              '" data-pwb-dim="m2" placeholder="0"></div>'
+          );
+        }
+        if (hasLin) {
+          parts.push(
+            '<div class="op-field"><label>Linear (m)</label><input type="number" min="0" step="0.01" class="op-pwb-inp" data-pwb-key="' +
+              escapeHtml(key) +
+              '" data-pwb-dim="linear" placeholder="0"></div>'
+          );
+        }
+        if (hasUn) {
+          parts.push(
+            '<div class="op-field"><label>Units</label><input type="number" min="0" step="1" class="op-pwb-inp" data-pwb-key="' +
+              escapeHtml(key) +
+              '" data-pwb-dim="units" placeholder="0"></div>'
+          );
+        }
+        parts.push('</div>');
+      });
+    });
+    stepsEl.innerHTML = parts.length ? parts.join('') : '<p class="op-text-muted">No billable steps on this job’s templates.</p>';
+    if (submitBtn) {
+      submitBtn.textContent = pwbQueue.length > 1 ? 'Continue' : 'Done';
+    }
+    formEl.classList.remove('d-none');
+  }
+
+  function collectPwbStepQuantities() {
+    var out = {};
+    document.querySelectorAll('#op-pwb-steps .op-pwb-inp').forEach(function (el) {
+      var key = el.getAttribute('data-pwb-key');
+      var dim = el.getAttribute('data-pwb-dim');
+      if (!key || !dim) return;
+      var v = (el.value || '').trim();
+      if (!out[key]) out[key] = { m2: '', linear: '', units: '' };
+      out[key][dim] = v;
+    });
+    return out;
+  }
+
+  if (formPwbJob) {
+    formPwbJob.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var feedback = document.getElementById('op-pwb-feedback');
+      hideFeedback(feedback);
+      if (!pwbCurrentJob) return;
+      var stepQuantities = collectPwbStepQuantities();
+      pendingPriceWorkEntries.push({
+        qaJobId: String(pwbCurrentJob.id),
+        jobNumber: pwbCurrentJob.jobNumber != null ? String(pwbCurrentJob.jobNumber) : '',
+        jobTitle: (pwbCurrentJob.jobTitle && String(pwbCurrentJob.jobTitle).trim()) || '',
+        stepQuantities: stepQuantities,
+      });
+      pwbQueue.shift();
+      pwbCurrentJob = null;
+      if (pwbQueue.length) {
+        renderPwbCurrentJob();
+      } else {
+        closeModal(modalPriceWorkBuilder);
+        var wf = document.getElementById('op-worklog-feedback');
+        if (wf && modalWorklog && modalWorklog.classList.contains('is-open')) {
+          showFeedback(wf, 'QA price work saved for this entry. Complete totals and submit the work log.', false);
+        }
+      }
+    });
+  }
 
   function openWorklogModal() {
     document.getElementById('op-wl-worker').value = getOperativeName();
@@ -1477,6 +1641,9 @@
     if (invoicePathEl) invoicePathEl.value = '';
     pendingWorklogPhotoUrls = [];
     pendingWorklogTimesheetJobs = [];
+    pendingPriceWorkEntries = [];
+    pwbQueue = [];
+    pwbCurrentJob = null;
     if (generatedPdfLinkEl) {
       generatedPdfLinkEl.classList.add('d-none');
       generatedPdfLinkEl.removeAttribute('href');
@@ -1592,6 +1759,7 @@
               description: description,
               photoUrls: pendingWorklogPhotoUrls || [],
               timesheetJobs: pendingWorklogTimesheetJobs || [],
+              priceWorkJobs: pendingPriceWorkEntries || [],
               invoiceFilePath: docPath,
             }),
           });
@@ -1602,6 +1770,7 @@
             loadWorklogList();
             pendingWorklogPhotoUrls = [];
             pendingWorklogTimesheetJobs = [];
+            pendingPriceWorkEntries = [];
             setTimeout(function () {
               closeModal(modalWorklog);
               hideFeedback(feedback);
@@ -1633,7 +1802,7 @@
   var btnFlowTimesheet = document.getElementById('op-btn-flow-time-sheet');
   if (btnFlowPrice) {
     btnFlowPrice.addEventListener('click', function () {
-      setWorklogFlow('price');
+      openPriceWorkBuilderModal();
     });
   }
   if (btnFlowTimesheet) {

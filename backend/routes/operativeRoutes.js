@@ -33,6 +33,7 @@ const {
   workLogUpload,
   createWorkLog,
   archiveMyWorkLog,
+  listQaAssignedJobsForOperative,
 } = require('../controllers/operativeDashboardController');
 
 const { generateTimesheetPdf, generateWorkReportPdf } = require('../controllers/pdfKitReportsController');
@@ -63,6 +64,7 @@ router.post('/work-hours/clock-out', requireOperativeAuth, clockOut);
 router.get('/work-hours/status', requireOperativeAuth, workHoursStatus);
 router.get('/work-hours/weekly', requireOperativeAuth, workHoursWeekly);
 router.get('/project/current', requireOperativeAuth, getCurrentProject);
+router.get('/qa/assigned-jobs', requireOperativeAuth, listQaAssignedJobsForOperative);
 router.get('/tasks', requireOperativeAuth, getTasks);
 router.get('/tasks/:taskId', requireOperativeAuth, getTaskDetail);
 router.patch('/tasks/:taskId', requireOperativeAuth, updateTaskStatus);

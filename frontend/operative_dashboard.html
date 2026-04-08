@@ -205,6 +205,30 @@
     </div>
   </div>
 
+  <!-- Modal: Price work builder (QA job steps) -->
+  <div class="op-modal op-modal-worklog" id="op-modal-price-work-builder" aria-hidden="true" role="dialog" aria-labelledby="op-pwb-title">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog op-modal-dialog-worklog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3 id="op-pwb-title">Price work builder</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <p class="op-tasks-hint" style="margin-top:0;">Enter what you completed for each template step on your assigned QA jobs. Submit to move to the next job when there is more than one.</p>
+          <div id="op-pwb-loading" class="op-text-muted">Loading your QA jobs…</div>
+          <div id="op-pwb-empty" class="d-none"></div>
+          <form id="op-form-pwb-job" class="d-none">
+            <div id="op-pwb-job-label" class="op-pwb-job-label"></div>
+            <div id="op-pwb-steps" class="op-pwb-steps"></div>
+            <div id="op-pwb-feedback" class="op-feedback d-none" role="alert"></div>
+            <button type="submit" class="op-btn op-btn-primary" id="op-pwb-submit">Continue</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Generate Work Report -->
   <div class="op-modal op-modal-worklog" id="op-modal-work-report" aria-hidden="true" role="dialog">
     <div class="op-modal-backdrop" data-dismiss="modal"></div>

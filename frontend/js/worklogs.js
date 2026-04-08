@@ -171,6 +171,55 @@
     });
   }
 
+  function escapeHtml(s) {
+    if (s == null) return '';
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  /** Render QA price work entries for manager detail modal */
+  function renderQaPriceWorkHtml(entries) {
+    if (!entries || !entries.length) return '';
+    var html =
+      '<div class="worklogs-details-qa-price"><h4 class="worklogs-details-subhd">QA price work</h4>';
+    entries.forEach(function (ent) {
+      var jn = ent.jobNumber != null && String(ent.jobNumber).trim() !== '' ? String(ent.jobNumber) : ent.qaJobId || '—';
+      var jt = (ent.jobTitle && String(ent.jobTitle).trim()) || '';
+      html +=
+        '<div class="worklogs-qa-price-job"><div class="worklogs-qa-price-job-head"><strong>' +
+        escapeHtml('Job ' + jn) +
+        '</strong>' +
+        (jt ? ' — ' + escapeHtml(jt) : '') +
+        '</div>';
+      var sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
+      var keys = Object.keys(sq);
+      if (!keys.length) {
+        html += '<p class="worklogs-qa-price-empty">No step quantities recorded.</p>';
+      } else {
+        var lines = [];
+        keys.forEach(function (k) {
+          var q = sq[k] || {};
+          var parts = [];
+          if (q.m2 != null && String(q.m2).trim() !== '') parts.push('m²: ' + escapeHtml(String(q.m2)));
+          if (q.linear != null && String(q.linear).trim() !== '') parts.push('linear m: ' + escapeHtml(String(q.linear)));
+          if (q.units != null && String(q.units).trim() !== '') parts.push('units: ' + escapeHtml(String(q.units)));
+          if (parts.length) {
+            lines.push('<li><span class="worklogs-qa-price-key">' + escapeHtml(k) + '</span> — ' + parts.join(', ') + '</li>');
+          }
+        });
+        if (lines.length) {
+          html += '<ul class="worklogs-qa-price-steps">' + lines.join('') + '</ul>';
+        } else {
+          html += '<p class="worklogs-qa-price-empty">No step quantities recorded.</p>';
+        }
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
   function getJobById(jobs, idOrJobId) {
     if (idOrJobId == null) return null;
     var byId = typeof idOrJobId === 'number' || (typeof idOrJobId === 'string' && /^\d+$/.test(idOrJobId));
@@ -214,23 +263,32 @@
     }
     html += '</div>';
     if (job.timesheetJobs && Array.isArray(job.timesheetJobs) && job.timesheetJobs.length) {
-      html += '<dt>Photos</dt><dd>';
-      job.timesheetJobs.forEach(function (tj, tjIdx) {
-        var photos = tj && Array.isArray(tj.photos) ? tj.photos : [];
-        if (!photos.length) return;
-        html +=
-          '<div style="margin-top:10px;">' +
-          '<div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:6px;">Job ' +
-          (tjIdx + 1) +
-          '</div>' +
-          '<div class="worklogs-details-photos">';
-        photos.forEach(function (url, idx) {
-          html +=
-            '<img src="' + url + '" alt="Photo ' + (idx + 1) + '" data-url="' + url + '" class="worklogs-photo-thumb">';
-        });
-        html += '</div></div>';
+      job.timesheetJobs.forEach(function (tj) {
+        if (tj && tj.type === 'qa_price_work' && Array.isArray(tj.entries)) {
+          html += renderQaPriceWorkHtml(tj.entries);
+        }
       });
-      html += '</dd>';
+      var tsPhotoJobs = job.timesheetJobs.filter(function (tj) {
+        if (tj && tj.type === 'qa_price_work') return false;
+        return tj && Array.isArray(tj.photos) && tj.photos.length > 0;
+      });
+      if (tsPhotoJobs.length) {
+        html += '<h4 class="worklogs-details-subhd" style="margin-top:16px">Photos</h4>';
+        tsPhotoJobs.forEach(function (tj, i) {
+          var photos = tj.photos;
+          html +=
+            '<div style="margin-top:10px;">' +
+            '<div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:6px;">Timesheet job ' +
+            (i + 1) +
+            '</div>' +
+            '<div class="worklogs-details-photos">';
+          photos.forEach(function (url, idx) {
+            html +=
+              '<img src="' + url + '" alt="Photo ' + (idx + 1) + '" data-url="' + url + '" class="worklogs-photo-thumb">';
+          });
+          html += '</div></div>';
+        });
+      }
     } else if (job.photoUrls && job.photoUrls.length) {
       html += '<dt>Photos</dt><dd><div class="worklogs-details-photos">';
       job.photoUrls.forEach(function (url, idx) {

@@ -407,6 +407,49 @@
   margin: 0;
 }
 
+.worklogs-details-subhd {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--text-primary);
+}
+.worklogs-details-qa-price {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--input-bg);
+  border-radius: var(--radius);
+  border: 1px solid var(--divider);
+}
+.worklogs-details-qa-price .worklogs-details-subhd {
+  margin-top: 0;
+}
+.worklogs-qa-price-job {
+  margin-top: 12px;
+}
+.worklogs-qa-price-job:first-of-type {
+  margin-top: 0;
+}
+.worklogs-qa-price-job-head {
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+}
+.worklogs-qa-price-steps {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+.worklogs-qa-price-key {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.worklogs-qa-price-empty {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
 .worklogs-details-photos {
   display: flex;
   flex-wrap: wrap;

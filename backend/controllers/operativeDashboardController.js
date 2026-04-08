@@ -1082,6 +1082,134 @@ async function nextJobDisplayId(companyId) {
  * POST /api/operatives/work-log
  * Create work log. Project/Site is taken from operative's assignment (read-only); body must not send project.
  */
+/**
+ * GET /api/operatives/qa/assigned-jobs
+ * QA jobs on the operative's project where they are linked as worker or via crew membership.
+ */
+async function listQaAssignedJobsForOperative(req, res) {
+  const op = getOperative(req);
+  if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+
+  const uid = parseInt(String(op.id), 10);
+  if (!Number.isInteger(uid)) {
+    return res.status(400).json({ success: false, message: 'Invalid user.' });
+  }
+
+  try {
+    let projectId = null;
+    const userRow = await pool.query(
+      'SELECT id, project_id, company_id FROM users WHERE id = $1',
+      [uid]
+    );
+    if (!userRow.rows.length) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    projectId = userRow.rows[0].project_id;
+    if (projectId == null) {
+      try {
+        const paRow = await pool.query(
+          'SELECT project_id FROM project_assignments WHERE user_id = $1 ORDER BY assigned_at DESC LIMIT 1',
+          [uid]
+        );
+        if (paRow.rows.length && paRow.rows[0].project_id != null) projectId = paRow.rows[0].project_id;
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    if (projectId == null) {
+      return res.status(200).json({ success: true, jobs: [] });
+    }
+
+    const pid = parseInt(String(projectId), 10);
+    if (!Number.isInteger(pid)) {
+      return res.status(200).json({ success: true, jobs: [] });
+    }
+
+    let jobRows = [];
+    try {
+      const r = await pool.query(
+        `SELECT DISTINCT j.id, j.job_number, j.job_title
+         FROM qa_jobs j
+         WHERE j.project_id = $1
+           AND (
+             EXISTS (SELECT 1 FROM qa_job_user_workers w WHERE w.job_id = j.id AND w.user_id = $2)
+             OR EXISTS (
+               SELECT 1 FROM qa_job_crews jc
+               INNER JOIN crew_members cm ON cm.crew_id = jc.crew_id AND cm.user_id = $2
+               WHERE jc.job_id = j.id
+             )
+           )
+         ORDER BY j.job_number`,
+        [pid, uid]
+      );
+      jobRows = r.rows;
+    } catch (e) {
+      if (e.code === '42P01') {
+        try {
+          const r2 = await pool.query(
+            `SELECT DISTINCT j.id, j.job_number, j.job_title
+             FROM qa_jobs j
+             WHERE j.project_id = $1
+               AND EXISTS (SELECT 1 FROM qa_job_user_workers w WHERE w.job_id = j.id AND w.user_id = $2)
+             ORDER BY j.job_number`,
+            [pid, uid]
+          );
+          jobRows = r2.rows;
+        } catch (e2) {
+          return res.status(200).json({ success: true, jobs: [] });
+        }
+      } else {
+        throw e;
+      }
+    }
+
+    const jobs = [];
+    for (const row of jobRows) {
+      const jobId = row.id;
+      const tplRes = await pool.query(
+        'SELECT template_id FROM qa_job_templates WHERE job_id = $1 ORDER BY template_id',
+        [jobId]
+      );
+      const templateIds = tplRes.rows.map((x) => x.template_id);
+      const templates = [];
+      for (const tid of templateIds) {
+        const tMeta = await pool.query('SELECT id, name FROM qa_templates WHERE id = $1', [tid]).catch(() => ({ rows: [] }));
+        const tname = tMeta.rows[0] ? tMeta.rows[0].name : '';
+        const stepsRes = await pool.query(
+          `SELECT id, step_external_id, description, price_per_m2, price_per_unit, price_per_linear, sort_order
+           FROM qa_template_steps WHERE template_id = $1 ORDER BY sort_order, id`,
+          [tid]
+        );
+        const steps = stepsRes.rows.map((s, idx) => {
+          const sid = s.step_external_id != null && String(s.step_external_id).trim() !== '' ? String(s.step_external_id) : String(s.id);
+          return {
+            key: `${tid}:${sid}`,
+            stepId: sid,
+            dbStepId: s.id,
+            description: (s.description || '').trim(),
+            sortOrder: s.sort_order != null ? s.sort_order : idx,
+            pricePerM2: s.price_per_m2 != null ? String(s.price_per_m2) : '',
+            pricePerUnit: s.price_per_unit != null ? String(s.price_per_unit) : '',
+            pricePerLinear: s.price_per_linear != null ? String(s.price_per_linear) : '',
+          };
+        });
+        templates.push({ id: String(tid), name: (tname && String(tname).trim()) || '', steps });
+      }
+      jobs.push({
+        id: String(jobId),
+        jobNumber: row.job_number || '',
+        jobTitle: (row.job_title && String(row.job_title).trim()) || '',
+        templates,
+      });
+    }
+
+    return res.status(200).json({ success: true, jobs });
+  } catch (err) {
+    console.error('listQaAssignedJobsForOperative:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load QA jobs.' });
+  }
+}
+
 async function createWorkLog(req, res) {
   const op = getOperative(req);
   if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
@@ -1171,6 +1299,11 @@ async function createWorkLog(req, res) {
         ? b.timesheet_jobs
         : [];
     const timesheetJobs = timesheetJobsRaw || [];
+    const priceWorkJobs = Array.isArray(b.priceWorkJobs) ? b.priceWorkJobs : [];
+    let timesheetPayload = Array.isArray(timesheetJobs) ? timesheetJobs.slice() : [];
+    if (priceWorkJobs.length) {
+      timesheetPayload.push({ type: 'qa_price_work', entries: priceWorkJobs });
+    }
 
     const jobDisplayId = await nextJobDisplayId(companyId);
 
@@ -1191,7 +1324,7 @@ async function createWorkLog(req, res) {
           quantity, unitPrice, total,
           (b.description && String(b.description).trim()) || null,
           JSON.stringify(photoUrls),
-          JSON.stringify(timesheetJobs),
+          JSON.stringify(timesheetPayload),
           invoiceFilePath,
         ]
       );
@@ -1255,4 +1388,5 @@ module.exports = {
   workLogUpload,
   createWorkLog,
   archiveMyWorkLog,
+  listQaAssignedJobsForOperative,
 };

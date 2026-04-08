@@ -981,6 +981,46 @@ a.op-doc-row:active {
   min-width: 200px;
 }
 
+/* Price work builder (QA steps) */
+.op-pwb-job-label {
+  font-weight: 600;
+  margin-bottom: 12px;
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+.op-pwb-template-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--op-text-muted);
+  margin: 16px 0 8px;
+}
+.op-pwb-template-title:first-child {
+  margin-top: 0;
+}
+.op-pwb-step {
+  background: rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--op-card-border);
+  border-radius: var(--op-radius);
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.op-pwb-step-title {
+  font-weight: 600;
+  margin-bottom: 10px;
+  font-size: 0.95rem;
+}
+.op-pwb-step .op-field {
+  margin-bottom: 8px;
+}
+.op-pwb-step .op-field:last-child {
+  margin-bottom: 0;
+}
+.op-pwb-step .op-field label {
+  font-size: 0.85rem;
+  color: var(--op-text-muted);
+}
+
 .d-none { display: none !important; }
 
 @media (min-width: 600px) {
