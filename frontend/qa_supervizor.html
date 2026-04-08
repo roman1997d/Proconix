@@ -602,23 +602,36 @@
             input.onchange = function () {
               var f = input.files && input.files[0];
               if (!f) return;
+              var tid = step.getAttribute('data-tid');
+              var sid = step.getAttribute('data-sid');
               var fd = new FormData();
               fd.append('file', f);
-              fd.append('templateId', step.getAttribute('data-tid'));
-              fd.append('stepId', step.getAttribute('data-sid'));
+              fd.append('templateId', tid);
+              fd.append('stepId', sid);
+              var url =
+                API + '/jobs/' + encodeURIComponent(jobId) + '/step-photos' +
+                '?templateId=' + encodeURIComponent(tid) +
+                '&stepId=' + encodeURIComponent(sid);
               var h = {};
               var tok = token();
               if (tok) h['X-Operative-Token'] = tok;
-              fetch(API + '/jobs/' + encodeURIComponent(jobId) + '/step-photos', {
+              fetch(url, {
                 method: 'POST',
                 headers: h,
-                body: fd
+                body: fd,
+                credentials: 'same-origin'
               }).then(function (r) {
-                return r.json().then(function (j) { return { ok: r.ok, json: j }; });
+                return r.text().then(function (text) {
+                  var j = null;
+                  try {
+                    j = text ? JSON.parse(text) : null;
+                  } catch (e) {}
+                  return { ok: r.ok, status: r.status, json: j };
+                });
               }).then(function (out) {
                 input.value = '';
-                if (!out.ok || !out.json.success) {
-                  showToast((out.json && out.json.message) || 'Upload failed');
+                if (!out.ok || !(out.json && out.json.success)) {
+                  showToast((out.json && out.json.message) || ('Upload failed' + (out.status ? ' (' + out.status + ')' : '')));
                   return;
                 }
                 showToast('Photo added');

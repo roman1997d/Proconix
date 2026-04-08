@@ -104,6 +104,9 @@ app.use('/api/documents', digitalDocumentsRoutes);
 // Crews — same as documents: must be BEFORE `app.use('/api', qaRoutes)` so /api/crews/* is not lost.
 app.use('/api/crews', crewRoutes);
 
+// Supervisor QA (operative token) — BEFORE `app.use('/api', qaRoutes)` so /api/supervisor/qa/* is never swallowed.
+app.use('/api/supervisor/qa', supervisorQaRoutes);
+
 // Quality Assurance (templates, jobs) – GET/POST/PUT/DELETE /api/templates, /api/jobs
 app.use('/api', qaRoutes);
 
@@ -118,9 +121,6 @@ app.use('/api/platform-admin', platformAdminRoutes);
 
 // Site Snags (per-company JSON state; requires site_snags_state table)
 app.use('/api/site-snags', siteSnagsRoutes);
-
-// QA for supervisors (operative session; must be before static / catch-alls if any)
-app.use('/api/supervisor/qa', supervisorQaRoutes);
 
 // API 404 – ensure all unmatched /api/* return JSON (no HTML)
 app.use('/api', (req, res) => {

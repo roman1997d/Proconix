@@ -4,6 +4,7 @@
  * Jobs are scoped to manager's company via project.company_id.
  */
 
+const fs = require('fs');
 const { pool } = require('../db/pool');
 
 function getQaCompanyId(req) {
@@ -1168,21 +1169,51 @@ async function putJobStepComment(req, res) {
 /**
  * POST /api/supervisor/qa/jobs/:id/step-photos (multipart: file, body templateId, stepId)
  */
+function pickFormString(obj, key) {
+  if (!obj || obj[key] == null) return '';
+  const v = obj[key];
+  if (Array.isArray(v)) return String(v[0] != null ? v[0] : '').trim();
+  return String(v).trim();
+}
+
 async function postJobStepPhoto(req, res) {
   const jobId = parseInt(req.params.id, 10);
   if (!Number.isInteger(jobId) || jobId < 1) return res.status(400).json({ message: 'Invalid job id.' });
   if (!req.supervisor) return res.status(403).json({ message: 'Supervisor access only.' });
   if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
+  if (!/^image\//.test(req.file.mimetype || '')) {
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(400).json({ success: false, message: 'Only image files are allowed.' });
+  }
 
-  const templateId = parseInt(String((req.body && req.body.templateId) || ''), 10);
-  const stepId = (req.body && req.body.stepId != null && String(req.body.stepId).trim()) || '';
-  if (!Number.isInteger(templateId) || templateId < 1) return res.status(400).json({ message: 'templateId is required.' });
-  if (!stepId) return res.status(400).json({ message: 'stepId is required.' });
+  const templateIdRaw = pickFormString(req.body, 'templateId') || pickFormString(req.query, 'templateId');
+  const stepIdRaw = pickFormString(req.body, 'stepId') || pickFormString(req.query, 'stepId');
+  const templateId = parseInt(String(templateIdRaw || ''), 10);
+  const stepId = stepIdRaw;
+  if (!Number.isInteger(templateId) || templateId < 1) {
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(400).json({ message: 'templateId is required.', success: false });
+  }
+  if (!stepId) {
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(400).json({ message: 'stepId is required.', success: false });
+  }
 
   const check = await assertJobInSupervisorProject(req, jobId);
-  if (check.err) return res.status(check.err.status).json({ message: check.err.message });
+  if (check.err) {
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(check.err.status).json({ message: check.err.message, success: false });
+  }
 
-  const fileUrl = (req.body && req.body.file_url) || `/uploads/task-photos/${req.file.filename}`;
+  const fileUrl = pickFormString(req.body, 'file_url') || `/uploads/task-photos/${req.file.filename}`;
 
   try {
     const tplOk = await pool.query(
@@ -1191,7 +1222,12 @@ async function postJobStepPhoto(req, res) {
        WHERE t.id = $2`,
       [jobId, templateId]
     );
-    if (tplOk.rows.length === 0) return res.status(400).json({ message: 'Template is not linked to this job.' });
+    if (tplOk.rows.length === 0) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (_) {}
+      return res.status(400).json({ message: 'Template is not linked to this job.', success: false });
+    }
 
     const stepOk = await pool.query(
       `SELECT 1 FROM qa_template_steps
@@ -1200,7 +1236,12 @@ async function postJobStepPhoto(req, res) {
        LIMIT 1`,
       [templateId, stepId]
     );
-    if (stepOk.rows.length === 0) return res.status(400).json({ message: 'Step does not belong to this template.' });
+    if (stepOk.rows.length === 0) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (_) {}
+      return res.status(400).json({ message: 'Step does not belong to this template.', success: false });
+    }
 
     const cnt = await pool.query(
       `SELECT COUNT(*)::int AS c FROM qa_job_step_photos
@@ -1208,7 +1249,13 @@ async function postJobStepPhoto(req, res) {
       [jobId, templateId, stepId]
     );
     if ((cnt.rows[0] && cnt.rows[0].c) >= MAX_QA_STEP_PHOTOS) {
-      return res.status(400).json({ message: `Maximum ${MAX_QA_STEP_PHOTOS} photos per step.` });
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (_) {}
+      return res.status(400).json({
+        message: `Maximum ${MAX_QA_STEP_PHOTOS} photos per step.`,
+        success: false,
+      });
     }
 
     const ins = await pool.query(
@@ -1226,13 +1273,17 @@ async function postJobStepPhoto(req, res) {
       },
     });
   } catch (err) {
+    try {
+      if (req.file && req.file.path) fs.unlinkSync(req.file.path);
+    } catch (_) {}
     if (err.code === '42P01') {
       return res.status(503).json({
         message: 'QA step evidence tables are not installed. Run scripts/alter_qa_job_step_evidence.sql',
+        success: false,
       });
     }
     console.error('QA postJobStepPhoto:', err);
-    return res.status(500).json({ message: err.message || 'Failed to upload photo.' });
+    return res.status(500).json({ message: err.message || 'Failed to upload photo.', success: false });
   }
 }
 
