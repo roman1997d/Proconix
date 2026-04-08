@@ -14,6 +14,8 @@
   var templateSortable = null;
   var searchTimers = {};
   var openJobMenuId = null;
+  /** Templates for current project, refreshed when opening job create (for price estimate). */
+  var jobCreateTemplatesCache = [];
 
   /** Mirrors backend compact job numbers for offline QA demo. */
   var QA_MAX_COMPACT_SEQ = 26 * 99;
@@ -433,6 +435,79 @@
       total += (parseFloat(s && s.pricePerM2) || 0) + (parseFloat(s && s.pricePerUnit) || 0) + (parseFloat(s && s.pricePerLinear) || 0);
     });
     return total;
+  }
+
+  /**
+   * Job price from template rates × job quantities (all selected templates, all steps):
+   * Σ(price/m²)×job sqm + Σ(price/m lin)×job linear m + Σ(price/unit).
+   */
+  function computeJobTemplatePriceEstimate(templates, templateIds, sqmStr, linearStr) {
+    var ids = (templateIds || []).map(String).filter(Boolean);
+    if (!ids.length || !templates || !templates.length) return null;
+    var sumM2 = 0;
+    var sumLin = 0;
+    var sumUnit = 0;
+    templates.forEach(function (t) {
+      if (ids.indexOf(String(t.id)) === -1) return;
+      (t.steps || []).forEach(function (s) {
+        var m = parseFloat(s.pricePerM2);
+        var ln = parseFloat(s.pricePerLinear);
+        var u = parseFloat(s.pricePerUnit);
+        if (m === m) sumM2 += m;
+        if (ln === ln) sumLin += ln;
+        if (u === u) sumUnit += u;
+      });
+    });
+    if (!(sumM2 > 0 || sumLin > 0 || sumUnit > 0)) return null;
+    var S = parseFloat(sqmStr) || 0;
+    var L = parseFloat(linearStr) || 0;
+    var m2Part = sumM2 * S;
+    var linPart = sumLin * L;
+    var total = m2Part + linPart + sumUnit;
+    return {
+      total: total,
+      sumM2: sumM2,
+      sumLin: sumLin,
+      sumUnit: sumUnit,
+      m2Part: m2Part,
+      linPart: linPart,
+      S: S,
+      L: L,
+    };
+  }
+
+  function formatTemplateEstimateHint(est) {
+    if (!est) return '';
+    var parts = [];
+    if (est.sumM2 > 0) {
+      parts.push('m²: £' + est.m2Part.toFixed(2) + ' (' + est.sumM2.toFixed(2) + '/m² × ' + est.S + ')');
+    }
+    if (est.sumLin > 0) {
+      parts.push('linear: £' + est.linPart.toFixed(2) + ' (' + est.sumLin.toFixed(2) + '/m × ' + est.L + ')');
+    }
+    if (est.sumUnit > 0) {
+      parts.push('units: £' + est.sumUnit.toFixed(2));
+    }
+    var h = parts.join(' · ');
+    if (est.sumM2 > 0 && est.S <= 0) h += (h ? ' · ' : '') + 'Add total sqm to include m² component.';
+    if (est.sumLin > 0 && est.L <= 0) h += (h ? ' · ' : '') + 'Add linear meters to include linear component.';
+    return h;
+  }
+
+  function getJobTemplatePriceEstimate(job, templates) {
+    if (!job) return null;
+    return computeJobTemplatePriceEstimate(templates, job.templateIds, job.sqm, job.linearMeters);
+  }
+
+  function formatJobCostAndEstimate(job, templates) {
+    var base = getCostDisplay(job);
+    var est = getJobTemplatePriceEstimate(job, templates);
+    if (est && (est.total > 0 || est.sumM2 > 0 || est.sumLin > 0 || est.sumUnit > 0)) {
+      var estStr = 'Est. £' + est.total.toFixed(2) + ' (templates × quantities)';
+      if (base === 'No cost provided') return estStr;
+      return base + ' · ' + estStr;
+    }
+    return base;
   }
 
   function formatTemplatePrice(v) {
@@ -1123,6 +1198,7 @@
   if (includeCostCheck) includeCostCheck.addEventListener('change', toggleCostOptions);
 
   function updateCostPreview() {
+    updateJobPriceEstimateDisplay();
     var el = document.getElementById('qa-cost-preview');
     if (!el) return;
     if (!includeCostCheck || !includeCostCheck.checked) {
@@ -1146,14 +1222,86 @@
     if (n) n.addEventListener('input', updateCostPreview);
   });
 
+  var jobCreateSection = document.getElementById('qa-view-job-create');
+  if (jobCreateSection) {
+    jobCreateSection.addEventListener('input', function (e) {
+      if (e.target && (e.target.id === 'qa-job-sqm' || e.target.id === 'qa-job-linear')) {
+        updateJobPriceEstimateDisplay();
+      }
+    });
+    jobCreateSection.addEventListener('change', function (e) {
+      if (e.target && e.target.name === 'qa-job-template') updateJobPriceEstimateDisplay();
+    });
+  }
+
+  var applyEstBtn = document.getElementById('qa-job-apply-estimate');
+  if (applyEstBtn) {
+    if (QA_SUPERVISOR_MODE) {
+      applyEstBtn.classList.add('d-none');
+    } else {
+      applyEstBtn.addEventListener('click', function () {
+        var est = computeJobTemplatePriceEstimate(
+          jobCreateTemplatesCache,
+          getJobCreateFormSelectedTemplateIds(),
+          document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value,
+          document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value
+        );
+        if (!est || est.total <= 0) {
+          showToast('No positive estimate. Check template rates and job m² / linear m.', 'error');
+          return;
+        }
+        if (includeCostCheck) includeCostCheck.checked = true;
+        toggleCostOptions();
+        setWorkType('price');
+        var inp = document.getElementById('qa-job-total-price');
+        if (inp) inp.value = est.total.toFixed(2);
+        updateCostPreview();
+      });
+    }
+  }
+
+  function getJobCreateFormSelectedTemplateIds() {
+    var tplIds = [];
+    document.querySelectorAll('#qa-job-templates-list input[name="qa-job-template"]:checked').forEach(function (cb) {
+      tplIds.push(cb.value);
+    });
+    return tplIds;
+  }
+
+  function updateJobPriceEstimateDisplay() {
+    var valEl = document.getElementById('qa-job-estimated-price');
+    var hintEl = document.getElementById('qa-job-estimated-price-hint');
+    var costLine = document.getElementById('qa-cost-template-estimate-line');
+    if (!valEl) return;
+    var sqm = document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value;
+    var lin = document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value;
+    var est = computeJobTemplatePriceEstimate(jobCreateTemplatesCache, getJobCreateFormSelectedTemplateIds(), sqm, lin);
+    if (!est) {
+      valEl.textContent = '—';
+      if (hintEl) hintEl.textContent = 'Select templates (Templates tab) that include step prices, then enter m² and/or linear m if those rates apply.';
+      if (costLine && !QA_SUPERVISOR_MODE) costLine.textContent = '';
+      return;
+    }
+    valEl.textContent = '£' + est.total.toFixed(2);
+    if (hintEl) hintEl.textContent = formatTemplateEstimateHint(est);
+    if (costLine && !QA_SUPERVISOR_MODE) {
+      costLine.textContent =
+        'Template-based estimate: £' +
+        est.total.toFixed(2) +
+        ' — enable “Enter cost”, choose Price work, then “Use template estimate” or type the total.';
+    }
+  }
+
   function refreshJobTemplatesList() {
     var jobTemplatesList = document.getElementById('qa-job-templates-list');
     if (!jobTemplatesList) return;
     jobTemplatesList.innerHTML = '';
     var projectId = projectSelect && projectSelect.value;
     qaApi.getTemplates(projectId).then(function (templates) {
+      jobCreateTemplatesCache = templates || [];
       if (!templates.length) {
         jobTemplatesList.innerHTML = '<p class="qa-message">No templates yet.</p>';
+        updateJobPriceEstimateDisplay();
         iconsRefresh();
         return;
       }
@@ -1163,6 +1311,7 @@
         label.innerHTML = '<input type="checkbox" name="qa-job-template" value="' + escapeHtml(t.id) + '"> <span>' + escapeHtml(t.name) + '</span>';
         jobTemplatesList.appendChild(label);
       });
+      updateJobPriceEstimateDisplay();
       iconsRefresh();
     });
   }
@@ -1234,7 +1383,18 @@
     var costValue = '';
     if (costType === 'day') costValue = (document.getElementById('qa-job-days') && document.getElementById('qa-job-days').value) || '';
     else if (costType === 'hour') costValue = (document.getElementById('qa-job-hours') && document.getElementById('qa-job-hours').value) || '';
-    else if (costType === 'price') costValue = (document.getElementById('qa-job-total-price') && document.getElementById('qa-job-total-price').value) || '';
+    else if (costType === 'price') {
+      costValue = (document.getElementById('qa-job-total-price') && document.getElementById('qa-job-total-price').value) || '';
+      if (!String(costValue).trim() && includeCost) {
+        var estAuto = computeJobTemplatePriceEstimate(
+          jobCreateTemplatesCache,
+          templateIds,
+          document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value,
+          document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value
+        );
+        if (estAuto && estAuto.total > 0) costValue = estAuto.total.toFixed(2);
+      }
+    }
     var targetDate = (document.getElementById('qa-job-target-date') && document.getElementById('qa-job-target-date').value) || '';
     var createdBy = (typeof window.qaCurrentUserName === 'string' && window.qaCurrentUserName.trim()) ? window.qaCurrentUserName.trim() : '';
     var jobTitle = (document.getElementById('qa-job-title') && document.getElementById('qa-job-title').value || '').trim();
@@ -1399,7 +1559,7 @@
               (QA_SUPERVISOR_MODE ? '' : '<button type="button" data-act="del">Delete</button>') +
             '</div></div></div>' +
         '<span class="qa-badge ' + statusBadgeClass(st) + '">' + escapeHtml(getStatusLabel(st)) + '</span>' +
-        '<p class="qa-job-card-pro__row"><i data-lucide="layers" style="width:14px;height:14px;vertical-align:middle;"></i> Level: ' + escapeHtml(job.floor || '—') + ' · ' + escapeHtml(getCostDisplay(job)) + '</p>' +
+        '<p class="qa-job-card-pro__row"><i data-lucide="layers" style="width:14px;height:14px;vertical-align:middle;"></i> Level: ' + escapeHtml(job.floor || '—') + ' · ' + escapeHtml(formatJobCostAndEstimate(job, templates)) + '</p>' +
         '<p class="qa-job-card-pro__row"><i data-lucide="calendar" style="width:14px;height:14px;vertical-align:middle;"></i> Due: ' + escapeHtml(formatJobDate(job.targetCompletionDate)) + '</p>' +
         '<p class="qa-job-card-pro__row">Supervisor: ' + escapeHtml(getSupervisorName(job.responsibleId)) + ' · Workers: ' + (job.workerIds ? job.workerIds.length : 0) + '</p>' +
         (job.stepPhotoCount > 0
@@ -1459,7 +1619,7 @@
         '</td>' +
         '<td><span class="qa-badge ' + statusBadgeClass(job.status) + '">' + escapeHtml(getStatusLabel(job.status)) + '</span></td>' +
         '<td>' + escapeHtml(job.floor || '—') + '</td>' +
-        '<td>' + escapeHtml(getCostDisplay(job)) + '</td>' +
+        '<td>' + escapeHtml(formatJobCostAndEstimate(job, templates)) + '</td>' +
         '<td>' + escapeHtml(formatJobDate(job.targetCompletionDate)) + '</td>' +
         '<td>' + photoCell + '</td>' +
         '<td><button type="button" class="qa-btn qa-btn--ghost qa-btn--sm qa-tbl-open" data-id="' + escapeHtml(job.id) + '">Open</button></td>' +
@@ -1569,10 +1729,19 @@
       var specStr = String(job.specification || '').trim();
       var descStr = String(job.description || '').trim();
       var jtStr = String(job.jobTitle || '').trim();
+      var priceEst = getJobTemplatePriceEstimate(job, templates);
+      var estRow =
+        priceEst && (priceEst.total > 0 || priceEst.sumM2 > 0 || priceEst.sumLin > 0 || priceEst.sumUnit > 0)
+          ? '<dt>Template price estimate</dt><dd>£' +
+            priceEst.total.toFixed(2) +
+            (priceEst.total > 0 ? '' : ' (add m² / linear m if rates apply)') +
+            '</dd>'
+          : '';
       var html =
         '<dl class="qa-dl">' +
         '<dt>Job title</dt><dd>' + (jtStr ? escapeHtml(jtStr) : '—') + '</dd>' +
         '<dt>Job reference</dt><dd>' + escapeHtml(job.jobNumber || '—') + '</dd>' +
+        estRow +
         '<dt>Specification</dt><dd>' + (specStr ? escapeHtml(specStr) : '—') + '</dd>' +
         '<dt>Description</dt><dd class="qa-dl__preline">' + (descStr ? escapeHtml(descStr) : '—') + '</dd>' +
         '<dt>Location</dt><dd>' + escapeHtml(job.location || '—') + '</dd>' +

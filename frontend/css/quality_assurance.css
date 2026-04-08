@@ -262,6 +262,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.qa-price-estimate__value {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--qa-text-strong);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .qa-empty-hint {
   margin-top: 1rem;
   padding: 1rem 1.25rem;
