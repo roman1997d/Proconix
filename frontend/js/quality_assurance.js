@@ -122,7 +122,8 @@
     return {
       getTemplates: function () { return Promise.resolve(_templates.slice()); },
       getTemplate: function (id) {
-        var t = _templates.find(function (x) { return x.id === id; });
+        var sid = String(id);
+        var t = _templates.find(function (x) { return String(x.id) === sid; });
         return Promise.resolve(t ? Object.assign({}, t) : null);
       },
       createTemplate: function (data) {
@@ -467,6 +468,7 @@
     var unitPart = sumUnit * U;
     var total = m2Part + linPart + unitPart;
     return {
+      mode: 'global',
       total: total,
       sumM2: sumM2,
       sumLin: sumLin,
@@ -480,8 +482,88 @@
     };
   }
 
+  function jobStepKey(templateId, stepId) {
+    return String(templateId) + ':' + String(stepId);
+  }
+
+  function hasPositiveStepRate(v) {
+    var n = parseFloat(v);
+    return v != null && String(v).trim() !== '' && n === n && n > 0;
+  }
+
+  /**
+   * Price from each template step’s rate × quantity entered for that step (m² / linear / units).
+   */
+  function computeJobPriceFromStepQuantities(templates, templateIds, stepQuantities) {
+    var ids = (templateIds || []).map(String).filter(Boolean);
+    var sq = stepQuantities && typeof stepQuantities === 'object' ? stepQuantities : {};
+    if (!ids.length || !templates || !templates.length) return null;
+    var hasAnyRate = false;
+    templates.forEach(function (t) {
+      if (ids.indexOf(String(t.id)) === -1) return;
+      (t.steps || []).forEach(function (s) {
+        if (hasPositiveStepRate(s.pricePerM2) || hasPositiveStepRate(s.pricePerLinear) || hasPositiveStepRate(s.pricePerUnit)) {
+          hasAnyRate = true;
+        }
+      });
+    });
+    if (!hasAnyRate) return null;
+    var total = 0;
+    var hintParts = [];
+    templates.forEach(function (t) {
+      if (ids.indexOf(String(t.id)) === -1) return;
+      (t.steps || []).forEach(function (s, idx) {
+        var key = jobStepKey(t.id, s.id);
+        var q = sq[key] || {};
+        var pm2 = parseFloat(s.pricePerM2);
+        var plin = parseFloat(s.pricePerLinear);
+        var pun = parseFloat(s.pricePerUnit);
+        var m2 = parseFloat(q.m2);
+        var lin = parseFloat(q.linear);
+        var un = parseFloat(q.units);
+        var stepTitle = 'Step ' + (idx + 1) + (s.description ? ' (' + String(s.description).trim().slice(0, 36) + (String(s.description).length > 36 ? '…' : '') + ')' : '');
+        if (hasPositiveStepRate(s.pricePerM2) && pm2 === pm2) {
+          var qm = m2 === m2 ? m2 : 0;
+          var part = pm2 * qm;
+          total += part;
+          hintParts.push(stepTitle + ' m²: £' + part.toFixed(2));
+        }
+        if (hasPositiveStepRate(s.pricePerLinear) && plin === plin) {
+          var ql = lin === lin ? lin : 0;
+          var part2 = plin * ql;
+          total += part2;
+          hintParts.push(stepTitle + ' lin: £' + part2.toFixed(2));
+        }
+        if (hasPositiveStepRate(s.pricePerUnit) && pun === pun) {
+          var qu = un === un ? un : 0;
+          var part3 = pun * qu;
+          total += part3;
+          hintParts.push(stepTitle + ' units: £' + part3.toFixed(2));
+        }
+      });
+    });
+    return { mode: 'perStep', total: total, hintParts: hintParts };
+  }
+
+  function collectJobCreateStepQuantities() {
+    var out = {};
+    document.querySelectorAll('.qa-step-qty-input').forEach(function (el) {
+      var key = el.getAttribute('data-step-qty-key');
+      var dim = el.getAttribute('data-step-dim');
+      if (!key || !dim) return;
+      var v = (el.value || '').trim();
+      if (!out[key]) out[key] = { m2: '', linear: '', units: '' };
+      out[key][dim] = v;
+    });
+    return out;
+  }
+
   function formatTemplateEstimateHint(est) {
     if (!est) return '';
+    if (est.mode === 'perStep') {
+      if (est.hintParts && est.hintParts.length) return est.hintParts.join(' · ');
+      return 'Enter quantities for each step where the template defines a rate.';
+    }
     var parts = [];
     if (est.sumM2 > 0) {
       parts.push('m²: £' + est.m2Part.toFixed(2) + ' (' + est.sumM2.toFixed(2) + '/m² × ' + est.S + ')');
@@ -501,14 +583,18 @@
 
   function getJobTemplatePriceEstimate(job, templates) {
     if (!job) return null;
+    var sq = job.stepQuantities;
+    if (sq && typeof sq === 'object' && Object.keys(sq).length > 0) {
+      return computeJobPriceFromStepQuantities(templates, job.templateIds, sq);
+    }
     return computeJobTemplatePriceEstimate(templates, job.templateIds, job.sqm, job.linearMeters, job.totalUnits);
   }
 
   function formatJobCostAndEstimate(job, templates) {
     var base = getCostDisplay(job);
     var est = getJobTemplatePriceEstimate(job, templates);
-    if (est && (est.total > 0 || est.sumM2 > 0 || est.sumLin > 0 || est.sumUnit > 0)) {
-      var estStr = 'Est. £' + est.total.toFixed(2) + ' (templates × quantities)';
+    if (est && (est.mode === 'perStep' || est.total > 0 || est.sumM2 > 0 || est.sumLin > 0 || est.sumUnit > 0)) {
+      var estStr = 'Est. £' + (est.total != null ? est.total : 0).toFixed(2) + ' (templates × quantities)';
       if (base === 'No cost provided') return estStr;
       return base + ' · ' + estStr;
     }
@@ -645,7 +731,7 @@
       document.getElementById('qa-job-create-project-label').textContent = o ? o.text : '';
       rebuildJobFloorSelect(false);
       refreshJobNumberPreview();
-      switchJobTab('details');
+      switchJobTab('template');
       refreshJobTemplatesList();
       renderWorkersList(document.getElementById('qa-worker-category').value);
       updateCostPreview();
@@ -1230,12 +1316,18 @@
   var jobCreateSection = document.getElementById('qa-view-job-create');
   if (jobCreateSection) {
     jobCreateSection.addEventListener('input', function (e) {
-      if (e.target && (e.target.id === 'qa-job-sqm' || e.target.id === 'qa-job-linear' || e.target.id === 'qa-job-units')) {
+      if (e.target && e.target.classList && e.target.classList.contains('qa-step-qty-input')) {
         updateJobPriceEstimateDisplay();
       }
     });
-    jobCreateSection.addEventListener('change', function (e) {
-      if (e.target && e.target.name === 'qa-job-template') updateJobPriceEstimateDisplay();
+  }
+
+  var jobTemplatesListRoot = document.getElementById('qa-job-templates-list');
+  if (jobTemplatesListRoot) {
+    jobTemplatesListRoot.addEventListener('change', function (e) {
+      if (e.target && e.target.name === 'qa-job-base-template') {
+        renderJobStepQuantityForm(e.target.value);
+      }
     });
   }
 
@@ -1245,15 +1337,13 @@
       applyEstBtn.classList.add('d-none');
     } else {
       applyEstBtn.addEventListener('click', function () {
-        var est = computeJobTemplatePriceEstimate(
+        var est = computeJobPriceFromStepQuantities(
           jobCreateTemplatesCache,
           getJobCreateFormSelectedTemplateIds(),
-          document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value,
-          document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value,
-          document.getElementById('qa-job-units') && document.getElementById('qa-job-units').value
+          collectJobCreateStepQuantities()
         );
         if (!est || est.total <= 0) {
-          showToast('No positive estimate. Check template rates and job m² / linear m / units.', 'error');
+          showToast('No positive estimate. Select a template, enter step quantities, and check template rates.', 'error');
           return;
         }
         if (includeCostCheck) includeCostCheck.checked = true;
@@ -1266,12 +1356,89 @@
     }
   }
 
+  function getJobCreateBaseTemplateId() {
+    var r = document.querySelector('#qa-job-templates-list input[name="qa-job-base-template"]:checked');
+    return r ? r.value : '';
+  }
+
   function getJobCreateFormSelectedTemplateIds() {
-    var tplIds = [];
-    document.querySelectorAll('#qa-job-templates-list input[name="qa-job-template"]:checked').forEach(function (cb) {
-      tplIds.push(cb.value);
+    var id = getJobCreateBaseTemplateId();
+    return id ? [id] : [];
+  }
+
+  function renderJobStepQuantityForm(templateId) {
+    var container = document.getElementById('qa-job-step-quantities');
+    if (!container) return;
+    if (!templateId) {
+      container.innerHTML = '<p class="qa-message">Select a template on the Template tab to load steps.</p>';
+      updateJobPriceEstimateDisplay();
+      return;
+    }
+    container.innerHTML = '<p class="qa-message">Loading steps…</p>';
+    qaApi.getTemplate(templateId).then(function (t) {
+      if (!t || !t.steps || !t.steps.length) {
+        container.innerHTML = '<p class="qa-message">This template has no steps.</p>';
+        updateJobPriceEstimateDisplay();
+        iconsRefresh();
+        return;
+      }
+      container.innerHTML = '';
+      t.steps.forEach(function (s, i) {
+        var key = jobStepKey(t.id, s.id);
+        var title = 'Step ' + (i + 1) + (s.description ? ' — ' + String(s.description).trim() : '');
+        var block = document.createElement('div');
+        block.className = 'qa-form-grid';
+        block.style.marginBottom = '1.25rem';
+        var inner = '<div class="qa-label" style="grid-column:1/-1;">' + escapeHtml(title) + '</div>';
+        var any = false;
+        if (hasPositiveStepRate(s.pricePerM2)) {
+          inner +=
+            '<div><label class="qa-label" for="qa-sq-m2-' +
+            i +
+            '">Total m² (this step)</label>' +
+            '<input type="number" min="0" step="0.01" class="qa-input qa-step-qty-input" id="qa-sq-m2-' +
+            i +
+            '" data-step-qty-key="' +
+            escapeHtml(key) +
+            '" data-step-dim="m2" placeholder="0"></div>';
+          any = true;
+        }
+        if (hasPositiveStepRate(s.pricePerLinear)) {
+          inner +=
+            '<div><label class="qa-label" for="qa-sq-lin-' +
+            i +
+            '">Total linear m (this step)</label>' +
+            '<input type="number" min="0" step="0.01" class="qa-input qa-step-qty-input" id="qa-sq-lin-' +
+            i +
+            '" data-step-qty-key="' +
+            escapeHtml(key) +
+            '" data-step-dim="linear" placeholder="0"></div>';
+          any = true;
+        }
+        if (hasPositiveStepRate(s.pricePerUnit)) {
+          inner +=
+            '<div><label class="qa-label" for="qa-sq-u-' +
+            i +
+            '">Total units (this step)</label>' +
+            '<input type="number" min="0" step="1" class="qa-input qa-step-qty-input" id="qa-sq-u-' +
+            i +
+            '" data-step-qty-key="' +
+            escapeHtml(key) +
+            '" data-step-dim="units" placeholder="0"></div>';
+          any = true;
+        }
+        if (!any) {
+          inner += '<p class="qa-message" style="grid-column:1/-1;">No price rates on this step.</p>';
+        }
+        block.innerHTML = inner;
+        container.appendChild(block);
+      });
+      updateJobPriceEstimateDisplay();
+      iconsRefresh();
+    }).catch(function () {
+      container.innerHTML = '<p class="qa-message">Could not load template steps.</p>';
+      updateJobPriceEstimateDisplay();
     });
-    return tplIds;
   }
 
   function updateJobPriceEstimateDisplay() {
@@ -1279,15 +1446,16 @@
     var hintEl = document.getElementById('qa-job-estimated-price-hint');
     var costLine = document.getElementById('qa-cost-template-estimate-line');
     if (!valEl) return;
-    var sqm = document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value;
-    var lin = document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value;
-    var units = document.getElementById('qa-job-units') && document.getElementById('qa-job-units').value;
-    var est = computeJobTemplatePriceEstimate(jobCreateTemplatesCache, getJobCreateFormSelectedTemplateIds(), sqm, lin, units);
+    var est = computeJobPriceFromStepQuantities(
+      jobCreateTemplatesCache,
+      getJobCreateFormSelectedTemplateIds(),
+      collectJobCreateStepQuantities()
+    );
     if (!est) {
       valEl.textContent = '—';
       if (hintEl) {
         hintEl.textContent =
-          'Select templates (Templates tab) with step prices, then enter total m², linear m, and/or units where those rates apply.';
+          'Choose a template, then enter quantities per step on the Step quantities tab (m², linear m, or units where the template defines rates).';
       }
       if (costLine && !QA_SUPERVISOR_MODE) costLine.textContent = '';
       return;
@@ -1311,6 +1479,7 @@
       jobCreateTemplatesCache = templates || [];
       if (!templates.length) {
         jobTemplatesList.innerHTML = '<p class="qa-message">No templates yet.</p>';
+        renderJobStepQuantityForm('');
         updateJobPriceEstimateDisplay();
         iconsRefresh();
         return;
@@ -1318,9 +1487,11 @@
       templates.forEach(function (t) {
         var label = document.createElement('label');
         label.className = 'qa-check-item';
-        label.innerHTML = '<input type="checkbox" name="qa-job-template" value="' + escapeHtml(t.id) + '"> <span>' + escapeHtml(t.name) + '</span>';
+        label.innerHTML =
+          '<input type="radio" name="qa-job-base-template" value="' + escapeHtml(t.id) + '"> <span>' + escapeHtml(t.name) + '</span>';
         jobTemplatesList.appendChild(label);
       });
+      renderJobStepQuantityForm('');
       updateJobPriceEstimateDisplay();
       iconsRefresh();
     });
@@ -1384,8 +1555,13 @@
   document.getElementById('qa-job-create').addEventListener('click', function () {
     var projectId = projectSelect && projectSelect.value;
     if (!projectId) return;
-    var templateIds = [];
-    document.querySelectorAll('#qa-job-templates-list input[name="qa-job-template"]:checked').forEach(function (cb) { templateIds.push(cb.value); });
+    var baseTpl = getJobCreateBaseTemplateId();
+    if (!baseTpl) {
+      showToast('Select a template this job is based on (Template tab).', 'error');
+      return;
+    }
+    var templateIds = getJobCreateFormSelectedTemplateIds();
+    var stepQuantities = collectJobCreateStepQuantities();
     var workerIds = [];
     document.querySelectorAll('#qa-workers-list input[name="qa-worker"]:checked').forEach(function (cb) { workerIds.push(cb.value); });
     var includeCost = document.getElementById('qa-job-include-cost') && document.getElementById('qa-job-include-cost').checked;
@@ -1396,13 +1572,7 @@
     else if (costType === 'price') {
       costValue = (document.getElementById('qa-job-total-price') && document.getElementById('qa-job-total-price').value) || '';
       if (!String(costValue).trim() && includeCost) {
-        var estAuto = computeJobTemplatePriceEstimate(
-          jobCreateTemplatesCache,
-          templateIds,
-          document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value,
-          document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value,
-          document.getElementById('qa-job-units') && document.getElementById('qa-job-units').value
-        );
+        var estAuto = computeJobPriceFromStepQuantities(jobCreateTemplatesCache, templateIds, stepQuantities);
         if (estAuto && estAuto.total > 0) costValue = estAuto.total.toFixed(2);
       }
     }
@@ -1418,9 +1588,7 @@
       jobTitle: jobTitle,
       floor: (document.getElementById('qa-job-floor') && document.getElementById('qa-job-floor').value) || '',
       location: (document.getElementById('qa-job-location') && document.getElementById('qa-job-location').value) || '',
-      sqm: (document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value) || '',
-      linearMeters: (document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value) || '',
-      totalUnits: (document.getElementById('qa-job-units') && document.getElementById('qa-job-units').value) || '',
+      stepQuantities: stepQuantities,
       specification: (document.getElementById('qa-job-spec') && document.getElementById('qa-job-spec').value) || '',
       description: (document.getElementById('qa-job-description') && document.getElementById('qa-job-description').value) || '',
       targetCompletionDate: targetDate,
@@ -1718,6 +1886,32 @@
   /* ——— Job drawer ——— */
   var layerJob = document.getElementById('qa-layer-job');
 
+  function formatJobStepQuantitiesReadonly(job, templates) {
+    var sq = job.stepQuantities;
+    if (!sq || typeof sq !== 'object' || !Object.keys(sq).length) return '';
+    var lines = [];
+    var tplById = {};
+    (templates || []).forEach(function (t) { tplById[String(t.id)] = t; });
+    (job.templateIds || []).forEach(function (tid) {
+      var t = tplById[String(tid)];
+      if (!t || !t.steps) return;
+      t.steps.forEach(function (s, idx) {
+        var key = jobStepKey(t.id, s.id);
+        var q = sq[key];
+        if (!q) return;
+        var bits = [];
+        if (q.m2 != null && String(q.m2).trim() !== '') bits.push('m²: ' + String(q.m2).trim());
+        if (q.linear != null && String(q.linear).trim() !== '') bits.push('linear m: ' + String(q.linear).trim());
+        if (q.units != null && String(q.units).trim() !== '') bits.push('units: ' + String(q.units).trim());
+        if (!bits.length) return;
+        var title = 'Step ' + (idx + 1) + (s.description ? ' — ' + String(s.description).trim() : '');
+        lines.push('<div><strong>' + escapeHtml(title) + '</strong>: ' + escapeHtml(bits.join(', ')) + '</div>');
+      });
+    });
+    if (!lines.length) return '';
+    return '<dt>Quantities per step</dt><dd class="qa-dl__preline">' + lines.join('') + '</dd>';
+  }
+
   function openJobDrawer(job) {
     document.getElementById('qa-job-panel-id').value = job.id;
     document.getElementById('qa-job-drawer-title').textContent = job.jobNumber || 'Job';
@@ -1743,17 +1937,19 @@
       var jtStr = String(job.jobTitle || '').trim();
       var priceEst = getJobTemplatePriceEstimate(job, templates);
       var estRow =
-        priceEst && (priceEst.total > 0 || priceEst.sumM2 > 0 || priceEst.sumLin > 0 || priceEst.sumUnit > 0)
+        priceEst && (priceEst.mode === 'perStep' || priceEst.total > 0 || priceEst.sumM2 > 0 || priceEst.sumLin > 0 || priceEst.sumUnit > 0)
           ? '<dt>Template price estimate</dt><dd>£' +
-            priceEst.total.toFixed(2) +
-            (priceEst.total > 0 ? '' : ' (add m² / linear m / units if rates apply)') +
+            (priceEst.total != null ? priceEst.total : 0).toFixed(2) +
+            (priceEst.total > 0 ? '' : ' (add step quantities if rates apply)') +
             '</dd>'
           : '';
+      var stepQtyRow = formatJobStepQuantitiesReadonly(job, templates);
       var html =
         '<dl class="qa-dl">' +
         '<dt>Job title</dt><dd>' + (jtStr ? escapeHtml(jtStr) : '—') + '</dd>' +
         '<dt>Job reference</dt><dd>' + escapeHtml(job.jobNumber || '—') + '</dd>' +
         estRow +
+        stepQtyRow +
         '<dt>Specification</dt><dd>' + (specStr ? escapeHtml(specStr) : '—') + '</dd>' +
         '<dt>Description</dt><dd class="qa-dl__preline">' + (descStr ? escapeHtml(descStr) : '—') + '</dd>' +
         '<dt>Location</dt><dd>' + escapeHtml(job.location || '—') + '</dd>' +

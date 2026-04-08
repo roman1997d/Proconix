@@ -121,12 +121,26 @@
           </div>
         </header>
         <nav class="qa-tabs" role="tablist" aria-label="Job sections">
-          <button type="button" class="qa-tab is-active" role="tab" aria-selected="true" data-tab="details" id="qa-job-tab-details">Job Details</button>
-          <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="templates" id="qa-job-tab-templates">Templates</button>
+          <button type="button" class="qa-tab is-active" role="tab" aria-selected="true" data-tab="template" id="qa-job-tab-template">Template</button>
+          <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="quantities" id="qa-job-tab-quantities">Step quantities</button>
+          <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="details" id="qa-job-tab-details">Job details</button>
           <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="cost" id="qa-job-tab-cost">Cost</button>
           <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="personnel" id="qa-job-tab-personnel">Personnel</button>
         </nav>
-        <div class="qa-tab-panel" id="qa-job-panel-details" role="tabpanel">
+        <div class="qa-tab-panel" id="qa-job-panel-template" role="tabpanel">
+          <p class="qa-message">Choose which template this job is based on. Step quantities and the price estimate are driven by that template’s steps.</p>
+          <div class="qa-checklist" id="qa-job-templates-list"></div>
+        </div>
+        <div class="qa-tab-panel d-none" id="qa-job-panel-quantities" role="tabpanel" hidden>
+          <p class="qa-message">For each step, enter totals only for the rate types defined on the template (m², linear m, or units).</p>
+          <div id="qa-job-step-quantities"></div>
+          <div class="qa-price-estimate" id="qa-job-price-estimate-block" style="margin-top:1rem;">
+            <p class="qa-label" style="margin-bottom:0.25rem;">Price estimate (from template × quantities)</p>
+            <p class="qa-price-estimate__value" id="qa-job-estimated-price">—</p>
+            <p class="qa-message" id="qa-job-estimated-price-hint" style="margin-top:0.35rem;"></p>
+          </div>
+        </div>
+        <div class="qa-tab-panel d-none" id="qa-job-panel-details" role="tabpanel" hidden>
           <div class="qa-form-grid">
             <div>
               <label class="qa-label" for="qa-job-title">Job title</label>
@@ -148,23 +162,6 @@
               <input type="text" id="qa-job-location" class="qa-input" placeholder="e.g. Building A">
             </div>
             <div>
-              <label class="qa-label" for="qa-job-sqm">Total sqm</label>
-              <input type="number" id="qa-job-sqm" class="qa-input" min="0" step="0.01" placeholder="0">
-            </div>
-            <div>
-              <label class="qa-label" for="qa-job-linear">Total linear meters</label>
-              <input type="number" id="qa-job-linear" class="qa-input" min="0" step="0.01" placeholder="0">
-            </div>
-            <div>
-              <label class="qa-label" for="qa-job-units">Total units</label>
-              <input type="number" id="qa-job-units" class="qa-input" min="0" step="1" placeholder="0" title="e.g. number of doors, fixtures, priced per unit in the template">
-            </div>
-            <div class="qa-price-estimate" id="qa-job-price-estimate-block">
-              <p class="qa-label" style="margin-bottom:0.25rem;">Price estimate (from templates)</p>
-              <p class="qa-price-estimate__value" id="qa-job-estimated-price">—</p>
-              <p class="qa-message" id="qa-job-estimated-price-hint" style="margin-top:0.35rem;"></p>
-            </div>
-            <div>
               <label class="qa-label" for="qa-job-spec">Specification</label>
               <input type="text" id="qa-job-spec" class="qa-input" placeholder="Specification reference">
             </div>
@@ -177,10 +174,6 @@
               <input type="date" id="qa-job-target-date" class="qa-input">
             </div>
           </div>
-        </div>
-        <div class="qa-tab-panel d-none" id="qa-job-panel-templates" role="tabpanel" hidden>
-          <p class="qa-message">Select one or more templates (optional).</p>
-          <div class="qa-checklist" id="qa-job-templates-list"></div>
         </div>
         <div class="qa-tab-panel d-none" id="qa-job-panel-cost" role="tabpanel" hidden>
           <label class="qa-checkbox-label" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">

@@ -421,6 +421,50 @@ async function assertProjectAccess(pool, projectId, companyId) {
   if (r.rows.length === 0) throw new Error('Project not found or access denied.');
 }
 
+/** Normalize client stepQuantities payload; keys "templateId:stepId" → { m2, linear, units } strings */
+function normalizeStepQuantitiesInput(raw) {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof v !== 'object' || v == null) continue;
+    const m2 = v.m2 != null && String(v.m2).trim() !== '' ? String(v.m2).trim() : '';
+    const linear = v.linear != null && String(v.linear).trim() !== '' ? String(v.linear).trim() : '';
+    const units = v.units != null && String(v.units).trim() !== '' ? String(v.units).trim() : '';
+    if (m2 || linear || units) out[k] = { m2, linear, units };
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** Sum per-step quantities into legacy job sqm / linear_meters / total_units columns (reporting / planning). */
+function aggregateQuantitiesFromStepJson(sq) {
+  if (!sq || typeof sq !== 'object') return { sqm: null, linearMeters: null, totalUnits: null };
+  let sumM2 = 0;
+  let sumL = 0;
+  let sumU = 0;
+  for (const v of Object.values(sq)) {
+    if (!v || typeof v !== 'object') continue;
+    sumM2 += parseFloat(v.m2) || 0;
+    sumL += parseFloat(v.linear) || 0;
+    sumU += parseFloat(v.units) || 0;
+  }
+  return {
+    sqm: sumM2 > 0 ? String(Number(sumM2.toFixed(4))) : null,
+    linearMeters: sumL > 0 ? String(Number(sumL.toFixed(4))) : null,
+    totalUnits: sumU > 0 ? (Number.isInteger(sumU) ? String(sumU) : String(Number(sumU.toFixed(4)))) : null,
+  };
+}
+
+function stepQuantitiesFromRow(row) {
+  const raw = row.step_quantities;
+  if (raw == null) return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  try {
+    return JSON.parse(String(raw));
+  } catch {
+    return {};
+  }
+}
+
 function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, responsibleUserId, forSupervisor) {
   const responsibleId = responsibleUserId != null ? String(responsibleUserId) : (row.responsible_id != null ? String(row.responsible_id) : '');
   const base = {
@@ -433,6 +477,7 @@ function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCo
     sqm: row.sqm || '',
     linearMeters: row.linear_meters || '',
     totalUnits: row.total_units || '',
+    stepQuantities: stepQuantitiesFromRow(row),
     specification: row.specification || '',
     description: row.description || '',
     targetCompletionDate: row.target_completion_date ? row.target_completion_date.toISOString().slice(0, 10) : '',
@@ -476,7 +521,7 @@ async function listJobs(req, res) {
   try {
     const jobs = await pool.query(
       `SELECT j.id, j.project_id, j.job_number, j.job_title, j.floor_id, j.floor_code, j.location, j.sqm, j.linear_meters,
-              j.total_units, j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
+              j.total_units, j.step_quantities, j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
               j.cost_value, j.responsible_id, j.responsible_user_id, j.status_id, j.created_at, j.created_by
        FROM qa_jobs j
        WHERE j.project_id = $1 ORDER BY j.job_number`,
@@ -617,7 +662,7 @@ async function getJob(req, res) {
   try {
     const job = await pool.query(
       `SELECT j.id, j.project_id, j.job_number, j.job_title, j.floor_id, j.floor_code, j.location, j.sqm, j.linear_meters,
-              j.total_units, j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
+              j.total_units, j.step_quantities, j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
               j.cost_value, j.responsible_id, j.responsible_user_id, j.status_id, j.created_at, j.created_by
        FROM qa_jobs j
        INNER JOIN projects p ON p.id = j.project_id AND p.company_id = $1
@@ -723,14 +768,27 @@ async function createJob(req, res) {
     }
   }
 
+  const stepQtyNorm = normalizeStepQuantitiesInput(b.stepQuantities);
+  let sqmVal = (b.sqm != null && String(b.sqm)) || null;
+  let linearVal = (b.linearMeters != null && String(b.linearMeters)) || null;
+  let unitsVal = (b.totalUnits != null && String(b.totalUnits)) || null;
+  if (stepQtyNorm) {
+    const agg = aggregateQuantitiesFromStepJson(stepQtyNorm);
+    sqmVal = agg.sqm;
+    linearVal = agg.linearMeters;
+    unitsVal = agg.totalUnits;
+  }
+
   try {
     const insert = await pool.query(
       `INSERT INTO qa_jobs (
         project_id, job_number, job_title, floor_id, floor_code, location, sqm, linear_meters, total_units,
+        step_quantities,
         specification, description, target_completion_date, cost_included, cost_type_id, cost_value,
         responsible_user_id, status_id, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING id, project_id, job_number, job_title, floor_id, floor_code, location, sqm, linear_meters, total_units,
+        step_quantities,
         specification, description, target_completion_date, cost_included, cost_type_id, cost_value,
         responsible_user_id, status_id, created_at, created_by`,
       [
@@ -740,9 +798,10 @@ async function createJob(req, res) {
         floorId,
         floorRaw || null,
         (b.location != null && String(b.location)) || null,
-        (b.sqm != null && String(b.sqm)) || null,
-        (b.linearMeters != null && String(b.linearMeters)) || null,
-        (b.totalUnits != null && String(b.totalUnits)) || null,
+        sqmVal,
+        linearVal,
+        unitsVal,
+        stepQtyNorm,
         (b.specification != null && String(b.specification)) || null,
         (b.description != null && String(b.description)) || null,
         b.targetCompletionDate || null,
@@ -803,10 +862,10 @@ async function createJob(req, res) {
     );
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ message: 'Job number already exists for this project.' });
-    if (err.code === '42703' && /job_title|total_units/i.test(err.message || '')) {
+    if (err.code === '42703' && /job_title|total_units|step_quantities/i.test(err.message || '')) {
       return res.status(503).json({
         message:
-          'Database schema out of date. Run: scripts/alter_qa_jobs_job_title.sql and scripts/alter_qa_jobs_total_units.sql',
+          'Database schema out of date. Run QA migrations including scripts/alter_qa_jobs_step_quantities.sql',
       });
     }
     console.error('QA createJob:', err);
