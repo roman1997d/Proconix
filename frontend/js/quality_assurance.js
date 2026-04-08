@@ -439,9 +439,9 @@
 
   /**
    * Job price from template rates × job quantities (all selected templates, all steps):
-   * Σ(price/m²)×job sqm + Σ(price/m lin)×job linear m + Σ(price/unit).
+   * Σ(price/m²)×job sqm + Σ(price/m lin)×job linear m + Σ(price/unit)×job units.
    */
-  function computeJobTemplatePriceEstimate(templates, templateIds, sqmStr, linearStr) {
+  function computeJobTemplatePriceEstimate(templates, templateIds, sqmStr, linearStr, unitsStr) {
     var ids = (templateIds || []).map(String).filter(Boolean);
     if (!ids.length || !templates || !templates.length) return null;
     var sumM2 = 0;
@@ -461,9 +461,11 @@
     if (!(sumM2 > 0 || sumLin > 0 || sumUnit > 0)) return null;
     var S = parseFloat(sqmStr) || 0;
     var L = parseFloat(linearStr) || 0;
+    var U = parseFloat(unitsStr) || 0;
     var m2Part = sumM2 * S;
     var linPart = sumLin * L;
-    var total = m2Part + linPart + sumUnit;
+    var unitPart = sumUnit * U;
+    var total = m2Part + linPart + unitPart;
     return {
       total: total,
       sumM2: sumM2,
@@ -471,8 +473,10 @@
       sumUnit: sumUnit,
       m2Part: m2Part,
       linPart: linPart,
+      unitPart: unitPart,
       S: S,
       L: L,
+      U: U,
     };
   }
 
@@ -486,17 +490,18 @@
       parts.push('linear: £' + est.linPart.toFixed(2) + ' (' + est.sumLin.toFixed(2) + '/m × ' + est.L + ')');
     }
     if (est.sumUnit > 0) {
-      parts.push('units: £' + est.sumUnit.toFixed(2));
+      parts.push('units: £' + est.unitPart.toFixed(2) + ' (' + est.sumUnit.toFixed(2) + '/unit × ' + est.U + ')');
     }
     var h = parts.join(' · ');
     if (est.sumM2 > 0 && est.S <= 0) h += (h ? ' · ' : '') + 'Add total sqm to include m² component.';
     if (est.sumLin > 0 && est.L <= 0) h += (h ? ' · ' : '') + 'Add linear meters to include linear component.';
+    if (est.sumUnit > 0 && est.U <= 0) h += (h ? ' · ' : '') + 'Add total units to include per-unit component.';
     return h;
   }
 
   function getJobTemplatePriceEstimate(job, templates) {
     if (!job) return null;
-    return computeJobTemplatePriceEstimate(templates, job.templateIds, job.sqm, job.linearMeters);
+    return computeJobTemplatePriceEstimate(templates, job.templateIds, job.sqm, job.linearMeters, job.totalUnits);
   }
 
   function formatJobCostAndEstimate(job, templates) {
@@ -1225,7 +1230,7 @@
   var jobCreateSection = document.getElementById('qa-view-job-create');
   if (jobCreateSection) {
     jobCreateSection.addEventListener('input', function (e) {
-      if (e.target && (e.target.id === 'qa-job-sqm' || e.target.id === 'qa-job-linear')) {
+      if (e.target && (e.target.id === 'qa-job-sqm' || e.target.id === 'qa-job-linear' || e.target.id === 'qa-job-units')) {
         updateJobPriceEstimateDisplay();
       }
     });
@@ -1244,10 +1249,11 @@
           jobCreateTemplatesCache,
           getJobCreateFormSelectedTemplateIds(),
           document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value,
-          document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value
+          document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value,
+          document.getElementById('qa-job-units') && document.getElementById('qa-job-units').value
         );
         if (!est || est.total <= 0) {
-          showToast('No positive estimate. Check template rates and job m² / linear m.', 'error');
+          showToast('No positive estimate. Check template rates and job m² / linear m / units.', 'error');
           return;
         }
         if (includeCostCheck) includeCostCheck.checked = true;
@@ -1275,10 +1281,14 @@
     if (!valEl) return;
     var sqm = document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value;
     var lin = document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value;
-    var est = computeJobTemplatePriceEstimate(jobCreateTemplatesCache, getJobCreateFormSelectedTemplateIds(), sqm, lin);
+    var units = document.getElementById('qa-job-units') && document.getElementById('qa-job-units').value;
+    var est = computeJobTemplatePriceEstimate(jobCreateTemplatesCache, getJobCreateFormSelectedTemplateIds(), sqm, lin, units);
     if (!est) {
       valEl.textContent = '—';
-      if (hintEl) hintEl.textContent = 'Select templates (Templates tab) that include step prices, then enter m² and/or linear m if those rates apply.';
+      if (hintEl) {
+        hintEl.textContent =
+          'Select templates (Templates tab) with step prices, then enter total m², linear m, and/or units where those rates apply.';
+      }
       if (costLine && !QA_SUPERVISOR_MODE) costLine.textContent = '';
       return;
     }
@@ -1390,7 +1400,8 @@
           jobCreateTemplatesCache,
           templateIds,
           document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value,
-          document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value
+          document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value,
+          document.getElementById('qa-job-units') && document.getElementById('qa-job-units').value
         );
         if (estAuto && estAuto.total > 0) costValue = estAuto.total.toFixed(2);
       }
@@ -1409,6 +1420,7 @@
       location: (document.getElementById('qa-job-location') && document.getElementById('qa-job-location').value) || '',
       sqm: (document.getElementById('qa-job-sqm') && document.getElementById('qa-job-sqm').value) || '',
       linearMeters: (document.getElementById('qa-job-linear') && document.getElementById('qa-job-linear').value) || '',
+      totalUnits: (document.getElementById('qa-job-units') && document.getElementById('qa-job-units').value) || '',
       specification: (document.getElementById('qa-job-spec') && document.getElementById('qa-job-spec').value) || '',
       description: (document.getElementById('qa-job-description') && document.getElementById('qa-job-description').value) || '',
       targetCompletionDate: targetDate,
@@ -1734,7 +1746,7 @@
         priceEst && (priceEst.total > 0 || priceEst.sumM2 > 0 || priceEst.sumLin > 0 || priceEst.sumUnit > 0)
           ? '<dt>Template price estimate</dt><dd>£' +
             priceEst.total.toFixed(2) +
-            (priceEst.total > 0 ? '' : ' (add m² / linear m if rates apply)') +
+            (priceEst.total > 0 ? '' : ' (add m² / linear m / units if rates apply)') +
             '</dd>'
           : '';
       var html =
@@ -1746,6 +1758,9 @@
         '<dt>Description</dt><dd class="qa-dl__preline">' + (descStr ? escapeHtml(descStr) : '—') + '</dd>' +
         '<dt>Location</dt><dd>' + escapeHtml(job.location || '—') + '</dd>' +
         '<dt>Floor</dt><dd>' + escapeHtml(job.floor || '—') + '</dd>' +
+        '<dt>Total sqm</dt><dd>' + escapeHtml(job.sqm || '—') + '</dd>' +
+        '<dt>Total linear m</dt><dd>' + escapeHtml(job.linearMeters || '—') + '</dd>' +
+        '<dt>Total units</dt><dd>' + escapeHtml(job.totalUnits || '—') + '</dd>' +
         '<dt>Cost</dt><dd>' + escapeHtml(getCostDisplay(job)) + '</dd>' +
         '<dt>Target</dt><dd>' + escapeHtml(formatJobDate(job.targetCompletionDate)) + '</dd>' +
         '<dt>Templates</dt><dd>' + (tplNames.length ? tplNames.map(escapeHtml).join(', ') : '—') + '</dd>' +

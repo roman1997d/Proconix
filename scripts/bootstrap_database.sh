@@ -93,6 +93,7 @@ SQL_FILES=(
   scripts/seed_qa_lookup.sql
   scripts/qa_jobs_use_users.sql
   scripts/alter_qa_jobs_job_title.sql
+  scripts/alter_qa_jobs_total_units.sql
   scripts/create_proconix_admin_table.sql
   scripts/create_site_snags_tables.sql
 )

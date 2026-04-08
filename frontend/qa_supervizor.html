@@ -440,6 +440,7 @@
         '<div><span class="qsv-label">Location</span><input class="qsv-input" id="qsvNjLoc" placeholder="e.g. Building A"></div>' +
         '<div><span class="qsv-label">Sqm</span><input class="qsv-input" id="qsvNjSqm" type="number" min="0" step="0.01"></div>' +
         '<div><span class="qsv-label">Linear m</span><input class="qsv-input" id="qsvNjLin" type="number" min="0" step="0.01"></div>' +
+        '<div><span class="qsv-label">Total units</span><input class="qsv-input" id="qsvNjUnits" type="number" min="0" step="1" placeholder="0"></div>' +
         '<div><span class="qsv-label">Specification</span><input class="qsv-input" id="qsvNjSpec"></div>' +
         '<div><span class="qsv-label">Description</span><textarea class="qsv-textarea" id="qsvNjDesc"></textarea></div>' +
         '<div><span class="qsv-label">Target completion</span><input class="qsv-input" id="qsvNjDate" type="date"></div>' +
@@ -476,6 +477,7 @@
           location: document.getElementById('qsvNjLoc').value || null,
           sqm: document.getElementById('qsvNjSqm').value || null,
           linearMeters: document.getElementById('qsvNjLin').value || null,
+          totalUnits: document.getElementById('qsvNjUnits').value || null,
           specification: document.getElementById('qsvNjSpec').value || null,
           description: document.getElementById('qsvNjDesc').value || null,
           targetCompletionDate: document.getElementById('qsvNjDate').value || null,

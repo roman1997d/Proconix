@@ -432,6 +432,7 @@ function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCo
     location: row.location || '',
     sqm: row.sqm || '',
     linearMeters: row.linear_meters || '',
+    totalUnits: row.total_units || '',
     specification: row.specification || '',
     description: row.description || '',
     targetCompletionDate: row.target_completion_date ? row.target_completion_date.toISOString().slice(0, 10) : '',
@@ -475,7 +476,7 @@ async function listJobs(req, res) {
   try {
     const jobs = await pool.query(
       `SELECT j.id, j.project_id, j.job_number, j.job_title, j.floor_id, j.floor_code, j.location, j.sqm, j.linear_meters,
-              j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
+              j.total_units, j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
               j.cost_value, j.responsible_id, j.responsible_user_id, j.status_id, j.created_at, j.created_by
        FROM qa_jobs j
        WHERE j.project_id = $1 ORDER BY j.job_number`,
@@ -616,7 +617,7 @@ async function getJob(req, res) {
   try {
     const job = await pool.query(
       `SELECT j.id, j.project_id, j.job_number, j.job_title, j.floor_id, j.floor_code, j.location, j.sqm, j.linear_meters,
-              j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
+              j.total_units, j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
               j.cost_value, j.responsible_id, j.responsible_user_id, j.status_id, j.created_at, j.created_by
        FROM qa_jobs j
        INNER JOIN projects p ON p.id = j.project_id AND p.company_id = $1
@@ -725,11 +726,11 @@ async function createJob(req, res) {
   try {
     const insert = await pool.query(
       `INSERT INTO qa_jobs (
-        project_id, job_number, job_title, floor_id, floor_code, location, sqm, linear_meters,
+        project_id, job_number, job_title, floor_id, floor_code, location, sqm, linear_meters, total_units,
         specification, description, target_completion_date, cost_included, cost_type_id, cost_value,
         responsible_user_id, status_id, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-      RETURNING id, project_id, job_number, job_title, floor_id, floor_code, location, sqm, linear_meters,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      RETURNING id, project_id, job_number, job_title, floor_id, floor_code, location, sqm, linear_meters, total_units,
         specification, description, target_completion_date, cost_included, cost_type_id, cost_value,
         responsible_user_id, status_id, created_at, created_by`,
       [
@@ -741,6 +742,7 @@ async function createJob(req, res) {
         (b.location != null && String(b.location)) || null,
         (b.sqm != null && String(b.sqm)) || null,
         (b.linearMeters != null && String(b.linearMeters)) || null,
+        (b.totalUnits != null && String(b.totalUnits)) || null,
         (b.specification != null && String(b.specification)) || null,
         (b.description != null && String(b.description)) || null,
         b.targetCompletionDate || null,
@@ -801,9 +803,10 @@ async function createJob(req, res) {
     );
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ message: 'Job number already exists for this project.' });
-    if (err.code === '42703' && /job_title/i.test(err.message || '')) {
+    if (err.code === '42703' && /job_title|total_units/i.test(err.message || '')) {
       return res.status(503).json({
-        message: 'Database missing job_title column. Run: psql ... -f scripts/alter_qa_jobs_job_title.sql',
+        message:
+          'Database schema out of date. Run: scripts/alter_qa_jobs_job_title.sql and scripts/alter_qa_jobs_total_units.sql',
       });
     }
     console.error('QA createJob:', err);
@@ -856,6 +859,9 @@ async function syncPlanningForQaJob(companyId, qaJobId, managerId) {
         j.job_title,
         j.floor_code,
         j.location,
+        j.sqm,
+        j.linear_meters,
+        j.total_units,
         j.specification,
         j.description,
         j.target_completion_date,
@@ -945,6 +951,9 @@ async function syncPlanningForQaJob(companyId, qaJobId, managerId) {
   const descBits = [];
   if (qa.floor_code) descBits.push('Floor: ' + qa.floor_code);
   if (qa.location) descBits.push('Location: ' + qa.location);
+  if (qa.sqm) descBits.push('Sqm: ' + String(qa.sqm).trim());
+  if (qa.linear_meters) descBits.push('Linear m: ' + String(qa.linear_meters).trim());
+  if (qa.total_units) descBits.push('Units: ' + String(qa.total_units).trim());
   if (qa.target_completion_date) descBits.push('Target: ' + String(qa.target_completion_date).slice(0, 10));
   if (qa.description) descBits.push(String(qa.description));
   const taskDescription = descBits.join(' • ') || qa.description || null;

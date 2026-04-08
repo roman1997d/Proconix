@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS qa_jobs (
   location               VARCHAR(500),
   sqm                    VARCHAR(100),
   linear_meters          VARCHAR(100),
+  total_units            VARCHAR(100),
   specification          VARCHAR(500),
   description            TEXT,
   target_completion_date DATE,
