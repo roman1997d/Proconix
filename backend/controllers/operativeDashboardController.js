@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const { pool } = require('../db/pool');
+const { enrichJobsWithQaPriceTotals } = require('./worklogsController');
 
 const MAX_TASK_CONFIRMATION_PHOTOS = 10;
 
@@ -938,6 +939,17 @@ async function uploadTaskConfirmationPhoto(req, res) {
  * GET /api/operatives/work-log
  * Returns work log entries submitted by the current operative (for "My work entries" list).
  */
+function parseWorkLogJsonField(val, defaultVal) {
+  if (val == null) return defaultVal;
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'object') return val;
+  try {
+    return JSON.parse(val || (Array.isArray(defaultVal) ? '[]' : '{}'));
+  } catch (_) {
+    return defaultVal;
+  }
+}
+
 function rowToWorkLogEntry(row) {
   if (!row) return null;
   return {
@@ -952,8 +964,16 @@ function rowToWorkLogEntry(row) {
     quantity: row.quantity != null ? Number(row.quantity) : null,
     unitPrice: row.unit_price != null ? Number(row.unit_price) : null,
     total: row.total != null ? Number(row.total) : null,
+    description: row.description != null ? String(row.description) : '',
     invoiceFilePath: row.invoice_file_path || null,
-    timesheetJobs: row.timesheet_jobs || [],
+    timesheetJobs: (function () {
+      var ts = parseWorkLogJsonField(row.timesheet_jobs, []);
+      return Array.isArray(ts) ? ts : [];
+    })(),
+    photoUrls: (function () {
+      var p = parseWorkLogJsonField(row.photo_urls, []);
+      return Array.isArray(p) ? p : [];
+    })(),
     operativeArchived: Boolean(row.operative_archived),
     operativeArchivedAt: row.operative_archived_at ? new Date(row.operative_archived_at).toISOString() : null,
     status: row.status || 'pending',
@@ -969,7 +989,7 @@ async function getMyWorkLogs(req, res) {
     try {
       const result = await pool.query(
         `SELECT id, job_display_id, worker_name, project, block, floor, apartment, zone,
-                work_type, quantity, unit_price, total, invoice_file_path, timesheet_jobs,
+                work_type, quantity, unit_price, total, description, invoice_file_path, photo_urls, timesheet_jobs,
                 operative_archived, operative_archived_at,
                 status, submitted_at
          FROM work_logs
@@ -979,7 +999,12 @@ async function getMyWorkLogs(req, res) {
          LIMIT 100`,
         [op.id]
       );
-      const entries = result.rows.map(rowToWorkLogEntry);
+      let entries = result.rows.map(rowToWorkLogEntry);
+      try {
+        await enrichJobsWithQaPriceTotals(entries);
+      } catch (enrichErr) {
+        console.error('enrichJobsWithQaPriceTotals (operative list):', enrichErr);
+      }
       return res.status(200).json({ success: true, entries });
     } catch (err) {
       if (err && err.code === '42703' && /timesheet_jobs|operative_archived/i.test(err.message || '')) {

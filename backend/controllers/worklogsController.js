@@ -721,4 +721,5 @@ module.exports = {
   remove,
   archiveBulk,
   create,
+  enrichJobsWithQaPriceTotals,
 };

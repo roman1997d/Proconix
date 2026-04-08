@@ -764,6 +764,167 @@
   var invoicePathEl = document.getElementById('op-wl-invoice-path');
   var modalWorkReport = document.getElementById('op-modal-work-report');
   var formWorkReport = document.getElementById('op-form-work-report');
+  var modalWorklogOverview = document.getElementById('op-modal-worklog-overview');
+  var worklogOverviewBodyEl = document.getElementById('op-worklog-overview-body');
+  /** @type {Array<object>} last loaded entries for overview modal */
+  var opWorklogEntriesCache = [];
+
+  function formatWorklogOverviewWhen(iso) {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    } catch (e) {
+      return '—';
+    }
+  }
+
+  function formatOpWorklogMoneyDisplay(e) {
+    if (!e) return '—';
+    if (e.total != null && !isNaN(Number(e.total))) return Number(e.total).toFixed(2);
+    if (e.qaPriceWorkTotal != null && !isNaN(Number(e.qaPriceWorkTotal))) return Number(e.qaPriceWorkTotal).toFixed(2);
+    if (e.quantity != null && e.unitPrice != null && !isNaN(Number(e.quantity)) && !isNaN(Number(e.unitPrice))) {
+      return (Number(e.quantity) * Number(e.unitPrice)).toFixed(2);
+    }
+    return '—';
+  }
+
+  function buildWorklogOverviewHtml(entry) {
+    if (!entry) return '<p class="op-text-muted">No data.</p>';
+    var loc = [entry.project, entry.block, entry.floor, entry.apartment, entry.zone].filter(Boolean).join(' / ') || '—';
+    var totalShown = formatOpWorklogMoneyDisplay(entry);
+    var qaExtra =
+      entry.qaPriceWorkTotal != null &&
+      !isNaN(Number(entry.qaPriceWorkTotal)) &&
+      (entry.total == null || isNaN(Number(entry.total)) || Number(entry.qaPriceWorkTotal) !== Number(entry.total))
+        ? '<div class="op-worklog-overview-section"><p class="op-text-muted" style="margin:0;font-size:0.85rem;">QA price work (estimated): <strong>£' +
+          Number(entry.qaPriceWorkTotal).toFixed(2) +
+          '</strong></p></div>'
+        : '';
+    var desc = (entry.description && String(entry.description).trim()) || '';
+    var parts = [];
+    parts.push('<dl class="op-worklog-overview-dl">');
+    parts.push('<dt>Reference</dt><dd>' + escapeHtml(entry.jobId || '—') + '</dd>');
+    parts.push('<dt>Status</dt><dd>' + escapeHtml(String(entry.status || 'pending').replace(/_/g, ' ')) + '</dd>');
+    parts.push('<dt>Submitted</dt><dd>' + escapeHtml(formatWorklogOverviewWhen(entry.submittedAt)) + '</dd>');
+    parts.push('<dt>Location</dt><dd>' + escapeHtml(loc) + '</dd>');
+    parts.push('<dt>Work type</dt><dd>' + escapeHtml(entry.workType || '—') + '</dd>');
+    parts.push(
+      '<dt>Quantity</dt><dd>' + (entry.quantity != null ? escapeHtml(String(entry.quantity)) : '—') + '</dd>'
+    );
+    parts.push(
+      '<dt>Unit price</dt><dd>' +
+        (entry.unitPrice != null ? '£' + Number(entry.unitPrice).toFixed(2) : '—') +
+        '</dd>'
+    );
+    parts.push('<dt>Total</dt><dd><strong>£' + escapeHtml(totalShown) + '</strong></dd>');
+    parts.push('</dl>');
+    if (desc) {
+      parts.push(
+        '<div class="op-worklog-overview-section"><h4>Description</h4><p style="margin:0;white-space:pre-wrap;word-break:break-word;">' +
+          escapeHtml(desc) +
+          '</p></div>'
+      );
+    }
+    parts.push(qaExtra);
+
+    var ts = entry.timesheetJobs;
+    if (Array.isArray(ts)) {
+      ts.forEach(function (block) {
+        if (!block || block.type !== 'qa_price_work' || !Array.isArray(block.entries)) return;
+        var qaHtml =
+          '<div class="op-worklog-overview-section"><h4>QA price work</h4><div class="op-worklog-overview-qa">';
+        block.entries.forEach(function (ent) {
+          var jn = ent.jobNumber != null && String(ent.jobNumber).trim() !== '' ? String(ent.jobNumber) : ent.qaJobId || '—';
+          var jt = (ent.jobTitle && String(ent.jobTitle).trim()) || '';
+          qaHtml +=
+            '<div style="margin-bottom:10px;"><strong>' +
+            escapeHtml('Job ' + jn) +
+            '</strong>' +
+            (jt ? ' — ' + escapeHtml(jt) : '') +
+            '</div>';
+          var sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
+          var labels = ent.stepLabels && typeof ent.stepLabels === 'object' ? ent.stepLabels : {};
+          var keys = Object.keys(sq);
+          if (!keys.length) {
+            qaHtml += '<p class="op-text-muted" style="margin:0;">No step quantities.</p>';
+          } else {
+            qaHtml += '<ul>';
+            keys.forEach(function (k) {
+              var q = sq[k] || {};
+              var bits = [];
+              if (q.m2 != null && String(q.m2).trim() !== '') bits.push('m²: ' + escapeHtml(String(q.m2)));
+              if (q.linear != null && String(q.linear).trim() !== '') bits.push('linear m: ' + escapeHtml(String(q.linear)));
+              if (q.units != null && String(q.units).trim() !== '') bits.push('units: ' + escapeHtml(String(q.units)));
+              if (!bits.length) return;
+              var disp = labels[k] || k;
+              qaHtml += '<li><span style="color:var(--op-text-muted);font-size:0.8rem;">' + escapeHtml(disp) + '</span> — ' + bits.join(', ') + '</li>';
+            });
+            qaHtml += '</ul>';
+          }
+          qaHtml += '</div>';
+        });
+        qaHtml += '</div></div>';
+        parts.push(qaHtml);
+      });
+      var tsIdx = 0;
+      ts.forEach(function (tj) {
+        if (!tj || tj.type === 'qa_price_work') return;
+        var photos = tj && Array.isArray(tj.photos) ? tj.photos : [];
+        if (!photos.length) return;
+        tsIdx += 1;
+        parts.push(
+          '<div class="op-worklog-overview-section"><h4>Timesheet job ' +
+            tsIdx +
+            ' — photos</h4><div class="op-worklog-overview-photos">'
+        );
+        photos.forEach(function (url) {
+          parts.push(
+            '<img src="' +
+              escapeHtml(url) +
+              '" alt="" data-op-overview-photo="' +
+              escapeHtml(url) +
+              '">'
+          );
+        });
+        parts.push('</div></div>');
+      });
+    }
+
+    var purls = entry.photoUrls && Array.isArray(entry.photoUrls) ? entry.photoUrls : [];
+    if (purls.length) {
+      parts.push('<div class="op-worklog-overview-section"><h4>Photos</h4><div class="op-worklog-overview-photos">');
+      purls.forEach(function (url) {
+        parts.push(
+          '<img src="' + escapeHtml(url) + '" alt="" data-op-overview-photo="' + escapeHtml(url) + '">'
+        );
+      });
+      parts.push('</div></div>');
+    }
+
+    var inv = entry.invoiceFilePath || entry.invoice_file_path || '';
+    if (inv) {
+      parts.push(
+        '<div class="op-worklog-overview-section"><a href="' +
+          escapeHtml(inv) +
+          '" target="_blank" rel="noopener" class="op-btn op-btn-secondary op-btn-sm">Open uploaded file / invoice</a></div>'
+      );
+    }
+
+    return parts.join('');
+  }
+
+  function openWorklogOverviewModal(entry) {
+    if (!modalWorklogOverview || !worklogOverviewBodyEl) return;
+    document.getElementById('op-wlo-title').textContent = entry && entry.jobId ? 'Work entry ' + entry.jobId : 'Work entry';
+    worklogOverviewBodyEl.innerHTML = buildWorklogOverviewHtml(entry);
+    worklogOverviewBodyEl.querySelectorAll('img[data-op-overview-photo]').forEach(function (img) {
+      img.addEventListener('click', function () {
+        var u = img.getAttribute('data-op-overview-photo');
+        if (u) window.open(u, '_blank', 'noopener');
+      });
+    });
+    openModal(modalWorklogOverview);
+  }
 
   function loadWorklogList() {
     if (!worklogListEl) return;
@@ -797,6 +958,7 @@
   function renderWorklogList(entries) {
     if (!worklogListEl) return;
     entries = Array.isArray(entries) ? entries : [];
+    opWorklogEntriesCache = entries.slice(0, 20);
     if (entries.length === 0) {
       worklogListEl.innerHTML = '<p class="op-worklog-empty">No entries yet. Add one to send to your manager.</p>';
       return;
@@ -805,19 +967,36 @@
       var loc = [e.project, e.block, e.floor, e.apartment, e.zone].filter(Boolean).join(' / ') || '—';
       var submitted = e.submittedAt ? formatDate(e.submittedAt) : '—';
       var invoicePath = e.invoiceFilePath || e.invoice_file_path || '';
-      var clickableAttr = invoicePath ? ' data-op-invoice-path="' + escapeHtml(invoicePath) + '"' : '';
+      var invAttr = invoicePath ? ' data-op-invoice-path="' + escapeHtml(invoicePath) + '"' : '';
+      var money =
+        e.total != null && !isNaN(Number(e.total))
+          ? Number(e.total).toFixed(2)
+          : e.qaPriceWorkTotal != null && !isNaN(Number(e.qaPriceWorkTotal))
+            ? Number(e.qaPriceWorkTotal).toFixed(2)
+            : '—';
       return (
-        '<div class="op-worklog-item"' + clickableAttr + ' data-op-entry-id="' + escapeHtml(String(e.id != null ? e.id : '')) + '">' +
+        '<div class="op-worklog-item op-worklog-item--openable"' +
+        invAttr +
+        ' data-op-entry-id="' +
+        escapeHtml(String(e.id != null ? e.id : '')) +
+        '">' +
         '<div class="op-worklog-item-head">' +
-        '<span class="op-worklog-item-id">' + escapeHtml(e.workType || 'Work') + ' – ' + escapeHtml(loc) + '</span>' +
-        '<span class="op-worklog-item-status">' + escapeHtml(e.status || 'Pending') + '</span>' +
+        '<span class="op-worklog-item-id">' +
+        escapeHtml(e.workType || 'Work') +
+        ' – ' +
+        escapeHtml(loc) +
+        '</span>' +
+        '<span class="op-worklog-item-status">' +
+        escapeHtml(e.status || 'Pending') +
+        '</span>' +
         '</div>' +
         '<div class="op-worklog-item-meta">' +
         (e.jobId ? escapeHtml(e.jobId) + ' · ' : '') +
         escapeHtml(submitted) +
         ' · £' +
-        (e.total != null ? Number(e.total).toFixed(2) : '0') +
+        money +
         '</div>' +
+        '<p class="op-worklog-item-hint">Tap for details, prices &amp; photos</p>' +
         '<div class="op-worklog-item-actions">' +
         '<button type="button" class="op-btn op-btn-danger-outline op-btn-xs op-worklog-archive" data-entry-id="' +
         escapeHtml(String(e.id != null ? e.id : '')) +
@@ -850,11 +1029,14 @@
           });
         return;
       }
-      var item = e.target.closest('.op-worklog-item');
+      var item = e.target.closest('.op-worklog-item--openable');
       if (!item) return;
-      var p = item.getAttribute('data-op-invoice-path');
-      if (!p) return;
-      window.open(p, '_blank', 'noopener');
+      var id = item.getAttribute('data-op-entry-id');
+      if (!id) return;
+      var entry = opWorklogEntriesCache.find(function (x) {
+        return String(x.id) === String(id);
+      });
+      if (entry) openWorklogOverviewModal(entry);
     });
   }
 

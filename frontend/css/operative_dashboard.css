@@ -448,8 +448,74 @@ a.op-doc-row:active {
   border: 1px solid var(--op-card-border);
   font-size: 0.9rem;
 }
-.op-worklog-item[data-op-invoice-path] {
+.op-worklog-item--openable {
   cursor: pointer;
+}
+.op-worklog-item--openable:active {
+  opacity: 0.92;
+}
+.op-modal-dialog-worklog-overview .op-modal-body {
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.op-worklog-overview-dl {
+  margin: 0;
+  display: grid;
+  gap: 6px 12px;
+  grid-template-columns: auto 1fr;
+  font-size: 0.9rem;
+}
+.op-worklog-overview-dl dt {
+  margin: 0;
+  color: var(--op-text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.op-worklog-overview-dl dd {
+  margin: 0;
+  grid-column: 2;
+}
+.op-worklog-overview-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--op-card-border);
+}
+.op-worklog-overview-section h4 {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--op-accent);
+}
+.op-worklog-overview-qa {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: var(--op-radius);
+  padding: 10px;
+  font-size: 0.85rem;
+}
+.op-worklog-overview-qa ul {
+  margin: 6px 0 0;
+  padding-left: 1.1rem;
+}
+.op-worklog-overview-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.op-worklog-overview-photos img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--op-card-border);
+  cursor: pointer;
+}
+.op-worklog-item-hint {
+  font-size: 0.75rem;
+  color: var(--op-text-muted);
+  margin-top: 4px;
 }
 
 .op-worklog-item-actions {
