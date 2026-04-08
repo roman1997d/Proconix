@@ -465,7 +465,7 @@ function stepQuantitiesFromRow(row) {
   }
 }
 
-function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, responsibleUserId, forSupervisor) {
+function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, responsibleUserId, forSupervisor, crewIds) {
   const responsibleId = responsibleUserId != null ? String(responsibleUserId) : (row.responsible_id != null ? String(row.responsible_id) : '');
   const base = {
     id: String(row.id),
@@ -484,6 +484,7 @@ function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCo
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
     createdBy: row.created_by || '',
     templateIds: templateIds || [],
+    crewIds: Array.isArray(crewIds) ? crewIds : [],
     costIncluded: !!row.cost_included,
     costType: costCode || '',
     costValue: row.cost_value || '',
@@ -549,9 +550,12 @@ async function listJobs(req, res) {
     }
 
     const jobIds = jobs.rows.map((j) => j.id);
-    const [tplLinks, workerUserLinks, photoAgg] = await Promise.all([
+    const [tplLinks, workerUserLinks, crewLinks, photoAgg] = await Promise.all([
       jobIds.length ? pool.query('SELECT job_id, template_id FROM qa_job_templates WHERE job_id = ANY($1)', [jobIds]) : { rows: [] },
       jobIds.length ? pool.query('SELECT job_id, user_id FROM qa_job_user_workers WHERE job_id = ANY($1)', [jobIds]).catch(() => ({ rows: [] })) : { rows: [] },
+      jobIds.length
+        ? pool.query('SELECT job_id, crew_id FROM qa_job_crews WHERE job_id = ANY($1)', [jobIds]).catch(() => ({ rows: [] }))
+        : { rows: [] },
       (async () => {
         if (!jobIds.length) return { counts: {}, previews: {} };
         try {
@@ -628,6 +632,11 @@ async function listJobs(req, res) {
       if (!workerByJob[r.job_id]) workerByJob[r.job_id] = [];
       workerByJob[r.job_id].push(String(r.user_id));
     });
+    const crewByJob = {};
+    (crewLinks.rows || []).forEach((r) => {
+      if (!crewByJob[r.job_id]) crewByJob[r.job_id] = [];
+      crewByJob[r.job_id].push(String(r.crew_id));
+    });
 
     const list = jobs.rows.map((row) => {
       const j = jobRowToJson(
@@ -638,7 +647,8 @@ async function listJobs(req, res) {
         row.cost_type_id ? costMap[row.cost_type_id] : null,
         row.status_id ? statusMap[row.status_id] : null,
         row.responsible_user_id,
-        !!req.supervisor
+        !!req.supervisor,
+        crewByJob[row.id] || []
       );
       j.stepPhotoCount = photoAgg.counts[row.id] || 0;
       j.stepPhotoPreviewUrl = photoAgg.previews[row.id] || null;
@@ -676,21 +686,23 @@ async function getJob(req, res) {
     }
     const row = job.rows[0];
 
-    const [tplLinks, workerUserLinks, statusRow, costRow, floorRow] = await Promise.all([
+    const [tplLinks, workerUserLinks, crewRows, statusRow, costRow, floorRow] = await Promise.all([
       pool.query('SELECT template_id FROM qa_job_templates WHERE job_id = $1', [id]),
       pool.query('SELECT user_id FROM qa_job_user_workers WHERE job_id = $1', [id]).catch(() => ({ rows: [] })),
+      pool.query('SELECT crew_id FROM qa_job_crews WHERE job_id = $1', [id]).catch(() => ({ rows: [] })),
       row.status_id ? pool.query('SELECT code FROM qa_job_statuses WHERE id = $1', [row.status_id]) : { rows: [] },
       row.cost_type_id ? pool.query('SELECT code FROM qa_cost_types WHERE id = $1', [row.cost_type_id]) : { rows: [] },
       row.floor_id ? pool.query('SELECT code FROM qa_floors WHERE id = $1', [row.floor_id]) : { rows: [] },
     ]);
     const templateIds = tplLinks.rows.map((r) => String(r.template_id));
     const workerIds = (workerUserLinks.rows || []).map((r) => String(r.user_id));
+    const crewIds = (crewRows.rows || []).map((r) => String(r.crew_id));
     const statusCode = statusRow.rows[0] ? statusRow.rows[0].code : null;
     const costCode = costRow.rows[0] ? costRow.rows[0].code : null;
     const floorCode = floorRow.rows[0] ? floorRow.rows[0].code : row.floor_code;
 
     return res.status(200).json(
-      jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, row.responsible_user_id, !!req.supervisor)
+      jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, row.responsible_user_id, !!req.supervisor, crewIds)
     );
   } catch (err) {
     console.error('QA getJob:', err);
@@ -779,6 +791,17 @@ async function createJob(req, res) {
     unitsVal = agg.totalUnits;
   }
 
+  let costValueStored = null;
+  if (b.costIncluded) {
+    if (b.costValue != null) {
+      if (typeof b.costValue === 'object' && b.costValue !== null) costValueStored = JSON.stringify(b.costValue);
+      else {
+        const s = String(b.costValue).trim();
+        costValueStored = s || null;
+      }
+    }
+  }
+
   try {
     const insert = await pool.query(
       `INSERT INTO qa_jobs (
@@ -807,7 +830,7 @@ async function createJob(req, res) {
         b.targetCompletionDate || null,
         !!b.costIncluded,
         costTypeId,
-        (b.costValue != null && String(b.costValue)) || null,
+        costValueStored,
         responsibleUserId,
         statusId,
         createdBy,
@@ -826,12 +849,29 @@ async function createJob(req, res) {
       if (Number.isInteger(u)) await pool.query('INSERT INTO qa_job_user_workers (job_id, user_id) VALUES ($1, $2) ON CONFLICT (job_id, user_id) DO NOTHING', [jobId, u]).catch(() => {});
     }
 
-    const [tplLinks, workerUserLinks] = await Promise.all([
+    const crewIdsBody = Array.isArray(b.crewIds) ? b.crewIds : [];
+    for (const cid of crewIdsBody) {
+      const c = parseInt(String(cid), 10);
+      if (!Number.isInteger(c)) continue;
+      const ok = await pool.query('SELECT 1 FROM crews WHERE id = $1 AND company_id = $2', [c, companyId]).catch(() => ({ rows: [] }));
+      if (ok.rows && ok.rows.length) {
+        await pool
+          .query(
+            'INSERT INTO qa_job_crews (job_id, crew_id) VALUES ($1, $2) ON CONFLICT (job_id, crew_id) DO NOTHING',
+            [jobId, c]
+          )
+          .catch(() => {});
+      }
+    }
+
+    const [tplLinks, workerUserLinks, crewLinksOut] = await Promise.all([
       pool.query('SELECT template_id FROM qa_job_templates WHERE job_id = $1', [jobId]),
       pool.query('SELECT user_id FROM qa_job_user_workers WHERE job_id = $1', [jobId]).catch(() => ({ rows: [] })),
+      pool.query('SELECT crew_id FROM qa_job_crews WHERE job_id = $1', [jobId]).catch(() => ({ rows: [] })),
     ]);
     const outTemplateIds = tplLinks.rows.map((r) => String(r.template_id));
     const outWorkerIds = (workerUserLinks.rows || []).map((r) => String(r.user_id));
+    const outCrewIds = (crewLinksOut.rows || []).map((r) => String(r.crew_id));
 
     // --- Auto sync into Task & Planning (Gantt + Kanban) ---
     // Make QA jobs visible in Planning and keep them in sync on updates/deletes.
@@ -857,11 +897,17 @@ async function createJob(req, res) {
         costCode,
         statusCode,
         row.responsible_user_id,
-        !!req.supervisor
+        !!req.supervisor,
+        outCrewIds
       )
     );
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ message: 'Job number already exists for this project.' });
+    if (err.code === '42P01' && /qa_job_crews/i.test(err.message || '')) {
+      return res.status(503).json({
+        message: 'Database schema out of date. Run scripts/alter_qa_job_crews.sql (requires crews table).',
+      });
+    }
     if (err.code === '42703' && /job_title|total_units|step_quantities/i.test(err.message || '')) {
       return res.status(503).json({
         message:

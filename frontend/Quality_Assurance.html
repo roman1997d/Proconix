@@ -189,14 +189,22 @@
             <input type="hidden" name="qa-work-type" id="qa-work-type-value" value="day">
             <div id="qa-cost-day-wrap" class="qa-form-grid" style="margin-top:1rem;">
               <div>
-                <label class="qa-label" for="qa-job-days">Days</label>
+                <label class="qa-label" for="qa-job-days">Number of days</label>
                 <input type="number" id="qa-job-days" class="qa-input" min="0" step="1" placeholder="0">
+              </div>
+              <div>
+                <label class="qa-label" for="qa-job-rate-day">Cost per day (£)</label>
+                <input type="number" id="qa-job-rate-day" class="qa-input" min="0" step="0.01" placeholder="0.00">
               </div>
             </div>
             <div id="qa-cost-hour-wrap" class="qa-form-grid d-none" style="margin-top:1rem;">
               <div>
-                <label class="qa-label" for="qa-job-hours">Hours</label>
+                <label class="qa-label" for="qa-job-hours">Number of hours</label>
                 <input type="number" id="qa-job-hours" class="qa-input" min="0" step="0.5" placeholder="0">
+              </div>
+              <div>
+                <label class="qa-label" for="qa-job-rate-hour">Cost per hour (£)</label>
+                <input type="number" id="qa-job-rate-hour" class="qa-input" min="0" step="0.01" placeholder="0.00">
               </div>
             </div>
             <div id="qa-cost-price-wrap" class="qa-form-grid d-none" style="margin-top:1rem;">
@@ -217,6 +225,11 @@
               <select id="qa-job-responsible" class="qa-select" aria-label="Supervisor">
                 <option value="">— Select —</option>
               </select>
+            </div>
+            <div id="qa-job-crews-wrap">
+              <label class="qa-label">Crews (optional)</label>
+              <p class="qa-message" style="margin-bottom:0.5rem;">Assign whole teams from Operatives → Crews, or pick individual workers below.</p>
+              <div class="qa-checklist" id="qa-job-crews-list"></div>
             </div>
             <div>
               <label class="qa-label" for="qa-worker-category">Filter workers</label>

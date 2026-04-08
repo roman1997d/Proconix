@@ -98,6 +98,9 @@
     { id: 'sup3', name: 'James Wright' }
   ];
 
+  /** Company crews from GET /api/crews (manager); used in Create QA Job personnel tab. */
+  var crewsData = [];
+
   var qaApiLocal = (function () {
     var _templates = [];
     var _jobs = [];
@@ -196,7 +199,8 @@
           if (v > maxSeq) maxSeq = v;
         });
         return Promise.resolve(qaFormatSeqToJobNumber(maxSeq + 1));
-      }
+      },
+      getCrews: function () { return Promise.resolve([]); }
     };
   })();
 
@@ -294,6 +298,25 @@
       return qaFetch('/jobs/next-number?projectId=' + encodeURIComponent(projectId)).then(function (d) {
         return (d && d.jobNumber) ? d.jobNumber : 'A01';
       }, function () { return 'A01'; });
+    },
+    /** Operatives → Crews (manager session). Not under /api/qa; uses /api/crews. */
+    getCrews: function () {
+      return fetch('/api/crews', {
+        headers: Object.assign({}, getQASessionHeaders(), { Accept: 'application/json' }),
+        credentials: 'same-origin',
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (!data || !data.success || !Array.isArray(data.crews)) return [];
+          return data.crews.map(function (c) {
+            return {
+              id: String(c.id),
+              name: (c.name && String(c.name).trim()) || ('Crew ' + c.id),
+              memberCount: c.member_count,
+            };
+          });
+        })
+        .catch(function () { return []; });
     }
   };
 
@@ -630,12 +653,72 @@
     });
   }
 
+  function getCrewNames(ids) {
+    if (!ids || !ids.length) return [];
+    return ids.map(function (id) {
+      var c = crewsData.find(function (x) { return String(x.id) === String(id); });
+      return c ? c.name : id;
+    });
+  }
+
+  function parseQaCostValue(raw) {
+    if (raw == null || raw === '') return null;
+    var s = String(raw).trim();
+    if (s.charAt(0) === '{') {
+      try {
+        return JSON.parse(s);
+      } catch (e) {
+        return { legacy: true, raw: s };
+      }
+    }
+    return { legacy: true, raw: s };
+  }
+
   function getCostDisplay(job) {
     if (!job.costIncluded || !job.costType) return 'No cost provided';
     var v = job.costValue || '';
-    if (job.costType === 'day') return 'Day work (' + v + ' day' + (v !== '1' ? 's' : '') + ')';
-    if (job.costType === 'hour') return 'Hour work (' + v + ' hour' + (v !== '1' ? 's' : '') + ')';
-    if (job.costType === 'price') return 'Price work (£' + (v ? Number(v).toFixed(2) : '0') + ')';
+    var p = parseQaCostValue(v);
+    if (job.costType === 'day') {
+      if (p && !p.legacy && p.days != null && p.ratePerDay != null) {
+        var d = parseFloat(p.days);
+        var r = parseFloat(p.ratePerDay);
+        var td = (d === d ? d : 0) * (r === r ? r : 0);
+        return (
+          'Day work (' +
+          (d === d ? d : 0) +
+          ' day(s) × £' +
+          (r === r ? r.toFixed(2) : '0.00') +
+          '/day = £' +
+          td.toFixed(2) +
+          ')'
+        );
+      }
+      var dv = p && p.legacy ? p.raw : v;
+      return 'Day work (' + dv + ' day(s))';
+    }
+    if (job.costType === 'hour') {
+      if (p && !p.legacy && p.hours != null && p.ratePerHour != null) {
+        var h = parseFloat(p.hours);
+        var rh = parseFloat(p.ratePerHour);
+        var th = (h === h ? h : 0) * (rh === rh ? rh : 0);
+        return (
+          'Hour work (' +
+          (h === h ? h : 0) +
+          ' h × £' +
+          (rh === rh ? rh.toFixed(2) : '0.00') +
+          '/h = £' +
+          th.toFixed(2) +
+          ')'
+        );
+      }
+      var hv = p && p.legacy ? p.raw : v;
+      return 'Hour work (' + hv + ' hour(s))';
+    }
+    if (job.costType === 'price') {
+      if (p && !p.legacy && p.total != null) return 'Price work (£' + Number(p.total).toFixed(2) + ')';
+      var num = p && p.legacy ? p.raw : v;
+      return 'Price work (£' + (num ? Number(num).toFixed(2) : '0.00') + ')';
+    }
     return 'No cost provided';
   }
 
@@ -733,10 +816,12 @@
       refreshJobNumberPreview();
       switchJobTab('template');
       refreshJobTemplatesList();
-      renderWorkersList(document.getElementById('qa-worker-category').value);
+      refreshPersonnelUI();
+      loadQACrews();
       updateCostPreview();
     }
     if (name === 'jobs') {
+      loadQACrews();
       var opt = projectSelect.options[projectSelect.selectedIndex];
       document.getElementById('qa-jobs-page-title').textContent = 'QA Jobs — ' + (opt ? opt.text.split('–')[0].trim() : '—');
       document.getElementById('qa-jobs-project-sub').textContent = opt ? opt.text : '';
@@ -1298,17 +1383,23 @@
     }
     var wt = document.getElementById('qa-work-type-value').value;
     if (wt === 'day') {
-      var d = document.getElementById('qa-job-days') && document.getElementById('qa-job-days').value;
-      el.textContent = 'Preview: Day work — ' + (d || '0') + ' day(s) recorded.';
+      var d = parseFloat(document.getElementById('qa-job-days') && document.getElementById('qa-job-days').value) || 0;
+      var rd = parseFloat(document.getElementById('qa-job-rate-day') && document.getElementById('qa-job-rate-day').value) || 0;
+      var td = d * rd;
+      el.textContent =
+        'Preview: Day work — ' + d + ' day(s) × £' + rd.toFixed(2) + '/day = £' + td.toFixed(2) + ' total.';
     } else if (wt === 'hour') {
-      var h = document.getElementById('qa-job-hours') && document.getElementById('qa-job-hours').value;
-      el.textContent = 'Preview: Hour work — ' + (h || '0') + ' hour(s).';
+      var h = parseFloat(document.getElementById('qa-job-hours') && document.getElementById('qa-job-hours').value) || 0;
+      var rh = parseFloat(document.getElementById('qa-job-rate-hour') && document.getElementById('qa-job-rate-hour').value) || 0;
+      var th = h * rh;
+      el.textContent =
+        'Preview: Hour work — ' + h + ' h × £' + rh.toFixed(2) + '/h = £' + th.toFixed(2) + ' total.';
     } else {
       var p = document.getElementById('qa-job-total-price') && document.getElementById('qa-job-total-price').value;
       el.textContent = 'Preview: Fixed price — £' + (p ? Number(p).toFixed(2) : '0.00');
     }
   }
-  ['qa-job-days', 'qa-job-hours', 'qa-job-total-price'].forEach(function (id) {
+  ['qa-job-days', 'qa-job-rate-day', 'qa-job-hours', 'qa-job-rate-hour', 'qa-job-total-price'].forEach(function (id) {
     var n = document.getElementById(id);
     if (n) n.addEventListener('input', updateCostPreview);
   });
@@ -1517,6 +1608,63 @@
     renderWorkersList(this.value);
   });
 
+  function renderJobCrewsList() {
+    var listEl = document.getElementById('qa-job-crews-list');
+    if (!listEl) return;
+    var checked = [];
+    listEl.querySelectorAll('input[name="qa-job-crew"]:checked').forEach(function (cb) {
+      checked.push(cb.value);
+    });
+    listEl.innerHTML = '';
+    if (!crewsData.length) {
+      listEl.innerHTML =
+        '<p class="qa-message">No crews loaded. Create teams under Dashboard → Operatives → Crews (manager session).</p>';
+      return;
+    }
+    crewsData.forEach(function (c) {
+      var label = document.createElement('label');
+      label.className = 'qa-check-item';
+      var isChecked = checked.indexOf(c.id) !== -1;
+      var meta =
+        c.memberCount != null && c.memberCount !== ''
+          ? ' · ' + c.memberCount + ' member' + (c.memberCount === 1 ? '' : 's')
+          : '';
+      label.innerHTML =
+        '<input type="checkbox" name="qa-job-crew" value="' +
+        escapeHtml(c.id) +
+        '"' +
+        (isChecked ? ' checked' : '') +
+        '> <span>' +
+        escapeHtml(c.name) +
+        '<span class="qa-message">' +
+        escapeHtml(meta) +
+        '</span></span>';
+      listEl.appendChild(label);
+    });
+  }
+
+  function loadQACrews() {
+    if (!(window.QA_CONFIG && window.QA_CONFIG.useBackend) || QA_SUPERVISOR_MODE) {
+      crewsData = [];
+      renderJobCrewsList();
+      return;
+    }
+    if (typeof qaApi.getCrews !== 'function') {
+      renderJobCrewsList();
+      return;
+    }
+    qaApi
+      .getCrews()
+      .then(function (list) {
+        crewsData = list || [];
+        renderJobCrewsList();
+      })
+      .catch(function () {
+        crewsData = [];
+        renderJobCrewsList();
+      });
+  }
+
   function refreshPersonnelUI() {
     var sel = document.getElementById('qa-job-responsible');
     if (sel) {
@@ -1539,15 +1687,20 @@
       });
     }
     renderWorkersList('');
+    renderJobCrewsList();
   }
 
   function loadQAPersonnel() {
     if (!(window.QA_CONFIG && window.QA_CONFIG.useBackend)) return;
-    qaApi.getPersonnel().then(function (data) {
-      if (data && Array.isArray(data.supervisors)) supervisorsData = data.supervisors;
-      if (data && Array.isArray(data.workers)) workersData = data.workers;
-      refreshPersonnelUI();
-    }).catch(function () {});
+    qaApi
+      .getPersonnel()
+      .then(function (data) {
+        if (data && Array.isArray(data.supervisors)) supervisorsData = data.supervisors;
+        if (data && Array.isArray(data.workers)) workersData = data.workers;
+        refreshPersonnelUI();
+        loadQACrews();
+      })
+      .catch(function () {});
   }
 
   document.getElementById('qa-job-cancel').addEventListener('click', function () { showView('home'); });
@@ -1564,12 +1717,20 @@
     var stepQuantities = collectJobCreateStepQuantities();
     var workerIds = [];
     document.querySelectorAll('#qa-workers-list input[name="qa-worker"]:checked').forEach(function (cb) { workerIds.push(cb.value); });
+    var crewIds = [];
+    document.querySelectorAll('#qa-job-crews-list input[name="qa-job-crew"]:checked').forEach(function (cb) { crewIds.push(cb.value); });
     var includeCost = document.getElementById('qa-job-include-cost') && document.getElementById('qa-job-include-cost').checked;
     var costType = includeCost ? document.getElementById('qa-work-type-value').value : '';
     var costValue = '';
-    if (costType === 'day') costValue = (document.getElementById('qa-job-days') && document.getElementById('qa-job-days').value) || '';
-    else if (costType === 'hour') costValue = (document.getElementById('qa-job-hours') && document.getElementById('qa-job-hours').value) || '';
-    else if (costType === 'price') {
+    if (costType === 'day') {
+      var d = parseFloat(document.getElementById('qa-job-days') && document.getElementById('qa-job-days').value) || 0;
+      var rd = parseFloat(document.getElementById('qa-job-rate-day') && document.getElementById('qa-job-rate-day').value) || 0;
+      costValue = JSON.stringify({ type: 'day', days: d, ratePerDay: rd });
+    } else if (costType === 'hour') {
+      var h = parseFloat(document.getElementById('qa-job-hours') && document.getElementById('qa-job-hours').value) || 0;
+      var rh = parseFloat(document.getElementById('qa-job-rate-hour') && document.getElementById('qa-job-rate-hour').value) || 0;
+      costValue = JSON.stringify({ type: 'hour', hours: h, ratePerHour: rh });
+    } else if (costType === 'price') {
       costValue = (document.getElementById('qa-job-total-price') && document.getElementById('qa-job-total-price').value) || '';
       if (!String(costValue).trim() && includeCost) {
         var estAuto = computeJobPriceFromStepQuantities(jobCreateTemplatesCache, templateIds, stepQuantities);
@@ -1600,6 +1761,7 @@
       costValue: costValue,
       responsibleId: (document.getElementById('qa-job-responsible') && document.getElementById('qa-job-responsible').value) || '',
       workerIds: workerIds,
+      crewIds: crewIds,
       status: 'new',
       notes: ''
     };
@@ -1741,7 +1903,14 @@
         '<span class="qa-badge ' + statusBadgeClass(st) + '">' + escapeHtml(getStatusLabel(st)) + '</span>' +
         '<p class="qa-job-card-pro__row"><i data-lucide="layers" style="width:14px;height:14px;vertical-align:middle;"></i> Level: ' + escapeHtml(job.floor || '—') + ' · ' + escapeHtml(formatJobCostAndEstimate(job, templates)) + '</p>' +
         '<p class="qa-job-card-pro__row"><i data-lucide="calendar" style="width:14px;height:14px;vertical-align:middle;"></i> Due: ' + escapeHtml(formatJobDate(job.targetCompletionDate)) + '</p>' +
-        '<p class="qa-job-card-pro__row">Supervisor: ' + escapeHtml(getSupervisorName(job.responsibleId)) + ' · Workers: ' + (job.workerIds ? job.workerIds.length : 0) + '</p>' +
+        '<p class="qa-job-card-pro__row">Supervisor: ' +
+          escapeHtml(getSupervisorName(job.responsibleId)) +
+          ' · Workers: ' +
+          (job.workerIds ? job.workerIds.length : 0) +
+          (job.crewIds && job.crewIds.length
+            ? ' · Crews: ' + getCrewNames(job.crewIds).map(escapeHtml).join(', ')
+            : '') +
+          '</p>' +
         (job.stepPhotoCount > 0
           ? '<div class="qa-job-card-pro__photos">' +
             (job.stepPhotoPreviewUrl
@@ -1960,7 +2129,13 @@
         '<dt>Cost</dt><dd>' + escapeHtml(getCostDisplay(job)) + '</dd>' +
         '<dt>Target</dt><dd>' + escapeHtml(formatJobDate(job.targetCompletionDate)) + '</dd>' +
         '<dt>Templates</dt><dd>' + (tplNames.length ? tplNames.map(escapeHtml).join(', ') : '—') + '</dd>' +
-        '<dt>Team</dt><dd>' + escapeHtml(getSupervisorName(job.responsibleId)) + ' · ' + (workerNames.length ? workerNames.map(escapeHtml).join(', ') : '—') + '</dd>' +
+        '<dt>Team</dt><dd>' +
+          escapeHtml(getSupervisorName(job.responsibleId)) +
+          ' · Workers: ' +
+          (workerNames.length ? workerNames.map(escapeHtml).join(', ') : '—') +
+          ' · Crews: ' +
+          (job.crewIds && job.crewIds.length ? getCrewNames(job.crewIds).map(escapeHtml).join(', ') : '—') +
+          '</dd>' +
         '</dl>' +
         buildJobEvidenceSection(evPayload.steps, templates, evPayload.operativePhotos || []);
       document.getElementById('qa-job-drawer-readonly').innerHTML = html;
@@ -2009,5 +2184,7 @@
     });
     var tplCard = document.querySelector('#qa-module-cards [data-action="template"]');
     if (tplCard) tplCard.classList.add('d-none');
+    var jcw = document.getElementById('qa-job-crews-wrap');
+    if (jcw) jcw.classList.add('d-none');
   }
 })();
