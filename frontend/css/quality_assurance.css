@@ -1222,6 +1222,31 @@
   word-break: break-word;
 }
 
+.qa-dl dd.qa-dl__step-qty {
+  white-space: normal;
+}
+
+.qa-step-qty-block {
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--qa-filters-bg);
+  border: 1px solid var(--qa-border);
+  border-radius: var(--qa-radius-input);
+}
+
+.qa-step-qty-block strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.9375rem;
+}
+
+.qa-step-qty-dim {
+  font-size: 0.875rem;
+  color: var(--qa-text-strong);
+  margin-left: 0.15rem;
+  line-height: 1.45;
+}
+
 .qa-dl dt:first-child {
   margin-top: 0;
 }

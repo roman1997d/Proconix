@@ -2055,9 +2055,19 @@
   /* ——— Job drawer ——— */
   var layerJob = document.getElementById('qa-layer-job');
 
-  function formatJobStepQuantitiesReadonly(job, templates) {
-    var sq = job.stepQuantities;
-    if (!sq || typeof sq !== 'object' || !Object.keys(sq).length) return '';
+  function formatQtyDisplay(n, isUnits) {
+    if (n == null || isNaN(n)) return '0';
+    if (isUnits && Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+    var x = Math.round(n * 100) / 100;
+    return String(x);
+  }
+
+  /**
+   * @param {object} [bookedStepQuantities] - from GET job: sums from approved Work Logs (QA price work) per step key
+   */
+  function formatJobStepQuantitiesReadonly(job, templates, bookedStepQuantities) {
+    var sq = job.stepQuantities && typeof job.stepQuantities === 'object' ? job.stepQuantities : {};
+    var booked = bookedStepQuantities && typeof bookedStepQuantities === 'object' ? bookedStepQuantities : {};
     var lines = [];
     var tplById = {};
     (templates || []).forEach(function (t) { tplById[String(t.id)] = t; });
@@ -2066,19 +2076,74 @@
       if (!t || !t.steps) return;
       t.steps.forEach(function (s, idx) {
         var key = jobStepKey(t.id, s.id);
-        var q = sq[key];
-        if (!q) return;
-        var bits = [];
-        if (q.m2 != null && String(q.m2).trim() !== '') bits.push('m²: ' + String(q.m2).trim());
-        if (q.linear != null && String(q.linear).trim() !== '') bits.push('linear m: ' + String(q.linear).trim());
-        if (q.units != null && String(q.units).trim() !== '') bits.push('units: ' + String(q.units).trim());
-        if (!bits.length) return;
+        var q = sq[key] || {};
+        var b = booked[key] || { m2: 0, linear: 0, units: 0 };
+        var bm = typeof b.m2 === 'number' ? b.m2 : parseFloat(b.m2) || 0;
+        var bl = typeof b.linear === 'number' ? b.linear : parseFloat(b.linear) || 0;
+        var bu = typeof b.units === 'number' ? b.units : parseFloat(b.units) || 0;
+
+        var dimLines = [];
+        if (hasPositiveStepRate(s.pricePerM2) || (q.m2 != null && String(q.m2).trim() !== '') || bm > 0) {
+          var tm = parseFloat(q.m2);
+          var hasT = q.m2 != null && String(q.m2).trim() !== '' && !isNaN(tm);
+          var rem = hasT ? Math.max(0, tm - bm) : null;
+          dimLines.push(
+            'm² — Total: ' +
+              (hasT ? formatQtyDisplay(tm, false) : '—') +
+              ' → Booked: ' +
+              formatQtyDisplay(bm, false) +
+              ' → Remaining: ' +
+              (rem != null ? formatQtyDisplay(rem, false) : '—')
+          );
+        }
+        if (hasPositiveStepRate(s.pricePerLinear) || (q.linear != null && String(q.linear).trim() !== '') || bl > 0) {
+          var tl = parseFloat(q.linear);
+          var hasL = q.linear != null && String(q.linear).trim() !== '' && !isNaN(tl);
+          var remL = hasL ? Math.max(0, tl - bl) : null;
+          dimLines.push(
+            'Linear m — Total: ' +
+              (hasL ? formatQtyDisplay(tl, false) : '—') +
+              ' → Booked: ' +
+              formatQtyDisplay(bl, false) +
+              ' → Remaining: ' +
+              (remL != null ? formatQtyDisplay(remL, false) : '—')
+          );
+        }
+        if (hasPositiveStepRate(s.pricePerUnit) || (q.units != null && String(q.units).trim() !== '') || bu > 0) {
+          var tu = parseFloat(q.units);
+          var hasU = q.units != null && String(q.units).trim() !== '' && !isNaN(tu);
+          var remU = hasU ? Math.max(0, tu - bu) : null;
+          dimLines.push(
+            'Units — Total: ' +
+              (hasU ? formatQtyDisplay(tu, true) : '—') +
+              ' → Booked: ' +
+              formatQtyDisplay(bu, true) +
+              ' → Remaining: ' +
+              (remU != null ? formatQtyDisplay(remU, true) : '—')
+          );
+        }
+        if (!dimLines.length) return;
         var title = 'Step ' + (idx + 1) + (s.description ? ' — ' + String(s.description).trim() : '');
-        lines.push('<div><strong>' + escapeHtml(title) + '</strong>: ' + escapeHtml(bits.join(', ')) + '</div>');
+        lines.push(
+          '<div class="qa-step-qty-block"><strong>' +
+            escapeHtml(title) +
+            '</strong>' +
+            dimLines
+              .map(function (line) {
+                return '<div class="qa-step-qty-dim">' + escapeHtml(line) + '</div>';
+              })
+              .join('') +
+            '</div>'
+        );
       });
     });
     if (!lines.length) return '';
-    return '<dt>Quantities per step</dt><dd class="qa-dl__preline">' + lines.join('') + '</dd>';
+    return (
+      '<dt>Quantities per step</dt><dd class="qa-dl__preline qa-dl__step-qty">' +
+      '<p class="qa-message" style="margin:0 0 8px;">Booked totals include only entries from <strong>approved</strong> Work Logs (QA price work).</p>' +
+      lines.join('') +
+      '</dd>'
+    );
   }
 
   function openJobDrawer(job) {
@@ -2092,19 +2157,24 @@
     else drawerEl.removeAttribute('aria-describedby');
     document.getElementById('qa-job-drawer-status').value = job.status || 'new';
     document.getElementById('qa-job-drawer-notes').value = job.notes || '';
-    var workerNames = getWorkerNames(job.workerIds || []);
     var projId = job.projectId || (projectSelect && projectSelect.value);
     var evFn = typeof qaApi.getJobStepEvidence === 'function'
       ? qaApi.getJobStepEvidence(job.id)
       : Promise.resolve({ steps: [], operativePhotos: [] });
-    Promise.all([qaApi.getTemplates(projId), evFn]).then(function (results) {
-      var templates = results[0] || [];
-      var evPayload = results[1] || { steps: [], operativePhotos: [] };
-      var tplNames = getTemplateNames(templates, job.templateIds || []);
-      var specStr = String(job.specification || '').trim();
-      var descStr = String(job.description || '').trim();
-      var jtStr = String(job.jobTitle || '').trim();
-      var priceEst = getJobTemplatePriceEstimate(job, templates);
+    var jobFetch =
+      window.QA_CONFIG && window.QA_CONFIG.useBackend && typeof qaApi.getJob === 'function'
+        ? qaApi.getJob(job.id)
+        : Promise.resolve(job);
+    Promise.all([jobFetch, qaApi.getTemplates(projId), evFn]).then(function (results) {
+      var freshJob = results[0] || job;
+      var templates = results[1] || [];
+      var evPayload = results[2] || { steps: [], operativePhotos: [] };
+      var workerNames = getWorkerNames(freshJob.workerIds || []);
+      var tplNames = getTemplateNames(templates, freshJob.templateIds || []);
+      var specStr = String(freshJob.specification || '').trim();
+      var descStr = String(freshJob.description || '').trim();
+      var jtStr = String(freshJob.jobTitle || '').trim();
+      var priceEst = getJobTemplatePriceEstimate(freshJob, templates);
       var estRow =
         priceEst && (priceEst.mode === 'perStep' || priceEst.total > 0 || priceEst.sumM2 > 0 || priceEst.sumLin > 0 || priceEst.sumUnit > 0)
           ? '<dt>Template price estimate</dt><dd>£' +
@@ -2112,29 +2182,30 @@
             (priceEst.total > 0 ? '' : ' (add step quantities if rates apply)') +
             '</dd>'
           : '';
-      var stepQtyRow = formatJobStepQuantitiesReadonly(job, templates);
+      var booked = freshJob.bookedStepQuantities;
+      var stepQtyRow = formatJobStepQuantitiesReadonly(freshJob, templates, booked);
       var html =
         '<dl class="qa-dl">' +
         '<dt>Job title</dt><dd>' + (jtStr ? escapeHtml(jtStr) : '—') + '</dd>' +
-        '<dt>Job reference</dt><dd>' + escapeHtml(job.jobNumber || '—') + '</dd>' +
+        '<dt>Job reference</dt><dd>' + escapeHtml(freshJob.jobNumber || '—') + '</dd>' +
         estRow +
         stepQtyRow +
         '<dt>Specification</dt><dd>' + (specStr ? escapeHtml(specStr) : '—') + '</dd>' +
         '<dt>Description</dt><dd class="qa-dl__preline">' + (descStr ? escapeHtml(descStr) : '—') + '</dd>' +
-        '<dt>Location</dt><dd>' + escapeHtml(job.location || '—') + '</dd>' +
-        '<dt>Floor</dt><dd>' + escapeHtml(job.floor || '—') + '</dd>' +
-        '<dt>Total sqm</dt><dd>' + escapeHtml(job.sqm || '—') + '</dd>' +
-        '<dt>Total linear m</dt><dd>' + escapeHtml(job.linearMeters || '—') + '</dd>' +
-        '<dt>Total units</dt><dd>' + escapeHtml(job.totalUnits || '—') + '</dd>' +
-        '<dt>Cost</dt><dd>' + escapeHtml(getCostDisplay(job)) + '</dd>' +
-        '<dt>Target</dt><dd>' + escapeHtml(formatJobDate(job.targetCompletionDate)) + '</dd>' +
+        '<dt>Location</dt><dd>' + escapeHtml(freshJob.location || '—') + '</dd>' +
+        '<dt>Floor</dt><dd>' + escapeHtml(freshJob.floor || '—') + '</dd>' +
+        '<dt>Total sqm</dt><dd>' + escapeHtml(freshJob.sqm || '—') + '</dd>' +
+        '<dt>Total linear m</dt><dd>' + escapeHtml(freshJob.linearMeters || '—') + '</dd>' +
+        '<dt>Total units</dt><dd>' + escapeHtml(freshJob.totalUnits || '—') + '</dd>' +
+        '<dt>Cost</dt><dd>' + escapeHtml(getCostDisplay(freshJob)) + '</dd>' +
+        '<dt>Target</dt><dd>' + escapeHtml(formatJobDate(freshJob.targetCompletionDate)) + '</dd>' +
         '<dt>Templates</dt><dd>' + (tplNames.length ? tplNames.map(escapeHtml).join(', ') : '—') + '</dd>' +
         '<dt>Team</dt><dd>' +
-          escapeHtml(getSupervisorName(job.responsibleId)) +
+          escapeHtml(getSupervisorName(freshJob.responsibleId)) +
           ' · Workers: ' +
           (workerNames.length ? workerNames.map(escapeHtml).join(', ') : '—') +
           ' · Crews: ' +
-          (job.crewIds && job.crewIds.length ? getCrewNames(job.crewIds).map(escapeHtml).join(', ') : '—') +
+          (freshJob.crewIds && freshJob.crewIds.length ? getCrewNames(freshJob.crewIds).map(escapeHtml).join(', ') : '—') +
           '</dd>' +
         '</dl>' +
         buildJobEvidenceSection(evPayload.steps, templates, evPayload.operativePhotos || []);

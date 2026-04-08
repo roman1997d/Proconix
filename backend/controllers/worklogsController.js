@@ -99,6 +99,142 @@ function parseJsonField(val, defaultVal) {
   try { return JSON.parse(val || '[]'); } catch (_) { return defaultVal; }
 }
 
+/**
+ * Sum £ from QA price work (rates from qa_template_steps × quantities in timesheet payload).
+ */
+async function computeQaPriceWorkTotalsByJobId(db, timesheetJobsPayload) {
+  const timesheetJobs = Array.isArray(timesheetJobsPayload) ? timesheetJobsPayload : [];
+  const sumsByQaJobId = new Map();
+  const uniqueQaJobIds = new Set();
+
+  for (const block of timesheetJobs) {
+    if (!block || block.type !== 'qa_price_work' || !Array.isArray(block.entries)) continue;
+    for (const ent of block.entries) {
+      const jid = parseInt(String(ent && ent.qaJobId != null ? ent.qaJobId : ''), 10);
+      if (!Number.isInteger(jid)) continue;
+      uniqueQaJobIds.add(jid);
+      if (!sumsByQaJobId.has(jid)) sumsByQaJobId.set(jid, []);
+      sumsByQaJobId.get(jid).push(
+        ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {}
+      );
+    }
+  }
+
+  if (uniqueQaJobIds.size === 0) return new Map();
+
+  const ids = Array.from(uniqueQaJobIds);
+  let tplRows;
+  try {
+    tplRows = await db.query(
+      `SELECT job_id, template_id FROM qa_job_templates WHERE job_id = ANY($1::int[]) ORDER BY job_id, template_id`,
+      [ids]
+    );
+  } catch (e) {
+    if (e && e.code === '42P01') return new Map();
+    throw e;
+  }
+
+  const templatesByQaJob = new Map();
+  for (const row of tplRows.rows) {
+    const j = row.job_id;
+    if (!templatesByQaJob.has(j)) templatesByQaJob.set(j, []);
+    templatesByQaJob.get(j).push(row.template_id);
+  }
+
+  const allTids = [...new Set(tplRows.rows.map((r) => r.template_id))];
+  if (allTids.length === 0) {
+    const out = new Map();
+    ids.forEach((id) => out.set(id, 0));
+    return out;
+  }
+
+  let stepRows;
+  try {
+    stepRows = await db.query(
+      `SELECT template_id, id, step_external_id, price_per_m2, price_per_unit, price_per_linear
+       FROM qa_template_steps WHERE template_id = ANY($1::int[])`,
+      [allTids]
+    );
+  } catch (e) {
+    if (e && e.code === '42P01') return new Map();
+    throw e;
+  }
+
+  const stepsByTemplate = new Map();
+  for (const s of stepRows.rows) {
+    if (!stepsByTemplate.has(s.template_id)) stepsByTemplate.set(s.template_id, []);
+    stepsByTemplate.get(s.template_id).push(s);
+  }
+
+  function sumQuantitiesAgainstSteps(templateIds, sq) {
+    let sum = 0;
+    for (const tid of templateIds) {
+      const steps = stepsByTemplate.get(tid) || [];
+      for (const s of steps) {
+        const sid =
+          s.step_external_id != null && String(s.step_external_id).trim() !== ''
+            ? String(s.step_external_id)
+            : String(s.id);
+        const key = `${tid}:${sid}`;
+        const q = sq[key] || {};
+        const pm2 = parseFloat(s.price_per_m2);
+        const plin = parseFloat(s.price_per_linear);
+        const pun = parseFloat(s.price_per_unit);
+        const m2 = parseFloat(q.m2);
+        const lin = parseFloat(q.linear);
+        const un = parseFloat(q.units);
+        if (pm2 > 0 && m2 === m2) sum += pm2 * m2;
+        if (plin > 0 && lin === lin) sum += plin * lin;
+        if (pun > 0 && un === un) sum += pun * un;
+      }
+    }
+    return sum;
+  }
+
+  const result = new Map();
+  for (const qaJobId of ids) {
+    const templateIds = templatesByQaJob.get(qaJobId) || [];
+    const qtyMaps = sumsByQaJobId.get(qaJobId) || [];
+    let jobSum = 0;
+    for (const sq of qtyMaps) {
+      jobSum += sumQuantitiesAgainstSteps(templateIds, sq);
+    }
+    result.set(qaJobId, Math.round(jobSum * 100) / 100);
+  }
+  return result;
+}
+
+/**
+ * For each work log job, set qaPriceWorkTotal = sum of all QA price work lines (from DB rates).
+ */
+async function enrichJobsWithQaPriceTotals(jobs) {
+  if (!Array.isArray(jobs) || jobs.length === 0) return jobs;
+
+  const perRowMaps = await Promise.all(
+    jobs.map((job) => computeQaPriceWorkTotalsByJobId(pool, job.timesheetJobs))
+  );
+
+  jobs.forEach((job, idx) => {
+    const m = perRowMaps[idx];
+    if (!m || m.size === 0) return;
+    let total = 0;
+    m.forEach((v) => {
+      total += v;
+    });
+    if (total > 0 || m.size > 0) {
+      job.qaPriceWorkTotal = Math.round(total * 100) / 100;
+    }
+  });
+  return jobs;
+}
+
+async function jobFromRow(row) {
+  const j = rowToJob(row);
+  if (!j) return null;
+  await enrichJobsWithQaPriceTotals([j]);
+  return j;
+}
+
 function rowToJob(row) {
   if (!row) return null;
   return {
@@ -198,6 +334,7 @@ async function list(req, res) {
     try {
       const result = await pool.query(query, params);
       const jobs = result.rows.map(rowToJob);
+      await enrichJobsWithQaPriceTotals(jobs);
       return res.json({ success: true, jobs });
     } catch (err) {
       if (err && err.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(err.message || '')) {
@@ -206,6 +343,7 @@ async function list(req, res) {
         const result2 = await pool.query(fallbackQuery, params);
         const jobs2 = result2.rows.map(rowToJob);
         // timesheetJobs/operativeArchived will be empty because columns aren't selected.
+        await enrichJobsWithQaPriceTotals(jobs2);
         return res.json({ success: true, jobs: jobs2 });
       }
       throw err;
@@ -269,7 +407,8 @@ async function getOne(req, res) {
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Job not found.' });
     }
-    return res.json({ success: true, job: rowToJob(result.rows[0]) });
+    const jobOne = await jobFromRow(result.rows[0]);
+    return res.json({ success: true, job: jobOne });
   } catch (err) {
     if (err.code === '42P01') return res.status(404).json({ success: false, message: 'Job not found.' });
     if (err && err.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(err.message || '')) {
@@ -282,7 +421,8 @@ async function getOne(req, res) {
         [id, companyId]
       );
       if (result2.rows.length === 0) return res.status(404).json({ success: false, message: 'Job not found.' });
-      return res.json({ success: true, job: rowToJob(result2.rows[0]) });
+      const jobTwo = await jobFromRow(result2.rows[0]);
+      return res.json({ success: true, job: jobTwo });
     }
     console.error('worklogsController getOne:', err);
     return res.status(500).json({ success: false, message: 'Failed to get job.' });
@@ -348,7 +488,8 @@ async function update(req, res) {
     }
 
     if (updates.length === 0) {
-      const job = rowToJob(await pool.query('SELECT * FROM work_logs WHERE id = $1', [id]).then(r => r.rows[0]));
+      const r0 = await pool.query('SELECT * FROM work_logs WHERE id = $1', [id]);
+      const job = await jobFromRow(r0.rows[0]);
       return res.json({ success: true, job });
     }
 
@@ -362,7 +503,8 @@ async function update(req, res) {
     );
 
     const updated = await pool.query('SELECT * FROM work_logs WHERE id = $1', [id]);
-    return res.json({ success: true, job: rowToJob(updated.rows[0]) });
+    const jobUpdated = await jobFromRow(updated.rows[0]);
+    return res.json({ success: true, job: jobUpdated });
   } catch (err) {
     console.error('worklogsController update:', err);
     return res.status(500).json({ success: false, message: 'Failed to update job.' });
@@ -385,7 +527,8 @@ async function approve(req, res) {
       ['approved', id, companyId]
     );
     if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Job not found.' });
-    return res.json({ success: true, job: rowToJob(result.rows[0]) });
+    const jobAp = await jobFromRow(result.rows[0]);
+    return res.json({ success: true, job: jobAp });
   } catch (err) {
     console.error('worklogsController approve:', err);
     return res.status(500).json({ success: false, message: 'Failed to approve job.' });
@@ -408,7 +551,8 @@ async function reject(req, res) {
       ['rejected', id, companyId]
     );
     if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Job not found.' });
-    return res.json({ success: true, job: rowToJob(result.rows[0]) });
+    const jobRej = await jobFromRow(result.rows[0]);
+    return res.json({ success: true, job: jobRej });
   } catch (err) {
     console.error('worklogsController reject:', err);
     return res.status(500).json({ success: false, message: 'Failed to reject job.' });
@@ -431,7 +575,8 @@ async function archive(req, res) {
       [id, companyId]
     );
     if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Job not found.' });
-    return res.json({ success: true, job: rowToJob(result.rows[0]) });
+    const jobArc = await jobFromRow(result.rows[0]);
+    return res.json({ success: true, job: jobArc });
   } catch (err) {
     console.error('worklogsController archive:', err);
     return res.status(500).json({ success: false, message: 'Failed to archive job.' });
@@ -554,7 +699,8 @@ async function create(req, res) {
         (b.invoiceFilePath && String(b.invoiceFilePath).trim()) || (b.invoice_file_path && String(b.invoice_file_path).trim()) || null,
       ]
     );
-    return res.status(201).json({ success: true, job: rowToJob(result.rows[0]) });
+    const jobCr = await jobFromRow(result.rows[0]);
+    return res.status(201).json({ success: true, job: jobCr });
   } catch (err) {
     if (err.code === '42P01') {
       return res.status(500).json({ success: false, message: 'Work logs table does not exist. Run scripts/create_work_logs_table.sql' });

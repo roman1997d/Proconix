@@ -67,6 +67,28 @@
     return parts.join(' / ') || '—';
   }
 
+  /** Stored total, else QA-computed total, else qty×unit. */
+  function getWorkLogAmountNumeric(job) {
+    if (!job) return 0;
+    if (job.total != null && job.total !== '' && !isNaN(Number(job.total))) return Number(job.total);
+    if (job.qaPriceWorkTotal != null && !isNaN(Number(job.qaPriceWorkTotal))) return Number(job.qaPriceWorkTotal);
+    if (job.quantity != null && job.unitPrice != null && !isNaN(Number(job.quantity)) && !isNaN(Number(job.unitPrice))) {
+      return Number(job.quantity) * Number(job.unitPrice);
+    }
+    return 0;
+  }
+
+  /** For table and Job details: prefer DB total, else QA sum from API. */
+  function formatWorkLogTotalDisplay(job) {
+    if (!job) return '—';
+    if (job.total != null && job.total !== '' && !isNaN(Number(job.total))) return Number(job.total).toFixed(2);
+    if (job.qaPriceWorkTotal != null && !isNaN(Number(job.qaPriceWorkTotal))) return Number(job.qaPriceWorkTotal).toFixed(2);
+    if (job.quantity != null && job.unitPrice != null && !isNaN(Number(job.quantity)) && !isNaN(Number(job.unitPrice))) {
+      return (Number(job.quantity) * Number(job.unitPrice)).toFixed(2);
+    }
+    return '—';
+  }
+
   function getFilters() {
     var workerEl = document.getElementById('worklogs-filter-worker');
     var dateFromEl = document.getElementById('worklogs-filter-date-from');
@@ -137,7 +159,8 @@
       tr.appendChild(document.createElement('td')).textContent = job.workerName || '—';
       tr.appendChild(document.createElement('td')).textContent = getLocation(job);
       tr.appendChild(document.createElement('td')).textContent = job.workType || '—';
-      tr.appendChild(document.createElement('td')).textContent = (job.quantity != null ? job.quantity : '—') + ' / £' + (job.total != null ? Number(job.total).toFixed(2) : '0');
+      tr.appendChild(document.createElement('td')).textContent =
+        (job.quantity != null ? job.quantity : '—') + ' / £' + formatWorkLogTotalDisplay(job);
       var statusCell = document.createElement('td');
       var badge = document.createElement('span');
       badge.className = statusClass(job.status);
@@ -244,7 +267,7 @@
     var content = document.getElementById('worklogs-details-content');
     if (!modal || !content) return;
 
-    var total = job.total != null ? Number(job.total).toFixed(2) : (job.quantity != null && job.unitPrice != null ? (job.quantity * job.unitPrice).toFixed(2) : '—');
+    var total = formatWorkLogTotalDisplay(job);
     var submitted = job.submittedAt ? new Date(job.submittedAt).toLocaleString() : '—';
 
     var html = '<dl class="worklogs-details-dl">';
@@ -253,7 +276,7 @@
     html += '<dt>Work type</dt><dd>' + (job.workType || '—') + '</dd>';
     html += '<dt>Quantity</dt><dd>' + (job.quantity != null ? job.quantity : '—') + '</dd>';
     html += '<dt>Unit price</dt><dd>£' + (job.unitPrice != null ? Number(job.unitPrice).toFixed(2) : '—') + '</dd>';
-    html += '<dt>Total</dt><dd>£' + total + '</dd>';
+    html += '<dt>Total</dt><dd>' + (total === '—' ? '—' : '£' + total) + '</dd>';
     html += '<dt>Description</dt><dd>' + (job.description || '—') + '</dd>';
     html += '<dt>Submitted</dt><dd>' + submitted + '</dd>';
     if (job.operativeArchived) {
@@ -379,7 +402,7 @@
 
     var totalAmount = 0;
     var rows = selectedJobs.map(function (j) {
-      var t = j.total != null ? Number(j.total) : (j.quantity * j.unitPrice) || 0;
+      var t = getWorkLogAmountNumeric(j);
       totalAmount += t;
       return '<tr><td>' + (j.workerName || '—') + '</td><td>' + getLocation(j) + '</td><td>' + (j.workType || '—') + '</td><td>' + (j.quantity != null ? j.quantity : '—') + '</td><td>£' + (j.unitPrice != null ? Number(j.unitPrice).toFixed(2) : '—') + '</td><td>£' + t.toFixed(2) + '</td></tr>';
     }).join('');
@@ -394,11 +417,11 @@
     var visible = filtered.filter(function (j) { return !j.archived; });
     var total = visible.length;
     var approved = visible.filter(function (j) { return j.status === 'approved'; }).length;
-    var totalCost = visible.reduce(function (sum, j) { return sum + (Number(j.total) || 0); }, 0);
+    var totalCost = visible.reduce(function (sum, j) { return sum + getWorkLogAmountNumeric(j); }, 0);
     var oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     var weeklyJobs = visible.filter(function (j) { return new Date(j.submittedAt) >= oneWeekAgo; });
-    var weeklyCost = weeklyJobs.reduce(function (sum, j) { return sum + (Number(j.total) || 0); }, 0);
+    var weeklyCost = weeklyJobs.reduce(function (sum, j) { return sum + getWorkLogAmountNumeric(j); }, 0);
 
     var now = new Date();
     var thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -407,7 +430,7 @@
       var t = new Date(j.submittedAt).getTime();
       return t >= thisMonthStart.getTime() && t <= thisMonthEnd.getTime();
     });
-    var monthlyCost = monthlyJobs.reduce(function (sum, j) { return sum + (Number(j.total) || 0); }, 0);
+    var monthlyCost = monthlyJobs.reduce(function (sum, j) { return sum + getWorkLogAmountNumeric(j); }, 0);
 
     var progressText = document.getElementById('worklogs-progress-text');
     var progressFill = document.getElementById('worklogs-progress-fill');

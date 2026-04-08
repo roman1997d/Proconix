@@ -465,6 +465,68 @@ function stepQuantitiesFromRow(row) {
   }
 }
 
+function parseWorkLogsTimesheetJobs(val) {
+  if (val == null) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'object') return [];
+  try {
+    const p = JSON.parse(val || '[]');
+    return Array.isArray(p) ? p : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Merge operative step quantity objects keyed by "templateId:stepId" (adds m2 / linear / units). */
+function mergeBookedStepQuantityMaps(into, sq) {
+  if (!sq || typeof sq !== 'object') return;
+  for (const [k, v] of Object.entries(sq)) {
+    if (!v || typeof v !== 'object') continue;
+    if (!into[k]) into[k] = { m2: 0, linear: 0, units: 0 };
+    into[k].m2 += parseFloat(v.m2) || 0;
+    into[k].linear += parseFloat(v.linear) || 0;
+    into[k].units += parseFloat(v.units) || 0;
+  }
+}
+
+/** Sum approved Work Logs QA price work for one QA job id (company-scoped). */
+async function fetchApprovedBookedStepQuantities(companyId, qaJobId) {
+  const qaIdStr = String(qaJobId);
+  const merged = {};
+  let rows;
+  try {
+    rows = await pool.query(
+      `SELECT timesheet_jobs FROM work_logs
+       WHERE company_id = $1 AND LOWER(status) = 'approved' AND (archived IS NOT TRUE)
+         AND timesheet_jobs IS NOT NULL`,
+      [companyId]
+    );
+  } catch (e) {
+    if (e && (e.code === '42P01' || e.code === '42703')) return {};
+    throw e;
+  }
+  for (const row of rows.rows) {
+    const ts = parseWorkLogsTimesheetJobs(row.timesheet_jobs);
+    if (!Array.isArray(ts)) continue;
+    for (const block of ts) {
+      if (!block || block.type !== 'qa_price_work' || !Array.isArray(block.entries)) continue;
+      for (const ent of block.entries) {
+        if (String(ent.qaJobId) !== qaIdStr) continue;
+        mergeBookedStepQuantityMaps(merged, ent.stepQuantities);
+      }
+    }
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(merged)) {
+    out[k] = {
+      m2: Math.round(v.m2 * 100) / 100,
+      linear: Math.round(v.linear * 100) / 100,
+      units: Math.round(v.units * 100) / 100,
+    };
+  }
+  return out;
+}
+
 function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, responsibleUserId, forSupervisor, crewIds) {
   const responsibleId = responsibleUserId != null ? String(responsibleUserId) : (row.responsible_id != null ? String(row.responsible_id) : '');
   const base = {
@@ -701,9 +763,23 @@ async function getJob(req, res) {
     const costCode = costRow.rows[0] ? costRow.rows[0].code : null;
     const floorCode = floorRow.rows[0] ? floorRow.rows[0].code : row.floor_code;
 
-    return res.status(200).json(
-      jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, row.responsible_user_id, !!req.supervisor, crewIds)
+    const payload = jobRowToJson(
+      row,
+      templateIds,
+      workerIds,
+      floorCode,
+      costCode,
+      statusCode,
+      row.responsible_user_id,
+      !!req.supervisor,
+      crewIds
     );
+    try {
+      payload.bookedStepQuantities = await fetchApprovedBookedStepQuantities(companyId, id);
+    } catch (e) {
+      payload.bookedStepQuantities = {};
+    }
+    return res.status(200).json(payload);
   } catch (err) {
     console.error('QA getJob:', err);
     return res.status(500).json({ message: err.message || 'Failed to get job.' });
