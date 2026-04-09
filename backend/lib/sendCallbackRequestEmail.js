@@ -72,9 +72,14 @@ function plainTextLinesFromPriceWorkTables(tables) {
           ': ' +
           String(r.jobDetails || '—') +
           ' — ' +
-          String(r.quantity || '—')
+          String(r.quantity || '—') +
+          ' — ' +
+          String(r.amountStr || '—')
       );
     });
+    if (tbl.jobTotalStr && String(tbl.jobTotalStr).trim()) {
+      lines.push('  Calculated subtotal (price work): ' + String(tbl.jobTotalStr).trim());
+    }
   });
   return lines;
 }
@@ -88,7 +93,7 @@ function plainTextLinesFromPriceWorkTables(tables) {
  *   subtitle: string,
  *   rows: { label: string, value: string }[],
  *   messageBlock?: { title: string, text: string },
- *   priceWorkTables?: { jobHeading: string, rows: { stepNr: string, jobDetails: string, quantity: string }[] }[],
+ *   priceWorkTables?: { jobHeading: string, jobTotalStr?: string | null, rows: { stepNr: string, jobDetails: string, quantity: string, amountStr: string }[] }[],
  *   photoConfirmationHtml?: string,
  * }} o
  */
@@ -124,10 +129,22 @@ function buildProconixEmailHtml(o) {
             '</td>' +
             '<td style="padding:10px 12px;border:1px solid #334155;color:#e2e8f0;font-size:14px;vertical-align:top;">' +
             escapeHtml(r.quantity || '—') +
+            '</td>' +
+            '<td style="padding:10px 12px;border:1px solid #334155;color:#bae6fd;font-size:14px;vertical-align:top;text-align:right;white-space:nowrap;">' +
+            escapeHtml(r.amountStr || '—') +
             '</td></tr>'
           );
         })
         .join('');
+      var foot = '';
+      if (tbl.jobTotalStr && String(tbl.jobTotalStr).trim()) {
+        foot =
+          '<tfoot><tr>' +
+          '<td colspan="3" style="padding:10px 12px;border:1px solid #475569;background-color:#1e293b;color:#94a3b8;font-size:12px;font-weight:700;text-align:right;text-transform:uppercase;letter-spacing:0.05em;">Calculated subtotal (price work)</td>' +
+          '<td style="padding:10px 12px;border:1px solid #475569;background-color:#1e293b;color:#7dd3fc;font-size:15px;font-weight:700;text-align:right;white-space:nowrap;">' +
+          escapeHtml(String(tbl.jobTotalStr).trim()) +
+          '</td></tr></tfoot>';
+      }
       return (
         '<div style="margin-top:20px;">' +
         '<p style="margin:0 0 10px 0;font-size:15px;font-weight:700;color:#f8fafc;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
@@ -138,9 +155,12 @@ function buildProconixEmailHtml(o) {
         '<th style="padding:10px 12px;border:1px solid #475569;background-color:#1e293b;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">Step no.</th>' +
         '<th style="padding:10px 12px;border:1px solid #475569;background-color:#1e293b;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">Job details</th>' +
         '<th style="padding:10px 12px;border:1px solid #475569;background-color:#1e293b;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">Quantity</th>' +
+        '<th style="padding:10px 12px;border:1px solid #475569;background-color:#1e293b;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">Amount</th>' +
         '</tr></thead><tbody>' +
         body +
-        '</tbody></table></div>'
+        '</tbody>' +
+        foot +
+        '</table></div>'
       );
     });
     priceWorkBlock =
@@ -1197,7 +1217,7 @@ async function sendSignedDocumentEmail(o) {
   const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
   const title = o.documentTitle || 'Document';
   const safe = String(title)
-    .replace(/[^\w\s\-]+/g, '_')
+    .replace(/[^\w\s-]+/g, '_')
     .replace(/\s+/g, '_')
     .slice(0, 72);
   const attachName = o.filename || `signed-${safe || 'document'}.pdf`;
@@ -1257,7 +1277,7 @@ async function sendSignedDocumentEmail(o) {
  *   totalStr: string,
  *   description: string,
  *   detailLines: string[],
- *   priceWorkTables?: { jobHeading: string, rows: { stepNr: string, jobDetails: string, quantity: string }[] }[],
+ *   priceWorkTables?: { jobHeading: string, jobTotalStr?: string | null, rows: { stepNr: string, jobDetails: string, quantity: string, amountStr: string }[] }[],
  *   photoGroups?: { label: string, urls: string[] }[],
  * }} p
  */

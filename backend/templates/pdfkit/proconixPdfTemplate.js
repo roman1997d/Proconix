@@ -247,7 +247,7 @@ function drawSummaryGrid(doc, x, y, w, rows) {
  * @param {number} pageW
  * @param {number} pageH
  * @param {number} innerW
- * @param {{ jobHeading: string, rows: { stepNr: string, jobDetails: string, quantity: string }[] }[]} tables
+ * @param {{ jobHeading: string, jobTotalStr?: string | null, rows: { stepNr: string, jobDetails: string, quantity: string, amountStr: string }[] }[]} tables
  * @returns {number} next Y
  */
 function drawPriceWorkTablesBlock(doc, startY, pageW, pageH, innerW, tables) {
@@ -267,10 +267,11 @@ function drawPriceWorkTablesBlock(doc, startY, pageW, pageH, innerW, tables) {
   doc.restore();
   textY += 32;
 
-  var colStepW = 42;
-  var colQtyW = 88;
-  var gap = 10;
-  var colDetW = Math.max(120, innerW - colStepW - colQtyW - gap * 2);
+  var colStepW = 34;
+  var colAmtW = 56;
+  var colQtyW = 72;
+  var gap = 8;
+  var colDetW = Math.max(80, innerW - colStepW - colQtyW - colAmtW - gap * 3);
 
   tables.forEach(function (tbl) {
     var heading = escapeText(tbl.jobHeading || 'Job');
@@ -286,10 +287,16 @@ function drawPriceWorkTablesBlock(doc, startY, pageW, pageH, innerW, tables) {
     doc.save();
     doc.fillColor('#e2e8f0');
     doc.rect(MARGIN, textY, innerW, hdrH).fill();
-    doc.fillColor(C.muted).font('Helvetica-Bold').fontSize(8.8);
+    doc.fillColor(C.muted).font('Helvetica-Bold').fontSize(8.3);
     doc.text('Step no.', MARGIN + 6, textY + 6, { width: colStepW });
     doc.text('Job details', MARGIN + colStepW + gap, textY + 6, { width: colDetW });
-    doc.text('Quantity', MARGIN + colStepW + colDetW + gap * 2, textY + 6, { width: colQtyW });
+    doc.text('Qty', MARGIN + colStepW + colDetW + gap * 2, textY + 6, { width: colQtyW });
+    doc.text(
+      'Amount',
+      MARGIN + colStepW + colDetW + colQtyW + gap * 3,
+      textY + 6,
+      { width: colAmtW, align: 'right' }
+    );
     doc.restore();
     textY += hdrH;
 
@@ -297,9 +304,12 @@ function drawPriceWorkTablesBlock(doc, startY, pageW, pageH, innerW, tables) {
       var step = escapeText(r.stepNr || '—');
       var det = escapeText(r.jobDetails || '—');
       var qty = escapeText(r.quantity || '—');
-      var detH = doc.heightOfString(det, { width: colDetW - 6, lineGap: 1 });
+      var amt = escapeText(r.amountStr || '—');
+      var detW = Math.max(40, colDetW - 6);
+      var detH = doc.heightOfString(det, { width: detW, lineGap: 1 });
       var qtyH = doc.heightOfString(qty, { width: colQtyW - 6, lineGap: 1 });
-      var rowH = Math.max(24, Math.max(detH, qtyH) + 12);
+      var amtH = doc.heightOfString(amt, { width: colAmtW - 6, lineGap: 1 });
+      var rowH = Math.max(24, Math.max(detH, qtyH, amtH) + 12);
       pageBreakIf(rowH + 4);
       var bg = ri % 2 === 0 ? '#ffffff' : '#f8fafc';
       doc.save();
@@ -309,8 +319,12 @@ function drawPriceWorkTablesBlock(doc, startY, pageW, pageH, innerW, tables) {
       doc.save();
       doc.fillColor(C.title).font('Helvetica').fontSize(9.5);
       doc.text(step, MARGIN + 6, textY + 6, { width: colStepW });
-      doc.text(det, MARGIN + colStepW + gap, textY + 6, { width: colDetW - 6 });
+      doc.text(det, MARGIN + colStepW + gap, textY + 6, { width: detW });
       doc.text(qty, MARGIN + colStepW + colDetW + gap * 2, textY + 6, { width: colQtyW - 6 });
+      doc.text(amt, MARGIN + colStepW + colDetW + colQtyW + gap * 3, textY + 6, {
+        width: colAmtW - 6,
+        align: 'right',
+      });
       doc.restore();
       doc.save();
       doc.strokeColor(C.rowBorder).lineWidth(0.4);
@@ -318,6 +332,27 @@ function drawPriceWorkTablesBlock(doc, startY, pageW, pageH, innerW, tables) {
       doc.restore();
       textY += rowH;
     });
+
+    if (tbl.jobTotalStr && String(tbl.jobTotalStr).trim()) {
+      var footH = 22;
+      pageBreakIf(footH + 4);
+      doc.save();
+      doc.fillColor('#e2e8f0');
+      doc.rect(MARGIN, textY, innerW, footH).fill();
+      doc.fillColor(C.muted).font('Helvetica-Bold').fontSize(8.5);
+      doc.text('Calculated subtotal (price work)', MARGIN + 6, textY + 6, {
+        width: innerW - colAmtW - gap * 2,
+        align: 'right',
+      });
+      doc.fillColor('#1e40af').font('Helvetica-Bold').fontSize(10.5);
+      doc.text(escapeText(String(tbl.jobTotalStr).trim()), MARGIN + colStepW + colDetW + colQtyW + gap * 3, textY + 5, {
+        width: colAmtW - 6,
+        align: 'right',
+      });
+      doc.restore();
+      textY += footH;
+    }
+
     textY += 14;
   });
 
@@ -649,7 +684,7 @@ function renderWorkReport(doc, opts) {
  *   totalStr: string,
  *   description: string,
  *   detailLines: string[],
- *   priceWorkTables?: { jobHeading: string, rows: { stepNr: string, jobDetails: string, quantity: string }[] }[],
+ *   priceWorkTables?: { jobHeading: string, jobTotalStr?: string | null, rows: { stepNr: string, jobDetails: string, quantity: string, amountStr: string }[] }[],
  *   photoGroups?: { label: string, urls: string[] }[],
  *   issuedAt?: Date,
  * }} opts

@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const { pool } = require('../db/pool');
+const { computeEntryMoneyForTemplates, loadStepsByTemplateForQaJob } = require('../lib/qaPriceWorkMoney');
 
 function getQaCompanyId(req) {
   if (req.manager && req.manager.company_id != null) return req.manager.company_id;
@@ -489,59 +490,6 @@ function mergeBookedStepQuantityMaps(into, sq) {
   }
 }
 
-function computeEntryMoneyForTemplates(sq, templateIds, stepsByTemplate) {
-  const perKey = {};
-  let total = 0;
-  if (!sq || typeof sq !== 'object') return { perKey, total: 0 };
-  for (const tid of templateIds) {
-    const steps = stepsByTemplate.get(tid) || [];
-    for (const s of steps) {
-      const sid =
-        s.step_external_id != null && String(s.step_external_id).trim() !== ''
-          ? String(s.step_external_id)
-          : String(s.id);
-      const key = `${tid}:${sid}`;
-      const q = sq[key];
-      if (!q || typeof q !== 'object') continue;
-      const pm2 = parseFloat(s.price_per_m2);
-      const plin = parseFloat(s.price_per_linear);
-      const pun = parseFloat(s.price_per_unit);
-      const m2 = parseFloat(q.m2);
-      const lin = parseFloat(q.linear);
-      const un = parseFloat(q.units);
-      let line = 0;
-      if (pm2 > 0 && m2 === m2) line += pm2 * m2;
-      if (plin > 0 && lin === lin) line += plin * lin;
-      if (pun > 0 && un === un) line += pun * un;
-      if (line > 0) {
-        perKey[key] = Math.round(line * 100) / 100;
-        total += line;
-      }
-    }
-  }
-  return { perKey, total: Math.round(total * 100) / 100 };
-}
-
-async function loadStepsByTemplateForQaJob(qaJobId) {
-  const tplRes = await pool.query(
-    'SELECT template_id FROM qa_job_templates WHERE job_id = $1 ORDER BY template_id',
-    [qaJobId]
-  );
-  const templateIds = tplRes.rows.map((r) => r.template_id);
-  if (templateIds.length === 0) return { templateIds: [], stepsByTemplate: new Map() };
-  const stepRows = await pool.query(
-    `SELECT template_id, id, step_external_id, price_per_m2, price_per_unit, price_per_linear
-     FROM qa_template_steps WHERE template_id = ANY($1::int[])`,
-    [templateIds]
-  );
-  const stepsByTemplate = new Map();
-  for (const s of stepRows.rows) {
-    if (!stepsByTemplate.has(s.template_id)) stepsByTemplate.set(s.template_id, []);
-    stepsByTemplate.get(s.template_id).push(s);
-  }
-  return { templateIds, stepsByTemplate };
-}
-
 /**
  * Approved Work Logs QA price work: merged quantities, per-step booking lines, total £ paid.
  */
@@ -553,7 +501,7 @@ async function fetchApprovedQaPriceWorkFullData(companyId, qaJobId) {
   };
   let stepsInfo;
   try {
-    stepsInfo = await loadStepsByTemplateForQaJob(qaJobId);
+    stepsInfo = await loadStepsByTemplateForQaJob(pool, qaJobId);
   } catch (e) {
     if (e && e.code === '42P01') return empty;
     throw e;

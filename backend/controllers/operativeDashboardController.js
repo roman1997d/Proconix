@@ -7,6 +7,7 @@ const fs = require('fs');
 const { pool } = require('../db/pool');
 const { enrichJobsWithQaPriceTotals } = require('./worklogsController');
 const { sendWorkLogInvoiceCopyEmail } = require('../lib/sendCallbackRequestEmail');
+const { loadStepsByTemplateForQaJob, computeEntryMoneyForTemplates } = require('../lib/qaPriceWorkMoney');
 
 const MAX_TASK_CONFIRMATION_PHOTOS = 10;
 
@@ -1537,28 +1538,28 @@ async function sendWorkLogInvoiceCopy(req, res) {
     }
     if (!Array.isArray(ts)) ts = [];
 
-    /** @type {{ jobHeading: string, rows: { stepNr: string, jobDetails: string, quantity: string }[] }[]} */
+    /** @type {{ jobHeading: string, jobTotalStr: string | null, rows: { stepNr: string, jobDetails: string, quantity: string, amountStr: string }[] }[]} */
     const priceWorkTables = [];
     /** @type {{ label: string, urls: string[] }[]} */
     const photoGroups = [];
 
-    function formatStepQuantity(q) {
+    const formatStepQuantity = (q) => {
       if (!q || typeof q !== 'object') return '';
       const bits = [];
       if (q.m2 != null && String(q.m2).trim() !== '') bits.push(String(q.m2).trim() + ' m²');
       if (q.linear != null && String(q.linear).trim() !== '') bits.push(String(q.linear).trim() + ' linear m');
       if (q.units != null && String(q.units).trim() !== '') bits.push(String(q.units).trim() + ' units');
       return bits.join(', ');
-    }
+    };
 
-    function stepSortOrder(label, key, idx) {
+    const stepSortOrder = (label, key, idx) => {
       const m = /^Step\s*(\d+)/i.exec(String(label || ''));
       if (m) return parseInt(m[1], 10);
       const tail = String(key).split(':').pop();
       const n = parseInt(tail, 10);
       if (!isNaN(n)) return n;
       return 1000 + idx;
-    }
+    };
 
     for (const block of ts) {
       if (!block || block.type !== 'qa_price_work' || !Array.isArray(block.entries)) continue;
@@ -1578,6 +1579,19 @@ async function sendWorkLogInvoiceCopy(req, res) {
               ? ent.step_photo_urls
               : {};
 
+        let perKey = {};
+        let jobTotalStr = null;
+        try {
+          const { templateIds, stepsByTemplate } = await loadStepsByTemplateForQaJob(pool, ent.qaJobId);
+          if (templateIds.length > 0) {
+            const money = computeEntryMoneyForTemplates(sq, templateIds, stepsByTemplate);
+            perKey = money.perKey;
+            jobTotalStr = '£' + Number(money.total).toFixed(2);
+          }
+        } catch (e) {
+          if (e && e.code !== '42P01') throw e;
+        }
+
         const sortedKeys = Object.keys(sq).sort((ka, kb) => {
           const la = labels[ka] != null ? String(labels[ka]) : ka;
           const lb = labels[kb] != null ? String(labels[kb]) : kb;
@@ -1596,9 +1610,12 @@ async function sendWorkLogInvoiceCopy(req, res) {
             const n = parseInt(tail, 10);
             stepNr = !isNaN(n) ? String(n) : String(idx + 1);
           }
-          rows.push({ stepNr, jobDetails: lbl, quantity: qtyStr });
+          const amt = perKey[k];
+          const amountStr =
+            amt != null && Number.isFinite(Number(amt)) ? '£' + Number(amt).toFixed(2) : '—';
+          rows.push({ stepNr, jobDetails: lbl, quantity: qtyStr, amountStr });
         });
-        if (rows.length) priceWorkTables.push({ jobHeading, rows });
+        if (rows.length) priceWorkTables.push({ jobHeading, jobTotalStr, rows });
 
         for (const k of Object.keys(spu)) {
           const urls = Array.isArray(spu[k]) ? spu[k] : [];

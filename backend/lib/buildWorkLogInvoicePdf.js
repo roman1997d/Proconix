@@ -16,7 +16,7 @@ const { renderWorkLogInvoice } = require('../templates/pdfkit/proconixPdfTemplat
  *   totalStr: string,
  *   description: string,
  *   detailLines: string[],
- *   priceWorkTables?: { jobHeading: string, rows: { stepNr: string, jobDetails: string, quantity: string }[] }[],
+ *   priceWorkTables?: { jobHeading: string, jobTotalStr?: string | null, rows: { stepNr: string, jobDetails: string, quantity: string, amountStr: string }[] }[],
  *   photoGroups?: { label: string, urls: string[] }[],
  *   issuedAt?: Date,
  * }} opts
