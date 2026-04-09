@@ -755,6 +755,7 @@
   // ----- Log Work (list from API GET /work-log) -----
   var modalWorklog = document.getElementById('op-modal-worklog');
   var modalPriceWorkBuilder = document.getElementById('op-modal-price-work-builder');
+  var pwbStepsContainer = document.getElementById('op-pwb-steps');
   var formPwbJob = document.getElementById('op-form-pwb-job');
   var formWorklog = document.getElementById('op-form-worklog');
   var worklogListEl = document.getElementById('op-worklog-list');
@@ -2169,11 +2170,24 @@
     return out;
   }
 
+  /** Ensure public URL for <img src> (API may omit leading slash). */
+  function normalizeWorklogUploadPath(p) {
+    if (p == null || typeof p !== 'string') return '';
+    var s = p.trim();
+    if (s.indexOf('/uploads/') === 0) return s;
+    if (s.indexOf('uploads/') === 0) return '/' + s;
+    return s;
+  }
+
   function uploadPwbWorklogPhoto(file) {
     var fd = new FormData();
     fd.append('file', file);
     return api('/work-log/upload', { method: 'POST', body: fd }).then(function (r) {
-      if (r.data && r.data.success && r.data.path) return r.data.path;
+      if (r.data && r.data.success && r.data.path) {
+        var path = normalizeWorklogUploadPath(r.data.path);
+        if (path.indexOf('/uploads/') === 0) return path;
+        throw new Error('Invalid file path from server.');
+      }
       throw new Error((r.data && r.data.message) || 'Upload failed');
     });
   }
@@ -2191,7 +2205,7 @@
           var img = chip.querySelector('img');
           if (img) u = img.getAttribute('src');
         }
-        u = u && String(u).trim();
+        u = normalizeWorklogUploadPath(u && String(u).trim());
         if (!u || u.indexOf('blob:') === 0) return;
         if (u.indexOf('/uploads/') === 0) urls.push(u);
       });
@@ -2229,10 +2243,37 @@
     });
   }
 
-  if (modalPriceWorkBuilder) {
-    modalPriceWorkBuilder.addEventListener('change', function (e) {
+  function revokeBlobWhenImgSettles(img, blobUrl) {
+    if (!img || !blobUrl) return;
+    var done = false;
+    function revoke() {
+      if (done) return;
+      done = true;
+      try {
+        URL.revokeObjectURL(blobUrl);
+      } catch (revErr) {}
+    }
+    function onLoad() {
+      img.removeEventListener('load', onLoad);
+      img.removeEventListener('error', onErr);
+      revoke();
+    }
+    function onErr() {
+      img.removeEventListener('load', onLoad);
+      img.removeEventListener('error', onErr);
+      revoke();
+    }
+    img.addEventListener('load', onLoad);
+    img.addEventListener('error', onErr);
+    window.setTimeout(revoke, 12000);
+  }
+
+  var pwbPhotoChangeRoot = pwbStepsContainer || modalPriceWorkBuilder;
+  if (pwbPhotoChangeRoot) {
+    pwbPhotoChangeRoot.addEventListener('change', function (e) {
       var inp = e.target;
-      if (!inp || !inp.classList || !inp.classList.contains('op-pwb-photo-input')) return;
+      if (!inp || inp.type !== 'file') return;
+      if (!inp.classList || !inp.classList.contains('op-pwb-photo-input')) return;
       var stepEl = inp.closest('.op-pwb-step');
       var chipsEl = stepEl && stepEl.querySelector('.op-pwb-photo-chips');
       if (!stepEl || !chipsEl) return;
@@ -2251,6 +2292,7 @@
         img.setAttribute('src', previewSrc);
         img.setAttribute('alt', '');
         img.setAttribute('draggable', 'false');
+        img.setAttribute('loading', 'eager');
         var rm = document.createElement('button');
         rm.type = 'button';
         rm.className = 'op-pwb-photo-remove';
@@ -2271,13 +2313,17 @@
           var img = chip.querySelector('img');
           return uploadPwbWorklogPhoto(file)
             .then(function (path) {
-              try {
-                URL.revokeObjectURL(localUrl);
-              } catch (revErr) {}
               if (!chip.parentNode) return;
               chip.classList.remove('op-pwb-photo-chip--pending');
               chip.setAttribute('data-url', path);
-              if (img) img.setAttribute('src', path);
+              if (img) {
+                revokeBlobWhenImgSettles(img, localUrl);
+                img.setAttribute('src', path);
+              } else {
+                try {
+                  URL.revokeObjectURL(localUrl);
+                } catch (revErr) {}
+              }
             })
             .catch(function (err) {
               try {
@@ -2296,6 +2342,8 @@
           showFeedback(feedback, err.message || 'Upload failed', true);
         });
     });
+  }
+  if (modalPriceWorkBuilder) {
     modalPriceWorkBuilder.addEventListener('click', function (e) {
       if (e.target.closest('.op-pwb-photo-remove')) {
         e.preventDefault();
