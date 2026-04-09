@@ -177,6 +177,7 @@
               </button>
             </div>
             <p class="text-white-50 small mb-3">Click a row to view full record, edit fields, or delete the company. <strong>Head manager</strong> = manager row with <code class="text-info">company_id</code> = this company (prefers <code class="text-info">is_head_manager</code> = Yes, else lowest <code class="text-info">id</code>). <strong>Head manager email</strong> = that row’s <code class="text-info">email</code>.</p>
+            <p class="text-white-50 small mb-3"><strong class="text-white-50">Upload storage</strong> sums files on disk under <code class="text-info">backend/uploads</code> linked to the tenant: work log / QA / task photos, operative file uploads, issue attachments, manager digital documents (including the whole <code class="text-info">*_{companyId}_docs</code> folder). Duplicate paths are counted once. Rows may take a few seconds on large datasets.</p>
             <div id="pxAdminCompaniesAlert" class="alert alert-danger d-none" role="alert"></div>
             <div id="pxAdminCompaniesLoading" class="text-white-50 py-3 d-none">Loading companies…</div>
             <div id="pxAdminCompaniesTableWrap" class="table-responsive d-none">
@@ -187,6 +188,7 @@
                     <th scope="col">Company name</th>
                     <th scope="col">Head manager</th>
                     <th scope="col">Head manager email</th>
+                    <th scope="col" class="text-end">Upload storage</th>
                   </tr>
                 </thead>
                 <tbody id="pxAdminCompaniesBody"></tbody>

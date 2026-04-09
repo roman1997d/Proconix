@@ -8,6 +8,7 @@ const {
   login,
   me,
   listCompanies,
+  listCompaniesStorageSummary,
   getCompany,
   updateCompany,
   deleteCompany,
@@ -40,6 +41,7 @@ router.get('/platform-users', requirePlatformAdminAuth, listPlatformUsers);
 router.get('/platform-users/:kind/:id', requirePlatformAdminAuth, getPlatformUser);
 router.patch('/platform-users/:kind/:id', requirePlatformAdminAuth, updatePlatformUser);
 router.delete('/platform-users/:kind/:id', requirePlatformAdminAuth, deletePlatformUser);
+router.get('/companies/storage-summary', requirePlatformAdminAuth, listCompaniesStorageSummary);
 router.get('/companies', requirePlatformAdminAuth, listCompanies);
 router.get('/companies/:id', requirePlatformAdminAuth, getCompany);
 router.patch('/companies/:id', requirePlatformAdminAuth, updateCompany);

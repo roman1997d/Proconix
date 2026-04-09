@@ -14,6 +14,8 @@ const { countCompanySeats } = require('../utils/companyUserSeats');
 const { runCreateDemoRecords } = require('../lib/createDemoRecords');
 const {
   collectCompanyTenantUploadPaths,
+  collectCompanyTenantAllFilePaths,
+  sumStorageStatsForAbsolutePaths,
   unlinkCollectedUploadFiles,
   removeDigitalDocsCompanyFolders,
 } = require('../lib/companyTenantFileCleanup');
@@ -183,6 +185,42 @@ async function listCompanies(req, res) {
     return res.status(500).json({
       success: false,
       message: 'Failed to load companies.',
+    });
+  }
+}
+
+/**
+ * GET /api/platform-admin/companies/storage-summary
+ * Per-tenant disk usage under uploads/ from referenced files and digital-docs folders.
+ */
+async function listCompaniesStorageSummary(req, res) {
+  try {
+    const cRes = await pool.query('SELECT id, name FROM companies ORDER BY id ASC');
+    const companies = cRes.rows || [];
+    const summaries = [];
+    for (let i = 0; i < companies.length; i++) {
+      const c = companies[i];
+      const cid = c.id;
+      const paths = await collectCompanyTenantAllFilePaths(pool, cid);
+      const stats = sumStorageStatsForAbsolutePaths(paths);
+      summaries.push({
+        company_id: cid,
+        company_name: c.name,
+        storage_bytes: stats.bytes,
+        file_count: stats.file_count,
+        missing_references: stats.missing_references,
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      generated_at: new Date().toISOString(),
+      companies: summaries,
+    });
+  } catch (err) {
+    console.error('platformAdmin listCompaniesStorageSummary error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to compute storage summary.',
     });
   }
 }
@@ -1019,6 +1057,7 @@ module.exports = {
   login,
   me,
   listCompanies,
+  listCompaniesStorageSummary,
   getCompany,
   updateCompany,
   deleteCompany,

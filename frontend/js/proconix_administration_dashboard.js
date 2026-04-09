@@ -66,6 +66,24 @@
     }
   }
 
+  function formatStorageBytes(n) {
+    var x = Number(n);
+    if (!isFinite(x) || x < 0) {
+      return '0 B';
+    }
+    if (x === 0) {
+      return '0 B';
+    }
+    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var i = 0;
+    while (x >= 1024 && i < units.length - 1) {
+      x /= 1024;
+      i++;
+    }
+    var num = i === 0 ? String(Math.round(x)) : x >= 10 || i === 1 ? x.toFixed(1) : x.toFixed(2);
+    return num.replace(/\.0$/, '') + ' ' + units[i];
+  }
+
   function loadCompaniesPanel(sess) {
     var loading = document.getElementById('pxAdminCompaniesLoading');
     var wrap = document.getElementById('pxAdminCompaniesTableWrap');
@@ -81,20 +99,38 @@
     if (empty) empty.classList.add('d-none');
     if (wrap) wrap.classList.add('d-none');
     tbody.innerHTML = '';
-    if (loading) loading.classList.remove('d-none');
+    if (loading) {
+      loading.classList.remove('d-none');
+      loading.textContent = 'Loading companies and upload storage…';
+    }
 
-    fetch('/api/platform-admin/companies', {
-      method: 'GET',
-      headers: sessionHeaders(sess),
-      credentials: 'same-origin',
-    })
-      .then(function (res) {
+    var headers = sessionHeaders(sess);
+
+    Promise.all([
+      fetch('/api/platform-admin/companies', {
+        method: 'GET',
+        headers: headers,
+        credentials: 'same-origin',
+      }).then(function (res) {
         return res.json().then(function (data) {
           return { status: res.status, data: data };
         });
-      })
-      .then(function (out) {
+      }),
+      fetch('/api/platform-admin/companies/storage-summary', {
+        method: 'GET',
+        headers: headers,
+        credentials: 'same-origin',
+      }).then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      }),
+    ])
+      .then(function (results) {
         if (loading) loading.classList.add('d-none');
+        var out = results[0];
+        var stOut = results[1];
+
         if (out.status === 401) {
           clearSession();
           window.location.replace(LOGIN_URL);
@@ -102,12 +138,23 @@
         }
         if (out.status !== 200 || !out.data || !out.data.success) {
           if (alertEl) {
+            alertEl.className = 'alert alert-danger mb-3';
             alertEl.textContent =
               (out.data && out.data.message) || 'Could not load companies.';
             alertEl.classList.remove('d-none');
           }
           return;
         }
+
+        var storageById = {};
+        if (stOut.status === 200 && stOut.data && stOut.data.success && Array.isArray(stOut.data.companies)) {
+          stOut.data.companies.forEach(function (s) {
+            if (s && s.company_id != null) {
+              storageById[s.company_id] = s;
+            }
+          });
+        }
+
         var list = out.data.companies || [];
         if (list.length === 0) {
           if (empty) empty.classList.remove('d-none');
@@ -129,13 +176,49 @@
             '</td><td>' +
             cellText(c.head_manager_email) +
             '</td>';
+          var tdStorage = document.createElement('td');
+          tdStorage.className = 'text-end align-middle';
+          var st = storageById[c.id];
+          if (st && typeof st.storage_bytes === 'number') {
+            var strong = document.createElement('strong');
+            strong.textContent = formatStorageBytes(st.storage_bytes);
+            tdStorage.appendChild(strong);
+            var sub = document.createElement('div');
+            sub.className = 'text-white-50 small';
+            var fc = st.file_count != null ? Number(st.file_count) : 0;
+            sub.textContent = fc + ' file' + (fc === 1 ? '' : 's');
+            tdStorage.appendChild(sub);
+            if (st.missing_references > 0) {
+              var miss = document.createElement('div');
+              miss.className = 'text-warning small';
+              miss.textContent =
+                String(st.missing_references) + ' DB path' + (st.missing_references === 1 ? '' : 's') + ' missing on disk';
+              tdStorage.appendChild(miss);
+            }
+          } else {
+            tdStorage.textContent = '—';
+            if (stOut.status !== 200 || !stOut.data || !stOut.data.success) {
+              tdStorage.title = 'Could not load storage summary';
+            }
+          }
+          tr.appendChild(tdStorage);
           tbody.appendChild(tr);
         });
         if (wrap) wrap.classList.remove('d-none');
+        if (stOut.status !== 200 || !stOut.data || !stOut.data.success) {
+          if (alertEl && list.length > 0) {
+            alertEl.className = 'alert alert-warning mb-3';
+            alertEl.textContent =
+              (stOut.data && stOut.data.message) ||
+              'Companies loaded, but upload storage could not be computed. Try Refresh.';
+            alertEl.classList.remove('d-none');
+          }
+        }
       })
       .catch(function () {
         if (loading) loading.classList.add('d-none');
         if (alertEl) {
+          alertEl.className = 'alert alert-danger mb-3';
           alertEl.textContent = 'Network error while loading companies.';
           alertEl.classList.remove('d-none');
         }
