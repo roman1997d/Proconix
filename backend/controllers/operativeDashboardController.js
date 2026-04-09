@@ -1538,7 +1538,12 @@ async function sendWorkLogInvoiceCopy(req, res) {
         detailLines.push(`QA price work — Job ${jn}${jt ? ': ' + jt : ''}`);
         const sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
         const labels = ent.stepLabels && typeof ent.stepLabels === 'object' ? ent.stepLabels : {};
-        const spu = ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object' ? ent.stepPhotoUrls : {};
+        const spu =
+          ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object'
+            ? ent.stepPhotoUrls
+            : ent.step_photo_urls && typeof ent.step_photo_urls === 'object'
+              ? ent.step_photo_urls
+              : {};
         for (const k of Object.keys(sq)) {
           const q = sq[k] || {};
           const bits = [];
@@ -1693,7 +1698,18 @@ async function createWorkLog(req, res) {
         ? b.timesheet_jobs
         : [];
     const timesheetJobs = timesheetJobsRaw || [];
-    const priceWorkJobs = Array.isArray(b.priceWorkJobs) ? b.priceWorkJobs : [];
+    const priceWorkJobsRaw = Array.isArray(b.priceWorkJobs)
+      ? b.priceWorkJobs
+      : Array.isArray(b.price_work_jobs)
+        ? b.price_work_jobs
+        : [];
+    const priceWorkJobs = priceWorkJobsRaw.map((ent) => {
+      if (!ent || typeof ent !== 'object') return ent;
+      const camel = ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object' ? ent.stepPhotoUrls : null;
+      const snake = ent.step_photo_urls && typeof ent.step_photo_urls === 'object' ? ent.step_photo_urls : null;
+      const stepPhotoUrls = camel || snake || {};
+      return Object.assign({}, ent, { stepPhotoUrls });
+    });
     let timesheetPayload = Array.isArray(timesheetJobs) ? timesheetJobs.slice() : [];
     if (priceWorkJobs.length) {
       const v = await validatePriceWorkJobsAgainstRemaining(companyId, projectId, op.id, priceWorkJobs);

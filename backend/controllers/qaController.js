@@ -598,7 +598,11 @@ async function fetchApprovedQaPriceWorkFullData(companyId, qaJobId) {
         const approvedAt = row.updated_at ? new Date(row.updated_at).toISOString() : null;
 
         const spu =
-          ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object' ? ent.stepPhotoUrls : {};
+          ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object'
+            ? ent.stepPhotoUrls
+            : ent.step_photo_urls && typeof ent.step_photo_urls === 'object'
+              ? ent.step_photo_urls
+              : {};
         const keys = new Set([...Object.keys(perKey), ...Object.keys(sq), ...Object.keys(spu)]);
         for (const key of keys) {
           const amt = perKey[key] || 0;

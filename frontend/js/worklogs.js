@@ -217,7 +217,12 @@
         '</div>';
       var sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
       var stepLabels = ent.stepLabels && typeof ent.stepLabels === 'object' ? ent.stepLabels : {};
-      var spu = ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object' ? ent.stepPhotoUrls : {};
+      var spu =
+        ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object'
+          ? ent.stepPhotoUrls
+          : ent.step_photo_urls && typeof ent.step_photo_urls === 'object'
+            ? ent.step_photo_urls
+            : {};
       var stepKeys = {};
       Object.keys(sq).forEach(function (k) {
         stepKeys[k] = true;

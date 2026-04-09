@@ -2133,9 +2133,9 @@
               (remU != null ? formatQtyDisplay(remU, true) : '—')
           );
         }
-        if (!dimLines.length) return;
         var title = 'Step ' + (idx + 1) + (s.description ? ' — ' + String(s.description).trim() : '');
         var stepBookings = details[key] && Array.isArray(details[key]) ? details[key] : [];
+        if (!dimLines.length && !stepBookings.length) return;
         var bookingHtml = '';
         if (stepBookings.length) {
           bookingHtml =

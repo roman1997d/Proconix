@@ -43,6 +43,20 @@ function collectPathsFromTimesheetJobs(jobs, set) {
         if (typeof item === 'string') addUploadPathToSet(set, item);
       });
     });
+    if (job.type === 'qa_price_work' && Array.isArray(job.entries)) {
+      job.entries.forEach(function (ent) {
+        if (!ent || typeof ent !== 'object') return;
+        var spu = ent.stepPhotoUrls || ent.step_photo_urls;
+        if (!spu || typeof spu !== 'object') return;
+        Object.keys(spu).forEach(function (k) {
+          var arr = spu[k];
+          if (!Array.isArray(arr)) return;
+          arr.forEach(function (item) {
+            if (typeof item === 'string') addUploadPathToSet(set, item);
+          });
+        });
+      });
+    }
   });
 }
 

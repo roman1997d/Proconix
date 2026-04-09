@@ -845,7 +845,12 @@
             '</div>';
           var sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
           var labels = ent.stepLabels && typeof ent.stepLabels === 'object' ? ent.stepLabels : {};
-          var spu = ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object' ? ent.stepPhotoUrls : {};
+          var spu =
+            ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object'
+              ? ent.stepPhotoUrls
+              : ent.step_photo_urls && typeof ent.step_photo_urls === 'object'
+                ? ent.step_photo_urls
+                : {};
           var stepKeys = {};
           Object.keys(sq).forEach(function (k) {
             stepKeys[k] = true;
@@ -1896,7 +1901,12 @@
         parts.push('<h4>' + escapeHtml('Job ' + jn + (jt ? ' — ' + jt : '')) + '</h4>');
         var sq = ent.stepQuantities || {};
         var labels = ent.stepLabels || {};
-        var spu = ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object' ? ent.stepPhotoUrls : {};
+        var spu =
+          ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object'
+            ? ent.stepPhotoUrls
+            : ent.step_photo_urls && typeof ent.step_photo_urls === 'object'
+              ? ent.step_photo_urls
+              : {};
         var stepKeys = {};
         Object.keys(sq).forEach(function (k) {
           stepKeys[k] = true;
@@ -2134,9 +2144,13 @@
       var key = stepEl.getAttribute('data-pwb-step-key');
       if (!key) return;
       var urls = [];
-      stepEl.querySelectorAll('.op-pwb-photo-chip[data-url]').forEach(function (chip) {
+      stepEl.querySelectorAll('.op-pwb-photo-chip').forEach(function (chip) {
         var u = chip.getAttribute('data-url');
-        if (u) urls.push(u);
+        if (!u && chip.querySelector) {
+          var img = chip.querySelector('img');
+          if (img) u = img.getAttribute('src');
+        }
+        if (u && String(u).trim()) urls.push(String(u).trim());
       });
       if (urls.length) out[key] = urls;
     });
