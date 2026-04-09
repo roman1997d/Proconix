@@ -375,6 +375,28 @@
         <input type="hidden" id="qa-job-panel-id" value="">
         <div id="qa-job-drawer-readonly" class="qa-dl-wrap"></div>
         <div style="margin-top:1.25rem;">
+          <label class="qa-label" for="qa-job-drawer-title-input">Job title</label>
+          <input type="text" id="qa-job-drawer-title-input" class="qa-input" maxlength="500" placeholder="Job title">
+        </div>
+        <div style="margin-top:1rem;">
+          <label class="qa-label" for="qa-job-drawer-target-date">Target completion</label>
+          <input type="date" id="qa-job-drawer-target-date" class="qa-input">
+        </div>
+        <div style="margin-top:1rem;">
+          <label class="qa-label" for="qa-job-drawer-responsible">Supervisor</label>
+          <select id="qa-job-drawer-responsible" class="qa-select">
+            <option value="">— Select —</option>
+          </select>
+        </div>
+        <div style="margin-top:1rem;">
+          <label class="qa-label">Crews</label>
+          <div class="qa-checklist" id="qa-job-drawer-crews-list"></div>
+        </div>
+        <div style="margin-top:1rem;">
+          <label class="qa-label">Workers</label>
+          <div class="qa-checklist" id="qa-job-drawer-workers-list"></div>
+        </div>
+        <div style="margin-top:1.25rem;">
           <label class="qa-label" for="qa-job-drawer-status">Status</label>
           <select id="qa-job-drawer-status" class="qa-select">
             <option value="new">New</option>

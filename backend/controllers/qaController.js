@@ -1417,21 +1417,116 @@ async function updateJob(req, res) {
   const values = [];
   let idx = 1;
 
+  if (b.jobTitle !== undefined) {
+    const jt = String(b.jobTitle || '').trim();
+    if (!jt) return res.status(400).json({ message: 'Job title is required.' });
+    updates.push(`job_title = $${idx++}`);
+    values.push(jt);
+  }
+  if (b.targetCompletionDate !== undefined) {
+    const dt = b.targetCompletionDate != null ? String(b.targetCompletionDate).trim() : '';
+    updates.push(`target_completion_date = $${idx++}`);
+    values.push(dt || null);
+  }
+  if (b.responsibleId !== undefined) {
+    const ridRaw = b.responsibleId != null ? String(b.responsibleId).trim() : '';
+    const rid = ridRaw ? parseInt(ridRaw, 10) : null;
+    if (ridRaw && !Number.isInteger(rid)) {
+      return res.status(400).json({ message: 'Invalid responsible person.' });
+    }
+    if (rid != null) {
+      const rchk = await pool.query('SELECT id FROM users WHERE id = $1 AND company_id = $2', [rid, companyId]);
+      if (!rchk.rows.length) {
+        return res.status(400).json({ message: 'Responsible person must be from your company.' });
+      }
+    }
+    updates.push(`responsible_user_id = $${idx++}`);
+    values.push(rid);
+  }
   if (b.status !== undefined) {
     const statusId = await getStatusIdByCode(b.status);
     if (!statusId) return res.status(400).json({ message: 'Invalid status.' });
     updates.push(`status_id = $${idx++}`);
     values.push(statusId);
   }
-  if (updates.length === 0) return res.status(400).json({ message: 'No fields to update.' });
+  const workerIdsProvided = b.workerIds !== undefined;
+  const crewIdsProvided = b.crewIds !== undefined;
+  if (workerIdsProvided) {
+    const workerIds = Array.isArray(b.workerIds) ? b.workerIds : [];
+    const parsedWorkers = [];
+    for (const uid of workerIds) {
+      const n = parseInt(String(uid), 10);
+      if (!Number.isInteger(n)) return res.status(400).json({ message: 'Invalid worker id.' });
+      parsedWorkers.push(n);
+    }
+    if (parsedWorkers.length) {
+      const wchk = await pool.query('SELECT id FROM users WHERE id = ANY($1::int[]) AND company_id = $2', [
+        [...new Set(parsedWorkers)],
+        companyId,
+      ]);
+      const allowed = new Set((wchk.rows || []).map((r) => r.id));
+      for (const wid of parsedWorkers) {
+        if (!allowed.has(wid)) return res.status(400).json({ message: 'All workers must be from your company.' });
+      }
+    }
+  }
+  if (crewIdsProvided) {
+    const crewIds = Array.isArray(b.crewIds) ? b.crewIds : [];
+    const parsedCrews = [];
+    for (const cid of crewIds) {
+      const n = parseInt(String(cid), 10);
+      if (!Number.isInteger(n)) return res.status(400).json({ message: 'Invalid crew id.' });
+      parsedCrews.push(n);
+    }
+    if (parsedCrews.length) {
+      const cchk = await pool.query('SELECT id FROM crews WHERE id = ANY($1::int[]) AND company_id = $2', [
+        [...new Set(parsedCrews)],
+        companyId,
+      ]).catch(() => ({ rows: [] }));
+      const allowed = new Set((cchk.rows || []).map((r) => r.id));
+      for (const cid of parsedCrews) {
+        if (!allowed.has(cid)) return res.status(400).json({ message: 'All crews must be from your company.' });
+      }
+    }
+  }
+  if (updates.length === 0 && !workerIdsProvided && !crewIdsProvided) {
+    return res.status(400).json({ message: 'No fields to update.' });
+  }
   updates.push(`updated_at = NOW()`, `updated_by = $${idx++}`);
   values.push(getCreatedBy(req), id);
 
   try {
-    await pool.query(
-      `UPDATE qa_jobs SET ${updates.join(', ')} WHERE id = $${idx}`,
-      values
-    );
+    if (updates.length > 2) {
+      await pool.query(`UPDATE qa_jobs SET ${updates.join(', ')} WHERE id = $${idx}`, values);
+    }
+    if (workerIdsProvided) {
+      const workerIds = (Array.isArray(b.workerIds) ? b.workerIds : [])
+        .map((uid) => parseInt(String(uid), 10))
+        .filter((n) => Number.isInteger(n));
+      await pool.query('DELETE FROM qa_job_user_workers WHERE job_id = $1', [id]).catch(() => {});
+      for (const wid of [...new Set(workerIds)]) {
+        await pool
+          .query('INSERT INTO qa_job_user_workers (job_id, user_id) VALUES ($1, $2) ON CONFLICT (job_id, user_id) DO NOTHING', [
+            id,
+            wid,
+          ])
+          .catch(() => {});
+      }
+    }
+    if (crewIdsProvided) {
+      const crewIds = (Array.isArray(b.crewIds) ? b.crewIds : [])
+        .map((cid) => parseInt(String(cid), 10))
+        .filter((n) => Number.isInteger(n));
+      await pool.query('DELETE FROM qa_job_crews WHERE job_id = $1', [id]).catch(() => {});
+      for (const cid of [...new Set(crewIds)]) {
+        await pool
+          .query('INSERT INTO qa_job_crews (job_id, crew_id) VALUES ($1, $2) ON CONFLICT (job_id, crew_id) DO NOTHING', [
+            id,
+            cid,
+          ])
+          .catch(() => {});
+      }
+    }
     // Keep Planning synchronized with this QA job update.
     try {
       const uid =

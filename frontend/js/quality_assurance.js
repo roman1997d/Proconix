@@ -661,6 +661,69 @@
     });
   }
 
+  function renderDrawerSupervisorSelect(selectedId) {
+    var sel = document.getElementById('qa-job-drawer-responsible');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Select —</option>';
+    supervisorsData.forEach(function (s) {
+      var opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name;
+      if (String(selectedId || '') === String(s.id)) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  function renderDrawerWorkersList(selectedIds) {
+    var listEl = document.getElementById('qa-job-drawer-workers-list');
+    if (!listEl) return;
+    var selSet = new Set((selectedIds || []).map(String));
+    listEl.innerHTML = '';
+    workersData.forEach(function (w) {
+      var label = document.createElement('label');
+      label.className = 'qa-check-item';
+      var checked = selSet.has(String(w.id)) ? ' checked' : '';
+      label.innerHTML =
+        '<input type="checkbox" name="qa-job-drawer-worker" value="' +
+        escapeHtml(w.id) +
+        '"' +
+        checked +
+        '> <span>' +
+        escapeHtml(w.name) +
+        (w.category ? ' <span class="qa-message">(' + escapeHtml(categoryLabel(w.category)) + ')</span>' : '') +
+        '</span>';
+      listEl.appendChild(label);
+    });
+    if (!workersData.length) {
+      listEl.innerHTML = '<p class="qa-message">No workers found.</p>';
+    }
+  }
+
+  function renderDrawerCrewsList(selectedIds) {
+    var listEl = document.getElementById('qa-job-drawer-crews-list');
+    if (!listEl) return;
+    var selSet = new Set((selectedIds || []).map(String));
+    listEl.innerHTML = '';
+    if (!crewsData.length) {
+      listEl.innerHTML = '<p class="qa-message">No crews loaded.</p>';
+      return;
+    }
+    crewsData.forEach(function (c) {
+      var label = document.createElement('label');
+      label.className = 'qa-check-item';
+      var checked = selSet.has(String(c.id)) ? ' checked' : '';
+      label.innerHTML =
+        '<input type="checkbox" name="qa-job-drawer-crew" value="' +
+        escapeHtml(c.id) +
+        '"' +
+        checked +
+        '> <span>' +
+        escapeHtml(c.name) +
+        '</span>';
+      listEl.appendChild(label);
+    });
+  }
+
   function parseQaCostValue(raw) {
     if (raw == null || raw === '') return null;
     var s = String(raw).trim();
@@ -2290,6 +2353,13 @@
         '</dl>' +
         buildJobEvidenceSection(evPayload.steps, templates, evPayload.operativePhotos || []);
       document.getElementById('qa-job-drawer-readonly').innerHTML = html;
+      var jtInput = document.getElementById('qa-job-drawer-title-input');
+      if (jtInput) jtInput.value = freshJob.jobTitle || '';
+      var tdInput = document.getElementById('qa-job-drawer-target-date');
+      if (tdInput) tdInput.value = freshJob.targetCompletionDate ? String(freshJob.targetCompletionDate).slice(0, 10) : '';
+      renderDrawerSupervisorSelect(freshJob.responsibleId || '');
+      renderDrawerWorkersList(freshJob.workerIds || []);
+      renderDrawerCrewsList(freshJob.crewIds || []);
       openLayer(layerJob, true);
       iconsRefresh();
     });
@@ -2307,8 +2377,36 @@
     var id = document.getElementById('qa-job-panel-id').value;
     var status = document.getElementById('qa-job-drawer-status').value;
     var notes = document.getElementById('qa-job-drawer-notes').value;
-    var projectId = projectSelect && projectSelect.value;
-    qaApi.updateJob(id, { status: status, notes: notes }).then(function () {
+    var jobTitle = (document.getElementById('qa-job-drawer-title-input') && document.getElementById('qa-job-drawer-title-input').value || '').trim();
+    if (!jobTitle) {
+      showToast('Job title is required.', 'error');
+      return;
+    }
+    var targetCompletionDate =
+      (document.getElementById('qa-job-drawer-target-date') &&
+        document.getElementById('qa-job-drawer-target-date').value) ||
+      '';
+    var responsibleId =
+      (document.getElementById('qa-job-drawer-responsible') &&
+        document.getElementById('qa-job-drawer-responsible').value) ||
+      '';
+    var workerIds = [];
+    document.querySelectorAll('#qa-job-drawer-workers-list input[name="qa-job-drawer-worker"]:checked').forEach(function (cb) {
+      workerIds.push(cb.value);
+    });
+    var crewIds = [];
+    document.querySelectorAll('#qa-job-drawer-crews-list input[name="qa-job-drawer-crew"]:checked').forEach(function (cb) {
+      crewIds.push(cb.value);
+    });
+    qaApi.updateJob(id, {
+      status: status,
+      notes: notes,
+      jobTitle: jobTitle,
+      targetCompletionDate: targetCompletionDate,
+      responsibleId: responsibleId,
+      workerIds: workerIds,
+      crewIds: crewIds,
+    }).then(function () {
       closeJobDrawer();
       if (currentView === 'jobs') renderJobsOverview(false);
       showToast('Job updated.', 'success');
