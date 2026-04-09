@@ -494,6 +494,11 @@ a.op-doc-row:active {
   padding: 10px;
   font-size: 0.85rem;
 }
+.op-worklog-overview-qa-entry + .op-worklog-overview-qa-entry {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--op-card-border);
+}
 .op-worklog-overview-qa ul {
   margin: 6px 0 0;
   padding-left: 1.1rem;

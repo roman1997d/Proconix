@@ -834,6 +834,7 @@
         var qaHtml =
           '<div class="op-worklog-overview-section"><h4>QA price work</h4><div class="op-worklog-overview-qa">';
         block.entries.forEach(function (ent) {
+          qaHtml += '<div class="op-worklog-overview-qa-entry">';
           var jn = ent.jobNumber != null && String(ent.jobNumber).trim() !== '' ? String(ent.jobNumber) : ent.qaJobId || '—';
           var jt = (ent.jobTitle && String(ent.jobTitle).trim()) || '';
           qaHtml +=
