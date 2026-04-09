@@ -590,6 +590,13 @@ async function deleteCompany(req, res) {
     await runDel('DELETE FROM qa_workers WHERE company_id = $1', cid);
     await runDel('DELETE FROM qa_templates WHERE company_id = $1', cid);
 
+    /**
+     * Crews: leader_user_id → users(id) ON DELETE RESTRICT (see create_crews_tables.sql).
+     * Must remove crews before deleting company users, or DELETE users fails with 23503.
+     * crew_members and qa_job_crews rows CASCADE from crews.
+     */
+    await runDel('DELETE FROM crews WHERE company_id = $1', cid);
+
     await runDel('DELETE FROM users WHERE company_id = $1', cid);
     await runDel('DELETE FROM manager WHERE company_id = $1', cid);
 
