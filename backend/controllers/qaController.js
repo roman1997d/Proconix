@@ -713,7 +713,7 @@ async function listJobs(req, res) {
               j.total_units, j.step_quantities, j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
               j.cost_value, j.responsible_id, j.responsible_user_id, j.status_id, j.created_at, j.created_by
        FROM qa_jobs j
-       WHERE j.project_id = $1 ORDER BY j.job_number`,
+       WHERE j.project_id = $1 ORDER BY j.created_at DESC NULLS LAST, j.id DESC`,
       [pid]
     );
 

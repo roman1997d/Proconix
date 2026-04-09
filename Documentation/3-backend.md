@@ -106,8 +106,10 @@ Base URL: `/api`. Toate răspunsurile sunt JSON, cu excepția `GET /api/dashboar
 | POST | /api/operatives/issues | Operative | multipart (file) + fields | Issue creat, file_url injectat |
 | POST | /api/operatives/uploads | Operative | multipart (file) + fields | Document upload, file_url injectat |
 | GET | /api/operatives/work-log | Operative | — | Work logs ale operativului (filtrate: **fără** rânduri cu `operative_archived = true` pentru operativ) |
+| GET | /api/operatives/qa/assigned-jobs | Operative | — | Joburi QA pe proiectul operativului (templates + steps + `remainingStepQuantities`) — folosit pentru **Price work booking** |
 | POST | /api/operatives/work-log/upload | Operative | multipart: `file` | Salvează în `uploads/worklogs/`; răspuns `path` (ex. `/uploads/worklogs/...`) |
-| POST | /api/operatives/work-log | Operative | body: câmpuri work log + opțional `photoUrls[]`, **`timesheetJobs`** (JSON array: joburi cu `photos` ca string-uri path) | Work log creat (persistă `timesheet_jobs` dacă coloana există) |
+| POST | /api/operatives/work-log | Operative | body: câmpuri work log + opțional `photoUrls[]`, **`timesheetJobs`**, **`priceWorkJobs`** (array: cantități + `stepPhotoUrls` per pas pentru `qa_price_work` în `timesheet_jobs`) | Work log creat (persistă `timesheet_jobs` dacă coloana există); vezi [10-price-work-booking-qa-photos.md](10-price-work-booking-qa-photos.md) |
+| POST | /api/operatives/work-log/:id/send-invoice-copy | Operative | id (path) | Trimite email companie + PDF rezumat (inclusiv poze din `stepPhotoUrls` dacă există) |
 | POST | /api/operatives/work-log/:id/archive | Operative | id (path) | Setează `operative_archived`, `operative_archived_at` pentru intrarea proprie (nu șterge rândul) |
 | POST | /api/operatives/timesheet/generate | Operative | body: JSON (`jobs[]`, `total_before_tax`, `work_type`, `period_from`, `period_to`, `workerName` / `project`, logo opțional, etc.) | Generează PDF pontaj (PDFKit); `{ success, pdfPath, pdfUrl }` |
 | POST | /api/operatives/work-report/generate | Operative | body: JSON (`photos` / `photoUrls`, `work_performed`, `notes`, `total_before_tax`, date interval, `location`, logo, …) | Generează PDF raport lucrare (PDFKit); `{ success, pdfPath, pdfUrl }` |

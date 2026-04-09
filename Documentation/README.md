@@ -17,6 +17,7 @@ Acest folder conține documentația de arhitectură, bază de date, backend, fro
 | 7 | [7-business-product.md](7-business-product.md) | Scop și obiective, utilizatori țintă, roadmap/MVP vs viitor, plan monetizare (Free/Silver/Gold), strategie lansare |
 | 8 | [8-recent-extras.md](8-recent-extras.md) | Extra recent: landing (typewriter, carusel hero, flux „How it works”, testimoniale, FAQ), dashboard iframe + touch, Site Snags double-tap, folder `Doc_Marketing_Suite` |
 | 9 | [9-documents-digital-signatures-frontend-plan.md](9-documents-digital-signatures-frontend-plan.md) | Plan front-end modul Documente & semnături digitale: pagini, componente, state, API, validări, UX, checklist livrabile (vanilla vs React) |
+| 10 | [10-price-work-booking-qa-photos.md](10-price-work-booking-qa-photos.md) | Price work booking (operativ): cantități QA pe pași, `stepPhotoUrls` în `timesheet_jobs`, poze în Work Logs / QA / factură email-PDF, remedieri UI și încărcare fișiere |
 
 ---
 
@@ -37,11 +38,18 @@ Pentru diagrame Mermaid poți folosi: [Mermaid Live Editor](https://mermaid.live
 - La **schimbare schemă DB**: actualizează `2-database.md` (ERD, schema, scripturi) și `5-installation-setup.md` dacă apar noi scripturi.
 - La **pagină sau modul nou**: actualizează `1-architecture.md` (tabel module) și `4-frontend.md` (structură, flux, manual).
 - La **schimbări majore pe landing / iframe dashboard / Site Snags**: actualizează `8-recent-extras.md` (și rezumatul din acest README).
+- La **Price work booking / poze QA în work logs**: actualizează `10-price-work-booking-qa-photos.md`.
 - La **nou flux de business sau test**: actualizează `6-qa-testing.md` și, dacă e cazul, `7-business-product.md`.
 
 ---
 
 ## Modificări recente (rezumat consolidat)
+
+### Price work booking & poze dovadă (aprilie 2026)
+- **Document:** [10-price-work-booking-qa-photos.md](10-price-work-booking-qa-photos.md).
+- Flux operativ: modal Price work booking → cantități pe pas + **photo evidence**; `priceWorkJobs` → `timesheet_jobs` cu `stepPhotoUrls`; upload `POST /work-log/upload` → `/uploads/worklogs/...`.
+- Afișare: manager **Work Logs** (detalii), **QA** (joburi approve + `bookedStepDetails.photoUrls`), **email/PDF** factură copie companie; normalizare `step_photo_urls` / `price_work_jobs` la backend; curățare fișiere la ștergere work log.
+- UI formular: header job, badge pas, grid câmpuri, chip-uri foto cu previzualizare și remove; **fix încărcare thumbnail** (ordine `revokeObjectURL`, path normalizat, delegare eveniment pe `#op-pwb-steps`).
 
 ### Extra (landing, iframe dashboard, Site Snags, marketing doc)
 - Detaliat în **[8-recent-extras.md](8-recent-extras.md)** — rezumat scurt:
