@@ -1102,7 +1102,13 @@ a.op-doc-row:active {
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--op-text-muted);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+}
+.op-pwb-photo-hint {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--op-text-muted);
 }
 .op-pwb-step-photo-block .op-pwb-add-photo {
   margin-bottom: 8px;

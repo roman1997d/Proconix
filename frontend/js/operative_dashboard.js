@@ -2089,6 +2089,7 @@
         parts.push(
           '<div class="op-pwb-step-photo-block">' +
           '<span class="op-pwb-step-photo-label">Photo confirmation</span>' +
+          '<p class="op-pwb-photo-hint">Add one or more photos for this step (price work evidence). Tap again to add more.</p>' +
           '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-pwb-add-photo">Add photo confirmation</button>' +
           '<input type="file" class="d-none op-pwb-photo-input" accept="image/*" multiple tabindex="-1">' +
           '<div class="op-pwb-photo-chips" aria-live="polite"></div>' +

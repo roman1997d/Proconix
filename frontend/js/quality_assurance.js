@@ -2150,7 +2150,27 @@
                 if (bk.amount != null && !isNaN(Number(bk.amount)) && Number(bk.amount) > 0) {
                   parts.push('Step <strong>£' + Number(bk.amount).toFixed(2) + '</strong>');
                 }
-                return '<li class="qa-step-booking-item">' + parts.join(' · ') + '</li>';
+                var photoUrls = Array.isArray(bk.photoUrls) ? bk.photoUrls : [];
+                var photosHtml = '';
+                if (photoUrls.length) {
+                  photosHtml =
+                    '<div class="qa-step-booking-photos" role="group" aria-label="Price work confirmation photos">' +
+                    photoUrls
+                      .map(function (url) {
+                        return (
+                          '<a href="' +
+                          escapeHtml(url) +
+                          '" target="_blank" rel="noopener" class="qa-step-booking-photo-wrap">' +
+                          '<img src="' +
+                          escapeHtml(url) +
+                          '" alt="" class="qa-step-booking-photo-thumb" loading="lazy">' +
+                          '</a>'
+                        );
+                      })
+                      .join('') +
+                    '</div>';
+                }
+                return '<li class="qa-step-booking-item">' + parts.join(' · ') + photosHtml + '</li>';
               })
               .join('') +
             '</ul>';

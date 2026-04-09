@@ -597,14 +597,17 @@ async function fetchApprovedQaPriceWorkFullData(companyId, qaJobId) {
         const submittedAt = row.submitted_at ? new Date(row.submitted_at).toISOString() : null;
         const approvedAt = row.updated_at ? new Date(row.updated_at).toISOString() : null;
 
-        const keys = new Set([...Object.keys(perKey), ...Object.keys(sq)]);
+        const spu =
+          ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object' ? ent.stepPhotoUrls : {};
+        const keys = new Set([...Object.keys(perKey), ...Object.keys(sq), ...Object.keys(spu)]);
         for (const key of keys) {
           const amt = perKey[key] || 0;
           const qk = sq[key] || {};
           const m2 = parseFloat(qk.m2) || 0;
           const lin = parseFloat(qk.linear) || 0;
           const un = parseFloat(qk.units) || 0;
-          if (amt <= 0 && m2 === 0 && lin === 0 && un === 0) continue;
+          const photoUrls = Array.isArray(spu[key]) ? spu[key].filter((u) => u && String(u).trim()) : [];
+          if (amt <= 0 && m2 === 0 && lin === 0 && un === 0 && photoUrls.length === 0) continue;
           if (!details[key]) details[key] = [];
           details[key].push({
             workerName,
@@ -614,6 +617,7 @@ async function fetchApprovedQaPriceWorkFullData(companyId, qaJobId) {
             linear: Math.round(lin * 100) / 100,
             units: Math.round(un * 100) / 100,
             amount: amt,
+            photoUrls,
           });
         }
       }
