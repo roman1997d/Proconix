@@ -480,6 +480,18 @@ async function getCurrentProject(req, res) {
     const p = projRow.rows[0];
     const projectName = p.name != null ? String(p.name).trim() : null;
     console.log('getCurrentProject: opId=%s projectId=%s name=%s', op.id, projectId, projectName || p.name);
+
+    let trades = [];
+    try {
+      const tr = await pool.query(
+        'SELECT id, label FROM project_trades WHERE project_id = $1 ORDER BY sort_order ASC, id ASC',
+        [projectId]
+      );
+      trades = (tr.rows || []).map((row) => ({ id: row.id, label: row.label || '' }));
+    } catch (trErr) {
+      if (trErr.code !== '42P01') throw trErr;
+    }
+
     return res.status(200).json({
       success: true,
       project: {
@@ -488,6 +500,7 @@ async function getCurrentProject(req, res) {
         address: p.address,
         start_date: p.start_date,
         description: p.description,
+        trades,
       },
     });
   } catch (err) {

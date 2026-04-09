@@ -155,6 +155,40 @@
     return (c && c.querySelector('#' + id)) || document.getElementById(id);
   }
 
+  /** Trade categories being edited in Edit Project modal (saved with project). */
+  var editTradesState = [];
+
+  function tradeLabelsFromProject(project) {
+    var t = project && project.trades;
+    if (!Array.isArray(t) || !t.length) return [];
+    return t
+      .map(function (x) {
+        return typeof x === 'string' ? String(x).trim() : (x && String(x.label || '').trim()) || '';
+      })
+      .filter(Boolean);
+  }
+
+  function renderEditTradesTags() {
+    var list = el('projects-edit-trades-list');
+    if (!list) return;
+    list.innerHTML = '';
+    editTradesState.forEach(function (label, idx) {
+      var tag = document.createElement('span');
+      tag.className = 'projects-trade-tag';
+      var txt = document.createElement('span');
+      txt.textContent = label;
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'projects-trade-remove';
+      rm.setAttribute('aria-label', 'Remove');
+      rm.setAttribute('data-idx', String(idx));
+      rm.innerHTML = '&times;';
+      tag.appendChild(txt);
+      tag.appendChild(rm);
+      list.appendChild(tag);
+    });
+  }
+
   function renderProjectsList(projects) {
     var list = document.getElementById('projects-list');
     var empty = document.getElementById('projects-empty');
@@ -277,6 +311,16 @@
           html += '<p>Timeline: ' + escapeHtml(timelineHtml) + '</p>';
         }
         html += '<p>Number of floors: ' + (p.number_of_floors != null ? escapeHtml(String(p.number_of_floors)) : '—') + '</p>';
+        if (Array.isArray(p.trades) && p.trades.length) {
+          var tnames = p.trades
+            .map(function (t) {
+              return typeof t === 'string' ? t : (t && t.label) || '';
+            })
+            .filter(Boolean);
+          if (tnames.length) {
+            html += '<p>Trade categories: ' + escapeHtml(tnames.join(', ')) + '</p>';
+          }
+        }
         html += '<p>Status: ' + (active ? 'Active' : 'Inactive') + '</p>';
         if (p.project_pass_key) html += '<p>Pass key: <code>' + escapeHtml(p.project_pass_key) + '</code></p>';
         if (p.created_by_who) html += '<p>Created by: ' + escapeHtml(p.created_by_who) + '</p>';
@@ -399,6 +443,8 @@
     if (latEl) latEl.value = project.latitude != null ? project.latitude : '';
     var lngEl = el('projects-edit-longitude');
     if (lngEl) lngEl.value = project.longitude != null ? project.longitude : '';
+    editTradesState = tradeLabelsFromProject(project).slice();
+    renderEditTradesTags();
     openModal('projects-modal-edit');
   }
 
@@ -436,6 +482,40 @@
     }
 
     loadProjects(headers);
+
+    content.addEventListener('click', function (e) {
+      var addTrade = e.target && e.target.closest && e.target.closest('#projects-edit-trade-add');
+      if (addTrade) {
+        e.preventDefault();
+        var tinp = el('projects-edit-trade-input');
+        var v = tinp ? tinp.value.trim() : '';
+        if (!v) return;
+        editTradesState.push(v);
+        if (tinp) tinp.value = '';
+        renderEditTradesTags();
+        return;
+      }
+      var rmTrade = e.target && e.target.closest && e.target.closest('.projects-trade-remove');
+      if (rmTrade && rmTrade.closest('#projects-edit-trades-list')) {
+        e.preventDefault();
+        var ix = parseInt(rmTrade.getAttribute('data-idx'), 10);
+        if (!isNaN(ix)) {
+          editTradesState.splice(ix, 1);
+          renderEditTradesTags();
+        }
+      }
+    });
+    content.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      var t = e.target;
+      if (!t || t.id !== 'projects-edit-trade-input') return;
+      e.preventDefault();
+      var v = (t.value || '').trim();
+      if (!v) return;
+      editTradesState.push(v);
+      t.value = '';
+      renderEditTradesTags();
+    });
 
     var toggleHiddenBtn = content.querySelector('#projects-btn-toggle-hidden');
     if (toggleHiddenBtn) {
@@ -517,6 +597,7 @@
         number_of_floors: floors === '' ? undefined : parseInt(floors, 10),
         latitude: latVal === '' ? undefined : parseFloat(latVal),
         longitude: lngVal === '' ? undefined : parseFloat(lngVal),
+        trades: editTradesState.slice(),
       };
       if (!id) return;
       fetch('/api/projects/' + id + '/update', {

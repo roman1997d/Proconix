@@ -2438,7 +2438,13 @@
       generatedPdfLinkEl.removeAttribute('href');
     }
     setWorklogFlow('price');
-    loadWorkTypes();
+    if (wt) {
+      wt.innerHTML = '';
+      var lo = document.createElement('option');
+      lo.value = '';
+      lo.textContent = 'Loading work types…';
+      wt.appendChild(lo);
+    }
     renderDocumentName();
     if (documentNameEl) documentNameEl.classList.add('d-none');
     hideFeedback(document.getElementById('op-worklog-feedback'));
@@ -2450,6 +2456,7 @@
         if (!r.data || !r.data.success) {
           projectInput.value = 'No project assigned';
           currentWorklogProject = null;
+          loadWorkTypes();
           return;
         }
         var proj = r.data.project;
@@ -2457,9 +2464,19 @@
         if (proj && (name || proj.id)) {
           projectInput.value = name || 'Project #' + proj.id;
           currentWorklogProject = proj;
+          var labels = [];
+          if (Array.isArray(proj.trades) && proj.trades.length) {
+            proj.trades.forEach(function (t) {
+              var L = typeof t === 'string' ? t : t && t.label;
+              if (L && String(L).trim()) labels.push(String(L).trim());
+            });
+          }
+          if (labels.length) renderWorkTypes(labels);
+          else loadWorkTypes();
         } else {
           projectInput.value = 'No project assigned';
           currentWorklogProject = null;
+          loadWorkTypes();
         }
       })
       .catch(function (err) {
@@ -2467,6 +2484,7 @@
           projectInput.value = 'No project assigned';
           currentWorklogProject = null;
         }
+        loadWorkTypes();
         console.error('project/current:', err && err.message ? err.message : err);
       });
   }

@@ -254,6 +254,15 @@ function getProjectsHtml() {
                   Use current location
                 </button>
               </div>
+              <div class="projects-field">
+                <span class="projects-label">Trade categories</span>
+                <p class="text-muted small" style="margin:0 0 8px;">Labels such as Plaster, Dryliner — used for <strong>Work type</strong> on the operative dashboard (and other project trade fields). Type a name and press + to add.</p>
+                <div class="projects-trades-add-row">
+                  <input type="text" id="projects-edit-trade-input" class="projects-input" placeholder="e.g. Dryliner" maxlength="200" autocomplete="off">
+                  <button type="button" class="btn-projects-secondary projects-trades-add-btn" id="projects-edit-trade-add" title="Add trade" aria-label="Add trade"><i class="bi bi-plus-lg"></i></button>
+                </div>
+                <div id="projects-edit-trades-list" class="projects-edit-trades-list" aria-live="polite"></div>
+              </div>
               <button type="submit" class="btn-projects-primary">Save Changes</button>
             </form>
           </div>

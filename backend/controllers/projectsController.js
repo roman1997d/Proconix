@@ -14,6 +14,66 @@ function getCompanyId(req) {
   return null;
 }
 
+/** @returns {Promise<Map<number, Array<{id:number,label:string,sort_order:number}>>>} */
+async function queryTradesForProjects(projectIds) {
+  if (!projectIds || !projectIds.length) return new Map();
+  try {
+    const tr = await pool.query(
+      `SELECT id, project_id, label, sort_order FROM project_trades WHERE project_id = ANY($1::int[]) ORDER BY project_id, sort_order ASC, id ASC`,
+      [projectIds]
+    );
+    const map = new Map();
+    for (const row of tr.rows) {
+      if (!map.has(row.project_id)) map.set(row.project_id, []);
+      map.get(row.project_id).push({
+        id: row.id,
+        label: row.label,
+        sort_order: row.sort_order,
+      });
+    }
+    return map;
+  } catch (err) {
+    if (err.code === '42P01') return new Map();
+    throw err;
+  }
+}
+
+async function attachTradesToProjects(rows) {
+  if (!rows || !rows.length) return [];
+  const ids = rows.map((r) => r.id);
+  const map = await queryTradesForProjects(ids);
+  return rows.map((p) => Object.assign({}, p, { trades: map.get(p.id) || [] }));
+}
+
+async function replaceProjectTrades(client, projectId, tradesInput) {
+  const raw = Array.isArray(tradesInput) ? tradesInput : [];
+  const labels = raw
+    .map((t) =>
+      typeof t === 'string'
+        ? String(t).trim()
+        : t && t.label != null
+          ? String(t.label).trim()
+          : ''
+    )
+    .filter(Boolean)
+    .slice(0, 80);
+  const seen = new Set();
+  const deduped = [];
+  for (const L of labels) {
+    const k = L.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    deduped.push(L.slice(0, 200));
+  }
+  await client.query('DELETE FROM project_trades WHERE project_id = $1', [projectId]);
+  for (let i = 0; i < deduped.length; i++) {
+    await client.query(
+      'INSERT INTO project_trades (project_id, label, sort_order) VALUES ($1, $2, $3)',
+      [projectId, deduped[i], i]
+    );
+  }
+}
+
 function generateProjectPassKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let key = '';
@@ -141,7 +201,8 @@ async function list(req, res) {
        ORDER BY created_at DESC`,
       [companyId]
     );
-    return res.status(200).json({ success: true, projects: result.rows });
+    const withTrades = await attachTradesToProjects(result.rows);
+    return res.status(200).json({ success: true, projects: withTrades });
   } catch (err) {
     if (err.code === '42703' || err.code === '42P01') {
       try {
@@ -167,7 +228,8 @@ async function list(req, res) {
           created_at: row.created_at,
           deactivate_by_who: null,
         }));
-        return res.status(200).json({ success: true, projects });
+        const withTrades = await attachTradesToProjects(projects);
+        return res.status(200).json({ success: true, projects: withTrades });
       } catch (legacyErr) {
         console.error('projectsController list (legacy):', legacyErr);
         return res.status(500).json({ success: false, message: 'Failed to load projects.' });
@@ -235,7 +297,9 @@ async function getOne(req, res) {
       if (result.rows.length === 0) {
         return res.status(403).json({ success: false, message: ACCESS_DENIED_MESSAGE });
       }
-      return res.status(200).json({ success: true, project: result.rows[0] });
+      const row = result.rows[0];
+      const tmap = await queryTradesForProjects([id]);
+      return res.status(200).json({ success: true, project: Object.assign({}, row, { trades: tmap.get(id) || [] }) });
     }
 
     if (req.userType === 'operative') {
@@ -287,7 +351,9 @@ async function getOne(req, res) {
       if (result.rows.length === 0) {
         return res.status(403).json({ success: false, message: ACCESS_DENIED_MESSAGE });
       }
-      return res.status(200).json({ success: true, project: result.rows[0] });
+      const row = result.rows[0];
+      const tmap = await queryTradesForProjects([id]);
+      return res.status(200).json({ success: true, project: Object.assign({}, row, { trades: tmap.get(id) || [] }) });
     }
 
     return res.status(403).json({ success: false, message: ACCESS_DENIED_MESSAGE });
@@ -343,8 +409,10 @@ async function update(req, res) {
     return res.status(400).json({ success: false, message: 'Project name is required.' });
   }
 
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
+    await client.query('BEGIN');
+    const result = await client.query(
       `UPDATE projects
        SET project_name = $1, address = COALESCE($2, address), start_date = COALESCE($3, start_date),
            planned_end_date = COALESCE($4, planned_end_date), number_of_floors = COALESCE($5, number_of_floors),
@@ -358,11 +426,29 @@ async function update(req, res) {
       [projectName, address || null, startDate, plannedEndDate, numberOfFloors, description, latitude, longitude, id, companyId]
     );
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ success: false, message: ACCESS_DENIED_MESSAGE });
     }
-    return res.status(200).json({ success: true, project: result.rows[0] });
+    if (b.trades !== undefined) {
+      await replaceProjectTrades(client, id, b.trades);
+    }
+    await client.query('COMMIT');
+    const row = result.rows[0];
+    const tmap = await queryTradesForProjects([id]);
+    return res.status(200).json({ success: true, project: Object.assign({}, row, { trades: tmap.get(id) || [] }) });
   } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {}
     console.error('projectsController update:', err);
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        success: false,
+        message:
+          'Trade categories need the project_trades table. On the server run: psql -d ProconixDB -f scripts/create_project_trades.sql',
+        detail: err.message,
+      });
+    }
     if (err.code === '42703') {
       return res.status(503).json({
         success: false,
@@ -376,6 +462,8 @@ async function update(req, res) {
       message: 'Failed to update project.',
       detail: process.env.NODE_ENV !== 'production' ? err.message : undefined,
     });
+  } finally {
+    client.release();
   }
 }
 
