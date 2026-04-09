@@ -1053,11 +1053,57 @@ a.op-doc-row:active {
 }
 
 /* Price work builder (QA steps) */
+.op-pwb-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+}
+.op-pwb-job-header {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: var(--op-radius);
+  border: 1px solid var(--op-card-border);
+  background: rgba(0, 0, 0, 0.18);
+  border-left: 4px solid var(--op-accent, #2563eb);
+}
 .op-pwb-job-label {
-  font-weight: 600;
-  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 8px;
   font-size: 1.05rem;
   line-height: 1.35;
+}
+.op-pwb-job-label-kicker {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--op-text-muted);
+}
+.op-pwb-job-label-text {
+  font-weight: 600;
+  color: var(--op-text);
+}
+.op-pwb-job-sub {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--op-text-muted);
+}
+.op-pwb-steps {
+  margin-bottom: 4px;
+}
+.op-pwb-form-actions {
+  margin-top: 16px;
+  padding-top: 4px;
+}
+.op-pwb-submit-btn {
+  width: 100%;
+  min-height: 48px;
+  font-size: 1rem;
+  font-weight: 600;
 }
 .op-pwb-template-title {
   font-size: 0.8rem;
@@ -1073,23 +1119,75 @@ a.op-doc-row:active {
   background: rgba(0, 0, 0, 0.12);
   border: 1px solid var(--op-card-border);
   border-radius: var(--op-radius);
-  padding: 12px;
+  padding: 12px 12px 14px;
+  margin-bottom: 12px;
+}
+.op-pwb-step-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   margin-bottom: 10px;
+}
+.op-pwb-step-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: rgba(37, 99, 235, 0.25);
+  color: #93c5fd;
+  border: 1px solid rgba(37, 99, 235, 0.45);
 }
 .op-pwb-step-title {
   font-weight: 600;
-  margin-bottom: 10px;
   font-size: 0.95rem;
+  line-height: 1.35;
+  margin: 0;
+  padding-top: 2px;
+}
+.op-pwb-step-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+@media (min-width: 420px) {
+  .op-pwb-step-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  .op-pwb-step-fields .op-field:only-child {
+    grid-column: 1 / -1;
+  }
 }
 .op-pwb-step .op-field {
-  margin-bottom: 8px;
-}
-.op-pwb-step .op-field:last-child {
   margin-bottom: 0;
 }
 .op-pwb-step .op-field label {
   font-size: 0.85rem;
   color: var(--op-text-muted);
+}
+.op-pwb-inp {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--op-card-border);
+  border-radius: 10px;
+  color: var(--op-text);
+  font-size: 1rem;
+}
+.op-pwb-inp:focus {
+  outline: none;
+  border-color: var(--op-accent, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+.op-pwb-inp::placeholder {
+  color: rgba(255, 255, 255, 0.35);
 }
 .op-pwb-rem-hint {
   display: block;
@@ -1103,11 +1201,27 @@ a.op-doc-row:active {
   border-top: 1px dashed var(--op-card-border);
 }
 .op-pwb-step-photo-label {
-  display: block;
-  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: var(--op-text-muted);
+  color: var(--op-text);
   margin-bottom: 4px;
+}
+.op-pwb-step-photo-label .bi-camera {
+  opacity: 0.85;
+}
+.op-pwb-optional {
+  font-weight: 500;
+  font-size: 0.75rem;
+  color: var(--op-text-muted);
+}
+.op-pwb-add-photo .bi {
+  margin-right: 4px;
+  vertical-align: -0.1em;
 }
 .op-pwb-photo-hint {
   margin: 0 0 8px;

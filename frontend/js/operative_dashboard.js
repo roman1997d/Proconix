@@ -2016,6 +2016,10 @@
       });
   }
 
+  function pwbSafeInputId(key, dim) {
+    return 'op-pwb-inp-' + String(key).replace(/[^a-zA-Z0-9_-]/g, '_') + '-' + dim;
+  }
+
   function renderPwbCurrentJob() {
     var job = pwbSelectedJob;
     var labelEl = document.getElementById('op-pwb-job-label');
@@ -2029,7 +2033,11 @@
     if (labelEl) {
       var jn = job.jobNumber != null && String(job.jobNumber).trim() !== '' ? String(job.jobNumber) : job.id;
       var jt = (job.jobTitle && String(job.jobTitle).trim()) || 'QA job';
-      labelEl.textContent = 'Job ' + jn + ' — ' + jt;
+      labelEl.innerHTML =
+        '<span class="op-pwb-job-label-kicker">Booking</span>' +
+        '<span class="op-pwb-job-label-text">' +
+        escapeHtml('Job ' + jn + ' — ' + jt) +
+        '</span>';
     }
     var remMap = getEffectiveRemainingForPwbJob(job);
     var parts = [];
@@ -2047,16 +2055,32 @@
         var title = 'Step ' + (idx + 1) + (desc ? ' — ' + desc : '');
         var key = s.key || String(tpl.id) + ':' + String(s.stepId != null ? s.stepId : s.dbStepId);
         var rem = remMap[key] || { m2: null, linear: null, units: null };
-        parts.push('<div class="op-pwb-step" data-pwb-step-key="' + escapeHtml(key) + '">');
-        parts.push('<div class="op-pwb-step-title">' + escapeHtml(title) + '</div>');
+        parts.push('<section class="op-pwb-step" data-pwb-step-key="' + escapeHtml(key) + '" aria-label="' + escapeHtml(title) + '">');
+        parts.push(
+          '<div class="op-pwb-step-head">' +
+            '<span class="op-pwb-step-badge" aria-hidden="true">' +
+            String(idx + 1) +
+            '</span>' +
+            '<div class="op-pwb-step-title">' +
+            escapeHtml(title) +
+            '</div></div>'
+        );
+        parts.push('<div class="op-pwb-step-fields">');
         if (hasM2) {
+          var idM2 = pwbSafeInputId(key, 'm2');
           var maxM2 = rem.m2 != null ? ' max="' + String(rem.m2) + '"' : '';
           var hintM2 =
             rem.m2 != null
               ? '<span class="op-pwb-rem-hint">Remaining: ' + escapeHtml(String(rem.m2)) + ' m²</span>'
               : '';
           parts.push(
-            '<div class="op-field"><label>m²</label><input type="number" min="0" step="0.01" class="op-pwb-inp" data-pwb-key="' +
+            '<div class="op-field">' +
+              '<label for="' +
+              idM2 +
+              '">m²</label>' +
+              '<input id="' +
+              idM2 +
+              '" type="number" inputmode="decimal" min="0" step="0.01" class="op-pwb-inp" data-pwb-key="' +
               escapeHtml(key) +
               '" data-pwb-dim="m2" placeholder="0"' +
               maxM2 +
@@ -2066,13 +2090,20 @@
           );
         }
         if (hasLin) {
+          var idLin = pwbSafeInputId(key, 'lin');
           var maxL = rem.linear != null ? ' max="' + String(rem.linear) + '"' : '';
           var hintL =
             rem.linear != null
               ? '<span class="op-pwb-rem-hint">Remaining: ' + escapeHtml(String(rem.linear)) + ' m</span>'
               : '';
           parts.push(
-            '<div class="op-field"><label>Linear (m)</label><input type="number" min="0" step="0.01" class="op-pwb-inp" data-pwb-key="' +
+            '<div class="op-field">' +
+              '<label for="' +
+              idLin +
+              '">Linear (m)</label>' +
+              '<input id="' +
+              idLin +
+              '" type="number" inputmode="decimal" min="0" step="0.01" class="op-pwb-inp" data-pwb-key="' +
               escapeHtml(key) +
               '" data-pwb-dim="linear" placeholder="0"' +
               maxL +
@@ -2082,13 +2113,20 @@
           );
         }
         if (hasUn) {
+          var idUn = pwbSafeInputId(key, 'units');
           var maxU = rem.units != null ? ' max="' + String(rem.units) + '"' : '';
           var hintU =
             rem.units != null
               ? '<span class="op-pwb-rem-hint">Remaining: ' + escapeHtml(String(rem.units)) + ' units</span>'
               : '';
           parts.push(
-            '<div class="op-field"><label>Units</label><input type="number" min="0" step="1" class="op-pwb-inp" data-pwb-key="' +
+            '<div class="op-field">' +
+              '<label for="' +
+              idUn +
+              '">Units</label>' +
+              '<input id="' +
+              idUn +
+              '" type="number" inputmode="numeric" min="0" step="1" class="op-pwb-inp" data-pwb-key="' +
               escapeHtml(key) +
               '" data-pwb-dim="units" placeholder="0"' +
               maxU +
@@ -2097,16 +2135,18 @@
               '</div>'
           );
         }
+        parts.push('</div>');
         parts.push(
           '<div class="op-pwb-step-photo-block">' +
-          '<span class="op-pwb-step-photo-label">Photo confirmation</span>' +
-          '<p class="op-pwb-photo-hint">Add one or more photos for this step (price work evidence). Tap again to add more.</p>' +
-          '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-pwb-add-photo">Add photo confirmation</button>' +
-          '<input type="file" class="d-none op-pwb-photo-input" accept="image/*" multiple tabindex="-1">' +
-          '<div class="op-pwb-photo-chips" aria-live="polite"></div>' +
-          '</div>'
+            '<span class="op-pwb-step-photo-label"><i class="bi bi-camera" aria-hidden="true"></i> Photo evidence <span class="op-pwb-optional">(optional)</span></span>' +
+            '<p class="op-pwb-photo-hint">Add one or more images for this step. Use <strong>Remove</strong> on a thumbnail if the wrong file was chosen.</p>' +
+            '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-pwb-add-photo">' +
+            '<i class="bi bi-plus-lg" aria-hidden="true"></i> Add photos</button>' +
+            '<input type="file" class="d-none op-pwb-photo-input" accept="image/*" multiple tabindex="-1">' +
+            '<div class="op-pwb-photo-chips" aria-live="polite"></div>' +
+            '</div>'
         );
-        parts.push('</div>');
+        parts.push('</section>');
       });
     });
     stepsEl.innerHTML = parts.length ? parts.join('') : '<p class="op-text-muted">No billable steps on this job’s templates.</p>';

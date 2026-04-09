@@ -216,18 +216,27 @@
         </div>
         <div class="op-modal-body">
           <p id="op-pwb-intro" class="op-pwb-intro op-tasks-hint" style="margin-top:0;">
-            You are attached to the QA jobs listed below. <strong>Choose one</strong> to enter your booking quantities and optional photo confirmation for each step (multiple photos per step allowed). You cannot exceed the <strong>remaining</strong> amount (job total minus already approved work).
+            You are attached to the QA jobs below. <strong>Pick a job</strong>, then enter quantities per step and optional <strong>photo evidence</strong>. You cannot book more than the <strong>remaining</strong> allowance (job total minus already approved work).
           </p>
           <div id="op-pwb-loading" class="op-text-muted">Loading your QA jobs…</div>
           <div id="op-pwb-empty" class="d-none"></div>
           <div id="op-pwb-pick" class="d-none"></div>
           <div id="op-pwb-after-job" class="d-none"></div>
           <div id="op-pwb-overview" class="d-none"></div>
-          <form id="op-form-pwb-job" class="d-none">
-            <div id="op-pwb-job-label" class="op-pwb-job-label"></div>
-            <div id="op-pwb-steps" class="op-pwb-steps"></div>
-            <div id="op-pwb-feedback" class="op-feedback d-none" role="alert"></div>
-            <button type="submit" class="op-btn op-btn-primary" id="op-pwb-submit">Save booking for this job</button>
+          <form id="op-form-pwb-job" class="d-none" novalidate>
+            <div class="op-pwb-form-stack">
+              <header class="op-pwb-job-header">
+                <div id="op-pwb-job-label" class="op-pwb-job-label"></div>
+                <p class="op-pwb-job-sub">
+                  Enter quantities for each step. Add photos if you need to show evidence. Remaining caps appear under each field.
+                </p>
+              </header>
+              <div id="op-pwb-steps" class="op-pwb-steps" role="region" aria-label="Booking steps"></div>
+              <div id="op-pwb-feedback" class="op-feedback d-none" role="alert"></div>
+              <div class="op-pwb-form-actions">
+                <button type="submit" class="op-btn op-btn-primary op-pwb-submit-btn" id="op-pwb-submit">Save booking for this job</button>
+              </div>
+            </div>
           </form>
         </div>
       </div>
