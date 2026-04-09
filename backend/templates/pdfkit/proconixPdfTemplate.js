@@ -552,9 +552,124 @@ function renderWorkReport(doc, opts) {
   foot();
 }
 
+/**
+ * Invoice-style one-pager for work log email attachment (matches Time Sheet / Work Report visual language).
+ * @param {import('pdfkit').PDFDocument} doc
+ * @param {{
+ *   companyName: string,
+ *   workerName: string,
+ *   workerEmail?: string,
+ *   jobDisplayId: string,
+ *   projectName: string,
+ *   workType: string,
+ *   totalStr: string,
+ *   description: string,
+ *   detailLines: string[],
+ *   issuedAt?: Date,
+ * }} opts
+ */
+function renderWorkLogInvoice(doc, opts) {
+  var companyName = escapeText(opts.companyName || '—');
+  var workerName = escapeText(opts.workerName || 'Operative');
+  var workerEmail = escapeText(opts.workerEmail || '');
+  var jobDisplayId = escapeText(opts.jobDisplayId || '—');
+  var projectName = escapeText(opts.projectName || '—');
+  var workType = escapeText(opts.workType || '—');
+  var totalStr = escapeText(opts.totalStr || '—');
+  var description = opts.description != null && String(opts.description).trim() !== '' ? String(opts.description) : '—';
+  var detailLines = Array.isArray(opts.detailLines) ? opts.detailLines.map(function (l) { return escapeText(l); }) : [];
+  var issued = opts.issuedAt instanceof Date ? opts.issuedAt : new Date();
+  var issuedStr = formatOneDateToDMYY(issued.toISOString().slice(0, 10));
+
+  var sz = pageSize(doc);
+  var pageW = sz.pageW;
+  var pageH = sz.pageH;
+  var foot = attachFooters(doc);
+  doc.addPage();
+
+  doc.save();
+  doc.rect(0, 0, pageW, HEADER_BAND_H).fill(C.headerBg);
+  doc.restore();
+
+  doc.save();
+  doc.fillColor(C.onHeader).font('Helvetica-Bold').fontSize(28);
+  doc.text('Invoice summary', MARGIN, 36, { width: pageW - MARGIN * 2 });
+  doc.fillColor(C.headerSub).font('Helvetica').fontSize(12);
+  doc.text('Work log · operative submission', MARGIN, 74);
+  doc.restore();
+
+  var y0 = HEADER_BAND_H + 22;
+  var bandH = 44;
+  roundRectFilled(doc, MARGIN, y0, pageW - MARGIN * 2, bandH, 10, C.periodBand, C.periodBandBorder, 1);
+  doc.save();
+  doc.fillColor(C.title).font('Helvetica-Bold').fontSize(13);
+  doc.text('Date issued:', MARGIN + 16, y0 + 14);
+  doc.font('Helvetica-Bold').fontSize(14).fillColor('#1e40af');
+  doc.text(issuedStr, MARGIN + 198, y0 + 13, { width: pageW - MARGIN * 2 - 220 });
+  doc.restore();
+
+  var tableTop = y0 + bandH + 18;
+  var tableW = pageW - MARGIN * 2;
+  var operativeVal = workerName + (workerEmail ? ' · ' + workerEmail : '');
+  var tableBot = drawSummaryGrid(doc, MARGIN, tableTop, tableW, [
+    { label: 'Bill to (company)', value: companyName },
+    { label: 'Operative', value: operativeVal },
+    { label: 'Reference', value: jobDisplayId },
+    { label: 'Project', value: projectName },
+    { label: 'Work type', value: workType },
+    { label: 'Amount', value: totalStr },
+  ]);
+
+  var textY = tableBot + 22;
+  var innerW = tableW;
+
+  roundRectFilled(doc, MARGIN, textY, innerW, 22, 8, C.rowAlt, C.periodBandBorder, 1);
+  doc.save();
+  doc.fillColor(C.title).font('Helvetica-Bold').fontSize(13);
+  doc.text('Description', MARGIN + 12, textY + 5);
+  doc.restore();
+  textY += 32;
+  doc.save();
+  doc.fillColor(C.title).font('Helvetica').fontSize(11.5);
+  doc.text(description, MARGIN, textY, { width: innerW });
+  doc.restore();
+  textY = doc.y + 18;
+
+  if (detailLines.length) {
+    roundRectFilled(doc, MARGIN, textY, innerW, 22, 8, C.rowAlt, C.periodBandBorder, 1);
+    doc.save();
+    doc.fillColor(C.title).font('Helvetica-Bold').fontSize(13);
+    doc.text('QA price work / booking lines', MARGIN + 12, textY + 5);
+    doc.restore();
+    textY += 32;
+    doc.save();
+    doc.fillColor(C.muted).font('Helvetica').fontSize(10);
+    doc.text(detailLines.join('\n'), MARGIN, textY, { width: innerW });
+    doc.restore();
+    textY = doc.y + 18;
+  }
+
+  var discText =
+    'Pending manager review in Work Logs. Not a final tax invoice unless confirmed by your company.';
+  doc.font('Helvetica').fontSize(10);
+  var discBoxH = doc.heightOfString(discText, { width: innerW - 24 }) + 20;
+  if (textY + discBoxH + 30 > pageH - 40) {
+    doc.addPage();
+    textY = 56;
+  }
+  roundRectFilled(doc, MARGIN, textY, innerW, Math.max(36, discBoxH), 8, '#fef3c7', '#fbbf24', 1);
+  doc.save();
+  doc.fillColor('#92400e').font('Helvetica').fontSize(10);
+  doc.text(discText, MARGIN + 12, textY + 10, { width: innerW - 24 });
+  doc.restore();
+
+  foot();
+}
+
 module.exports = {
   formatDateRange,
   resolveImageToBuffer,
   renderTimesheet,
   renderWorkReport,
+  renderWorkLogInvoice,
 };

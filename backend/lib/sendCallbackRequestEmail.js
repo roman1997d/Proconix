@@ -4,6 +4,7 @@
  */
 
 const nodemailer = require('nodemailer');
+const { buildWorkLogInvoicePdfBuffer } = require('./buildWorkLogInvoicePdf');
 
 function escapeHtml(s) {
   return String(s)
@@ -1168,7 +1169,8 @@ async function sendWorkLogInvoiceCopyEmail(p) {
     description || '—',
     detailBlock,
     '',
-    'This message was sent because the operative asked for a copy to be emailed to the company.',
+    'A PDF invoice summary is attached to this message.',
+    'This email was sent because the operative asked for a copy to be sent to the company.',
     '— Proconix',
   ].join('\n');
 
@@ -1182,7 +1184,7 @@ async function sendWorkLogInvoiceCopyEmail(p) {
     badge: 'Work log · invoice summary',
     title: 'Operative work entry (invoice-style summary)',
     subtitle:
-      'Requested by the operative after submit. Pending manager review in Work Logs. Reply to this email to contact your team.',
+      'Requested by the operative after submit. A PDF invoice summary is attached. Pending manager review in Work Logs.',
     rows: [
       { label: 'Company', value: companyName },
       { label: 'Operative', value: workerName + (workerEmail ? ' — ' + workerEmail : '') },
@@ -1199,6 +1201,21 @@ async function sendWorkLogInvoiceCopyEmail(p) {
 
   const replyTo = workerEmail || (process.env.SUPPORT_REPLY_EMAIL || process.env.CALLBACK_NOTIFY_EMAIL || '').trim() || undefined;
 
+  var pdfBuffer = await buildWorkLogInvoicePdfBuffer({
+    companyName,
+    workerName,
+    workerEmail,
+    jobDisplayId,
+    projectName,
+    workType,
+    totalStr,
+    description,
+    detailLines,
+    issuedAt: new Date(),
+  });
+  var safeRef = jobDisplayId.replace(/[^a-zA-Z0-9._-]+/g, '_') || 'work-log';
+  var attachName = 'Invoice_' + safeRef + '.pdf';
+
   await transport.sendMail({
     from,
     to: toAddr,
@@ -1206,6 +1223,13 @@ async function sendWorkLogInvoiceCopyEmail(p) {
     subject,
     text,
     html,
+    attachments: [
+      {
+        filename: attachName,
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ],
   });
 }
 
