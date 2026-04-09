@@ -2145,12 +2145,15 @@
       if (!key) return;
       var urls = [];
       stepEl.querySelectorAll('.op-pwb-photo-chip').forEach(function (chip) {
+        if (chip.classList.contains('op-pwb-photo-chip--pending')) return;
         var u = chip.getAttribute('data-url');
         if (!u && chip.querySelector) {
           var img = chip.querySelector('img');
           if (img) u = img.getAttribute('src');
         }
-        if (u && String(u).trim()) urls.push(String(u).trim());
+        u = u && String(u).trim();
+        if (!u || u.indexOf('blob:') === 0) return;
+        if (u.indexOf('/uploads/') === 0) urls.push(u);
       });
       if (urls.length) out[key] = urls;
     });
@@ -2199,25 +2202,50 @@
       var feedback = document.getElementById('op-pwb-feedback');
       var arr = Array.prototype.slice.call(files);
       showFeedback(feedback, 'Uploading photos…', false);
+
+      function appendPhotoChip(previewSrc, isPending) {
+        var chip = document.createElement('span');
+        chip.className = 'op-pwb-photo-chip' + (isPending ? ' op-pwb-photo-chip--pending' : '');
+        if (!isPending) chip.setAttribute('data-url', previewSrc);
+        var img = document.createElement('img');
+        img.setAttribute('src', previewSrc);
+        img.setAttribute('alt', '');
+        img.setAttribute('draggable', 'false');
+        var rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'op-pwb-photo-remove';
+        rm.setAttribute('aria-label', 'Remove photo');
+        rm.setAttribute('title', 'Remove photo');
+        rm.innerHTML = '<i class="bi bi-x-lg" aria-hidden="true"></i>';
+        chip.appendChild(img);
+        chip.appendChild(rm);
+        chipsEl.appendChild(chip);
+        return chip;
+      }
+
       var seq = Promise.resolve();
       arr.forEach(function (file) {
         seq = seq.then(function () {
-          return uploadPwbWorklogPhoto(file).then(function (path) {
-            var chip = document.createElement('span');
-            chip.className = 'op-pwb-photo-chip';
-            chip.setAttribute('data-url', path);
-            var img = document.createElement('img');
-            img.setAttribute('src', path);
-            img.setAttribute('alt', '');
-            var rm = document.createElement('button');
-            rm.type = 'button';
-            rm.className = 'op-pwb-photo-remove';
-            rm.setAttribute('aria-label', 'Remove');
-            rm.appendChild(document.createTextNode('\u00d7'));
-            chip.appendChild(img);
-            chip.appendChild(rm);
-            chipsEl.appendChild(chip);
-          });
+          var localUrl = URL.createObjectURL(file);
+          var chip = appendPhotoChip(localUrl, true);
+          var img = chip.querySelector('img');
+          return uploadPwbWorklogPhoto(file)
+            .then(function (path) {
+              try {
+                URL.revokeObjectURL(localUrl);
+              } catch (revErr) {}
+              if (!chip.parentNode) return;
+              chip.classList.remove('op-pwb-photo-chip--pending');
+              chip.setAttribute('data-url', path);
+              if (img) img.setAttribute('src', path);
+            })
+            .catch(function (err) {
+              try {
+                URL.revokeObjectURL(localUrl);
+              } catch (revErr) {}
+              if (chip.parentNode) chip.parentNode.removeChild(chip);
+              return Promise.reject(err);
+            });
         });
       });
       seq
