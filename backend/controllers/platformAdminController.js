@@ -578,7 +578,16 @@ async function deleteCompany(req, res) {
       cid
     );
 
-    /** Orphan qa_floors otherwise get project_id NULL when projects are removed (SET NULL FK). */
+    /**
+     * QA jobs reference qa_floors via floor_id (qa_jobs_floor_id_fkey). Deleting qa_floors first
+     * fails with 23503. Remove jobs for this company's projects first (CASCADE cleans job children).
+     */
+    await runDel(
+      `DELETE FROM qa_jobs WHERE project_id IN (SELECT id FROM projects WHERE company_id = $1)`,
+      cid
+    );
+
+    /** Per-project floors; safe after qa_jobs rows that referenced them are gone. */
     await runDel(
       'DELETE FROM qa_floors WHERE project_id IN (SELECT id FROM projects WHERE company_id = $1)',
       cid
