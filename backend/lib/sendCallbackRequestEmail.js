@@ -1129,6 +1129,7 @@ async function sendSignedDocumentEmail(o) {
  *   totalStr: string,
  *   description: string,
  *   detailLines: string[],
+ *   photoGroups?: { label: string, urls: string[] }[],
  * }} p
  */
 async function sendWorkLogInvoiceCopyEmail(p) {
@@ -1154,6 +1155,7 @@ async function sendWorkLogInvoiceCopyEmail(p) {
   const totalStr = String(p.totalStr || '—').trim();
   const description = String(p.description || '').trim();
   const detailLines = Array.isArray(p.detailLines) ? p.detailLines.filter(Boolean) : [];
+  const photoGroups = Array.isArray(p.photoGroups) ? p.photoGroups : [];
   const subject = `Work log invoice summary — ${jobDisplayId} — ${workerName}`;
 
   const detailBlock = detailLines.length ? '\n\n' + detailLines.join('\n') : '';
@@ -1211,6 +1213,7 @@ async function sendWorkLogInvoiceCopyEmail(p) {
     totalStr,
     description,
     detailLines,
+    photoGroups,
     issuedAt: new Date(),
   });
   var safeRef = jobDisplayId.replace(/[^a-zA-Z0-9._-]+/g, '_') || 'work-log';

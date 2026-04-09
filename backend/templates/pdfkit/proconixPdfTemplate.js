@@ -565,6 +565,7 @@ function renderWorkReport(doc, opts) {
  *   totalStr: string,
  *   description: string,
  *   detailLines: string[],
+ *   photoGroups?: { label: string, urls: string[] }[],
  *   issuedAt?: Date,
  * }} opts
  */
@@ -578,6 +579,7 @@ function renderWorkLogInvoice(doc, opts) {
   var totalStr = escapeText(opts.totalStr || '—');
   var description = opts.description != null && String(opts.description).trim() !== '' ? String(opts.description) : '—';
   var detailLines = Array.isArray(opts.detailLines) ? opts.detailLines.map(function (l) { return escapeText(l); }) : [];
+  var photoGroups = Array.isArray(opts.photoGroups) ? opts.photoGroups : [];
   var issued = opts.issuedAt instanceof Date ? opts.issuedAt : new Date();
   var issuedStr = formatOneDateToDMYY(issued.toISOString().slice(0, 10));
 
@@ -647,6 +649,45 @@ function renderWorkLogInvoice(doc, opts) {
     doc.text(detailLines.join('\n'), MARGIN, textY, { width: innerW });
     doc.restore();
     textY = doc.y + 18;
+  }
+
+  if (photoGroups.length) {
+    if (textY + 36 > pageH - 56) {
+      doc.addPage();
+      textY = 56;
+    }
+    roundRectFilled(doc, MARGIN, textY, innerW, 22, 8, C.rowAlt, C.periodBandBorder, 1);
+    doc.save();
+    doc.fillColor(C.title).font('Helvetica-Bold').fontSize(13);
+    doc.text('Photo confirmation', MARGIN + 12, textY + 5);
+    doc.restore();
+    var cursorY = textY + 32;
+    var photoRowH = 118;
+    photoGroups.forEach(function (g) {
+      var urls = Array.isArray(g.urls) ? g.urls.filter(function (u) { return u && String(u).trim(); }) : [];
+      if (!urls.length) return;
+      var gLabel = escapeText(g.label || 'Step');
+      if (cursorY + 28 > pageH - 56) {
+        doc.addPage();
+        cursorY = 56;
+      }
+      doc.save();
+      doc.fillColor(C.title).font('Helvetica-Bold').fontSize(10.5);
+      doc.text(gLabel, MARGIN, cursorY, { width: innerW });
+      doc.restore();
+      cursorY = doc.y + 6;
+      urls.forEach(function (url) {
+        if (cursorY + photoRowH > pageH - 56) {
+          doc.addPage();
+          cursorY = 56;
+        }
+        var buf = resolveImageToBuffer(url);
+        drawPhotoCell(doc, buf, MARGIN, cursorY, innerW, photoRowH, 10);
+        cursorY += photoRowH + 8;
+      });
+      cursorY += 4;
+    });
+    textY = cursorY;
   }
 
   var discText =

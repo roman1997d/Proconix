@@ -1525,6 +1525,8 @@ async function sendWorkLogInvoiceCopy(req, res) {
     if (!Array.isArray(ts)) ts = [];
 
     const detailLines = [];
+    /** @type {{ label: string, urls: string[] }[]} */
+    const photoGroups = [];
     for (const block of ts) {
       if (!block || block.type !== 'qa_price_work' || !Array.isArray(block.entries)) continue;
       for (const ent of block.entries) {
@@ -1551,6 +1553,12 @@ async function sendWorkLogInvoiceCopy(req, res) {
           for (const u of urls) {
             if (u && String(u).trim()) detailLines.push(`  Photo (${labels[k] || k}): ${String(u).trim()}`);
           }
+          const cleanUrls = urls.filter((x) => x && String(x).trim());
+          if (cleanUrls.length) {
+            const stepPart = labels[k] || k;
+            const jobPart = `Job ${jn}${jt ? ' — ' + jt : ''}`;
+            photoGroups.push({ label: `${jobPart} · ${stepPart}`, urls: cleanUrls });
+          }
         }
       }
     }
@@ -1568,6 +1576,7 @@ async function sendWorkLogInvoiceCopy(req, res) {
       totalStr,
       description: (wl.description && String(wl.description).trim()) || '',
       detailLines,
+      photoGroups,
     });
 
     return res.status(200).json({ success: true, message: 'Invoice summary sent to your company email.' });
