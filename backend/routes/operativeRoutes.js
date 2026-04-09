@@ -32,6 +32,7 @@ const {
   getMyWorkLogs,
   workLogUpload,
   createWorkLog,
+  sendWorkLogInvoiceCopy,
   archiveMyWorkLog,
   listQaAssignedJobsForOperative,
 } = require('../controllers/operativeDashboardController');
@@ -82,6 +83,7 @@ router.post('/uploads', requireOperativeAuth, uploadDocumentFile, injectFileUrl(
 router.get('/work-log', requireOperativeAuth, getMyWorkLogs);
 router.post('/work-log/upload', requireOperativeAuth, uploadWorklogFile, workLogUpload);
 router.post('/work-log', requireOperativeAuth, createWorkLog);
+router.post('/work-log/:id/send-invoice-copy', requireOperativeAuth, sendWorkLogInvoiceCopy);
 router.post('/work-log/:id/archive', requireOperativeAuth, archiveMyWorkLog);
 
 // PDF generation (backend: PDFKit)

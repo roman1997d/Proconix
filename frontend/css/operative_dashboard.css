@@ -1092,6 +1092,70 @@ a.op-doc-row:active {
   color: var(--op-text-muted);
   margin-top: 4px;
 }
+.op-pwb-intro {
+  line-height: 1.5;
+}
+.op-pwb-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.op-pwb-pick-card {
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: var(--op-radius);
+  border: 1px solid var(--op-card-border);
+  background: rgba(0, 0, 0, 0.15);
+  color: var(--op-text);
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.op-pwb-pick-card:hover,
+.op-pwb-pick-card:focus-visible {
+  border-color: var(--op-accent, #2563eb);
+  background: rgba(37, 99, 235, 0.12);
+  outline: none;
+}
+.op-pwb-pick-card-title {
+  font-weight: 600;
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+.op-pwb-pick-card-meta {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--op-text-muted);
+}
+.op-pwb-after-msg {
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+.op-pwb-after-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.op-pwb-overview-block {
+  background: rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--op-card-border);
+  border-radius: var(--op-radius);
+  padding: 12px;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+}
+.op-pwb-overview-block h4 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+.op-pwb-overview-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
 
 .d-none { display: none !important; }
 

@@ -181,7 +181,7 @@
             <div class="op-field">
               <label class="op-field-label">Choose workflow</label>
               <div class="op-wl-flow-buttons">
-                <button type="button" class="op-btn op-btn-secondary op-wl-flow-btn" id="op-btn-flow-price-work">Price Work</button>
+                <button type="button" class="op-btn op-btn-secondary op-wl-flow-btn" id="op-btn-flow-price-work">Price work booking</button>
                 <button type="button" class="op-btn op-btn-secondary op-wl-flow-btn" id="op-btn-flow-time-sheet">Time Sheet</button>
               </div>
             </div>
@@ -211,19 +211,46 @@
     <div class="op-modal-dialog op-modal-dialog-worklog">
       <div class="op-modal-content">
         <div class="op-modal-header">
-          <h3 id="op-pwb-title">Price work builder</h3>
+          <h3 id="op-pwb-title">Price work booking</h3>
           <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
         </div>
         <div class="op-modal-body">
-          <p class="op-tasks-hint" style="margin-top:0;">Enter what you completed for each step. You cannot exceed the <strong>remaining</strong> amount (job total minus already approved work). Submit to continue to the next QA job if there is one.</p>
+          <p id="op-pwb-intro" class="op-pwb-intro op-tasks-hint" style="margin-top:0;">
+            You are attached to the QA jobs listed below. <strong>Choose one</strong> to enter your booking quantities. You cannot exceed the <strong>remaining</strong> amount (job total minus already approved work).
+          </p>
           <div id="op-pwb-loading" class="op-text-muted">Loading your QA jobs…</div>
           <div id="op-pwb-empty" class="d-none"></div>
+          <div id="op-pwb-pick" class="d-none"></div>
+          <div id="op-pwb-after-job" class="d-none"></div>
+          <div id="op-pwb-overview" class="d-none"></div>
           <form id="op-form-pwb-job" class="d-none">
             <div id="op-pwb-job-label" class="op-pwb-job-label"></div>
             <div id="op-pwb-steps" class="op-pwb-steps"></div>
             <div id="op-pwb-feedback" class="op-feedback d-none" role="alert"></div>
-            <button type="submit" class="op-btn op-btn-primary" id="op-pwb-submit">Continue</button>
+            <button type="submit" class="op-btn op-btn-primary" id="op-pwb-submit">Save booking for this job</button>
           </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: after work log submit — optional invoice email to company -->
+  <div class="op-modal op-modal-worklog" id="op-modal-wl-invoice-email" aria-hidden="true" role="dialog" aria-labelledby="op-wl-inv-title">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog op-modal-dialog-worklog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3 id="op-wl-inv-title">Submitted successfully</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <p id="op-wl-inv-body" class="op-tasks-hint" style="margin-top:0;">Your work entry was submitted. Your manager will review it in Work Logs.</p>
+          <p class="op-pwb-intro" style="margin-top:12px;">Would you like us to send an <strong>invoice-style summary</strong> of this entry to your <strong>company</strong> email (usually your head manager)?</p>
+          <div id="op-wl-inv-feedback" class="op-feedback d-none" role="alert"></div>
+          <div class="op-field-row" style="margin-top:16px;gap:12px;">
+            <button type="button" class="op-btn op-btn-primary" id="op-wl-inv-yes">Yes, email a copy</button>
+            <button type="button" class="op-btn op-btn-secondary" id="op-wl-inv-no">No thanks</button>
+          </div>
         </div>
       </div>
     </div>

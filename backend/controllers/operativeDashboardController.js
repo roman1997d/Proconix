@@ -6,6 +6,7 @@
 const fs = require('fs');
 const { pool } = require('../db/pool');
 const { enrichJobsWithQaPriceTotals } = require('./worklogsController');
+const { sendWorkLogInvoiceCopyEmail } = require('../lib/sendCallbackRequestEmail');
 
 const MAX_TASK_CONFIRMATION_PHOTOS = 10;
 
@@ -1453,6 +1454,128 @@ async function listQaAssignedJobsForOperative(req, res) {
   }
 }
 
+/** Head manager email, or first company manager user. */
+async function resolveCompanyInvoiceEmail(companyId) {
+  try {
+    const r = await pool.query(
+      `SELECT email FROM manager WHERE company_id = $1 AND email IS NOT NULL AND TRIM(email) <> ''
+       ORDER BY CASE WHEN LOWER(TRIM(COALESCE(is_head_manager,''))) = 'yes' THEN 0 ELSE 1 END, id ASC LIMIT 1`,
+      [companyId]
+    );
+    if (r.rows[0] && r.rows[0].email) return String(r.rows[0].email).trim();
+  } catch (e) {
+    if (e.code !== '42P01') throw e;
+  }
+  try {
+    const r2 = await pool.query(
+      `SELECT email FROM users WHERE company_id = $1 AND COALESCE(active, true) = true
+         AND email IS NOT NULL AND TRIM(email) <> ''
+       ORDER BY CASE WHEN role ILIKE '%Manager%' OR role ILIKE '%Head%' THEN 0 ELSE 1 END, id ASC LIMIT 1`,
+      [companyId]
+    );
+    if (r2.rows[0] && r2.rows[0].email) return String(r2.rows[0].email).trim();
+  } catch (e2) {
+    if (e2.code !== '42703') throw e2;
+  }
+  return null;
+}
+
+async function sendWorkLogInvoiceCopy(req, res) {
+  const op = getOperative(req);
+  if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+
+  const id = parseInt(String(req.params.id || ''), 10);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ success: false, message: 'Invalid work entry id.' });
+  }
+
+  try {
+    const row = await pool.query(
+      `SELECT w.*, c.name AS company_name
+       FROM work_logs w
+       LEFT JOIN companies c ON c.id = w.company_id
+       WHERE w.id = $1 AND w.submitted_by_user_id = $2`,
+      [id, op.id]
+    );
+    if (row.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Work entry not found.' });
+    }
+    const wl = row.rows[0];
+    const toEmail = await resolveCompanyInvoiceEmail(wl.company_id);
+    if (!toEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'No company email on file. Ask your administrator to add a manager email.',
+      });
+    }
+
+    const userRow = await pool.query('SELECT name, email FROM users WHERE id = $1', [op.id]);
+    const u = userRow.rows[0] || {};
+    const workerName = (u.name && String(u.name).trim()) || u.email || 'Operative';
+    const workerEmail = (u.email && String(u.email).trim()) || '';
+
+    let ts = [];
+    try {
+      const raw = wl.timesheet_jobs;
+      if (typeof raw === 'string') ts = JSON.parse(raw || '[]');
+      else if (Array.isArray(raw)) ts = raw;
+    } catch (_) {
+      ts = [];
+    }
+    if (!Array.isArray(ts)) ts = [];
+
+    const detailLines = [];
+    for (const block of ts) {
+      if (!block || block.type !== 'qa_price_work' || !Array.isArray(block.entries)) continue;
+      for (const ent of block.entries) {
+        const jn =
+          ent.jobNumber != null && String(ent.jobNumber).trim() !== ''
+            ? String(ent.jobNumber)
+            : ent.qaJobId || '—';
+        const jt = (ent.jobTitle && String(ent.jobTitle).trim()) || '';
+        detailLines.push(`QA price work — Job ${jn}${jt ? ': ' + jt : ''}`);
+        const sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
+        const labels = ent.stepLabels && typeof ent.stepLabels === 'object' ? ent.stepLabels : {};
+        for (const k of Object.keys(sq)) {
+          const q = sq[k] || {};
+          const bits = [];
+          if (q.m2 != null && String(q.m2).trim() !== '') bits.push('m² ' + q.m2);
+          if (q.linear != null && String(q.linear).trim() !== '') bits.push('linear m ' + q.linear);
+          if (q.units != null && String(q.units).trim() !== '') bits.push('units ' + q.units);
+          if (!bits.length) continue;
+          detailLines.push(`  ${labels[k] || k}: ${bits.join(', ')}`);
+        }
+      }
+    }
+
+    const totalStr = wl.total != null && !isNaN(Number(wl.total)) ? '£' + Number(wl.total).toFixed(2) : '—';
+
+    await sendWorkLogInvoiceCopyEmail({
+      to: toEmail,
+      companyName: (wl.company_name && String(wl.company_name).trim()) || '—',
+      workerName,
+      workerEmail,
+      jobDisplayId: (wl.job_display_id && String(wl.job_display_id)) || String(id),
+      projectName: (wl.project && String(wl.project).trim()) || '—',
+      workType: (wl.work_type && String(wl.work_type).trim()) || '—',
+      totalStr,
+      description: (wl.description && String(wl.description).trim()) || '',
+      detailLines,
+    });
+
+    return res.status(200).json({ success: true, message: 'Invoice summary sent to your company email.' });
+  } catch (err) {
+    if (err.code === 'SMTP_NOT_CONFIGURED' || err.code === 'NO_EMAIL') {
+      return res.status(503).json({
+        success: false,
+        message: err.message || 'Email is not configured.',
+      });
+    }
+    console.error('sendWorkLogInvoiceCopy:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Failed to send email.' });
+  }
+}
+
 async function createWorkLog(req, res) {
   const op = getOperative(req);
   if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
@@ -1566,13 +1689,15 @@ async function createWorkLog(req, res) {
 
     const jobDisplayId = await nextJobDisplayId(companyId);
 
+    let workLogId = null;
     try {
-      await pool.query(
+      const ins = await pool.query(
         `INSERT INTO work_logs (
           company_id, submitted_by_user_id, project_id, job_display_id, worker_name, project,
           block, floor, apartment, zone, work_type, quantity, unit_price, total,
           status, description, photo_urls, timesheet_jobs, invoice_file_path
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', $15, $16, $17, $18)`,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', $15, $16, $17, $18)
+        RETURNING id`,
         [
           companyId, op.id, projectId, jobDisplayId, workerName, projectName,
           (b.block && String(b.block).trim()) || null,
@@ -1587,15 +1712,17 @@ async function createWorkLog(req, res) {
           invoiceFilePath,
         ]
       );
+      workLogId = ins.rows[0] ? ins.rows[0].id : null;
     } catch (err) {
       // Backward-compat if the DB migration hasn't been applied yet.
       if (err && err.code === '42703' && /timesheet_jobs/i.test(err.message || '')) {
-        await pool.query(
+        const ins2 = await pool.query(
           `INSERT INTO work_logs (
             company_id, submitted_by_user_id, project_id, job_display_id, worker_name, project,
             block, floor, apartment, zone, work_type, quantity, unit_price, total,
             status, description, photo_urls, invoice_file_path
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', $15, $16, $17)`,
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', $15, $16, $17)
+          RETURNING id`,
           [
             companyId, op.id, projectId, jobDisplayId, workerName, projectName,
             (b.block && String(b.block).trim()) || null,
@@ -1609,6 +1736,7 @@ async function createWorkLog(req, res) {
             invoiceFilePath,
           ]
         );
+        workLogId = ins2.rows[0] ? ins2.rows[0].id : null;
       } else {
         throw err;
       }
@@ -1617,6 +1745,7 @@ async function createWorkLog(req, res) {
     return res.status(201).json({
       success: true,
       message: 'Work entry submitted. Manager will review it in Work Logs.',
+      workLogId: workLogId != null ? workLogId : undefined,
     });
   } catch (err) {
     if (err.code === '42P01') {
@@ -1646,6 +1775,7 @@ module.exports = {
   getMyWorkLogs,
   workLogUpload,
   createWorkLog,
+  sendWorkLogInvoiceCopy,
   archiveMyWorkLog,
   listQaAssignedJobsForOperative,
 };

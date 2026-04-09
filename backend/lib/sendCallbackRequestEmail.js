@@ -1115,6 +1115,100 @@ async function sendSignedDocumentEmail(o) {
   });
 }
 
+/**
+ * Invoice-style summary to the company (typically head manager email) after operative submits a work log.
+ * @param {{
+ *   to: string,
+ *   companyName: string,
+ *   workerName: string,
+ *   workerEmail: string,
+ *   jobDisplayId: string,
+ *   projectName: string,
+ *   workType: string,
+ *   totalStr: string,
+ *   description: string,
+ *   detailLines: string[],
+ * }} p
+ */
+async function sendWorkLogInvoiceCopyEmail(p) {
+  const toAddr = String(p.to || '').trim();
+  if (!toAddr) {
+    const err = new Error('Recipient email not available.');
+    err.code = 'NO_EMAIL';
+    throw err;
+  }
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send invoice copy email.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const jobDisplayId = String(p.jobDisplayId || '—');
+  const workerName = String(p.workerName || 'Operative').trim();
+  const workerEmail = String(p.workerEmail || '').trim();
+  const companyName = String(p.companyName || '—').trim();
+  const projectName = String(p.projectName || '—').trim();
+  const workType = String(p.workType || '—').trim();
+  const totalStr = String(p.totalStr || '—').trim();
+  const description = String(p.description || '').trim();
+  const detailLines = Array.isArray(p.detailLines) ? p.detailLines.filter(Boolean) : [];
+  const subject = `Work log invoice summary — ${jobDisplayId} — ${workerName}`;
+
+  const detailBlock = detailLines.length ? '\n\n' + detailLines.join('\n') : '';
+  const text = [
+    `Operative ${workerName}${workerEmail ? ` <${workerEmail}>` : ''} submitted a work entry.`,
+    `Company: ${companyName}`,
+    `Reference: ${jobDisplayId}`,
+    `Project: ${projectName}`,
+    `Work type: ${workType}`,
+    `Total: ${totalStr}`,
+    '',
+    'Description:',
+    description || '—',
+    detailBlock,
+    '',
+    'This message was sent because the operative asked for a copy to be emailed to the company.',
+    '— Proconix',
+  ].join('\n');
+
+  let messageText = description || '—';
+  if (detailLines.length) {
+    messageText += '\n\n— QA price work / booking lines —\n' + detailLines.join('\n');
+  }
+
+  const html = buildProconixEmailHtml({
+    preheader: `Invoice summary ${jobDisplayId} for ${companyName}`,
+    badge: 'Work log · invoice summary',
+    title: 'Operative work entry (invoice-style summary)',
+    subtitle:
+      'Requested by the operative after submit. Pending manager review in Work Logs. Reply to this email to contact your team.',
+    rows: [
+      { label: 'Company', value: companyName },
+      { label: 'Operative', value: workerName + (workerEmail ? ' — ' + workerEmail : '') },
+      { label: 'Reference', value: jobDisplayId },
+      { label: 'Project', value: projectName },
+      { label: 'Work type', value: workType },
+      { label: 'Total', value: totalStr },
+    ],
+    messageBlock: {
+      title: 'Description & booking detail',
+      text: messageText.slice(0, 12000),
+    },
+  });
+
+  const replyTo = workerEmail || (process.env.SUPPORT_REPLY_EMAIL || process.env.CALLBACK_NOTIFY_EMAIL || '').trim() || undefined;
+
+  await transport.sendMail({
+    from,
+    to: toAddr,
+    replyTo: replyTo || from,
+    subject,
+    text,
+    html,
+  });
+}
+
 module.exports = {
   sendCallbackRequestEmail,
   sendContactUsEmail,
@@ -1126,5 +1220,6 @@ module.exports = {
   sendPlatformAdminClientEmail,
   sendDemoTenantWelcomeEmail,
   sendSignedDocumentEmail,
+  sendWorkLogInvoiceCopyEmail,
   createTransport,
 };
