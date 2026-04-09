@@ -1537,9 +1537,29 @@ async function sendWorkLogInvoiceCopy(req, res) {
     }
     if (!Array.isArray(ts)) ts = [];
 
-    const detailLines = [];
+    /** @type {{ jobHeading: string, rows: { stepNr: string, jobDetails: string, quantity: string }[] }[]} */
+    const priceWorkTables = [];
     /** @type {{ label: string, urls: string[] }[]} */
     const photoGroups = [];
+
+    function formatStepQuantity(q) {
+      if (!q || typeof q !== 'object') return '';
+      const bits = [];
+      if (q.m2 != null && String(q.m2).trim() !== '') bits.push(String(q.m2).trim() + ' m²');
+      if (q.linear != null && String(q.linear).trim() !== '') bits.push(String(q.linear).trim() + ' linear m');
+      if (q.units != null && String(q.units).trim() !== '') bits.push(String(q.units).trim() + ' units');
+      return bits.join(', ');
+    }
+
+    function stepSortOrder(label, key, idx) {
+      const m = /^Step\s*(\d+)/i.exec(String(label || ''));
+      if (m) return parseInt(m[1], 10);
+      const tail = String(key).split(':').pop();
+      const n = parseInt(tail, 10);
+      if (!isNaN(n)) return n;
+      return 1000 + idx;
+    }
+
     for (const block of ts) {
       if (!block || block.type !== 'qa_price_work' || !Array.isArray(block.entries)) continue;
       for (const ent of block.entries) {
@@ -1548,7 +1568,7 @@ async function sendWorkLogInvoiceCopy(req, res) {
             ? String(ent.jobNumber)
             : ent.qaJobId || '—';
         const jt = (ent.jobTitle && String(ent.jobTitle).trim()) || '';
-        detailLines.push(`QA price work — Job ${jn}${jt ? ': ' + jt : ''}`);
+        const jobHeading = `Job ${jn}${jt ? ' — ' + jt : ''}`;
         const sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
         const labels = ent.stepLabels && typeof ent.stepLabels === 'object' ? ent.stepLabels : {};
         const spu =
@@ -1557,26 +1577,36 @@ async function sendWorkLogInvoiceCopy(req, res) {
             : ent.step_photo_urls && typeof ent.step_photo_urls === 'object'
               ? ent.step_photo_urls
               : {};
-        for (const k of Object.keys(sq)) {
-          const q = sq[k] || {};
-          const bits = [];
-          if (q.m2 != null && String(q.m2).trim() !== '') bits.push('m² ' + q.m2);
-          if (q.linear != null && String(q.linear).trim() !== '') bits.push('linear m ' + q.linear);
-          if (q.units != null && String(q.units).trim() !== '') bits.push('units ' + q.units);
-          if (!bits.length) continue;
-          detailLines.push(`  ${labels[k] || k}: ${bits.join(', ')}`);
-        }
+
+        const sortedKeys = Object.keys(sq).sort((ka, kb) => {
+          const la = labels[ka] != null ? String(labels[ka]) : ka;
+          const lb = labels[kb] != null ? String(labels[kb]) : kb;
+          return stepSortOrder(la, ka, 0) - stepSortOrder(lb, kb, 0);
+        });
+        const rows = [];
+        sortedKeys.forEach((k, idx) => {
+          const qtyStr = formatStepQuantity(sq[k]);
+          if (!qtyStr) return;
+          const lbl = labels[k] != null ? String(labels[k]) : k;
+          const stepM = /^Step\s*(\d+)/i.exec(lbl);
+          let stepNr;
+          if (stepM) stepNr = stepM[1];
+          else {
+            const tail = String(k).split(':').pop();
+            const n = parseInt(tail, 10);
+            stepNr = !isNaN(n) ? String(n) : String(idx + 1);
+          }
+          rows.push({ stepNr, jobDetails: lbl, quantity: qtyStr });
+        });
+        if (rows.length) priceWorkTables.push({ jobHeading, rows });
+
         for (const k of Object.keys(spu)) {
           const urls = Array.isArray(spu[k]) ? spu[k] : [];
-          for (const u of urls) {
-            if (u && String(u).trim()) detailLines.push(`  Photo (${labels[k] || k}): ${String(u).trim()}`);
-          }
           const cleanUrls = urls.filter((x) => x && String(x).trim());
-          if (cleanUrls.length) {
-            const stepPart = labels[k] || k;
-            const jobPart = `Job ${jn}${jt ? ' — ' + jt : ''}`;
-            photoGroups.push({ label: `${jobPart} · ${stepPart}`, urls: cleanUrls });
-          }
+          if (!cleanUrls.length) continue;
+          const stepPart = labels[k] != null ? String(labels[k]) : k;
+          const jobPart = `Job ${jn}${jt ? ' — ' + jt : ''}`;
+          photoGroups.push({ label: `${jobPart} · ${stepPart}`, urls: cleanUrls });
         }
       }
     }
@@ -1593,7 +1623,8 @@ async function sendWorkLogInvoiceCopy(req, res) {
       workType: (wl.work_type && String(wl.work_type).trim()) || '—',
       totalStr,
       description: (wl.description && String(wl.description).trim()) || '',
-      detailLines,
+      detailLines: [],
+      priceWorkTables,
       photoGroups,
     });
 

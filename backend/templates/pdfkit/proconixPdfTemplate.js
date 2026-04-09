@@ -240,6 +240,90 @@ function drawSummaryGrid(doc, x, y, w, rows) {
   return y + totalH;
 }
 
+/**
+ * QA price work: per-job tables (step / details / quantity). Photos are not included here.
+ * @param {import('pdfkit')} doc
+ * @param {number} startY
+ * @param {number} pageW
+ * @param {number} pageH
+ * @param {number} innerW
+ * @param {{ jobHeading: string, rows: { stepNr: string, jobDetails: string, quantity: string }[] }[]} tables
+ * @returns {number} next Y
+ */
+function drawPriceWorkTablesBlock(doc, startY, pageW, pageH, innerW, tables) {
+  if (!tables || !tables.length) return startY;
+  var textY = startY;
+  function pageBreakIf(need) {
+    if (textY + need > pageH - 56) {
+      doc.addPage();
+      textY = 56;
+    }
+  }
+  pageBreakIf(60);
+  roundRectFilled(doc, MARGIN, textY, innerW, 22, 8, C.rowAlt, C.periodBandBorder, 1);
+  doc.save();
+  doc.fillColor(C.title).font('Helvetica-Bold').fontSize(13);
+  doc.text('QA price work', MARGIN + 12, textY + 5);
+  doc.restore();
+  textY += 32;
+
+  var colStepW = 42;
+  var colQtyW = 88;
+  var gap = 10;
+  var colDetW = Math.max(120, innerW - colStepW - colQtyW - gap * 2);
+
+  tables.forEach(function (tbl) {
+    var heading = escapeText(tbl.jobHeading || 'Job');
+    pageBreakIf(26);
+    doc.save();
+    doc.fillColor(C.title).font('Helvetica-Bold').fontSize(11.5);
+    doc.text(heading, MARGIN, textY, { width: innerW });
+    doc.restore();
+    textY = doc.y + 8;
+
+    var hdrH = 20;
+    pageBreakIf(hdrH + 6);
+    doc.save();
+    doc.fillColor('#e2e8f0');
+    doc.rect(MARGIN, textY, innerW, hdrH).fill();
+    doc.fillColor(C.muted).font('Helvetica-Bold').fontSize(8.8);
+    doc.text('Step no.', MARGIN + 6, textY + 6, { width: colStepW });
+    doc.text('Job details', MARGIN + colStepW + gap, textY + 6, { width: colDetW });
+    doc.text('Quantity', MARGIN + colStepW + colDetW + gap * 2, textY + 6, { width: colQtyW });
+    doc.restore();
+    textY += hdrH;
+
+    (tbl.rows || []).forEach(function (r, ri) {
+      var step = escapeText(r.stepNr || '—');
+      var det = escapeText(r.jobDetails || '—');
+      var qty = escapeText(r.quantity || '—');
+      var detH = doc.heightOfString(det, { width: colDetW - 6, lineGap: 1 });
+      var qtyH = doc.heightOfString(qty, { width: colQtyW - 6, lineGap: 1 });
+      var rowH = Math.max(24, Math.max(detH, qtyH) + 12);
+      pageBreakIf(rowH + 4);
+      var bg = ri % 2 === 0 ? '#ffffff' : '#f8fafc';
+      doc.save();
+      doc.fillColor(bg);
+      doc.rect(MARGIN, textY, innerW, rowH).fill();
+      doc.restore();
+      doc.save();
+      doc.fillColor(C.title).font('Helvetica').fontSize(9.5);
+      doc.text(step, MARGIN + 6, textY + 6, { width: colStepW });
+      doc.text(det, MARGIN + colStepW + gap, textY + 6, { width: colDetW - 6 });
+      doc.text(qty, MARGIN + colStepW + colDetW + gap * 2, textY + 6, { width: colQtyW - 6 });
+      doc.restore();
+      doc.save();
+      doc.strokeColor(C.rowBorder).lineWidth(0.4);
+      doc.moveTo(MARGIN, textY + rowH).lineTo(MARGIN + innerW, textY + rowH).stroke();
+      doc.restore();
+      textY += rowH;
+    });
+    textY += 14;
+  });
+
+  return textY + 4;
+}
+
 function buildTotalTimeText(jobs) {
   var t = sumTimeByUnit(jobs);
   if (t.totalDays > 0 && t.totalHours > 0) {
@@ -565,6 +649,7 @@ function renderWorkReport(doc, opts) {
  *   totalStr: string,
  *   description: string,
  *   detailLines: string[],
+ *   priceWorkTables?: { jobHeading: string, rows: { stepNr: string, jobDetails: string, quantity: string }[] }[],
  *   photoGroups?: { label: string, urls: string[] }[],
  *   issuedAt?: Date,
  * }} opts
@@ -579,6 +664,7 @@ function renderWorkLogInvoice(doc, opts) {
   var totalStr = escapeText(opts.totalStr || '—');
   var description = opts.description != null && String(opts.description).trim() !== '' ? String(opts.description) : '—';
   var detailLines = Array.isArray(opts.detailLines) ? opts.detailLines.map(function (l) { return escapeText(l); }) : [];
+  var priceWorkTables = Array.isArray(opts.priceWorkTables) ? opts.priceWorkTables : [];
   var photoGroups = Array.isArray(opts.photoGroups) ? opts.photoGroups : [];
   var issued = opts.issuedAt instanceof Date ? opts.issuedAt : new Date();
   var issuedStr = formatOneDateToDMYY(issued.toISOString().slice(0, 10));
@@ -637,7 +723,9 @@ function renderWorkLogInvoice(doc, opts) {
   doc.restore();
   textY = doc.y + 18;
 
-  if (detailLines.length) {
+  if (priceWorkTables.length) {
+    textY = drawPriceWorkTablesBlock(doc, textY, pageW, pageH, innerW, priceWorkTables);
+  } else if (detailLines.length) {
     roundRectFilled(doc, MARGIN, textY, innerW, 22, 8, C.rowAlt, C.periodBandBorder, 1);
     doc.save();
     doc.fillColor(C.title).font('Helvetica-Bold').fontSize(13);

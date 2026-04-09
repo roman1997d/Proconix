@@ -14,6 +14,71 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
+/** Make relative /uploads/ URLs absolute for email clients. */
+function absolutePublicUrl(u) {
+  var s = String(u || '').trim();
+  if (!s) return '';
+  if (/^https?:\/\//i.test(s)) return s;
+  var base = (process.env.PUBLIC_APP_URL || process.env.SITE_URL || 'https://proconix.uk').replace(/\/$/, '');
+  if (s.charAt(0) === '/') return base + s;
+  return base + '/' + s;
+}
+
+/** HTML for invoice email: embedded images only under Photo confirmation (no links in QA table). */
+function buildInvoicePhotoConfirmationHtml(photoGroups) {
+  var groups = Array.isArray(photoGroups) ? photoGroups : [];
+  if (!groups.length) return '';
+  return groups
+    .map(function (g) {
+      var urls = (g.urls || [])
+        .map(function (u) {
+          return u && String(u).trim();
+        })
+        .filter(Boolean);
+      if (!urls.length) return '';
+      var label = escapeHtml(g.label || 'Photos');
+      var imgs = urls
+        .map(function (u) {
+          var src = escapeHtml(absolutePublicUrl(u));
+          return (
+            '<div style="margin:0 0 12px 0;"><img src="' +
+            src +
+            '" alt="" width="560" style="max-width:100%;height:auto;border-radius:8px;border:1px solid #334155;display:block;" /></div>'
+          );
+        })
+        .join('');
+      return (
+        '<div style="margin-bottom:20px;">' +
+        '<p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#f1f5f9;">' +
+        label +
+        '</p>' +
+        imgs +
+        '</div>'
+      );
+    })
+    .filter(Boolean)
+    .join('');
+}
+
+function plainTextLinesFromPriceWorkTables(tables) {
+  if (!tables || !tables.length) return [];
+  var lines = ['— QA price work —'];
+  tables.forEach(function (tbl) {
+    lines.push(String(tbl.jobHeading || 'Job'));
+    (tbl.rows || []).forEach(function (r) {
+      lines.push(
+        '  Step ' +
+          String(r.stepNr || '—') +
+          ': ' +
+          String(r.jobDetails || '—') +
+          ' — ' +
+          String(r.quantity || '—')
+      );
+    });
+  });
+  return lines;
+}
+
 /**
  * Modern branded HTML for mail clients (table layout + inline CSS).
  * @param {{
@@ -22,7 +87,9 @@ function escapeHtml(s) {
  *   title: string,
  *   subtitle: string,
  *   rows: { label: string, value: string }[],
- *   messageBlock?: { title: string, text: string }
+ *   messageBlock?: { title: string, text: string },
+ *   priceWorkTables?: { jobHeading: string, rows: { stepNr: string, jobDetails: string, quantity: string }[] }[],
+ *   photoConfirmationHtml?: string,
  * }} o
  */
 function buildProconixEmailHtml(o) {
@@ -39,6 +106,65 @@ function buildProconixEmailHtml(o) {
       );
     })
     .join('');
+
+  var priceWorkBlock = '';
+  var tables = Array.isArray(o.priceWorkTables) ? o.priceWorkTables : [];
+  if (tables.length) {
+    var tableParts = tables.map(function (tbl) {
+      var head = escapeHtml(tbl.jobHeading || 'Job');
+      var body = (tbl.rows || [])
+        .map(function (r) {
+          return (
+            '<tr>' +
+            '<td style="padding:10px 12px;border:1px solid #334155;color:#e2e8f0;font-size:14px;vertical-align:top;">' +
+            escapeHtml(r.stepNr || '—') +
+            '</td>' +
+            '<td style="padding:10px 12px;border:1px solid #334155;color:#e2e8f0;font-size:14px;vertical-align:top;">' +
+            escapeHtml(r.jobDetails || '—') +
+            '</td>' +
+            '<td style="padding:10px 12px;border:1px solid #334155;color:#e2e8f0;font-size:14px;vertical-align:top;">' +
+            escapeHtml(r.quantity || '—') +
+            '</td></tr>'
+          );
+        })
+        .join('');
+      return (
+        '<div style="margin-top:20px;">' +
+        '<p style="margin:0 0 10px 0;font-size:15px;font-weight:700;color:#f8fafc;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+        head +
+        '</p>' +
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;">' +
+        '<thead><tr>' +
+        '<th style="padding:10px 12px;border:1px solid #475569;background-color:#1e293b;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">Step no.</th>' +
+        '<th style="padding:10px 12px;border:1px solid #475569;background-color:#1e293b;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">Job details</th>' +
+        '<th style="padding:10px 12px;border:1px solid #475569;background-color:#1e293b;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">Quantity</th>' +
+        '</tr></thead><tbody>' +
+        body +
+        '</tbody></table></div>'
+      );
+    });
+    priceWorkBlock =
+      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;">' +
+      '<tr><td style="background-color:#0f172a;border-radius:10px;padding:20px 22px;border-left:4px solid #2563eb;">' +
+      '<span style="display:block;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#94a3b8;margin-bottom:14px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+      'QA price work' +
+      '</span>' +
+      tableParts.join('') +
+      '</td></tr></table>';
+  }
+
+  var photoConf = '';
+  if (o.photoConfirmationHtml && String(o.photoConfirmationHtml).trim()) {
+    photoConf =
+      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:24px;">' +
+      '<tr><td style="background-color:#0f172a;border-radius:10px;padding:20px 22px;border-left:4px solid #0ea5e9;">' +
+      '<span style="display:block;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#94a3b8;margin-bottom:14px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+      'Photo confirmation' +
+      '</span>' +
+      '<div style="color:#e2e8f0;font-size:14px;line-height:1.5;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
+      o.photoConfirmationHtml +
+      '</div></td></tr></table>';
+  }
 
   var msgBlock = '';
   if (o.messageBlock) {
@@ -77,7 +203,9 @@ function buildProconixEmailHtml(o) {
     '<table role="presentation" width="100%" cellspacing="0" cellpadding="0">' +
     rowsHtml +
     '</table>' +
+    priceWorkBlock +
     msgBlock +
+    photoConf +
     '</td></tr>' +
     '<tr><td style="padding:16px 32px 24px 32px;border-top:1px solid #334155;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
     '<p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;">· <strong style="color:#94a3b8;">Proconix</strong> — construction workflow platform</p>' +
@@ -1129,6 +1257,7 @@ async function sendSignedDocumentEmail(o) {
  *   totalStr: string,
  *   description: string,
  *   detailLines: string[],
+ *   priceWorkTables?: { jobHeading: string, rows: { stepNr: string, jobDetails: string, quantity: string }[] }[],
  *   photoGroups?: { label: string, urls: string[] }[],
  * }} p
  */
@@ -1155,10 +1284,13 @@ async function sendWorkLogInvoiceCopyEmail(p) {
   const totalStr = String(p.totalStr || '—').trim();
   const description = String(p.description || '').trim();
   const detailLines = Array.isArray(p.detailLines) ? p.detailLines.filter(Boolean) : [];
+  const priceWorkTables = Array.isArray(p.priceWorkTables) ? p.priceWorkTables : [];
   const photoGroups = Array.isArray(p.photoGroups) ? p.photoGroups : [];
   const subject = `Work log invoice summary — ${jobDisplayId} — ${workerName}`;
 
-  const detailBlock = detailLines.length ? '\n\n' + detailLines.join('\n') : '';
+  const plainQa = plainTextLinesFromPriceWorkTables(priceWorkTables);
+  const fallbackDetail = !plainQa.length && detailLines.length ? ['— QA price work / booking —', ...detailLines] : plainQa;
+  const detailBlock = fallbackDetail.length ? '\n\n' + fallbackDetail.join('\n') : '';
   const text = [
     `Operative ${workerName}${workerEmail ? ` <${workerEmail}>` : ''} submitted a work entry.`,
     `Company: ${companyName}`,
@@ -1173,13 +1305,12 @@ async function sendWorkLogInvoiceCopyEmail(p) {
     '',
     'A PDF invoice summary is attached to this message.',
     'This email was sent because the operative asked for a copy to be sent to the company.',
+    photoGroups.length ? '\n(Photos: see HTML “Photo confirmation” or the attached PDF.)' : '',
     '— Proconix',
   ].join('\n');
 
-  let messageText = description || '—';
-  if (detailLines.length) {
-    messageText += '\n\n— QA price work / booking lines —\n' + detailLines.join('\n');
-  }
+  const messageText = description || '—';
+  const photoConfirmationHtml = buildInvoicePhotoConfirmationHtml(photoGroups);
 
   const html = buildProconixEmailHtml({
     preheader: `Invoice summary ${jobDisplayId} for ${companyName}`,
@@ -1195,8 +1326,10 @@ async function sendWorkLogInvoiceCopyEmail(p) {
       { label: 'Work type', value: workType },
       { label: 'Total', value: totalStr },
     ],
+    priceWorkTables: priceWorkTables.length ? priceWorkTables : undefined,
+    photoConfirmationHtml: photoConfirmationHtml || undefined,
     messageBlock: {
-      title: 'Description & booking detail',
+      title: 'Description',
       text: messageText.slice(0, 12000),
     },
   });
@@ -1212,7 +1345,8 @@ async function sendWorkLogInvoiceCopyEmail(p) {
     workType,
     totalStr,
     description,
-    detailLines,
+    detailLines: priceWorkTables.length ? [] : detailLines,
+    priceWorkTables: priceWorkTables.length ? priceWorkTables : undefined,
     photoGroups,
     issuedAt: new Date(),
   });
