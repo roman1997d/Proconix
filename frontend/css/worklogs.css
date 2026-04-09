@@ -453,6 +453,28 @@
   font-size: 0.9rem;
   color: var(--text-muted);
 }
+.worklogs-qa-price-step-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  margin-left: 0;
+  list-style: none;
+}
+.worklogs-qa-price-photo-thumb-wrap {
+  display: block;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--divider);
+}
+.worklogs-qa-price-photo-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 
 .worklogs-details-photos {
   display: flex;

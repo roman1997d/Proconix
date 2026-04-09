@@ -844,7 +844,15 @@
             '</div>';
           var sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
           var labels = ent.stepLabels && typeof ent.stepLabels === 'object' ? ent.stepLabels : {};
-          var keys = Object.keys(sq);
+          var spu = ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object' ? ent.stepPhotoUrls : {};
+          var stepKeys = {};
+          Object.keys(sq).forEach(function (k) {
+            stepKeys[k] = true;
+          });
+          Object.keys(spu).forEach(function (k) {
+            stepKeys[k] = true;
+          });
+          var keys = Object.keys(stepKeys);
           if (!keys.length) {
             qaHtml += '<p class="op-text-muted" style="margin:0;">No step quantities.</p>';
           } else {
@@ -855,9 +863,24 @@
               if (q.m2 != null && String(q.m2).trim() !== '') bits.push('m²: ' + escapeHtml(String(q.m2)));
               if (q.linear != null && String(q.linear).trim() !== '') bits.push('linear m: ' + escapeHtml(String(q.linear)));
               if (q.units != null && String(q.units).trim() !== '') bits.push('units: ' + escapeHtml(String(q.units)));
-              if (!bits.length) return;
+              var urls = Array.isArray(spu[k]) ? spu[k] : [];
+              if (!bits.length && !urls.length) return;
               var disp = labels[k] || k;
-              qaHtml += '<li><span style="color:var(--op-text-muted);font-size:0.8rem;">' + escapeHtml(disp) + '</span> — ' + bits.join(', ') + '</li>';
+              qaHtml += '<li><span style="color:var(--op-text-muted);font-size:0.8rem;">' + escapeHtml(disp) + '</span>';
+              if (bits.length) qaHtml += ' — ' + bits.join(', ');
+              if (urls.length) {
+                qaHtml += '<div class="op-worklog-overview-photos" style="margin-top:6px;">';
+                urls.forEach(function (url) {
+                  qaHtml +=
+                    '<img src="' +
+                    escapeHtml(url) +
+                    '" alt="" data-op-overview-photo="' +
+                    escapeHtml(url) +
+                    '">';
+                });
+                qaHtml += '</div>';
+              }
+              qaHtml += '</li>';
             });
             qaHtml += '</ul>';
           }
@@ -1659,7 +1682,7 @@
   var currentWorklogProject = null;
   var pendingWorklogPhotoUrls = [];
   var pendingWorklogTimesheetJobs = [];
-  /** @type {Array<{ qaJobId: string, jobNumber: string, jobTitle: string, stepQuantities: object }>} */
+  /** @type {Array<{ qaJobId: string, jobNumber: string, jobTitle: string, stepQuantities: object, stepLabels?: object, stepPhotoUrls?: Record<string, string[]> }>} */
   var pendingPriceWorkEntries = [];
   /** Full list from GET /qa/assigned-jobs (reused when adding more jobs without refetch). */
   var pwbAllJobs = [];
@@ -1872,25 +1895,46 @@
         parts.push('<h4>' + escapeHtml('Job ' + jn + (jt ? ' — ' + jt : '')) + '</h4>');
         var sq = ent.stepQuantities || {};
         var labels = ent.stepLabels || {};
-        var keys = Object.keys(sq);
-        if (!keys.length) {
+        var spu = ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object' ? ent.stepPhotoUrls : {};
+        var stepKeys = {};
+        Object.keys(sq).forEach(function (k) {
+          stepKeys[k] = true;
+        });
+        Object.keys(spu).forEach(function (k) {
+          stepKeys[k] = true;
+        });
+        var sk = Object.keys(stepKeys);
+        if (!sk.length) {
           parts.push('<p class="op-text-muted" style="margin:0;">No quantities entered.</p>');
         } else {
           parts.push('<ul style="margin:0;padding-left:18px;">');
-          keys.forEach(function (k) {
+          sk.forEach(function (k) {
             var q = sq[k] || {};
             var bits = [];
             if (q.m2 != null && String(q.m2).trim() !== '') bits.push('m² ' + escapeHtml(String(q.m2)));
             if (q.linear != null && String(q.linear).trim() !== '') bits.push('linear m ' + escapeHtml(String(q.linear)));
             if (q.units != null && String(q.units).trim() !== '') bits.push('units ' + escapeHtml(String(q.units)));
-            if (!bits.length) return;
+            var urls = Array.isArray(spu[k]) ? spu[k] : [];
+            if (!bits.length && !urls.length) return;
+            parts.push('<li>');
             parts.push(
-              '<li><span style="color:var(--op-text-muted);font-size:0.85rem;">' +
+              '<span style="color:var(--op-text-muted);font-size:0.85rem;">' +
                 escapeHtml(labels[k] || k) +
-                '</span> — ' +
-                bits.join(', ') +
-                '</li>'
+                '</span>'
             );
+            if (bits.length) parts.push(' — ' + bits.join(', '));
+            if (urls.length) {
+              parts.push('<div class="op-pwb-overview-step-photos">');
+              urls.forEach(function (url) {
+                parts.push(
+                  '<img src="' +
+                    escapeHtml(url) +
+                    '" alt="" class="op-pwb-overview-step-photo-thumb">'
+                );
+              });
+              parts.push('</div>');
+            }
+            parts.push('</li>');
           });
           parts.push('</ul>');
         }
@@ -2042,6 +2086,14 @@
               '</div>'
           );
         }
+        parts.push(
+          '<div class="op-pwb-step-photo-block">' +
+          '<span class="op-pwb-step-photo-label">Photo confirmation</span>' +
+          '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-pwb-add-photo">Add photo confirmation</button>' +
+          '<input type="file" class="d-none op-pwb-photo-input" accept="image/*" multiple tabindex="-1">' +
+          '<div class="op-pwb-photo-chips" aria-live="polite"></div>' +
+          '</div>'
+        );
         parts.push('</div>');
       });
     });
@@ -2061,6 +2113,30 @@
       var v = (el.value || '').trim();
       if (!out[key]) out[key] = { m2: '', linear: '', units: '' };
       out[key][dim] = v;
+    });
+    return out;
+  }
+
+  function uploadPwbWorklogPhoto(file) {
+    var fd = new FormData();
+    fd.append('file', file);
+    return api('/work-log/upload', { method: 'POST', body: fd }).then(function (r) {
+      if (r.data && r.data.success && r.data.path) return r.data.path;
+      throw new Error((r.data && r.data.message) || 'Upload failed');
+    });
+  }
+
+  function collectPwbStepPhotoUrls() {
+    var out = {};
+    document.querySelectorAll('#op-pwb-steps .op-pwb-step').forEach(function (stepEl) {
+      var key = stepEl.getAttribute('data-pwb-step-key');
+      if (!key) return;
+      var urls = [];
+      stepEl.querySelectorAll('.op-pwb-photo-chip[data-url]').forEach(function (chip) {
+        var u = chip.getAttribute('data-url');
+        if (u) urls.push(u);
+      });
+      if (urls.length) out[key] = urls;
     });
     return out;
   }
@@ -2085,6 +2161,7 @@
         jobTitle: (pwbCurrentJob.jobTitle && String(pwbCurrentJob.jobTitle).trim()) || '',
         stepQuantities: stepQuantities,
         stepLabels: buildStepLabelsForPwbJob(pwbCurrentJob),
+        stepPhotoUrls: collectPwbStepPhotoUrls(),
       });
       pwbSelectedJob = null;
       pwbCurrentJob = null;
@@ -2094,7 +2171,62 @@
   }
 
   if (modalPriceWorkBuilder) {
+    modalPriceWorkBuilder.addEventListener('change', function (e) {
+      var inp = e.target;
+      if (!inp || !inp.classList || !inp.classList.contains('op-pwb-photo-input')) return;
+      var stepEl = inp.closest('.op-pwb-step');
+      var chipsEl = stepEl && stepEl.querySelector('.op-pwb-photo-chips');
+      if (!stepEl || !chipsEl) return;
+      var files = inp.files;
+      if (!files || !files.length) return;
+      inp.value = '';
+      var feedback = document.getElementById('op-pwb-feedback');
+      var arr = Array.prototype.slice.call(files);
+      showFeedback(feedback, 'Uploading photos…', false);
+      var seq = Promise.resolve();
+      arr.forEach(function (file) {
+        seq = seq.then(function () {
+          return uploadPwbWorklogPhoto(file).then(function (path) {
+            var chip = document.createElement('span');
+            chip.className = 'op-pwb-photo-chip';
+            chip.setAttribute('data-url', path);
+            var img = document.createElement('img');
+            img.setAttribute('src', path);
+            img.setAttribute('alt', '');
+            var rm = document.createElement('button');
+            rm.type = 'button';
+            rm.className = 'op-pwb-photo-remove';
+            rm.setAttribute('aria-label', 'Remove');
+            rm.appendChild(document.createTextNode('\u00d7'));
+            chip.appendChild(img);
+            chip.appendChild(rm);
+            chipsEl.appendChild(chip);
+          });
+        });
+      });
+      seq
+        .then(function () {
+          hideFeedback(feedback);
+        })
+        .catch(function (err) {
+          showFeedback(feedback, err.message || 'Upload failed', true);
+        });
+    });
     modalPriceWorkBuilder.addEventListener('click', function (e) {
+      if (e.target.closest('.op-pwb-photo-remove')) {
+        e.preventDefault();
+        var chip = e.target.closest('.op-pwb-photo-chip');
+        if (chip && chip.parentNode) chip.parentNode.removeChild(chip);
+        return;
+      }
+      var addPhotoBtn = e.target.closest('.op-pwb-add-photo');
+      if (addPhotoBtn) {
+        e.preventDefault();
+        var step = addPhotoBtn.closest('.op-pwb-step');
+        var finp = step && step.querySelector('.op-pwb-photo-input');
+        if (finp) finp.click();
+        return;
+      }
       var card = e.target.closest('.op-pwb-pick-card');
       if (card) {
         e.preventDefault();

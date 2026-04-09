@@ -217,7 +217,15 @@
         '</div>';
       var sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
       var stepLabels = ent.stepLabels && typeof ent.stepLabels === 'object' ? ent.stepLabels : {};
-      var keys = Object.keys(sq);
+      var spu = ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object' ? ent.stepPhotoUrls : {};
+      var stepKeys = {};
+      Object.keys(sq).forEach(function (k) {
+        stepKeys[k] = true;
+      });
+      Object.keys(spu).forEach(function (k) {
+        stepKeys[k] = true;
+      });
+      var keys = Object.keys(stepKeys);
       if (!keys.length) {
         html += '<p class="worklogs-qa-price-empty">No step quantities recorded.</p>';
       } else {
@@ -228,16 +236,28 @@
           if (q.m2 != null && String(q.m2).trim() !== '') parts.push('m²: ' + escapeHtml(String(q.m2)));
           if (q.linear != null && String(q.linear).trim() !== '') parts.push('linear m: ' + escapeHtml(String(q.linear)));
           if (q.units != null && String(q.units).trim() !== '') parts.push('units: ' + escapeHtml(String(q.units)));
-          if (parts.length) {
-            var display = stepLabels[k] || k;
-            lines.push(
-              '<li><span class="worklogs-qa-price-step-name">' +
-                escapeHtml(display) +
-                '</span> — ' +
-                parts.join(', ') +
-                '</li>'
-            );
+          var urls = Array.isArray(spu[k]) ? spu[k] : [];
+          if (!parts.length && !urls.length) return;
+          var display = stepLabels[k] || k;
+          var li =
+            '<li><span class="worklogs-qa-price-step-name">' +
+            escapeHtml(display) +
+            '</span>';
+          if (parts.length) li += ' — ' + parts.join(', ');
+          if (urls.length) {
+            li += '<div class="worklogs-qa-price-step-photos">';
+            urls.forEach(function (url) {
+              li +=
+                '<a href="' +
+                escapeHtml(url) +
+                '" target="_blank" rel="noopener" class="worklogs-qa-price-photo-thumb-wrap"><img src="' +
+                escapeHtml(url) +
+                '" alt="" class="worklogs-qa-price-photo-thumb"></a>';
+            });
+            li += '</div>';
           }
+          li += '</li>';
+          lines.push(li);
         });
         if (lines.length) {
           html += '<ul class="worklogs-qa-price-steps">' + lines.join('') + '</ul>';

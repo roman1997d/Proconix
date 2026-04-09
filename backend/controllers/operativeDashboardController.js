@@ -1536,6 +1536,7 @@ async function sendWorkLogInvoiceCopy(req, res) {
         detailLines.push(`QA price work — Job ${jn}${jt ? ': ' + jt : ''}`);
         const sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
         const labels = ent.stepLabels && typeof ent.stepLabels === 'object' ? ent.stepLabels : {};
+        const spu = ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object' ? ent.stepPhotoUrls : {};
         for (const k of Object.keys(sq)) {
           const q = sq[k] || {};
           const bits = [];
@@ -1544,6 +1545,12 @@ async function sendWorkLogInvoiceCopy(req, res) {
           if (q.units != null && String(q.units).trim() !== '') bits.push('units ' + q.units);
           if (!bits.length) continue;
           detailLines.push(`  ${labels[k] || k}: ${bits.join(', ')}`);
+        }
+        for (const k of Object.keys(spu)) {
+          const urls = Array.isArray(spu[k]) ? spu[k] : [];
+          for (const u of urls) {
+            if (u && String(u).trim()) detailLines.push(`  Photo (${labels[k] || k}): ${String(u).trim()}`);
+          }
         }
       }
     }
