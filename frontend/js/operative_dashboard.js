@@ -2137,13 +2137,18 @@
           );
         }
         parts.push('</div>');
+        var idPhoto = pwbSafeInputId(key, 'photo');
         parts.push(
           '<div class="op-pwb-step-photo-block">' +
             '<span class="op-pwb-step-photo-label"><i class="bi bi-camera" aria-hidden="true"></i> Photo evidence <span class="op-pwb-optional">(optional)</span></span>' +
-            '<p class="op-pwb-photo-hint">Add one or more images for this step. Use <strong>Remove</strong> on a thumbnail if the wrong file was chosen.</p>' +
-            '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-pwb-add-photo">' +
-            '<i class="bi bi-plus-lg" aria-hidden="true"></i> Add photos</button>' +
-            '<input type="file" class="d-none op-pwb-photo-input" accept="image/*" multiple tabindex="-1">' +
+            '<p class="op-pwb-photo-hint">Add one or more images for this step. After you add photos, use <strong>Remove</strong> on a thumbnail if the wrong file was chosen.</p>' +
+            '<input type="file" id="' +
+            idPhoto +
+            '" class="op-pwb-photo-input op-pwb-photo-input-native" accept="image/*" multiple>' +
+            '<label for="' +
+            idPhoto +
+            '" class="op-btn op-btn-secondary op-btn-sm op-pwb-add-photo">' +
+            '<i class="bi bi-plus-lg" aria-hidden="true"></i> Add photos</label>' +
             '<div class="op-pwb-photo-chips" aria-live="polite"></div>' +
             '</div>'
         );
@@ -2183,6 +2188,9 @@
     var fd = new FormData();
     fd.append('file', file);
     return api('/work-log/upload', { method: 'POST', body: fd }).then(function (r) {
+      if (r.status >= 400) {
+        throw new Error((r.data && r.data.message) || 'Upload failed (' + r.status + ').');
+      }
       if (r.data && r.data.success && r.data.path) {
         var path = normalizeWorklogUploadPath(r.data.path);
         if (path.indexOf('/uploads/') === 0) return path;
@@ -2278,10 +2286,24 @@
       var chipsEl = stepEl && stepEl.querySelector('.op-pwb-photo-chips');
       if (!stepEl || !chipsEl) return;
       var files = inp.files;
-      if (!files || !files.length) return;
-      inp.value = '';
       var feedback = document.getElementById('op-pwb-feedback');
-      var arr = Array.prototype.slice.call(files);
+      var arr = files && files.length ? Array.prototype.slice.call(files) : [];
+      /* Defer clearing so iOS Safari finishes handing off File objects reliably */
+      setTimeout(function () {
+        try {
+          inp.value = '';
+        } catch (clearErr) {}
+      }, 0);
+      if (!arr.length) {
+        if (feedback) {
+          showFeedback(
+            feedback,
+            'No photo was received after you picked images. Try Add photos again, or use a smaller image. If this keeps happening, try Safari (not in-app browser).',
+            true
+          );
+        }
+        return;
+      }
       showFeedback(feedback, 'Uploading photos…', false);
 
       function appendPhotoChip(previewSrc, isPending) {
@@ -2351,14 +2373,7 @@
         if (chip && chip.parentNode) chip.parentNode.removeChild(chip);
         return;
       }
-      var addPhotoBtn = e.target.closest('.op-pwb-add-photo');
-      if (addPhotoBtn) {
-        e.preventDefault();
-        var step = addPhotoBtn.closest('.op-pwb-step');
-        var finp = step && step.querySelector('.op-pwb-photo-input');
-        if (finp) finp.click();
-        return;
-      }
+      /* Add photos: native <label for="file-id"> opens picker (required for iOS; do not preventDefault / finp.click) */
       var card = e.target.closest('.op-pwb-pick-card');
       if (card) {
         e.preventDefault();
