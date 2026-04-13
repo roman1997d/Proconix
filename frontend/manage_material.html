@@ -168,6 +168,9 @@
               <th data-sort="supplier">Supplier <i class="bi bi-arrow-down-up sort-icon"></i></th>
               <th data-sort="unit">Unit <i class="bi bi-arrow-down-up sort-icon"></i></th>
               <th data-sort="unitCoverage">Per pack/item <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="consumptionCalcType">QA rule <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="consumptionValue">QA value <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="wasteFactorPct">Waste % <i class="bi bi-arrow-down-up sort-icon"></i></th>
               <th data-sort="quantityInitial">Qty Initial <i class="bi bi-arrow-down-up sort-icon"></i></th>
               <th data-sort="quantityUsed">Qty Used <i class="bi bi-arrow-down-up sort-icon"></i></th>
               <th data-sort="quantityRemaining">Qty Remaining <i class="bi bi-arrow-down-up sort-icon"></i></th>
@@ -176,7 +179,7 @@
             </tr>
           </thead>
           <tbody id="materialsTbody">
-            <tr><td colspan="10" class="text-center text-muted py-4">Select a project to load materials.</td></tr>
+            <tr><td colspan="13" class="text-center text-muted py-4">Select a project to load materials.</td></tr>
           </tbody>
         </table>
       </div>
@@ -291,6 +294,27 @@
             <input type="number" class="form-control" id="materialUnitCoverage" min="0" step="any" placeholder="">
             <div class="form-text" id="materialUnitCoverageHelp"></div>
           </div>
+          <div class="mb-3">
+            <label class="form-label" for="materialConsumptionCalcType">QA consumption type</label>
+            <select class="form-select" id="materialConsumptionCalcType" aria-describedby="materialConsumptionHelp">
+              <option value="">— None —</option>
+              <option value="AREA_BASED">AREA_BASED (m² ÷ value)</option>
+              <option value="COVERAGE_BASED">COVERAGE_BASED (m² ÷ coverage)</option>
+              <option value="LENGTH_BASED">LENGTH_BASED (linear m ÷ length)</option>
+              <option value="MULTIPLIER_BASED">MULTIPLIER_BASED (m² × factor)</option>
+            </select>
+            <div class="form-text" id="materialConsumptionHelp">Used by QA to auto-calc from job step quantities. Value is divisor or multiplier per unit; area types can fall back to “Per pack/item” if value is empty.</div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label" for="materialConsumptionValue">Consumption value</label>
+              <input type="number" class="form-control" id="materialConsumptionValue" min="0" step="any" placeholder="e.g. 2.88">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label" for="materialWasteFactorPct">Material waste (%)</label>
+              <input type="number" class="form-control" id="materialWasteFactorPct" min="0" max="500" step="0.1" value="0" placeholder="0">
+            </div>
+          </div>
           <div class="row">
             <div class="col-md-6 mb-3">
               <label class="form-label">Quantity Initial <span class="text-danger">*</span></label>
@@ -348,6 +372,27 @@
             <label class="form-label" for="editMaterialUnitCoverage" id="editMaterialUnitCoverageLabel">Coverage (optional)</label>
             <input type="number" class="form-control" id="editMaterialUnitCoverage" min="0" step="any" placeholder="">
             <div class="form-text" id="editMaterialUnitCoverageHelp"></div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="editMaterialConsumptionCalcType">QA consumption type</label>
+            <select class="form-select" id="editMaterialConsumptionCalcType" aria-describedby="editMaterialConsumptionHelp">
+              <option value="">— None —</option>
+              <option value="AREA_BASED">AREA_BASED (m² ÷ value)</option>
+              <option value="COVERAGE_BASED">COVERAGE_BASED (m² ÷ coverage)</option>
+              <option value="LENGTH_BASED">LENGTH_BASED (linear m ÷ length)</option>
+              <option value="MULTIPLIER_BASED">MULTIPLIER_BASED (m² × factor)</option>
+            </select>
+            <div class="form-text" id="editMaterialConsumptionHelp">Used by QA to auto-calc from job step quantities.</div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label" for="editMaterialConsumptionValue">Consumption value</label>
+              <input type="number" class="form-control" id="editMaterialConsumptionValue" min="0" step="any" placeholder="">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label" for="editMaterialWasteFactorPct">Material waste (%)</label>
+              <input type="number" class="form-control" id="editMaterialWasteFactorPct" min="0" max="500" step="0.1" value="0">
+            </div>
           </div>
           <div class="row">
             <div class="col-md-4 mb-3">
@@ -576,7 +621,11 @@
     var supId = m.supplierId != null ? String(m.supplierId) : '';
     var uc = m.unitCoverage != null && m.unitCoverage !== '' ? Number(m.unitCoverage) : null;
     if (uc != null && !isFinite(uc)) uc = null;
-    return { id: id, name: m.name || '', categoryId: catId, categoryName: cat || m.categoryName || '', supplierId: supId, supplierName: m.supplierName || '', unit: m.unit || 'kg', unitCoverage: uc, quantityInitial: Number(m.quantityInitial) || 0, quantityUsed: Number(m.quantityUsed) || 0, quantityRemaining: m.quantityRemaining != null ? Number(m.quantityRemaining) : (Number(m.quantityInitial) || 0) - (Number(m.quantityUsed) || 0), lowStockThreshold: m.lowStockThreshold != null ? Number(m.lowStockThreshold) : null, status: m.status || 'normal', emailNotify: !!m.emailNotify };
+    var cct = m.consumptionCalcType != null && String(m.consumptionCalcType).trim() !== '' ? String(m.consumptionCalcType).trim() : null;
+    var cv = m.consumptionValue != null && m.consumptionValue !== '' ? Number(m.consumptionValue) : null;
+    if (cv != null && !isFinite(cv)) cv = null;
+    var wf = m.wasteFactorPct != null && !isNaN(Number(m.wasteFactorPct)) ? Number(m.wasteFactorPct) : 0;
+    return { id: id, name: m.name || '', categoryId: catId, categoryName: cat || m.categoryName || '', supplierId: supId, supplierName: m.supplierName || '', unit: m.unit || 'kg', unitCoverage: uc, consumptionCalcType: cct, consumptionValue: cv, wasteFactorPct: wf, quantityInitial: Number(m.quantityInitial) || 0, quantityUsed: Number(m.quantityUsed) || 0, quantityRemaining: m.quantityRemaining != null ? Number(m.quantityRemaining) : (Number(m.quantityInitial) || 0) - (Number(m.quantityUsed) || 0), lowStockThreshold: m.lowStockThreshold != null ? Number(m.lowStockThreshold) : null, status: m.status || 'normal', emailNotify: !!m.emailNotify };
   }
 
   function getUnitCoverageCopy(unit) {
@@ -614,6 +663,22 @@
     return n;
   }
 
+  function readConsumptionByIds(typeId, valueId, wasteId) {
+    var sel = document.getElementById(typeId);
+    var valIn = document.getElementById(valueId);
+    var wasteIn = document.getElementById(wasteId);
+    var type = sel && sel.value ? String(sel.value).trim() : '';
+    var vraw = valIn ? String(valIn.value || '').trim() : '';
+    var v = vraw === '' ? null : parseFloat(vraw);
+    var wraw = wasteIn ? String(wasteIn.value || '').trim() : '';
+    var w = wraw === '' ? 0 : parseFloat(wraw);
+    return {
+      consumptionCalcType: type || null,
+      consumptionValue: v != null && isFinite(v) ? v : null,
+      wasteFactorPct: isFinite(w) && w >= 0 ? w : 0
+    };
+  }
+
   // ---- State (filled from API or mock) ----
   var projects = [];
   var categories = [];
@@ -630,9 +695,9 @@
   function getProjectMaterialsMock(projectId) {
     if (!projectId) return [];
     return [
-      { id: 'm1', name: 'Portland Cement', categoryId: 'c1', categoryName: 'Cement', supplierId: 's1', supplierName: 'BuildCo Ltd', unit: 'kg', unitCoverage: 25, quantityInitial: 5000, quantityUsed: 3200, quantityRemaining: 1800, lowStockThreshold: 500, status: 'normal', emailNotify: true },
-      { id: 'm2', name: 'Timber 2x4', categoryId: 'c2', categoryName: 'Timber', supplierId: 's2', supplierName: 'TimberWorld', unit: 'm', unitCoverage: 2.4, quantityInitial: 200, quantityUsed: 180, quantityRemaining: 20, lowStockThreshold: 50, status: 'low', emailNotify: false },
-      { id: 'm3', name: 'Cable 2.5mm', categoryId: 'c3', categoryName: 'Electrical', supplierId: 's1', supplierName: 'BuildCo Ltd', unit: 'm', unitCoverage: null, quantityInitial: 500, quantityUsed: 500, quantityRemaining: 0, lowStockThreshold: 100, status: 'out', emailNotify: true }
+      { id: 'm1', name: 'Portland Cement', categoryId: 'c1', categoryName: 'Cement', supplierId: 's1', supplierName: 'BuildCo Ltd', unit: 'kg', unitCoverage: 25, consumptionCalcType: null, consumptionValue: null, wasteFactorPct: 0, quantityInitial: 5000, quantityUsed: 3200, quantityRemaining: 1800, lowStockThreshold: 500, status: 'normal', emailNotify: true },
+      { id: 'm2', name: 'Timber 2x4', categoryId: 'c2', categoryName: 'Timber', supplierId: 's2', supplierName: 'TimberWorld', unit: 'm', unitCoverage: 2.4, consumptionCalcType: 'LENGTH_BASED', consumptionValue: 3, wasteFactorPct: 5, quantityInitial: 200, quantityUsed: 180, quantityRemaining: 20, lowStockThreshold: 50, status: 'low', emailNotify: false },
+      { id: 'm3', name: 'Cable 2.5mm', categoryId: 'c3', categoryName: 'Electrical', supplierId: 's1', supplierName: 'BuildCo Ltd', unit: 'm', unitCoverage: null, consumptionCalcType: null, consumptionValue: null, wasteFactorPct: 0, quantityInitial: 500, quantityUsed: 500, quantityRemaining: 0, lowStockThreshold: 100, status: 'out', emailNotify: true }
     ];
   }
   function getForecastMock(projectId) { return projectId ? { thisWeek: 420, lastWeek: 380 } : { thisWeek: 0, lastWeek: 0 }; }
@@ -845,7 +910,9 @@
       m.categoryName || '',
       m.supplierName || '',
       m.unit || '',
-      m.unitCoverage != null ? String(m.unitCoverage) : ''
+      m.unitCoverage != null ? String(m.unitCoverage) : '',
+      m.consumptionCalcType || '',
+      m.consumptionValue != null ? String(m.consumptionValue) : ''
     ].join(' ').toLowerCase();
   }
 
@@ -877,7 +944,7 @@
     if (!tbody) return;
     var list = getFilteredMaterials();
     if (list.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">No materials match the filters.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="13" class="text-center text-muted py-4">No materials match the filters.</td></tr>';
       return;
     }
     tbody.innerHTML = list.map(function (m) {
@@ -889,6 +956,9 @@
         '<td>' + escapeHtml(m.supplierName || '—') + '</td>' +
         '<td>' + escapeHtml(m.unit || '—') + '</td>' +
         '<td>' + (m.unitCoverage != null ? m.unitCoverage : '—') + '</td>' +
+        '<td class="small">' + escapeHtml(m.consumptionCalcType || '—') + '</td>' +
+        '<td>' + (m.consumptionValue != null ? m.consumptionValue : '—') + '</td>' +
+        '<td>' + (m.wasteFactorPct != null ? m.wasteFactorPct : '—') + '</td>' +
         '<td>' + (m.quantityInitial != null ? m.quantityInitial : '—') + '</td>' +
         '<td>' + (m.quantityUsed != null ? m.quantityUsed : '—') + '</td>' +
         '<td>' + (m.quantityRemaining != null ? m.quantityRemaining : '—') + '</td>' +
@@ -1028,6 +1098,9 @@
     document.getElementById('editMaterialCategory').value = m.categoryId || '';
     document.getElementById('editMaterialSupplier').value = m.supplierId || '';
     document.getElementById('editMaterialUnitCoverage').value = m.unitCoverage != null ? m.unitCoverage : '';
+    document.getElementById('editMaterialConsumptionCalcType').value = m.consumptionCalcType || '';
+    document.getElementById('editMaterialConsumptionValue').value = m.consumptionValue != null ? m.consumptionValue : '';
+    document.getElementById('editMaterialWasteFactorPct').value = m.wasteFactorPct != null ? m.wasteFactorPct : '0';
     refreshUnitCoverageUI('editMaterialUnit', 'editMaterialUnitCoverageLabel', 'editMaterialUnitCoverageHelp', 'editMaterialUnitCoverage');
     new bootstrap.Modal(document.getElementById('modalEditMaterial')).show();
   }
@@ -1109,7 +1182,7 @@
       return;
     }
     var rows = [
-      ['Material Name', 'Category', 'Supplier', 'Unit', 'Per pack/item', 'Quantity Initial', 'Quantity Used', 'Quantity Remaining', 'Status']
+      ['Material Name', 'Category', 'Supplier', 'Unit', 'Per pack/item', 'QA rule', 'QA value', 'Waste %', 'Quantity Initial', 'Quantity Used', 'Quantity Remaining', 'Status']
     ];
     list.forEach(function (m) {
       rows.push([
@@ -1118,6 +1191,9 @@
         m.supplierName || '',
         m.unit || '',
         m.unitCoverage != null ? m.unitCoverage : '',
+        m.consumptionCalcType || '',
+        m.consumptionValue != null ? m.consumptionValue : '',
+        m.wasteFactorPct != null ? m.wasteFactorPct : '',
         m.quantityInitial != null ? m.quantityInitial : '',
         m.quantityUsed != null ? m.quantityUsed : '',
         m.quantityRemaining != null ? m.quantityRemaining : '',
@@ -1368,12 +1444,16 @@
       var cat = categories.find(function (c) { return c.id === catId; });
       var sup = suppliers.find(function (s) { return s.id === supId; });
       var newId = 'm' + Date.now();
-      var newMat = { id: newId, name: name, categoryId: catId, categoryName: cat ? cat.name : '', supplierId: supId, supplierName: sup ? sup.name : '', unit: unit, unitCoverage: unitCov, quantityInitial: qty, quantityUsed: 0, quantityRemaining: qty, lowStockThreshold: thresh, status: (qty <= thresh && thresh > 0) ? 'low' : (qty === 0 ? 'out' : 'normal'), emailNotify: emailNotify };
+      var cons = readConsumptionByIds('materialConsumptionCalcType', 'materialConsumptionValue', 'materialWasteFactorPct');
+      var newMat = { id: newId, name: name, categoryId: catId, categoryName: cat ? cat.name : '', supplierId: supId, supplierName: sup ? sup.name : '', unit: unit, unitCoverage: unitCov, consumptionCalcType: cons.consumptionCalcType, consumptionValue: cons.consumptionValue, wasteFactorPct: cons.wasteFactorPct, quantityInitial: qty, quantityUsed: 0, quantityRemaining: qty, lowStockThreshold: thresh, status: (qty <= thresh && thresh > 0) ? 'low' : (qty === 0 ? 'out' : 'normal'), emailNotify: emailNotify };
       materials.push(newMat);
       document.getElementById('materialName').value = '';
       document.getElementById('materialQtyInitial').value = '0';
       document.getElementById('materialLowStock').value = '0';
       document.getElementById('materialUnitCoverage').value = '';
+      document.getElementById('materialConsumptionCalcType').value = '';
+      document.getElementById('materialConsumptionValue').value = '';
+      document.getElementById('materialWasteFactorPct').value = '0';
       document.getElementById('materialEmailNotify').checked = false;
       bootstrap.Modal.getInstance(document.getElementById('modalMaterial')).hide();
       showToast('Material added.');
@@ -1381,11 +1461,15 @@
       renderTable();
       renderForecast();
     } else {
-      materialApi.createMaterial({ projectId: currentProjectId, name: name, categoryId: catId, supplierId: supId, unit: unit, unitCoverage: unitCov, quantityInitial: qty, lowStockThreshold: thresh, emailNotify: emailNotify }).then(function () {
+      var consPost = readConsumptionByIds('materialConsumptionCalcType', 'materialConsumptionValue', 'materialWasteFactorPct');
+      materialApi.createMaterial(Object.assign({ projectId: currentProjectId, name: name, categoryId: catId, supplierId: supId, unit: unit, unitCoverage: unitCov, quantityInitial: qty, lowStockThreshold: thresh, emailNotify: emailNotify }, consPost)).then(function () {
         document.getElementById('materialName').value = '';
         document.getElementById('materialQtyInitial').value = '0';
         document.getElementById('materialLowStock').value = '0';
         document.getElementById('materialUnitCoverage').value = '';
+        document.getElementById('materialConsumptionCalcType').value = '';
+        document.getElementById('materialConsumptionValue').value = '';
+        document.getElementById('materialWasteFactorPct').value = '0';
         document.getElementById('materialEmailNotify').checked = false;
         bootstrap.Modal.getInstance(document.getElementById('modalMaterial')).hide();
         showToast('Material added.');
@@ -1419,6 +1503,10 @@
       m.supplierName = (suppliers.find(function (s) { return s.id === supplierId; }) || {}).name || '';
       m.unit = unit;
       m.unitCoverage = editUnitCov;
+      var consE = readConsumptionByIds('editMaterialConsumptionCalcType', 'editMaterialConsumptionValue', 'editMaterialWasteFactorPct');
+      m.consumptionCalcType = consE.consumptionCalcType;
+      m.consumptionValue = consE.consumptionValue;
+      m.wasteFactorPct = consE.wasteFactorPct;
       m.quantityInitial = initial;
       m.quantityUsed = used;
       m.quantityRemaining = remaining;
@@ -1431,7 +1519,8 @@
       renderTable();
       renderForecast();
     } else {
-      materialApi.updateMaterial(id, { name: name, categoryId: categoryId, supplierId: supplierId, unit: unit, unitCoverage: editUnitCov, quantityInitial: initial, quantityUsed: used, quantityRemaining: remaining, lowStockThreshold: thresh, emailNotify: emailNotify }).then(function () {
+      var consPut = readConsumptionByIds('editMaterialConsumptionCalcType', 'editMaterialConsumptionValue', 'editMaterialWasteFactorPct');
+      materialApi.updateMaterial(id, Object.assign({ name: name, categoryId: categoryId, supplierId: supplierId, unit: unit, unitCoverage: editUnitCov, quantityInitial: initial, quantityUsed: used, quantityRemaining: remaining, lowStockThreshold: thresh, emailNotify: emailNotify }, consPut)).then(function () {
         bootstrap.Modal.getInstance(document.getElementById('modalEditMaterial')).hide();
         showToast('Material updated.');
         loadMaterialsForProject(currentProjectId);
@@ -1510,6 +1599,9 @@
     fillMaterialCategoryDropdown('materialCategory');
     fillMaterialSupplierDropdown('materialSupplier');
     document.getElementById('materialUnitCoverage').value = '';
+    document.getElementById('materialConsumptionCalcType').value = '';
+    document.getElementById('materialConsumptionValue').value = '';
+    document.getElementById('materialWasteFactorPct').value = '0';
     refreshUnitCoverageUI('materialUnit', 'materialUnitCoverageLabel', 'materialUnitCoverageHelp', 'materialUnitCoverage');
   });
   document.getElementById('modalEditMaterial').addEventListener('show.bs.modal', function () {

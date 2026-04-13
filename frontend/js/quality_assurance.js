@@ -109,6 +109,8 @@
   var qaJobCreateMaterialPicks = {};
   /** stepKey → material id strings for Create / Edit template wizard (step 2). */
   var qaTemplateDrawerMaterialPicks = {};
+  /** Template-level waste % (step 2); synced from server on edit. */
+  var qaTemplateDrawerWastePct = 0;
   /** 1 = name+steps, 2 = step materials. */
   var templateDrawerWizardStep = 1;
   /** Latest full template from API while creating a job (includes stepMaterials for defaults). */
@@ -151,6 +153,7 @@
           name: data.name,
           steps: data.steps || [],
           stepMaterials: sm,
+          wasteFactorPct: data.wasteFactorPct != null && !isNaN(Number(data.wasteFactorPct)) ? Number(data.wasteFactorPct) : 0,
           createdAt: new Date().toISOString(),
           createdBy: createdBy
         };
@@ -170,6 +173,12 @@
           name: data.name,
           steps: data.steps || [],
           stepMaterials: data.stepMaterials && typeof data.stepMaterials === 'object' ? data.stepMaterials : {},
+          wasteFactorPct:
+            data.wasteFactorPct !== undefined && data.wasteFactorPct !== null && !isNaN(Number(data.wasteFactorPct))
+              ? Number(data.wasteFactorPct)
+              : existing.wasteFactorPct != null
+                ? Number(existing.wasteFactorPct)
+                : 0,
           createdAt: existing.createdAt || new Date().toISOString(),
           createdBy: existing.createdBy || ''
         };
@@ -187,7 +196,10 @@
       },
       getJob: function (id) {
         var j = _jobs.find(function (x) { return x.id === id; });
-        return Promise.resolve(j ? Object.assign({}, j) : null);
+        if (!j) return Promise.resolve(null);
+        var o = Object.assign({}, j);
+        if (!o.materialRequirements) o.materialRequirements = [];
+        return Promise.resolve(o);
       },
       createJob: function (data) {
         var id = 'job_' + Date.now();
@@ -1472,12 +1484,20 @@
     if (backBtn) backBtn.classList.toggle('d-none', n === 1);
     if (nextBtn) nextBtn.classList.toggle('d-none', n === 2);
     if (saveBtn) saveBtn.classList.toggle('d-none', n === 1);
+    if (n === 2) {
+      var wEl = document.getElementById('qa-template-waste-pct');
+      if (wEl) {
+        var wv = qaTemplateDrawerWastePct != null && !isNaN(Number(qaTemplateDrawerWastePct)) ? Number(qaTemplateDrawerWastePct) : 0;
+        wEl.value = String(wv);
+      }
+    }
     iconsRefresh();
   }
 
   function openTemplateDrawer(mode, templateId) {
     templateDrawerMode = mode;
     qaTemplateDrawerMaterialPicks = {};
+    qaTemplateDrawerWastePct = 0;
     setTemplateWizardStep(1);
     document.getElementById('qa-template-drawer-title').textContent = mode === 'edit' ? 'Edit template' : 'Create template';
     document.getElementById('qa-edit-template-id').value = templateId || '';
@@ -1490,6 +1510,7 @@
           return;
         }
         document.getElementById('qa-template-name').value = t.name || '';
+        qaTemplateDrawerWastePct = t.wasteFactorPct != null && !isNaN(Number(t.wasteFactorPct)) ? Number(t.wasteFactorPct) : 0;
         var steps = (t.steps && t.steps.length) ? t.steps : [normalizeStepData({ id: generateStepId() })];
         steps.forEach(function (s, i) {
           stepsContainer.insertAdjacentHTML('beforeend', buildStepCardHtml(i + 1, s));
@@ -1577,6 +1598,9 @@
       if (editId && window.QA_CONFIG && window.QA_CONFIG.useBackend) {
         qaApi.getTemplate(editId).then(function (t) {
           hydrateTemplateMaterialPicksFromServer(editId, t && t.stepMaterials);
+          if (t && t.wasteFactorPct != null && !isNaN(Number(t.wasteFactorPct))) {
+            qaTemplateDrawerWastePct = Number(t.wasteFactorPct);
+          }
           afterLoad();
         }).catch(function () {
           qaTemplateDrawerMaterialPicks = {};
@@ -1590,6 +1614,11 @@
   });
 
   document.getElementById('qa-template-back').addEventListener('click', function () {
+    if (templateDrawerWizardStep === 2) {
+      var w = document.getElementById('qa-template-waste-pct');
+      var v = w && parseFloat(w.value);
+      qaTemplateDrawerWastePct = Number.isFinite(v) ? v : 0;
+    }
     setTemplateWizardStep(1);
     iconsRefresh();
   });
@@ -1602,9 +1631,12 @@
     var editId = document.getElementById('qa-edit-template-id').value;
     var draftId = editId || 'new';
     var stepMaterials = collectTemplateStepMaterialsPayload(draftId, steps);
+    var wasteEl = document.getElementById('qa-template-waste-pct');
+    var wasteRaw = wasteEl && wasteEl.value !== '' && wasteEl.value != null ? parseFloat(wasteEl.value) : 0;
+    var wasteFactorPct = Number.isFinite(wasteRaw) ? wasteRaw : 0;
     var p = editId
-      ? qaApi.updateTemplate(editId, { name: name, steps: steps, stepMaterials: stepMaterials })
-      : qaApi.createTemplate({ name: name, steps: steps, stepMaterials: stepMaterials });
+      ? qaApi.updateTemplate(editId, { name: name, steps: steps, stepMaterials: stepMaterials, wasteFactorPct: wasteFactorPct })
+      : qaApi.createTemplate({ name: name, steps: steps, stepMaterials: stepMaterials, wasteFactorPct: wasteFactorPct });
     p.then(function () {
       refreshJobTemplatesList();
       closeTemplateDrawer();
@@ -2684,6 +2716,40 @@
     );
   }
 
+  function formatJobMaterialRequirementsSection(job) {
+    var list = job.materialRequirements;
+    if (!list || !list.length) {
+      return (
+        '<dt>Materials required (auto)</dt><dd><span class="qa-muted">No calculated list yet. Enter step quantities, ensure the template lists materials, and set consumption rules under Material Management.</span></dd>'
+      );
+    }
+    var rows = list
+      .map(function (r) {
+        return (
+          '<tr><td>' +
+          escapeHtml(r.materialName || r.materialId || '') +
+          '</td><td>' +
+          escapeHtml(String(r.quantityRequired != null ? r.quantityRequired : '')) +
+          '</td><td>' +
+          escapeHtml(r.unit || '') +
+          '</td><td class="qa-muted">' +
+          escapeHtml(r.calculationType || '') +
+          '</td><td class="qa-muted small">' +
+          escapeHtml(String(r.wasteMaterialPct != null ? r.wasteMaterialPct : 0)) +
+          '% mat · ' +
+          escapeHtml(String(r.wasteTemplatePct != null ? r.wasteTemplatePct : 0)) +
+          '% tpl</td></tr>'
+        );
+      })
+      .join('');
+    return (
+      '<dt>Materials required (auto)</dt><dd class="qa-job-mat-wrap">' +
+      '<table class="qa-table" style="margin-top:6px;font-size:0.9rem;"><thead><tr><th>Material</th><th>Qty</th><th>Unit</th><th>Rule</th><th>Waste</th></tr></thead><tbody>' +
+      rows +
+      '</tbody></table></dd>'
+    );
+  }
+
   function openJobDrawer(job) {
     document.getElementById('qa-job-panel-id').value = job.id;
     document.getElementById('qa-job-drawer-title').textContent = job.jobNumber || 'Job';
@@ -2756,6 +2822,7 @@
         '<dt>Job reference</dt><dd>' + escapeHtml(freshJob.jobNumber || '—') + '</dd>' +
         estRow +
         stepQtyRow +
+        formatJobMaterialRequirementsSection(freshJob) +
         '<dt>Specification</dt><dd>' + (specStr ? escapeHtml(specStr) : '—') + '</dd>' +
         '<dt>Description</dt><dd class="qa-dl__preline">' + (descStr ? escapeHtml(descStr) : '—') + '</dd>' +
         '<dt>Location</dt><dd>' + escapeHtml(freshJob.location || '—') + '</dd>' +

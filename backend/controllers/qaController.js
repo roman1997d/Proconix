@@ -7,6 +7,7 @@
 const fs = require('fs');
 const { pool } = require('../db/pool');
 const { computeEntryMoneyForTemplates, loadStepsByTemplateForQaJob } = require('../lib/qaPriceWorkMoney');
+const { buildJobMaterialRequirements, eachStepMaterialPair } = require('../lib/qaMaterialCalculationEngine');
 
 function getQaCompanyId(req) {
   if (req.manager && req.manager.company_id != null) return req.manager.company_id;
@@ -32,6 +33,14 @@ function getCreatedBy(req) {
   }
   if (req.supervisor && req.supervisor.name) return String(req.supervisor.name).trim();
   return '';
+}
+
+/** Optional template-level waste % (0–1000) for QA material auto-calculation. */
+function parseBodyWasteFactorPct(b) {
+  if (!b || b.wasteFactorPct === undefined || b.wasteFactorPct === null || b.wasteFactorPct === '') return 0;
+  const n = parseFloat(b.wasteFactorPct);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(n, 1000);
 }
 
 /** Compact QA job numbers: A01–A99, B01–B99, … Z99, then J-000001+ for overflow / legacy tail. */
@@ -156,11 +165,23 @@ async function getTemplate(req, res) {
   const companyId = getQaCompanyId(req);
   if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
   try {
-    const tpl = await pool.query(
-      `SELECT id, name, project_id, created_at AS "createdAt", created_by AS "createdBy"
-       FROM qa_templates WHERE id = $1 AND company_id = $2`,
-      [id, companyId]
-    );
+    let tpl;
+    try {
+      tpl = await pool.query(
+        `SELECT id, name, project_id, created_at AS "createdAt", created_by AS "createdBy",
+                COALESCE(waste_factor_pct, 0) AS waste_factor_pct
+         FROM qa_templates WHERE id = $1 AND company_id = $2`,
+        [id, companyId]
+      );
+    } catch (e) {
+      if (e.code !== '42703') throw e;
+      tpl = await pool.query(
+        `SELECT id, name, project_id, created_at AS "createdAt", created_by AS "createdBy"
+         FROM qa_templates WHERE id = $1 AND company_id = $2`,
+        [id, companyId]
+      );
+      if (tpl.rows.length) tpl.rows[0].waste_factor_pct = 0;
+    }
     if (tpl.rows.length === 0) return res.status(404).json({ message: 'Template not found.' });
     if (req.supervisor) {
       const m = supervisorProjectMismatch(req, tpl.rows[0].project_id);
@@ -192,6 +213,7 @@ async function getTemplate(req, res) {
       name: row.name || '',
       steps: stepList,
       stepMaterials,
+      wasteFactorPct: Number(row.waste_factor_pct) || 0,
       createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
       createdBy: row.createdBy || '',
     });
@@ -224,13 +246,23 @@ async function createTemplate(req, res) {
       return res.status(403).json({ message: 'Project not found or access denied.' });
     }
 
+    const tplWasteIn = parseBodyWasteFactorPct(b);
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const insert = await client.query(
-        `INSERT INTO qa_templates (name, created_by, company_id, project_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at, created_by`,
-        [name, createdBy, companyId, projectId]
-      );
+      let insert;
+      try {
+        insert = await client.query(
+          `INSERT INTO qa_templates (name, created_by, company_id, project_id, waste_factor_pct) VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at, created_by`,
+          [name, createdBy, companyId, projectId, tplWasteIn]
+        );
+      } catch (e) {
+        if (e.code !== '42703') throw e;
+        insert = await client.query(
+          `INSERT INTO qa_templates (name, created_by, company_id, project_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at, created_by`,
+          [name, createdBy, companyId, projectId]
+        );
+      }
       const templateId = insert.rows[0].id;
       const createdAt = insert.rows[0].created_at;
 
@@ -278,6 +310,7 @@ async function createTemplate(req, res) {
         name,
         steps: stepList,
         stepMaterials,
+        wasteFactorPct: tplWasteIn,
         createdAt: createdAt ? new Date(createdAt).toISOString() : null,
         createdBy,
       });
@@ -319,13 +352,22 @@ async function updateTemplate(req, res) {
     const createdAt = existing.rows[0].created_at;
     const projectId = existing.rows[0].project_id;
 
+    const tplWasteUp = parseBodyWasteFactorPct(b);
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query(
-        'UPDATE qa_templates SET name = $1, updated_at = NOW(), updated_by = $2 WHERE id = $3',
-        [name, getCreatedBy(req), id]
-      );
+      try {
+        await client.query(
+          'UPDATE qa_templates SET name = $1, waste_factor_pct = $2, updated_at = NOW(), updated_by = $3 WHERE id = $4',
+          [name, tplWasteUp, getCreatedBy(req), id]
+        );
+      } catch (e) {
+        if (e.code !== '42703') throw e;
+        await client.query(
+          'UPDATE qa_templates SET name = $1, updated_at = NOW(), updated_by = $2 WHERE id = $3',
+          [name, getCreatedBy(req), id]
+        );
+      }
       await client.query('DELETE FROM qa_template_steps WHERE template_id = $1', [id]);
 
       for (let i = 0; i < steps.length; i++) {
@@ -372,6 +414,7 @@ async function updateTemplate(req, res) {
         name,
         steps: stepList,
         stepMaterials,
+        wasteFactorPct: tplWasteUp,
         createdAt: createdAt ? new Date(createdAt).toISOString() : null,
         createdBy: createdBy || '',
       });
@@ -675,6 +718,142 @@ async function saveJobStepMaterials(poolConn, jobId, projectId, companyId, raw) 
       if (e.code === '42P01') return;
       throw e;
     }
+  }
+}
+
+/** Template waste % (first linked template on job). */
+async function fetchTemplateWastePctForJob(poolConn, templateIds) {
+  if (!templateIds || !templateIds.length) return 0;
+  const first = parseInt(String(templateIds[0]), 10);
+  if (!Number.isInteger(first) || first < 1) return 0;
+  try {
+    const r = await poolConn.query('SELECT waste_factor_pct FROM qa_templates WHERE id = $1', [first]);
+    if (!r.rows.length) return 0;
+    return Number(r.rows[0].waste_factor_pct) || 0;
+  } catch (e) {
+    if (e.code === '42703') return 0;
+    throw e;
+  }
+}
+
+async function loadMaterialsMapForQaCalc(poolConn, materialIds, projectId, companyId) {
+  const map = new Map();
+  const uniq = [...new Set(materialIds)].filter((n) => Number.isInteger(n));
+  if (!uniq.length) return map;
+  try {
+    const r = await poolConn.query(
+      `SELECT id, unit, name, consumption_calc_type, consumption_value, waste_factor_pct, unit_coverage
+       FROM materials
+       WHERE id = ANY($1::int[]) AND project_id = $2 AND company_id = $3 AND deleted_at IS NULL`,
+      [uniq, projectId, companyId]
+    );
+    r.rows.forEach((row) => map.set(row.id, row));
+  } catch (e) {
+    if (e.code === '42703') {
+      const r2 = await poolConn.query(
+        `SELECT id, unit, name, NULL::varchar AS consumption_calc_type, NULL::numeric AS consumption_value, 0::numeric AS waste_factor_pct, unit_coverage
+         FROM materials WHERE id = ANY($1::int[]) AND project_id = $2 AND company_id = $3 AND deleted_at IS NULL`,
+        [uniq, projectId, companyId]
+      );
+      r2.rows.forEach((row) => map.set(row.id, row));
+      return map;
+    }
+    throw e;
+  }
+  return map;
+}
+
+async function fetchJobMaterialRequirementsList(poolConn, jobId) {
+  try {
+    const r = await poolConn.query(
+      `SELECT r.material_id, r.quantity_required, r.unit, r.calculation_type, r.waste_material_pct, r.waste_template_pct, r.raw_quantity_sum,
+              m.name AS material_name
+       FROM qa_job_material_requirements r
+       LEFT JOIN materials m ON m.id = r.material_id AND m.deleted_at IS NULL
+       WHERE r.job_id = $1
+       ORDER BY COALESCE(m.name, '') ASC, r.material_id`,
+      [jobId]
+    );
+    return r.rows.map((x) => ({
+      materialId: String(x.material_id),
+      materialName: x.material_name || '',
+      quantityRequired: Number(x.quantity_required),
+      unit: x.unit || '',
+      calculationType: x.calculation_type || '',
+      wasteMaterialPct: x.waste_material_pct != null ? Number(x.waste_material_pct) : 0,
+      wasteTemplatePct: x.waste_template_pct != null ? Number(x.waste_template_pct) : 0,
+      rawQuantitySum: x.raw_quantity_sum != null ? Number(x.raw_quantity_sum) : null,
+    }));
+  } catch (e) {
+    if (e.code === '42P01') return [];
+    throw e;
+  }
+}
+
+/** Persist auto-calculated material requirements (rules from Material Management). */
+async function persistJobMaterialRequirements(poolConn, jobId, projectId, companyId, stepMaterials, stepQuantities, templateIds) {
+  try {
+    await poolConn.query('DELETE FROM qa_job_material_requirements WHERE job_id = $1', [jobId]);
+  } catch (e) {
+    if (e.code === '42P01') return { saved: false };
+    throw e;
+  }
+  if (!stepMaterials || typeof stepMaterials !== 'object') return { saved: true, count: 0 };
+
+  const pairs = eachStepMaterialPair(stepMaterials);
+  const materialIds = pairs.map((p) => p.materialId);
+  const materialsById = await loadMaterialsMapForQaCalc(poolConn, materialIds, projectId, companyId);
+  const tplWaste = await fetchTemplateWastePctForJob(poolConn, templateIds);
+  const { rows } = buildJobMaterialRequirements({
+    stepMaterials,
+    stepQuantities: stepQuantities && typeof stepQuantities === 'object' ? stepQuantities : {},
+    materialsById,
+    templateWastePct: tplWaste,
+  });
+
+  for (const row of rows) {
+    await poolConn.query(
+      `INSERT INTO qa_job_material_requirements (
+        job_id, material_id, quantity_required, unit, calculation_type, waste_material_pct, waste_template_pct, raw_quantity_sum
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (job_id, material_id) DO UPDATE SET
+        quantity_required = EXCLUDED.quantity_required,
+        unit = EXCLUDED.unit,
+        calculation_type = EXCLUDED.calculation_type,
+        waste_material_pct = EXCLUDED.waste_material_pct,
+        waste_template_pct = EXCLUDED.waste_template_pct,
+        raw_quantity_sum = EXCLUDED.raw_quantity_sum`,
+      [
+        jobId,
+        row.materialId,
+        row.quantityRequired,
+        row.unit,
+        row.calculationType,
+        row.wasteMaterialPct,
+        row.wasteTemplatePct,
+        row.rawSum,
+      ]
+    );
+  }
+  return { saved: true, count: rows.length };
+}
+
+/** Reload job step materials + quantities from DB and persist qa_job_material_requirements. */
+async function recalcJobMaterialRequirements(poolConn, jobId, projectId, companyId) {
+  try {
+    const jrow = await poolConn.query('SELECT step_quantities FROM qa_jobs WHERE id = $1', [jobId]);
+    const tlinks = await poolConn.query('SELECT template_id FROM qa_job_templates WHERE job_id = $1', [jobId]);
+    const tids = tlinks.rows.map((r) => String(r.template_id));
+    let smap = {};
+    try {
+      smap = (await fetchStepMaterialsMapByJobIds(poolConn, [jobId])).get(jobId) || {};
+    } catch (_) {
+      smap = {};
+    }
+    const sq = stepQuantitiesFromRow({ step_quantities: jrow.rows[0] && jrow.rows[0].step_quantities });
+    await persistJobMaterialRequirements(poolConn, jobId, projectId, companyId, smap, sq, tids);
+  } catch (recErr) {
+    console.error('QA job material re-calculation failed:', recErr);
   }
 }
 
@@ -1111,6 +1290,11 @@ async function getJob(req, res) {
       stepMat
     );
     try {
+      payload.materialRequirements = await fetchJobMaterialRequirementsList(pool, id);
+    } catch (_) {
+      payload.materialRequirements = [];
+    }
+    try {
       const qaPrice = await fetchApprovedQaPriceWorkFullData(companyId, id);
       payload.bookedStepQuantities = qaPrice.bookedStepQuantities;
       payload.bookedStepDetails = qaPrice.bookedStepDetails;
@@ -1318,6 +1502,20 @@ async function createJob(req, res) {
       stepMatOut = {};
     }
 
+    try {
+      await persistJobMaterialRequirements(
+        pool,
+        jobId,
+        projectId,
+        companyId,
+        stepMatOut,
+        stepQtyNorm || {},
+        outTemplateIds
+      );
+    } catch (calcErr) {
+      console.error('QA job material auto-calculation failed:', calcErr);
+    }
+
     // --- Auto sync into Task & Planning (Gantt + Kanban) ---
     // Make QA jobs visible in Planning and keep them in sync on updates/deletes.
     try {
@@ -1333,20 +1531,24 @@ async function createJob(req, res) {
       console.error('Auto planning sync from QA createJob failed:', err);
     }
 
-    return res.status(201).json(
-      jobRowToJson(
-        row,
-        outTemplateIds,
-        outWorkerIds,
-        row.floor_id ? (await pool.query('SELECT code FROM qa_floors WHERE id = $1', [row.floor_id])).rows[0]?.code : row.floor_code,
-        costCode,
-        statusCode,
-        row.responsible_user_id,
-        !!req.supervisor,
-        outCrewIds,
-        stepMatOut
-      )
+    const createdPayload = jobRowToJson(
+      row,
+      outTemplateIds,
+      outWorkerIds,
+      row.floor_id ? (await pool.query('SELECT code FROM qa_floors WHERE id = $1', [row.floor_id])).rows[0]?.code : row.floor_code,
+      costCode,
+      statusCode,
+      row.responsible_user_id,
+      !!req.supervisor,
+      outCrewIds,
+      stepMatOut
     );
+    try {
+      createdPayload.materialRequirements = await fetchJobMaterialRequirementsList(pool, jobId);
+    } catch (_) {
+      createdPayload.materialRequirements = [];
+    }
+    return res.status(201).json(createdPayload);
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ message: 'Job number already exists for this project.' });
     if (err.code === '42P01' && /qa_job_crews/i.test(err.message || '')) {
@@ -1693,6 +1895,18 @@ async function updateJob(req, res) {
   const workerIdsProvided = b.workerIds !== undefined;
   const crewIdsProvided = b.crewIds !== undefined;
   const stepMaterialsProvided = Object.prototype.hasOwnProperty.call(b, 'stepMaterials');
+  const stepQuantitiesProvided = Object.prototype.hasOwnProperty.call(b, 'stepQuantities');
+  if (stepQuantitiesProvided) {
+    const stepQtyNorm = normalizeStepQuantitiesInput(b.stepQuantities) || {};
+    const agg = aggregateQuantitiesFromStepJson(Object.keys(stepQtyNorm).length ? stepQtyNorm : {});
+    updates.push(
+      `step_quantities = $${idx++}::jsonb`,
+      `sqm = $${idx++}`,
+      `linear_meters = $${idx++}`,
+      `total_units = $${idx++}`
+    );
+    values.push(JSON.stringify(stepQtyNorm), agg.sqm, agg.linearMeters, agg.totalUnits);
+  }
   if (workerIdsProvided) {
     const workerIds = Array.isArray(b.workerIds) ? b.workerIds : [];
     const parsedWorkers = [];
@@ -1731,7 +1945,7 @@ async function updateJob(req, res) {
       }
     }
   }
-  if (updates.length === 0 && !workerIdsProvided && !crewIdsProvided && !stepMaterialsProvided) {
+  if (updates.length === 0 && !workerIdsProvided && !crewIdsProvided && !stepMaterialsProvided && !stepQuantitiesProvided) {
     return res.status(400).json({ message: 'No fields to update.' });
   }
   updates.push(`updated_at = NOW()`, `updated_by = $${idx++}`);
@@ -1778,6 +1992,9 @@ async function updateJob(req, res) {
         if (e && e.code === 'MATERIALS_SCHEMA') return res.status(503).json({ message: e.message });
         throw e;
       }
+    }
+    if (jobProjectId != null && (stepMaterialsProvided || stepQuantitiesProvided)) {
+      await recalcJobMaterialRequirements(pool, id, jobProjectId, companyId);
     }
     // Keep Planning synchronized with this QA job update.
     try {

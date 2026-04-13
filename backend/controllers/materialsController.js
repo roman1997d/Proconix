@@ -415,6 +415,32 @@ function parseUnitCoverage(body) {
   return n;
 }
 
+const MATERIAL_CONSUMPTION_TYPES = new Set(['AREA_BASED', 'LENGTH_BASED', 'COVERAGE_BASED', 'MULTIPLIER_BASED']);
+
+/** undefined = omit; null = clear */
+function parseConsumptionCalcType(body) {
+  if (!body || body.consumptionCalcType === undefined) return undefined;
+  if (body.consumptionCalcType === null || body.consumptionCalcType === '') return null;
+  const s = String(body.consumptionCalcType).trim().toUpperCase();
+  return MATERIAL_CONSUMPTION_TYPES.has(s) ? s : null;
+}
+
+function parseConsumptionValueField(body) {
+  if (!body || body.consumptionValue === undefined) return undefined;
+  if (body.consumptionValue === null || body.consumptionValue === '') return null;
+  const n = parseFloat(body.consumptionValue);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
+function parseMaterialWasteFactorPct(body) {
+  if (!body || body.wasteFactorPct === undefined) return undefined;
+  if (body.wasteFactorPct === null || body.wasteFactorPct === '') return 0;
+  const n = parseFloat(body.wasteFactorPct);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return n;
+}
+
 /** Ensure project belongs to manager's company */
 async function assertProjectBelongsToCompany(projectId, companyId) {
   const r = await pool.query('SELECT id FROM projects WHERE id = $1 AND company_id = $2', [projectId, companyId]);
@@ -437,18 +463,37 @@ async function getMaterials(req, res) {
   if (supErr) return res.status(403).json({ message: supErr });
   try {
     await assertProjectBelongsToCompany(projectId, companyId);
-    const result = await pool.query(
-      `SELECT m.id, m.name, m.category_id, m.supplier_id, m.unit,
-              m.quantity_initial, m.quantity_used, m.quantity_remaining, m.low_stock_threshold, m.status, m.email_notify,
-              m.unit_coverage,
-              c.name AS category_name, s.name AS supplier_name
-       FROM materials m
-       LEFT JOIN material_categories c ON c.id = m.category_id AND c.deleted_at IS NULL
-       LEFT JOIN material_suppliers s ON s.id = m.supplier_id AND s.deleted_at IS NULL
-       WHERE m.project_id = $1 AND m.company_id = $2 AND m.deleted_at IS NULL
-       ORDER BY m.name`,
-      [projectId, companyId]
-    );
+    let result;
+    try {
+      result = await pool.query(
+        `SELECT m.id, m.name, m.category_id, m.supplier_id, m.unit,
+                m.quantity_initial, m.quantity_used, m.quantity_remaining, m.low_stock_threshold, m.status, m.email_notify,
+                m.unit_coverage,
+                m.consumption_calc_type, m.consumption_value, m.waste_factor_pct,
+                c.name AS category_name, s.name AS supplier_name
+         FROM materials m
+         LEFT JOIN material_categories c ON c.id = m.category_id AND c.deleted_at IS NULL
+         LEFT JOIN material_suppliers s ON s.id = m.supplier_id AND s.deleted_at IS NULL
+         WHERE m.project_id = $1 AND m.company_id = $2 AND m.deleted_at IS NULL
+         ORDER BY m.name`,
+        [projectId, companyId]
+      );
+    } catch (err) {
+      if (err.code !== '42703') throw err;
+      result = await pool.query(
+        `SELECT m.id, m.name, m.category_id, m.supplier_id, m.unit,
+                m.quantity_initial, m.quantity_used, m.quantity_remaining, m.low_stock_threshold, m.status, m.email_notify,
+                m.unit_coverage,
+                NULL::varchar AS consumption_calc_type, NULL::numeric AS consumption_value, 0::numeric AS waste_factor_pct,
+                c.name AS category_name, s.name AS supplier_name
+         FROM materials m
+         LEFT JOIN material_categories c ON c.id = m.category_id AND c.deleted_at IS NULL
+         LEFT JOIN material_suppliers s ON s.id = m.supplier_id AND s.deleted_at IS NULL
+         WHERE m.project_id = $1 AND m.company_id = $2 AND m.deleted_at IS NULL
+         ORDER BY m.name`,
+        [projectId, companyId]
+      );
+    }
     const rows = result.rows.map((r) => ({
       id: r.id,
       name: r.name || '',
@@ -459,11 +504,17 @@ async function getMaterials(req, res) {
       unit: r.unit || 'kg',
       quantityInitial: Number(r.quantity_initial) || 0,
       quantityUsed: Number(r.quantity_used) || 0,
-      quantityRemaining: Number(r.quantity_remaining) ?? Number(r.quantity_initial) - Number(r.quantity_used),
+      quantityRemaining:
+        r.quantity_remaining != null
+          ? Number(r.quantity_remaining)
+          : Number(r.quantity_initial || 0) - Number(r.quantity_used || 0),
       lowStockThreshold: r.low_stock_threshold != null ? Number(r.low_stock_threshold) : null,
       status: r.status || 'normal',
       emailNotify: !!r.email_notify,
       unitCoverage: r.unit_coverage != null ? Number(r.unit_coverage) : null,
+      consumptionCalcType: r.consumption_calc_type || null,
+      consumptionValue: r.consumption_value != null ? Number(r.consumption_value) : null,
+      wasteFactorPct: r.waste_factor_pct != null ? Number(r.waste_factor_pct) : 0,
     }));
     return res.json(rows);
   } catch (err) {
@@ -513,34 +564,77 @@ async function createMaterial(req, res) {
   const createdById = req.manager.id;
   const status = computeStatus(quantityRemaining, lowStockThreshold);
 
+  const consumptionTypeParsed = parseConsumptionCalcType(body);
+  const consumptionCalcTypeIns = consumptionTypeParsed === undefined ? null : consumptionTypeParsed;
+  const consumptionValParsed = parseConsumptionValueField(body);
+  const consumptionValueIns = consumptionValParsed === undefined ? null : consumptionValParsed;
+  const wasteParsed = parseMaterialWasteFactorPct(body);
+  const wasteFactorIns = wasteParsed === undefined ? 0 : wasteParsed;
+
   try {
     await assertProjectBelongsToCompany(projectId, companyId);
-    const result = await pool.query(
-      `INSERT INTO materials (
+    let result;
+    try {
+      result = await pool.query(
+        `INSERT INTO materials (
+        project_id, company_id, name, category_id, supplier_id, unit,
+        quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, status, email_notify,
+        unit_coverage,
+        consumption_calc_type, consumption_value, waste_factor_pct,
+        created_by_id, created_by_name
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      RETURNING id, name, category_id, supplier_id, unit, quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, status, email_notify, unit_coverage,
+        consumption_calc_type, consumption_value, waste_factor_pct`,
+        [
+          projectId,
+          companyId,
+          name,
+          categoryId,
+          supplierId,
+          unit,
+          quantityInitial,
+          quantityUsed,
+          quantityRemaining,
+          lowStockThreshold,
+          status,
+          emailNotify,
+          unitCoverageVal,
+          consumptionCalcTypeIns,
+          consumptionValueIns,
+          wasteFactorIns,
+          createdById,
+          createdByName,
+        ]
+      );
+    } catch (e) {
+      if (e.code !== '42703') throw e;
+      result = await pool.query(
+        `INSERT INTO materials (
         project_id, company_id, name, category_id, supplier_id, unit,
         quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, status, email_notify,
         unit_coverage,
         created_by_id, created_by_name
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING id, name, category_id, supplier_id, unit, quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, status, email_notify, unit_coverage`,
-      [
-        projectId,
-        companyId,
-        name,
-        categoryId,
-        supplierId,
-        unit,
-        quantityInitial,
-        quantityUsed,
-        quantityRemaining,
-        lowStockThreshold,
-        status,
-        emailNotify,
-        unitCoverageVal,
-        createdById,
-        createdByName,
-      ]
-    );
+        [
+          projectId,
+          companyId,
+          name,
+          categoryId,
+          supplierId,
+          unit,
+          quantityInitial,
+          quantityUsed,
+          quantityRemaining,
+          lowStockThreshold,
+          status,
+          emailNotify,
+          unitCoverageVal,
+          createdById,
+          createdByName,
+        ]
+      );
+    }
     const r = result.rows[0];
     await recordConsumptionSnapshot(r.id, projectId, companyId, quantityRemaining);
     return res.status(201).json({
@@ -556,6 +650,9 @@ async function createMaterial(req, res) {
       status: r.status,
       emailNotify: !!r.email_notify,
       unitCoverage: r.unit_coverage != null ? Number(r.unit_coverage) : null,
+      consumptionCalcType: r.consumption_calc_type || null,
+      consumptionValue: r.consumption_value != null ? Number(r.consumption_value) : null,
+      wasteFactorPct: r.waste_factor_pct != null ? Number(r.waste_factor_pct) : 0,
     });
   } catch (err) {
     if (err.message === 'Project not found or access denied.') {
@@ -584,10 +681,19 @@ async function updateMaterial(req, res) {
   const updatedById = req.manager.id;
 
   try {
-    const existing = await pool.query(
-      'SELECT id, project_id, name, category_id, supplier_id, unit, quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, email_notify, unit_coverage FROM materials WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL',
-      [id, companyId]
-    );
+    let existing;
+    try {
+      existing = await pool.query(
+        'SELECT id, project_id, name, category_id, supplier_id, unit, quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, email_notify, unit_coverage, consumption_calc_type, consumption_value, waste_factor_pct FROM materials WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL',
+        [id, companyId]
+      );
+    } catch (e) {
+      if (e.code !== '42703') throw e;
+      existing = await pool.query(
+        'SELECT id, project_id, name, category_id, supplier_id, unit, quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, email_notify, unit_coverage FROM materials WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL',
+        [id, companyId]
+      );
+    }
     if (existing.rows.length === 0) {
       return res.status(404).json({ message: 'Material not found.' });
     }
@@ -603,6 +709,9 @@ async function updateMaterial(req, res) {
     let lowStockThreshold = row.low_stock_threshold != null ? Number(row.low_stock_threshold) : null;
     let emailNotify = row.email_notify;
     let unitCoverage = row.unit_coverage != null ? Number(row.unit_coverage) : null;
+    let consumptionCalcType = row.consumption_calc_type != null ? String(row.consumption_calc_type).trim() : null;
+    let consumptionValue = row.consumption_value != null ? Number(row.consumption_value) : null;
+    let wasteFactorPct = row.waste_factor_pct != null ? Number(row.waste_factor_pct) : 0;
 
     if (body.name !== undefined) name = String(body.name).trim() || name;
     if (body.categoryId !== undefined) categoryId = body.categoryId === '' || body.categoryId == null ? null : parseInt(String(body.categoryId), 10);
@@ -617,6 +726,12 @@ async function updateMaterial(req, res) {
       const parsed = parseUnitCoverage(body);
       unitCoverage = parsed === undefined ? unitCoverage : parsed;
     }
+    const ctIn = parseConsumptionCalcType(body);
+    if (ctIn !== undefined) consumptionCalcType = ctIn;
+    const cvIn = parseConsumptionValueField(body);
+    if (cvIn !== undefined) consumptionValue = cvIn;
+    const wfIn = parseMaterialWasteFactorPct(body);
+    if (wfIn !== undefined) wasteFactorPct = wfIn;
 
     if (!Number.isFinite(quantityInitial) || quantityInitial < 0) quantityInitial = 0;
     if (!Number.isFinite(quantityUsed) || quantityUsed < 0) quantityUsed = 0;
@@ -625,31 +740,64 @@ async function updateMaterial(req, res) {
 
     const status = computeStatus(quantityRemaining, lowStockThreshold);
 
-    await pool.query(
-      `UPDATE materials SET
+    try {
+      await pool.query(
+        `UPDATE materials SET
+        name = $1, category_id = $2, supplier_id = $3, unit = $4,
+        quantity_initial = $5, quantity_used = $6, quantity_remaining = $7, low_stock_threshold = $8, status = $9, email_notify = $10,
+        unit_coverage = $11,
+        consumption_calc_type = $12, consumption_value = $13, waste_factor_pct = $14,
+        updated_at = NOW(), updated_by_id = $15, updated_by_name = $16
+       WHERE id = $17 AND company_id = $18 AND deleted_at IS NULL`,
+        [
+          name,
+          categoryId,
+          supplierId,
+          unit,
+          quantityInitial,
+          quantityUsed,
+          quantityRemaining,
+          lowStockThreshold,
+          status,
+          emailNotify,
+          unitCoverage,
+          consumptionCalcType,
+          consumptionValue,
+          wasteFactorPct,
+          updatedById,
+          updatedByName,
+          id,
+          companyId,
+        ]
+      );
+    } catch (e) {
+      if (e.code !== '42703') throw e;
+      await pool.query(
+        `UPDATE materials SET
         name = $1, category_id = $2, supplier_id = $3, unit = $4,
         quantity_initial = $5, quantity_used = $6, quantity_remaining = $7, low_stock_threshold = $8, status = $9, email_notify = $10,
         unit_coverage = $11,
         updated_at = NOW(), updated_by_id = $12, updated_by_name = $13
        WHERE id = $14 AND company_id = $15 AND deleted_at IS NULL`,
-      [
-        name,
-        categoryId,
-        supplierId,
-        unit,
-        quantityInitial,
-        quantityUsed,
-        quantityRemaining,
-        lowStockThreshold,
-        status,
-        emailNotify,
-        unitCoverage,
-        updatedById,
-        updatedByName,
-        id,
-        companyId,
-      ]
-    );
+        [
+          name,
+          categoryId,
+          supplierId,
+          unit,
+          quantityInitial,
+          quantityUsed,
+          quantityRemaining,
+          lowStockThreshold,
+          status,
+          emailNotify,
+          unitCoverage,
+          updatedById,
+          updatedByName,
+          id,
+          companyId,
+        ]
+      );
+    }
     await recordConsumptionSnapshot(id, row.project_id, companyId, quantityRemaining);
     return res.status(200).json({
       id,
@@ -664,6 +812,9 @@ async function updateMaterial(req, res) {
       status,
       emailNotify,
       unitCoverage,
+      consumptionCalcType,
+      consumptionValue,
+      wasteFactorPct,
     });
   } catch (err) {
     console.error('materials updateMaterial:', err);
