@@ -103,6 +103,10 @@
 
   /** Materials catalogue for the selected project (Create QA Job → Step materials). */
   var jobCreateMaterialsCache = [];
+  /** Material categories (manager / supervisor API). */
+  var jobCreateCategoriesCache = [];
+  /** stepKey → material id strings selected for Create QA Job. */
+  var qaJobCreateMaterialPicks = {};
 
   var qaApiLocal = (function () {
     var _templates = [];
@@ -250,6 +254,80 @@
     });
   }
 
+  function fetchMaterialCategories() {
+    var url = QA_SUPERVISOR_MODE ? '/api/materials/supervisor/categories' : '/api/materials/categories';
+    return fetch(url, { credentials: 'same-origin', headers: getQASessionHeaders() })
+      .then(function (res) {
+        if (!res.ok) return [];
+        return res.json();
+      })
+      .catch(function () {
+        return [];
+      });
+  }
+
+  function loadJobCreateCategoriesCatalog() {
+    jobCreateCategoriesCache = [];
+    if (!(window.QA_CONFIG && window.QA_CONFIG.useBackend)) {
+      return Promise.resolve();
+    }
+    return fetchMaterialCategories().then(function (rows) {
+      jobCreateCategoriesCache = Array.isArray(rows) ? rows : [];
+    });
+  }
+
+  function materialPicksForStep(stepKey) {
+    if (!qaJobCreateMaterialPicks[stepKey]) qaJobCreateMaterialPicks[stepKey] = [];
+    return qaJobCreateMaterialPicks[stepKey];
+  }
+
+  function fillMaterialsForCategory(stepKey, categoryVal) {
+    var wrap = null;
+    document.querySelectorAll('.qa-job-step-material-mats').forEach(function (w) {
+      if (w.getAttribute('data-step-key') === stepKey) wrap = w;
+    });
+    if (!wrap) return;
+    var picks = materialPicksForStep(stepKey);
+    if (!categoryVal) {
+      wrap.innerHTML = '<p class="qa-message" style="margin-top:0.35rem;">Select a category to list materials.</p>';
+      return;
+    }
+    var list = jobCreateMaterialsCache.filter(function (m) {
+      var cid = m.categoryId != null && m.categoryId !== '' ? String(m.categoryId) : '';
+      if (categoryVal === '__all__') return true;
+      if (categoryVal === '__uncat__') return !cid;
+      return cid === String(categoryVal);
+    });
+    if (!list.length) {
+      wrap.innerHTML = '<p class="qa-message" style="margin-top:0.35rem;">No materials in this category for this project.</p>';
+      return;
+    }
+    wrap.innerHTML = '';
+    var inner = document.createElement('div');
+    inner.className = 'qa-checklist';
+    inner.style.marginTop = '0.35rem';
+    list.forEach(function (m) {
+      var mid = String(m.id);
+      var nm = (m.name || '') + (m.supplierName ? ' · ' + m.supplierName : '');
+      if (m.unit) nm += ' (' + m.unit + ')';
+      var lab = document.createElement('label');
+      lab.className = 'qa-check-item';
+      var checked = picks.indexOf(mid) !== -1;
+      lab.innerHTML =
+        '<input type="checkbox" class="qa-job-mat-cb" data-step-key="' +
+        escapeHtml(stepKey) +
+        '" value="' +
+        escapeHtml(mid) +
+        '"' +
+        (checked ? ' checked' : '') +
+        '> <span>' +
+        escapeHtml(nm) +
+        '</span>';
+      inner.appendChild(lab);
+    });
+    wrap.appendChild(inner);
+  }
+
   function renderJobStepMaterialsForm(templateT) {
     var container = document.getElementById('qa-job-step-materials');
     if (!container) return;
@@ -263,7 +341,13 @@
         '<p class="qa-message">No materials in the catalogue for this project. Add items under <strong>Dashboard → Materials</strong>, then reopen Create QA Job or switch project and back.</p>';
       return;
     }
+    qaJobCreateMaterialPicks = {};
     container.innerHTML = '';
+    var hasCategories = jobCreateCategoriesCache.length > 0;
+    var hasUncat = jobCreateMaterialsCache.some(function (m) {
+      return m.categoryId == null || m.categoryId === '';
+    });
+
     templateT.steps.forEach(function (s, i) {
       var key = jobStepKey(templateT.id, s.id);
       var title = 'Step ' + (i + 1) + (s.description ? ' — ' + String(s.description).trim() : '');
@@ -272,40 +356,66 @@
       sec.style.marginBottom = '1.25rem';
       var h = document.createElement('div');
       h.className = 'qa-label';
-      h.style.marginBottom = '0.5rem';
+      h.style.marginBottom = '0.35rem';
       h.textContent = title;
       sec.appendChild(h);
-      var list = document.createElement('div');
-      list.className = 'qa-checklist';
-      jobCreateMaterialsCache.forEach(function (m) {
-        var mid = String(m.id);
-        var nm = (m.name || '') + (m.categoryName ? ' · ' + m.categoryName : '');
-        if (m.unit) nm += ' (' + m.unit + ')';
-        var lab = document.createElement('label');
-        lab.className = 'qa-check-item';
-        lab.innerHTML =
-          '<input type="checkbox" class="qa-job-mat-cb" data-step-key="' +
-          escapeHtml(key) +
-          '" value="' +
-          escapeHtml(mid) +
-          '"> <span>' +
-          escapeHtml(nm) +
-          '</span>';
-        list.appendChild(lab);
-      });
-      sec.appendChild(list);
+
+      var matsWrap = document.createElement('div');
+      matsWrap.className = 'qa-job-step-material-mats';
+      matsWrap.setAttribute('data-step-key', key);
+
+      if (hasCategories || hasUncat) {
+        var labCat = document.createElement('label');
+        labCat.className = 'qa-label';
+        labCat.setAttribute('for', 'qa-job-mat-cat-' + templateT.id + '-' + i);
+        labCat.textContent = 'Category';
+        labCat.style.display = 'block';
+        labCat.style.marginBottom = '0.25rem';
+        sec.appendChild(labCat);
+        var catSel = document.createElement('select');
+        catSel.id = 'qa-job-mat-cat-' + templateT.id + '-' + i;
+        catSel.className = 'qa-select qa-job-step-material-cat';
+        catSel.setAttribute('data-step-key', key);
+        catSel.innerHTML = '<option value="">— Select category —</option>';
+        jobCreateCategoriesCache.forEach(function (c) {
+          var opt = document.createElement('option');
+          opt.value = String(c.id);
+          opt.textContent = c.name || 'Category';
+          catSel.appendChild(opt);
+        });
+        if (hasUncat) {
+          var ou = document.createElement('option');
+          ou.value = '__uncat__';
+          ou.textContent = 'Uncategorised';
+          catSel.appendChild(ou);
+        }
+        sec.appendChild(catSel);
+        matsWrap.innerHTML =
+          '<p class="qa-message" style="margin-top:0.35rem;">Select a category to list materials.</p>';
+      } else {
+        var hint = document.createElement('p');
+        hint.className = 'qa-message';
+        hint.style.marginBottom = '0.35rem';
+        hint.textContent =
+          'No material categories in the catalogue. All project materials are listed below for this step.';
+        sec.appendChild(hint);
+        matsWrap.innerHTML = '';
+      }
+
+      sec.appendChild(matsWrap);
       container.appendChild(sec);
+
+      if (!hasCategories && !hasUncat) {
+        fillMaterialsForCategory(key, '__all__');
+      }
     });
   }
 
   function collectJobCreateStepMaterials() {
     var out = {};
-    document.querySelectorAll('.qa-job-mat-cb:checked').forEach(function (cb) {
-      var sk = cb.getAttribute('data-step-key');
-      var mid = cb.value;
-      if (!sk || !mid) return;
-      if (!out[sk]) out[sk] = [];
-      if (out[sk].indexOf(mid) === -1) out[sk].push(mid);
+    Object.keys(qaJobCreateMaterialPicks).forEach(function (sk) {
+      var arr = qaJobCreateMaterialPicks[sk];
+      if (arr && arr.length) out[sk] = arr.slice();
     });
     return out;
   }
@@ -1165,7 +1275,7 @@
     rebuildJobFloorSelect(false);
     if (currentView === 'job-create') {
       refreshJobNumberPreview();
-      loadJobCreateMaterialsCatalog().then(function () {
+      Promise.all([loadJobCreateMaterialsCatalog(), loadJobCreateCategoriesCatalog()]).then(function () {
         var tid = getJobCreateBaseTemplateId();
         if (tid) {
           qaApi.getTemplate(tid).then(renderJobStepMaterialsForm).catch(function () {
@@ -1490,8 +1600,27 @@
   }
 
   /* ——— Job create tabs ——— */
+  var JOB_CREATE_TAB_ORDER = ['template', 'quantities', 'materials', 'details', 'cost', 'personnel'];
+
+  function jobCreateTabIndex(tabKey) {
+    var i = JOB_CREATE_TAB_ORDER.indexOf(tabKey);
+    return i === -1 ? 0 : i;
+  }
+
+  function updateJobWizardFooter(activeTabKey) {
+    var backBtn = document.getElementById('qa-job-wizard-back');
+    var nextBtn = document.getElementById('qa-job-wizard-next');
+    var createBtn = document.getElementById('qa-job-create');
+    if (!backBtn || !nextBtn || !createBtn) return;
+    var idx = jobCreateTabIndex(activeTabKey);
+    var last = JOB_CREATE_TAB_ORDER.length - 1;
+    backBtn.classList.toggle('d-none', idx <= 0);
+    nextBtn.classList.toggle('d-none', idx >= last);
+    createBtn.classList.toggle('d-none', idx < last);
+  }
+
   function switchJobTab(tabKey) {
-    document.querySelectorAll('.qa-tab').forEach(function (t) {
+    document.querySelectorAll('#qa-view-job-create .qa-tab').forEach(function (t) {
       var on = t.getAttribute('data-tab') === tabKey;
       t.classList.toggle('is-active', on);
       t.setAttribute('aria-selected', on ? 'true' : 'false');
@@ -1502,6 +1631,7 @@
       p.classList.toggle('d-none', !on);
       if (on) p.removeAttribute('hidden'); else p.setAttribute('hidden', 'hidden');
     });
+    updateJobWizardFooter(tabKey);
   }
 
   document.querySelectorAll('#qa-view-job-create .qa-tab').forEach(function (tab) {
@@ -1510,6 +1640,29 @@
       if (key) switchJobTab(key);
     });
   });
+
+  var wizardNextBtn = document.getElementById('qa-job-wizard-next');
+  var wizardBackBtn = document.getElementById('qa-job-wizard-back');
+  if (wizardNextBtn) {
+    wizardNextBtn.addEventListener('click', function () {
+      var active = document.querySelector('#qa-view-job-create .qa-tab.is-active');
+      var key = active && active.getAttribute('data-tab') ? active.getAttribute('data-tab') : 'template';
+      var idx = jobCreateTabIndex(key);
+      if (idx < JOB_CREATE_TAB_ORDER.length - 1) {
+        switchJobTab(JOB_CREATE_TAB_ORDER[idx + 1]);
+      }
+    });
+  }
+  if (wizardBackBtn) {
+    wizardBackBtn.addEventListener('click', function () {
+      var active = document.querySelector('#qa-view-job-create .qa-tab.is-active');
+      var key = active && active.getAttribute('data-tab') ? active.getAttribute('data-tab') : 'template';
+      var idx = jobCreateTabIndex(key);
+      if (idx > 0) {
+        switchJobTab(JOB_CREATE_TAB_ORDER[idx - 1]);
+      }
+    });
+  }
 
   function setWorkType(val) {
     document.getElementById('qa-work-type-value').value = val;
@@ -1572,6 +1725,27 @@
     jobCreateSection.addEventListener('input', function (e) {
       if (e.target && e.target.classList && e.target.classList.contains('qa-step-qty-input')) {
         updateJobPriceEstimateDisplay();
+      }
+    });
+    jobCreateSection.addEventListener('change', function (e) {
+      var t = e.target;
+      if (!t || !t.classList) return;
+      if (t.classList.contains('qa-job-step-material-cat')) {
+        var sk = t.getAttribute('data-step-key');
+        fillMaterialsForCategory(sk, t.value);
+        return;
+      }
+      if (t.classList.contains('qa-job-mat-cb')) {
+        var stepKey = t.getAttribute('data-step-key');
+        var mid = t.value;
+        if (!stepKey || !mid) return;
+        var arr = materialPicksForStep(stepKey);
+        if (t.checked) {
+          if (arr.indexOf(mid) === -1) arr.push(mid);
+        } else {
+          var j = arr.indexOf(mid);
+          if (j !== -1) arr.splice(j, 1);
+        }
       }
     });
   }
@@ -1738,7 +1912,7 @@
       if (!templates.length) {
         jobTemplatesList.innerHTML = '<p class="qa-message">No templates yet.</p>';
         renderJobStepQuantityForm('');
-        loadJobCreateMaterialsCatalog().then(function () {
+        Promise.all([loadJobCreateMaterialsCatalog(), loadJobCreateCategoriesCatalog()]).then(function () {
           renderJobStepMaterialsForm(null);
         });
         updateJobPriceEstimateDisplay();
@@ -1753,7 +1927,7 @@
         jobTemplatesList.appendChild(label);
       });
       renderJobStepQuantityForm('');
-      loadJobCreateMaterialsCatalog().then(function () {
+      Promise.all([loadJobCreateMaterialsCatalog(), loadJobCreateCategoriesCatalog()]).then(function () {
         var tid = getJobCreateBaseTemplateId();
         if (tid) {
           qaApi.getTemplate(tid).then(renderJobStepMaterialsForm).catch(function () {

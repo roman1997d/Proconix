@@ -142,7 +142,7 @@
           </div>
         </div>
         <div class="qa-tab-panel d-none" id="qa-job-panel-materials" role="tabpanel" hidden>
-          <p class="qa-message">For each template step, tick the materials from your project catalogue that will be needed on site. Materials are managed under <strong>Dashboard → Materials</strong>.</p>
+          <p class="qa-message">For each step: choose a <strong>category</strong>, then tick the <strong>materials</strong> from that category. You can switch category to add more items. Catalogue is managed under <strong>Dashboard → Materials</strong>.</p>
           <div id="qa-job-step-materials"></div>
         </div>
         <div class="qa-tab-panel d-none" id="qa-job-panel-details" role="tabpanel" hidden>
@@ -248,9 +248,13 @@
             </div>
           </div>
         </div>
-        <footer style="margin-top:2rem;display:flex;gap:0.75rem;justify-content:flex-end;">
+        <footer id="qa-job-create-footer" style="margin-top:2rem;display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;justify-content:space-between;">
           <button type="button" class="qa-btn qa-btn--secondary" id="qa-job-cancel">Cancel</button>
-          <button type="button" class="qa-btn qa-btn--primary" id="qa-job-create">Create job</button>
+          <div class="d-flex flex-wrap gap-2 align-items-center" style="margin-left:auto;">
+            <button type="button" class="qa-btn qa-btn--secondary d-none" id="qa-job-wizard-back" aria-label="Previous step">Back</button>
+            <button type="button" class="qa-btn qa-btn--primary" id="qa-job-wizard-next">Next</button>
+            <button type="button" class="qa-btn qa-btn--primary d-none" id="qa-job-create">Create job</button>
+          </div>
         </footer>
       </div>
     </section>
