@@ -23,8 +23,10 @@ router.post('/templates', requireManagerAuth, qa.createTemplate);
 router.put('/templates/:id', requireManagerAuth, qa.updateTemplate);
 router.delete('/templates/:id', requireManagerAuth, qa.deleteTemplate);
 
-// Jobs – next-number before :id so it is matched literally
+// Jobs – next-number and fixed paths before :id
 router.get('/jobs/next-number', requireManagerAuth, qa.getNextJobNumber);
+router.post('/jobs/preview-material-requirements', requireManagerAuth, qa.previewJobMaterialRequirements);
+router.post('/jobs/apply-materials-to-stock', requireManagerAuth, qa.applyPreviewMaterialsToStock);
 router.get('/jobs', requireManagerAuth, qa.listJobs);
 router.get('/jobs/:id/step-evidence', requireManagerAuth, qa.getJobStepEvidence);
 router.get('/jobs/:id', requireManagerAuth, qa.getJob);

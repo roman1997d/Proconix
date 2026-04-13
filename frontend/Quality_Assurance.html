@@ -139,6 +139,15 @@
             <p class="qa-price-estimate__value" id="qa-job-estimated-price">—</p>
             <p class="qa-message" id="qa-job-estimated-price-hint" style="margin-top:0.35rem;"></p>
           </div>
+          <div class="qa-job-mat-preview" id="qa-job-material-preview-section" style="margin-top:1.75rem;padding-top:1.25rem;border-top:1px solid var(--qa-border, rgba(0,0,0,0.08));">
+            <h3 class="qa-label" style="font-size:1rem;margin-bottom:0.35rem;">Estimated materials (auto)</h3>
+            <p class="qa-message" id="qa-job-material-preview-placeholder">Select a template and enter step quantities to calculate consumption from Material Management rules.</p>
+            <div id="qa-job-material-preview-table-wrap" class="d-none"></div>
+            <div id="qa-job-material-preview-actions" class="d-none" style="margin-top:1rem;">
+              <button type="button" class="qa-btn qa-btn--secondary" id="qa-job-allocate-materials-btn">Deduct from stock (Material Management)</button>
+              <p class="qa-message" id="qa-job-material-allocate-hint" style="margin-top:0.5rem;">Confirms subtraction from current project stock for the quantities shown above. You can create the QA job before or after.</p>
+            </div>
+          </div>
         </div>
         <div class="qa-tab-panel d-none" id="qa-job-panel-details" role="tabpanel" hidden>
           <div class="qa-form-grid">

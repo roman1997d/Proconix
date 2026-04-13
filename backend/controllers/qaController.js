@@ -2407,6 +2407,205 @@ async function deleteJob(req, res) {
   }
 }
 
+/** Stock status after changing quantity_remaining (align with Material Management). */
+function materialStatusAfterMove(remaining, threshold) {
+  const r = Number(remaining);
+  if (r <= 0) return 'out';
+  const t = threshold != null ? Number(threshold) : 0;
+  if (t > 0 && r <= t) return 'low';
+  return 'normal';
+}
+
+/**
+ * POST /api/jobs/preview-material-requirements (manager)
+ * POST /api/supervisor/qa/jobs/preview-material-requirements (supervisor — read-only preview)
+ * Body: { projectId, templateIds?, stepQuantities?, stepMaterials? }
+ */
+async function previewJobMaterialRequirements(req, res) {
+  const companyId = getQaCompanyId(req);
+  if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
+  const b = req.body || {};
+  const projectId = parseInt(String(b.projectId), 10);
+  if (!Number.isInteger(projectId) || projectId < 1) {
+    return res.status(400).json({ message: 'projectId is required.' });
+  }
+  if (req.supervisor) {
+    const m = supervisorProjectMismatch(req, projectId);
+    if (m) return res.status(403).json({ message: m });
+  }
+  try {
+    await assertProjectAccess(pool, projectId, companyId);
+  } catch (e) {
+    return res.status(403).json({ message: e.message || 'Access denied.' });
+  }
+  const templateIds = Array.isArray(b.templateIds) ? b.templateIds.map(String).filter(Boolean) : [];
+  const stepMaterials = b.stepMaterials && typeof b.stepMaterials === 'object' && !Array.isArray(b.stepMaterials) ? b.stepMaterials : {};
+  const stepQtyNorm = normalizeStepQuantitiesInput(b.stepQuantities) || {};
+  const pairs = eachStepMaterialPair(stepMaterials);
+  if (!pairs.length) {
+    return res.status(200).json({ requirements: [], skipped: [], message: 'No template materials for these steps.' });
+  }
+  try {
+    const materialIds = pairs.map((p) => p.materialId);
+    const materialsById = await loadMaterialsMapForQaCalc(pool, materialIds, projectId, companyId);
+    const tplWaste = await fetchTemplateWastePctForJob(pool, templateIds);
+    const { rows, skipped } = buildJobMaterialRequirements({
+      stepMaterials,
+      stepQuantities: stepQtyNorm,
+      materialsById,
+      templateWastePct: tplWaste,
+    });
+    const ids = [...new Set(rows.map((r) => r.materialId))];
+    const stockMap = new Map();
+    if (ids.length) {
+      try {
+        const sr = await pool.query(
+          `SELECT id, quantity_remaining, low_stock_threshold FROM materials WHERE id = ANY($1::int[]) AND project_id = $2 AND company_id = $3 AND deleted_at IS NULL`,
+          [ids, projectId, companyId]
+        );
+        sr.rows.forEach((x) => {
+          stockMap.set(x.id, {
+            quantityRemaining: Number(x.quantity_remaining) || 0,
+            lowStockThreshold: x.low_stock_threshold != null ? Number(x.low_stock_threshold) : null,
+          });
+        });
+      } catch (_) {
+        /* materials table missing */
+      }
+    }
+    const requirements = rows.map((row) => {
+      const mat = materialsById.get(row.materialId);
+      const st = stockMap.get(row.materialId);
+      return {
+        materialId: String(row.materialId),
+        materialName: (mat && mat.name) || '',
+        quantityRequired: row.quantityRequired,
+        unit: row.unit,
+        calculationType: row.calculationType,
+        wasteMaterialPct: row.wasteMaterialPct,
+        wasteTemplatePct: row.wasteTemplatePct,
+        rawQuantitySum: row.rawSum,
+        stockRemaining: st != null ? st.quantityRemaining : null,
+        sufficientStock: st == null ? null : st.quantityRemaining >= row.quantityRequired,
+      };
+    });
+    return res.status(200).json({ requirements, skipped: skipped || [] });
+  } catch (err) {
+    console.error('QA previewJobMaterialRequirements:', err);
+    return res.status(500).json({ message: err.message || 'Failed to preview materials.' });
+  }
+}
+
+/**
+ * POST /api/jobs/apply-materials-to-stock (manager only)
+ * Recomputes requirements from body (same as preview) and subtracts quantity_required from materials.quantity_remaining.
+ */
+async function applyPreviewMaterialsToStock(req, res) {
+  if (req.supervisor) {
+    return res.status(403).json({ message: 'Stock allocation is only available to managers.' });
+  }
+  const companyId = getQaCompanyId(req);
+  if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
+  const b = req.body || {};
+  const projectId = parseInt(String(b.projectId), 10);
+  if (!Number.isInteger(projectId) || projectId < 1) {
+    return res.status(400).json({ message: 'projectId is required.' });
+  }
+  try {
+    await assertProjectAccess(pool, projectId, companyId);
+  } catch (e) {
+    return res.status(403).json({ message: e.message || 'Access denied.' });
+  }
+  const templateIds = Array.isArray(b.templateIds) ? b.templateIds.map(String).filter(Boolean) : [];
+  const stepMaterials = b.stepMaterials && typeof b.stepMaterials === 'object' && !Array.isArray(b.stepMaterials) ? b.stepMaterials : {};
+  const stepQtyNorm = normalizeStepQuantitiesInput(b.stepQuantities) || {};
+  const pairs = eachStepMaterialPair(stepMaterials);
+  if (!pairs.length) {
+    return res.status(400).json({ message: 'Nothing to allocate: no template materials.' });
+  }
+  const managerId = req.manager && req.manager.id != null ? req.manager.id : null;
+  const managerName = [req.manager && req.manager.name, req.manager && req.manager.surname].filter(Boolean).join(' ').trim() || (req.manager && req.manager.email) || '';
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const materialIds = pairs.map((p) => p.materialId);
+    const materialsById = await loadMaterialsMapForQaCalc(client, materialIds, projectId, companyId);
+    const tplWaste = await fetchTemplateWastePctForJob(client, templateIds);
+    const { rows } = buildJobMaterialRequirements({
+      stepMaterials,
+      stepQuantities: stepQtyNorm,
+      materialsById,
+      templateWastePct: tplWaste,
+    });
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Calculated quantities are zero; nothing to deduct.' });
+    }
+    const ids = [...new Set(rows.map((r) => r.materialId))];
+    const lock = await client.query(
+      `SELECT id, name, quantity_remaining, quantity_used, low_stock_threshold FROM materials
+       WHERE id = ANY($1::int[]) AND project_id = $2 AND company_id = $3 AND deleted_at IS NULL
+       FOR UPDATE`,
+      [ids, projectId, companyId]
+    );
+    const byId = new Map(lock.rows.map((r) => [r.id, r]));
+    for (const row of rows) {
+      const deduct = Number(row.quantityRequired);
+      if (!Number.isFinite(deduct) || deduct < 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'Invalid quantity in calculation.' });
+      }
+      const m = byId.get(row.materialId);
+      if (!m) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: `Material ${row.materialId} not found for this project.` });
+      }
+      const rem = Number(m.quantity_remaining);
+      if (rem < deduct) {
+        await client.query('ROLLBACK');
+        const nm = m.name || String(row.materialId);
+        return res.status(400).json({
+          message: `Insufficient stock for «${nm}»: need ${deduct}, have ${rem}.`,
+          materialId: String(row.materialId),
+        });
+      }
+    }
+    for (const row of rows) {
+      const m = byId.get(row.materialId);
+      const deduct = Number(row.quantityRequired);
+      const newRem = Number(m.quantity_remaining) - deduct;
+      const newUsed = Number(m.quantity_used) + deduct;
+      const status = materialStatusAfterMove(newRem, m.low_stock_threshold);
+      await client.query(
+        `UPDATE materials SET
+          quantity_remaining = $1,
+          quantity_used = $2,
+          status = $3,
+          updated_at = NOW(),
+          updated_by_id = $4,
+          updated_by_name = $5
+        WHERE id = $6 AND project_id = $7 AND company_id = $8 AND deleted_at IS NULL`,
+        [newRem, newUsed, status, managerId, managerName, row.materialId, projectId, companyId]
+      );
+      m.quantity_remaining = newRem;
+      m.quantity_used = newUsed;
+    }
+    await client.query('COMMIT');
+    return res.status(200).json({ ok: true, deducted: rows.length, message: 'Stock updated in Material Management.' });
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      /* ignore */
+    }
+    console.error('QA applyPreviewMaterialsToStock:', err);
+    return res.status(500).json({ message: err.message || 'Failed to apply stock changes.' });
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   getPersonnel,
   listTemplates,
@@ -2420,6 +2619,8 @@ module.exports = {
   createJob,
   updateJob,
   deleteJob,
+  previewJobMaterialRequirements,
+  applyPreviewMaterialsToStock,
   getJobStepEvidence,
   putJobStepComment,
   postJobStepPhoto,

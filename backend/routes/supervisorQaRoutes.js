@@ -18,6 +18,7 @@ router.get('/personnel', requireSupervisorAuth, qa.getPersonnel);
 router.get('/templates', requireSupervisorAuth, qa.listTemplates);
 router.get('/templates/:id', requireSupervisorAuth, qa.getTemplate);
 router.get('/jobs/next-number', requireSupervisorAuth, qa.getNextJobNumber);
+router.post('/jobs/preview-material-requirements', requireSupervisorAuth, qa.previewJobMaterialRequirements);
 router.get('/jobs/:id/step-evidence', requireSupervisorAuth, qa.getJobStepEvidence);
 router.put('/jobs/:id/step-comment', requireSupervisorAuth, qa.putJobStepComment);
 router.post(

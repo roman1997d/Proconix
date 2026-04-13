@@ -747,6 +747,36 @@
   background: #fafafa;
 }
 
+/* Create job — material preview */
+.qa-job-mat-preview__scroll {
+  overflow-x: auto;
+  border: 1px solid var(--qa-border);
+  border-radius: var(--qa-radius-card);
+  background: var(--qa-card);
+  box-shadow: var(--qa-shadow);
+}
+
+.qa-job-mat-preview__table {
+  margin: 0;
+  min-width: 520px;
+}
+
+.qa-job-mat-preview__table .qa-mat-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.qa-mat-row-warn td {
+  background: rgba(220, 53, 69, 0.06);
+}
+
+.qa-mat-stock-warn {
+  color: #b02a37;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
 /* ——— Template library rows ——— */
 .qa-tpl-list {
   display: flex;

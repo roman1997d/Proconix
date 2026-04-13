@@ -228,6 +228,12 @@
         });
         return Promise.resolve(qaFormatSeqToJobNumber(maxSeq + 1));
       },
+      previewJobMaterialRequirements: function () {
+        return Promise.resolve({ requirements: [], skipped: [], message: 'Local mode: connect the server for material preview.' });
+      },
+      applyJobMaterialsToStock: function () {
+        return Promise.resolve({ ok: true, message: 'Local mode: no stock change.' });
+      },
       getCrews: function () { return Promise.resolve([]); }
     };
   })();
@@ -518,6 +524,136 @@
     return out;
   }
 
+  var _jobMatPreviewTimer = null;
+  function clearJobMaterialPreview() {
+    var ph = document.getElementById('qa-job-material-preview-placeholder');
+    var wrap = document.getElementById('qa-job-material-preview-table-wrap');
+    var act = document.getElementById('qa-job-material-preview-actions');
+    if (wrap) {
+      wrap.classList.add('d-none');
+      wrap.innerHTML = '';
+    }
+    if (ph) {
+      ph.classList.remove('d-none');
+      ph.textContent =
+        'Select a template and enter step quantities to calculate consumption from Material Management rules.';
+    }
+    if (act) act.classList.add('d-none');
+  }
+
+  function scheduleJobMaterialPreview() {
+    if (!(window.QA_CONFIG && window.QA_CONFIG.useBackend)) {
+      clearJobMaterialPreview();
+      var ph = document.getElementById('qa-job-material-preview-placeholder');
+      if (ph) {
+        ph.classList.remove('d-none');
+        ph.textContent = 'Material preview needs a server connection (disable local mock in QA config).';
+      }
+      return;
+    }
+    clearTimeout(_jobMatPreviewTimer);
+    _jobMatPreviewTimer = setTimeout(runJobMaterialPreview, 450);
+  }
+
+  function runJobMaterialPreview() {
+    var ph = document.getElementById('qa-job-material-preview-placeholder');
+    var wrap = document.getElementById('qa-job-material-preview-table-wrap');
+    var act = document.getElementById('qa-job-material-preview-actions');
+    var projectId = projectSelect && projectSelect.value;
+    var tid = getJobCreateBaseTemplateId();
+    if (!projectId || !tid) {
+      clearJobMaterialPreview();
+      return;
+    }
+    if (ph) {
+      ph.classList.remove('d-none');
+      ph.textContent = 'Calculating…';
+    }
+    if (wrap) wrap.classList.add('d-none');
+    var body = {
+      projectId: parseInt(projectId, 10),
+      templateIds: getJobCreateFormSelectedTemplateIds(),
+      stepQuantities: collectJobCreateStepQuantities(),
+      stepMaterials: collectJobCreateStepMaterials(),
+    };
+    if (typeof qaApi.previewJobMaterialRequirements !== 'function') {
+      if (ph) ph.textContent = 'Preview not available.';
+      return;
+    }
+    qaApi
+      .previewJobMaterialRequirements(body)
+      .then(function (res) {
+        var list = res && res.requirements ? res.requirements : [];
+        if (!list.length) {
+          if (ph) {
+            ph.classList.remove('d-none');
+            ph.textContent =
+              (res && res.message) ||
+              'No materials to display. Add materials on the template or set consumption rules in Material Management.';
+          }
+          if (wrap) {
+            wrap.classList.add('d-none');
+            wrap.innerHTML = '';
+          }
+          if (act) act.classList.add('d-none');
+          iconsRefresh();
+          return;
+        }
+        if (ph) ph.classList.add('d-none');
+        if (!wrap) return;
+        var rows = list
+          .map(function (r) {
+            var stock = r.stockRemaining != null ? String(r.stockRemaining) : '—';
+            var warn = r.sufficientStock === false ? ' <span class="qa-mat-stock-warn">(insufficient)</span>' : '';
+            return (
+              '<tr class="' +
+              (r.sufficientStock === false ? 'qa-mat-row-warn' : '') +
+              '">' +
+              '<td>' +
+              escapeHtml(r.materialName || r.materialId) +
+              '</td>' +
+              '<td class="qa-mat-num">' +
+              escapeHtml(String(r.quantityRequired)) +
+              '</td>' +
+              '<td>' +
+              escapeHtml(r.unit || '') +
+              '</td>' +
+              '<td class="qa-muted">' +
+              escapeHtml(r.calculationType || '') +
+              '</td>' +
+              '<td class="qa-mat-num">' +
+              escapeHtml(stock) +
+              warn +
+              '</td>' +
+              '</tr>'
+            );
+          })
+          .join('');
+        wrap.innerHTML =
+          '<div class="qa-job-mat-preview__scroll">' +
+          '<table class="qa-table qa-job-mat-preview__table"><thead><tr><th>Material</th><th>Required</th><th>Unit</th><th>Rule</th><th>In stock</th></tr></thead><tbody>' +
+          rows +
+          '</tbody></table></div>' +
+          (res.skipped && res.skipped.length
+            ? '<p class="qa-message" style="margin-top:0.5rem;">Some lines were skipped (missing consumption rule or invalid value).</p>'
+            : '');
+        wrap.classList.remove('d-none');
+        if (act && !QA_SUPERVISOR_MODE) act.classList.remove('d-none');
+        iconsRefresh();
+      })
+      .catch(function (err) {
+        if (ph) {
+          ph.classList.remove('d-none');
+          ph.textContent = (err && err.message) || 'Could not load material preview.';
+        }
+        if (wrap) {
+          wrap.classList.add('d-none');
+          wrap.innerHTML = '';
+        }
+        if (act) act.classList.add('d-none');
+      });
+  }
+
   if (window.QA_CONFIG && window.QA_CONFIG.useBackend) {
     try {
       var raw = localStorage.getItem('proconix_manager_session') || sessionStorage.getItem('proconix_manager_session');
@@ -569,11 +705,13 @@
       if (!pid) return Promise.reject(new Error('Select a project first.'));
       var body = { name: data.name, steps: data.steps || [], projectId: parseInt(pid, 10) };
       if (data.stepMaterials != null && typeof data.stepMaterials === 'object') body.stepMaterials = data.stepMaterials;
+      if (data.wasteFactorPct !== undefined && data.wasteFactorPct !== null) body.wasteFactorPct = data.wasteFactorPct;
       return qaFetch('/templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     },
     updateTemplate: function (id, data) {
       var body = { name: data.name, steps: data.steps || [] };
       if (data.stepMaterials != null && typeof data.stepMaterials === 'object') body.stepMaterials = data.stepMaterials;
+      if (data.wasteFactorPct !== undefined && data.wasteFactorPct !== null) body.wasteFactorPct = data.wasteFactorPct;
       return qaFetch('/templates/' + encodeURIComponent(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     },
     deleteTemplate: function (id) { return qaFetch('/templates/' + encodeURIComponent(id), { method: 'DELETE' }); },
@@ -616,6 +754,20 @@
           });
         })
         .catch(function () { return []; });
+    },
+    previewJobMaterialRequirements: function (body) {
+      return qaFetch('/jobs/preview-material-requirements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      });
+    },
+    applyJobMaterialsToStock: function (body) {
+      return qaFetch('/jobs/apply-materials-to-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      });
     }
   };
 
@@ -1797,6 +1949,7 @@
       if (on) p.removeAttribute('hidden'); else p.setAttribute('hidden', 'hidden');
     });
     updateJobWizardFooter(tabKey);
+    if (tabKey === 'quantities') scheduleJobMaterialPreview();
   }
 
   document.querySelectorAll('#qa-view-job-create .qa-tab').forEach(function (tab) {
@@ -1890,11 +2043,50 @@
     jobCreateSection.addEventListener('input', function (e) {
       if (e.target && e.target.classList && e.target.classList.contains('qa-step-qty-input')) {
         updateJobPriceEstimateDisplay();
+        scheduleJobMaterialPreview();
       }
     });
     jobCreateSection.addEventListener('change', function (e) {
       var t = e.target;
       if (!t || !t.classList) return;
+    });
+  }
+
+  var qaJobAllocateMaterialsBtn = document.getElementById('qa-job-allocate-materials-btn');
+  if (qaJobAllocateMaterialsBtn) {
+    qaJobAllocateMaterialsBtn.addEventListener('click', function () {
+      if (QA_SUPERVISOR_MODE) return;
+      if (
+        !confirm(
+          'Confirm deduction from project stock in Material Management for the quantities shown? This uses the same calculation as the preview.'
+        )
+      ) {
+        return;
+      }
+      var projectId = projectSelect && projectSelect.value;
+      if (!projectId) {
+        showToast('Select a project.', 'error');
+        return;
+      }
+      var body = {
+        projectId: parseInt(projectId, 10),
+        templateIds: getJobCreateFormSelectedTemplateIds(),
+        stepQuantities: collectJobCreateStepQuantities(),
+        stepMaterials: collectJobCreateStepMaterials(),
+      };
+      if (typeof qaApi.applyJobMaterialsToStock !== 'function') {
+        showToast('Stock allocation is not available.', 'error');
+        return;
+      }
+      qaApi
+        .applyJobMaterialsToStock(body)
+        .then(function () {
+          showToast('Stock updated in Material Management.', 'success');
+          runJobMaterialPreview();
+        })
+        .catch(function (e) {
+          showToast(e && e.message ? e.message : 'Allocation failed.', 'error');
+        });
     });
   }
 
@@ -1976,6 +2168,7 @@
       container.innerHTML = '<p class="qa-message">Select a template on the Template tab to load steps.</p>';
       jobCreateActiveTemplateDetail = null;
       updateJobPriceEstimateDisplay();
+      clearJobMaterialPreview();
       return;
     }
     container.innerHTML = '<p class="qa-message">Loading steps…</p>';
@@ -1984,6 +2177,7 @@
         container.innerHTML = '<p class="qa-message">This template has no steps.</p>';
         jobCreateActiveTemplateDetail = null;
         updateJobPriceEstimateDisplay();
+        clearJobMaterialPreview();
         iconsRefresh();
         return;
       }
@@ -2041,10 +2235,12 @@
       });
       updateJobPriceEstimateDisplay();
       iconsRefresh();
+      scheduleJobMaterialPreview();
     }).catch(function () {
       container.innerHTML = '<p class="qa-message">Could not load template steps.</p>';
       jobCreateActiveTemplateDetail = null;
       updateJobPriceEstimateDisplay();
+      clearJobMaterialPreview();
     });
   }
 
