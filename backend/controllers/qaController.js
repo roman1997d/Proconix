@@ -570,12 +570,20 @@ async function validateStepMaterialsForProject(poolConn, projectId, companyId, r
       [midSet, projectId, companyId]
     );
     const allowed = new Set(chk.rows.map((x) => x.id));
+    const invalid = [];
     for (const r of rows) {
-      if (!allowed.has(r.materialId)) {
-        const err = new Error('One or more materials are invalid for this project.');
-        err.code = 'BAD_MATERIAL';
-        throw err;
-      }
+      if (!allowed.has(r.materialId)) invalid.push(r.materialId);
+    }
+    if (invalid.length) {
+      const uniq = [...new Set(invalid)].sort((a, b) => a - b);
+      const err = new Error(
+        `Some ticked materials are not in Material Management for this project (materials are per project/site). ` +
+          `Invalid material id(s): ${uniq.join(', ')}. ` +
+          `Add those items under Dashboard → Materials for this project, or untick them in the template. ` +
+          `A template can list many materials; each id must exist in this project’s catalogue.`
+      );
+      err.code = 'BAD_MATERIAL';
+      throw err;
     }
   } catch (e) {
     if (e && e.code === 'BAD_MATERIAL') throw e;
@@ -678,35 +686,21 @@ async function fetchStepMaterialsMapByJobIds(poolConn, jobIds) {
 
 async function saveJobStepMaterials(poolConn, jobId, projectId, companyId, raw) {
   const rows = normalizeStepMaterialsForDb(raw);
+  if (!rows.length) {
+    try {
+      await poolConn.query('DELETE FROM qa_job_step_materials WHERE job_id = $1', [jobId]);
+    } catch (e) {
+      if (e.code === '42P01') return;
+      throw e;
+    }
+    return;
+  }
+  await validateStepMaterialsForProject(poolConn, projectId, companyId, raw);
   try {
     await poolConn.query('DELETE FROM qa_job_step_materials WHERE job_id = $1', [jobId]);
   } catch (e) {
     if (e.code === '42P01') return;
     throw e;
-  }
-  if (!rows.length) return;
-  const midSet = [...new Set(rows.map((r) => r.materialId))];
-  let chk;
-  try {
-    chk = await poolConn.query(
-      `SELECT id FROM materials WHERE id = ANY($1::int[]) AND project_id = $2 AND company_id = $3 AND deleted_at IS NULL`,
-      [midSet, projectId, companyId]
-    );
-  } catch (e) {
-    if (e.code === '42P01') {
-      const err = new Error('Material tables not set up; run scripts/create_material_tables.sql');
-      err.code = 'MATERIALS_SCHEMA';
-      throw err;
-    }
-    throw e;
-  }
-  const allowed = new Set(chk.rows.map((x) => x.id));
-  for (const r of rows) {
-    if (!allowed.has(r.materialId)) {
-      const err = new Error('One or more materials are invalid for this project.');
-      err.code = 'BAD_MATERIAL';
-      throw err;
-    }
   }
   for (const r of rows) {
     try {
