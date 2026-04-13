@@ -51,10 +51,24 @@
     .dg-viewer-frame-wrap {
       height: min(78vh, 820px); overflow: auto; display: flex; align-items: flex-start; justify-content: center;
       padding: 0.5rem;
+      -webkit-overflow-scrolling: touch;
     }
-    .dg-viewer-frame-wrap iframe { width: 100%; height: 100%; min-height: 70vh; border: none; background: #fff; }
-    .dg-viewer-frame-wrap img { max-width: 100%; height: auto; transform-origin: center center; transition: transform 0.15s ease; }
-    .dg-viewer-frame-wrap.dg-pan { cursor: grab; }
+    .dg-viewer-frame-wrap.dg-viewer--image-mode {
+      cursor: grab;
+      touch-action: none;
+      overscroll-behavior: contain;
+    }
+    .dg-viewer-frame-wrap.dg-viewer--image-mode:active { cursor: grabbing; }
+    .dg-viewer-img-host {
+      display: flex; align-items: center; justify-content: center;
+      min-width: 100%; min-height: 100%;
+      flex: 1;
+    }
+    .dg-viewer-frame-wrap iframe { width: 100%; height: 100%; min-height: 70vh; border: none; background: #fff; touch-action: auto; }
+    .dg-viewer-frame-wrap img {
+      max-width: none; height: auto; transform-origin: center center;
+      will-change: transform;
+    }
     .dg-side-panel { max-height: 220px; overflow-y: auto; font-size: 0.85rem; }
     .dg-comment { border-bottom: 1px solid var(--dg-border); padding: 0.35rem 0; }
     .dg-toast { position: fixed; bottom: 1rem; right: 1rem; z-index: 1080; }
@@ -187,13 +201,16 @@
         <div class="modal-body">
           <div class="dg-viewer-toolbar text-white-50 small">
             <span id="dg-viewer-meta"></span>
+            <span class="d-none d-md-inline text-white-50 me-2" id="dg-viewer-hint" style="font-size:0.72rem;">Images: wheel = zoom · drag = pan · tablet: pinch / drag</span>
             <button type="button" class="btn btn-sm btn-outline-light ms-auto" id="dg-copy-version-id">Copy version ID</button>
           </div>
           <div class="row g-0">
             <div class="col-lg-9">
               <div class="dg-viewer-frame-wrap" id="dg-viewer-wrap">
                 <iframe id="dg-viewer-iframe" class="d-none" title="PDF"></iframe>
-                <img id="dg-viewer-img" class="d-none" alt="Drawing" />
+                <div id="dg-viewer-img-host" class="dg-viewer-img-host d-none">
+                  <img id="dg-viewer-img" alt="Drawing" />
+                </div>
                 <div id="dg-viewer-dwg" class="dg-dwg-hint d-none">DWG files cannot be previewed in the browser. Use Download.</div>
               </div>
             </div>
@@ -422,7 +439,15 @@
     });
   }
 
-  var viewerState = { versionId: null, seriesId: null, blobUrl: null, scale: 1, rotation: 0 };
+  var viewerState = {
+    versionId: null,
+    seriesId: null,
+    blobUrl: null,
+    scale: 1,
+    rotation: 0,
+    translateX: 0,
+    translateY: 0,
+  };
 
   function revokeBlob() {
     if (viewerState.blobUrl) {
@@ -435,14 +460,21 @@
     viewerState.versionId = versionId;
     viewerState.scale = 1;
     viewerState.rotation = 0;
+    viewerState.translateX = 0;
+    viewerState.translateY = 0;
     revokeBlob();
+    var wrap = document.getElementById('dg-viewer-wrap');
+    var imgHost = document.getElementById('dg-viewer-img-host');
     var iframe = document.getElementById('dg-viewer-iframe');
     var img = document.getElementById('dg-viewer-img');
     var dwg = document.getElementById('dg-viewer-dwg');
     iframe.classList.add('d-none');
-    img.classList.add('d-none');
+    if (imgHost) imgHost.classList.add('d-none');
+    if (wrap) wrap.classList.remove('dg-viewer--image-mode');
     dwg.classList.add('d-none');
-    img.style.transform = 'scale(1) rotate(0deg)';
+    if (img) {
+      img.style.transform = 'translate(0,0) scale(1) rotate(0deg)';
+    }
 
     api('/versions/' + versionId + '/meta').then(function (out) {
       if (out.ok && out.data.success && out.data.version) {
@@ -476,10 +508,14 @@
             viewerState.blobUrl = url;
             if (isPdf || blob.type.indexOf('pdf') >= 0) {
               iframe.classList.remove('d-none');
+              if (imgHost) imgHost.classList.add('d-none');
+              if (wrap) wrap.classList.remove('dg-viewer--image-mode');
               iframe.src = url;
             } else {
-              img.classList.remove('d-none');
+              if (imgHost) imgHost.classList.remove('d-none');
+              if (wrap) wrap.classList.add('dg-viewer--image-mode');
               img.src = url;
+              applyImgTransform();
             }
           })
           .catch(function () {
@@ -495,6 +531,10 @@
       revokeBlob();
       if (iframe) iframe.src = 'about:blank';
       if (img) img.removeAttribute('src');
+      var w = document.getElementById('dg-viewer-wrap');
+      var ih = document.getElementById('dg-viewer-img-host');
+      if (w) w.classList.remove('dg-viewer--image-mode');
+      if (ih) ih.classList.add('d-none');
     }, { once: true });
   }
 
@@ -586,9 +626,128 @@
   });
   function applyImgTransform() {
     var img = document.getElementById('dg-viewer-img');
-    if (!img.classList.contains('d-none')) {
-      img.style.transform = 'scale(' + viewerState.scale + ') rotate(' + viewerState.rotation + 'deg)';
+    var host = document.getElementById('dg-viewer-img-host');
+    if (!img || !host || host.classList.contains('d-none')) return;
+    img.style.transform =
+      'translate(' +
+      viewerState.translateX +
+      'px,' +
+      viewerState.translateY +
+      'px) scale(' +
+      viewerState.scale +
+      ') rotate(' +
+      viewerState.rotation +
+      'deg)';
+  }
+
+  function setupDrawingViewerGestures() {
+    var wrap = document.getElementById('dg-viewer-wrap');
+    var img = document.getElementById('dg-viewer-img');
+    if (!wrap || !img) return;
+
+    function isImageMode() {
+      return wrap.classList.contains('dg-viewer--image-mode');
     }
+
+    var drag = null;
+    var pinchStartDist = 0;
+    var pinchStartScale = 1;
+    var panTouch = null;
+
+    function touchDist(a, b) {
+      var dx = a.clientX - b.clientX;
+      var dy = a.clientY - b.clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    wrap.addEventListener(
+      'wheel',
+      function (e) {
+        if (!isImageMode()) return;
+        e.preventDefault();
+        var z = e.deltaY < 0 ? 1.08 : 0.92;
+        viewerState.scale = Math.max(0.2, Math.min(5, viewerState.scale * z));
+        applyImgTransform();
+      },
+      { passive: false }
+    );
+
+    wrap.addEventListener('mousedown', function (e) {
+      if (!isImageMode() || e.button !== 0) return;
+      e.preventDefault();
+      drag = {
+        x: e.clientX,
+        y: e.clientY,
+        tx: viewerState.translateX,
+        ty: viewerState.translateY,
+      };
+    });
+
+    document.addEventListener('mousemove', function (e) {
+      if (!drag) return;
+      viewerState.translateX = drag.tx + (e.clientX - drag.x);
+      viewerState.translateY = drag.ty + (e.clientY - drag.y);
+      applyImgTransform();
+    });
+
+    document.addEventListener('mouseup', function () {
+      drag = null;
+    });
+
+    wrap.addEventListener(
+      'touchstart',
+      function (e) {
+        if (!isImageMode()) return;
+        if (e.touches.length === 2) {
+          pinchStartDist = touchDist(e.touches[0], e.touches[1]);
+          pinchStartScale = viewerState.scale;
+          panTouch = null;
+        } else if (e.touches.length === 1) {
+          panTouch = {
+            x: e.touches[0].clientX,
+            y: e.touches[0].clientY,
+            tx: viewerState.translateX,
+            ty: viewerState.translateY,
+          };
+          pinchStartDist = 0;
+        }
+      },
+      { passive: false }
+    );
+
+    wrap.addEventListener(
+      'touchmove',
+      function (e) {
+        if (!isImageMode()) return;
+        e.preventDefault();
+        if (e.touches.length === 2 && pinchStartDist > 0) {
+          var d = touchDist(e.touches[0], e.touches[1]);
+          var ratio = d / pinchStartDist;
+          viewerState.scale = Math.max(0.2, Math.min(5, pinchStartScale * ratio));
+          applyImgTransform();
+        } else if (e.touches.length === 1 && panTouch) {
+          viewerState.translateX = panTouch.tx + (e.touches[0].clientX - panTouch.x);
+          viewerState.translateY = panTouch.ty + (e.touches[0].clientY - panTouch.y);
+          applyImgTransform();
+        }
+      },
+      { passive: false }
+    );
+
+    wrap.addEventListener('touchend', function (e) {
+      if (e.touches.length === 0) {
+        pinchStartDist = 0;
+        panTouch = null;
+      } else if (e.touches.length === 1) {
+        pinchStartDist = 0;
+        panTouch = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY,
+          tx: viewerState.translateX,
+          ty: viewerState.translateY,
+        };
+      }
+    });
   }
   document.getElementById('dg-viewer-fullscreen').addEventListener('click', function () {
     var el = document.getElementById('dg-viewer-wrap');
@@ -696,6 +855,7 @@
   }
 
   loadProjects().then(function () { loadNotifications(); });
+  setupDrawingViewerGestures();
 
   /* fix download links for manager/operative — use blob */
   document.addEventListener('click', function (e) {

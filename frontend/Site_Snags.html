@@ -492,9 +492,23 @@
             <div class="form-text text-secondary">Used to suggest real lengths/areas; you can override each measurement after placing it.</div>
           </div>
           <div class="mb-2">
+            <label class="form-label">Sheet source</label>
+            <div class="d-flex flex-column gap-1">
+              <label class="d-flex align-items-center gap-2 mb-0"><input type="radio" name="nlSource" id="nlSourceUpload" value="upload" checked> Upload image file</label>
+              <label class="d-flex align-items-center gap-2 mb-0"><input type="radio" name="nlSource" id="nlSourceGallery" value="gallery"> Drawing Gallery (project plans)</label>
+            </div>
+          </div>
+          <div class="mb-2" id="nlUploadWrap">
             <label class="form-label">Drawing file (PNG / JPG)</label>
             <input type="file" class="form-control" id="nlFile" accept="image/png,image/jpeg,image/jpg,image/webp">
-            <div class="form-text text-secondary">PDF is not rendered on canvas in this frontend-only build; export sheets as image.</div>
+            <div class="form-text text-secondary">PDF/DWG in Gallery are not shown here; use an image version.</div>
+          </div>
+          <div class="mb-2" id="nlGalleryWrap" style="display:none;">
+            <label class="form-label">Plan from Drawing Gallery</label>
+            <select class="form-select" id="nlGalleryVersion">
+              <option value="">— Select project with API sync first —</option>
+            </select>
+            <div class="form-text text-secondary" id="nlGalleryHint">Loads the active version of each series (image types only).</div>
           </div>
         </div>
         <div class="modal-footer">
@@ -693,6 +707,8 @@
   var pendingPhotosBefore = [];
   var pendingPhotosAfter = [];
   var pollTimer = null;
+  /** Revoke gallery blob URLs when switching drawings. */
+  var ssLastDrawingLocId = null;
   /** Set by dashboard parent via postMessage when storage is not visible inside the iframe. */
   var managerSessionFromParent = null;
 
@@ -708,7 +724,15 @@
     });
     state.people = data.people || [];
     state.showArchived = !!data.showArchived;
-    state.locations = data.locations || [];
+    state.locations = (data.locations || []).map(function (l) {
+      var o = Object.assign({}, l);
+      if (o.drawingGalleryVersionId != null && o.drawingGalleryVersionId !== '') {
+        o.drawingGalleryVersionId = Number(o.drawingGalleryVersionId);
+      } else {
+        o.drawingGalleryVersionId = null;
+      }
+      return o;
+    });
     state.snags = (data.snags || []).map(function (s) {
       var o = Object.assign({}, s);
       if (o.assigneeUserId != null) o.assigneeUserId = Number(o.assigneeUserId);
@@ -785,7 +809,24 @@
   function buildWorkspacePutPayload() {
     return {
       showArchived: !!state.showArchived,
-      locations: state.locations,
+      locations: state.locations.map(function (l) {
+        var img =
+          l.imageDataUrl != null && String(l.imageDataUrl).trim() !== '' ? l.imageDataUrl : null;
+        var dg =
+          l.drawingGalleryVersionId != null && l.drawingGalleryVersionId !== ''
+            ? Number(l.drawingGalleryVersionId)
+            : null;
+        return {
+          id: l.id,
+          projectId: l.projectId,
+          name: l.name,
+          block: l.block,
+          floor: l.floor,
+          imageDataUrl: img,
+          pixelsToMm: l.pixelsToMm != null && isFinite(Number(l.pixelsToMm)) ? Number(l.pixelsToMm) : 1,
+          drawingGalleryVersionId: dg != null && isFinite(dg) && dg >= 1 ? dg : null
+        };
+      }),
       snags: state.snags.map(function (s) {
         return {
           id: s.id,
@@ -882,6 +923,19 @@
     };
   }
 
+  /** Same auth as Site Snags, without Content-Type (for GET blob / JSON). */
+  function getDrawingGalleryFetchHeaders() {
+    var h = getSiteSnagsAuthHeaders();
+    if (!h) return {};
+    if (h['X-Operative-Token']) {
+      return { 'X-Operative-Token': h['X-Operative-Token'] };
+    }
+    return {
+      'X-Manager-Id': h['X-Manager-Id'],
+      'X-Manager-Email': h['X-Manager-Email']
+    };
+  }
+
   function siteSnagsApiEnabled() {
     if (window.SITE_SNAGS_CONFIG && window.SITE_SNAGS_CONFIG.useBackend === false) return false;
     return !!getSiteSnagsAuthHeaders();
@@ -952,6 +1006,9 @@
         if (out.res.status === 503 && out.data && out.data.code === 'site_snags_tables_missing') {
           toast('Site Snags: run scripts/create_site_snags_tables.sql on the database.');
         }
+        if (out.res.status === 503 && out.data && out.data.code === 'site_snags_drawing_gallery_column_missing') {
+          toast('Site Snags: run scripts/alter_site_snag_drawings_drawing_gallery.sql on the database.');
+        }
       })
       .catch(function () {
         siteSnagsBackendLastError = 'Network error';
@@ -967,12 +1024,16 @@
     }
     var path = SITE_SNAGS_SUPERVISOR ? '/api/site-snags/supervisor/workspace' : '/api/site-snags/workspace';
     var url = siteSnagsApiUrl(path);
+    var getHeaders = {};
+    if (h['X-Operative-Token']) {
+      getHeaders['X-Operative-Token'] = h['X-Operative-Token'];
+    } else {
+      getHeaders['X-Manager-Id'] = h['X-Manager-Id'];
+      getHeaders['X-Manager-Email'] = h['X-Manager-Email'];
+    }
     return fetch(url, {
       method: 'GET',
-      headers: {
-        'X-Manager-Id': h['X-Manager-Id'],
-        'X-Manager-Email': h['X-Manager-Email']
-      },
+      headers: getHeaders,
       credentials: 'same-origin'
     })
       .then(function (res) {
@@ -1291,6 +1352,75 @@
     } else if (prevFp && Array.prototype.some.call(fp.options, function (o) { return o.value === prevFp; })) {
       fp.value = prevFp;
     }
+  }
+
+  function syncNlSourceUi() {
+    var gal = document.getElementById('nlSourceGallery');
+    var up = document.getElementById('nlUploadWrap');
+    var gw = document.getElementById('nlGalleryWrap');
+    var hint = document.getElementById('nlGalleryHint');
+    if (!gal || !up || !gw) return;
+    var useGal = gal.checked;
+    up.style.display = useGal ? 'none' : 'block';
+    gw.style.display = useGal ? 'block' : 'none';
+    if (hint) {
+      hint.textContent = siteSnagsApiEnabled()
+        ? 'Loads the active version of each series (image types only).'
+        : 'Use manager or supervisor session (server sync) to pick from Drawing Gallery.';
+    }
+    if (useGal && siteSnagsApiEnabled()) {
+      var nl = document.getElementById('nlProject');
+      var pid = nl && nl.value;
+      if (pid) refreshNlGallerySelect(pid);
+    }
+  }
+
+  function refreshNlGallerySelect(projectId) {
+    var sel = document.getElementById('nlGalleryVersion');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Loading…</option>';
+    if (!siteSnagsApiEnabled()) {
+      sel.innerHTML = '<option value="">Server session required</option>';
+      return;
+    }
+    var gh = getDrawingGalleryFetchHeaders();
+    if (!gh || (!gh['X-Manager-Id'] && !gh['X-Operative-Token'])) {
+      sel.innerHTML = '<option value="">Server session required</option>';
+      return;
+    }
+    var url = siteSnagsApiUrl('/api/drawing-gallery/projects/' + encodeURIComponent(projectId) + '/series');
+    fetch(url, { headers: gh, credentials: 'same-origin' })
+      .then(function (res) {
+        return res.json().then(function (j) {
+          return { res: res, j: j };
+        });
+      })
+      .then(function (out) {
+        sel.innerHTML = '<option value="">— Select a plan —</option>';
+        if (!out.res.ok || !out.j || !out.j.success || !Array.isArray(out.j.series)) {
+          sel.innerHTML = '<option value="">Could not load gallery</option>';
+          return;
+        }
+        var n = 0;
+        out.j.series.forEach(function (row) {
+          var vid = row.active_version_id;
+          var mime = (row.mime_type || '').toLowerCase();
+          if (vid == null || mime.indexOf('image/') !== 0) return;
+          var label = (row.title || 'Series') + ' (v' + (row.version_number != null ? row.version_number : '?') + ')';
+          var opt = document.createElement('option');
+          opt.value = String(vid);
+          opt.textContent = label;
+          opt.setAttribute('data-mime', mime);
+          sel.appendChild(opt);
+          n++;
+        });
+        if (!n) {
+          sel.innerHTML = '<option value="">No image plans in gallery for this project</option>';
+        }
+      })
+      .catch(function () {
+        sel.innerHTML = '<option value="">Gallery request failed</option>';
+      });
   }
 
   function fillPeopleAssigneeSelects() {
@@ -2625,52 +2755,160 @@
     stage.style.transform = 'translate(calc(-50% + ' + view.panX + 'px), calc(-50% + ' + view.panY + 'px)) scale(' + view.scale + ')';
   }
 
+  function showDrawingClearEmptyChrome() {
+    var empty = document.getElementById('emptyDrawing');
+    var stage = document.getElementById('stage');
+    var meta = document.getElementById('locationMeta');
+    empty.style.display = 'flex';
+    stage.style.display = 'none';
+    meta.textContent = 'No drawing loaded';
+    syncDrawingScaleUI();
+    renderMeasurementList();
+    var mc = document.getElementById('measureCanvas');
+    if (mc && mc.getContext) {
+      var z = mc.getContext('2d');
+      if (z && mc.width) z.clearRect(0, 0, mc.width, mc.height);
+    }
+    var hc = document.getElementById('highlightCanvas');
+    if (hc && hc.getContext) {
+      var zh = hc.getContext('2d');
+      if (zh && hc.width) zh.clearRect(0, 0, hc.width, hc.height);
+    }
+    renderHighlightList();
+  }
+
+  function onDrawingImageDecoded(loc) {
+    var inner = document.getElementById('inner');
+    var img = document.getElementById('drawingImg');
+    inner.style.width = img.naturalWidth + 'px';
+    inner.style.height = img.naturalHeight + 'px';
+    view.scale = 1;
+    view.panX = 0;
+    view.panY = 0;
+    updateStageTransform();
+    renderPins();
+    normalizeMeasurementsForLocation(loc);
+    syncDrawingScaleUI();
+    syncPointerLayersClass();
+    updateMeasureToolbar();
+    renderMeasurementCanvas();
+    renderMeasurementList();
+    renderHighlightCanvas();
+    renderHighlightList();
+  }
+
+  function showDrawingFromGallery(loc) {
+    var empty = document.getElementById('emptyDrawing');
+    var stage = document.getElementById('stage');
+    var img = document.getElementById('drawingImg');
+    var meta = document.getElementById('locationMeta');
+    var vid = Number(loc.drawingGalleryVersionId);
+    if (!isFinite(vid) || vid < 1) {
+      showDrawingClearEmptyChrome();
+      return;
+    }
+    var gh = getDrawingGalleryFetchHeaders();
+    if (!gh || (!gh['X-Manager-Id'] && !gh['X-Operative-Token'])) {
+      meta.textContent = 'Drawing Gallery requires server session';
+      empty.style.display = 'flex';
+      stage.style.display = 'none';
+      return;
+    }
+    empty.style.display = 'none';
+    stage.style.display = 'block';
+    meta.textContent = (loc.name || 'Drawing') + ' · Loading…';
+    function finishFromUrl() {
+      img.onload = function () {
+        onDrawingImageDecoded(loc);
+      };
+      img.onerror = function () {
+        toast('Could not display this drawing file.');
+        showDrawingClearEmptyChrome();
+      };
+      meta.textContent = loc.name + ' · Block ' + loc.block + ' · Floor ' + loc.floor;
+    }
+    if (loc._galleryBlobUrl) {
+      finishFromUrl();
+      img.src = loc._galleryBlobUrl;
+      return;
+    }
+    var metaUrl = siteSnagsApiUrl('/api/drawing-gallery/versions/' + encodeURIComponent(vid) + '/meta');
+    var fileUrl = siteSnagsApiUrl('/api/drawing-gallery/versions/' + encodeURIComponent(vid) + '/file');
+    fetch(metaUrl, { headers: gh, credentials: 'same-origin' })
+      .then(function (res) {
+        return res.json().then(function (j) {
+          return { res: res, j: j };
+        });
+      })
+      .then(function (out) {
+        if (!out.res.ok || !out.j || !out.j.success || !out.j.version) throw new Error('meta');
+        var mt = String(out.j.version.mime_type || '').toLowerCase();
+        if (mt.indexOf('image/') !== 0) {
+          toast('This gallery file is not an image (e.g. PDF). Use an image version or upload a PNG/JPG.');
+          throw new Error('mime');
+        }
+        return fetch(fileUrl, { headers: gh, credentials: 'same-origin' });
+      })
+      .then(function (res) {
+        if (!res.ok) throw new Error('file');
+        return res.blob();
+      })
+      .then(function (blob) {
+        var u = URL.createObjectURL(blob);
+        loc._galleryBlobUrl = u;
+        finishFromUrl();
+        img.src = u;
+      })
+      .catch(function () {
+        showDrawingClearEmptyChrome();
+        meta.textContent = 'Could not load drawing from gallery';
+      });
+  }
+
   function showDrawing(loc) {
     var empty = document.getElementById('emptyDrawing');
     var stage = document.getElementById('stage');
     var img = document.getElementById('drawingImg');
     var meta = document.getElementById('locationMeta');
-    if (!loc || !loc.imageDataUrl) {
-      empty.style.display = 'flex';
-      stage.style.display = 'none';
-      meta.textContent = 'No drawing loaded';
-      syncDrawingScaleUI();
-      renderMeasurementList();
-      var mc = document.getElementById('measureCanvas');
-      if (mc && mc.getContext) {
-        var z = mc.getContext('2d');
-        if (z && mc.width) z.clearRect(0, 0, mc.width, mc.height);
-      }
-      var hc = document.getElementById('highlightCanvas');
-      if (hc && hc.getContext) {
-        var zh = hc.getContext('2d');
-        if (zh && hc.width) zh.clearRect(0, 0, hc.width, hc.height);
-      }
-      renderHighlightList();
+    if (!loc) {
+      showDrawingClearEmptyChrome();
       return;
     }
-    empty.style.display = 'none';
-    stage.style.display = 'block';
-    img.onload = function () {
-      var inner = document.getElementById('inner');
-      inner.style.width = img.naturalWidth + 'px';
-      inner.style.height = img.naturalHeight + 'px';
-      view.scale = 1;
-      view.panX = 0;
-      view.panY = 0;
-      updateStageTransform();
-      renderPins();
-      normalizeMeasurementsForLocation(loc);
-      syncDrawingScaleUI();
-      syncPointerLayersClass();
-      updateMeasureToolbar();
-      renderMeasurementCanvas();
-      renderMeasurementList();
-      renderHighlightCanvas();
-      renderHighlightList();
-    };
-    img.src = loc.imageDataUrl;
-    meta.textContent = loc.name + ' · Block ' + loc.block + ' · Floor ' + loc.floor;
+    var lid = loc.id;
+    if (lid !== ssLastDrawingLocId) {
+      var prev = state.locations.find(function (l) {
+        return l.id === ssLastDrawingLocId;
+      });
+      if (prev && prev._galleryBlobUrl) {
+        try {
+          URL.revokeObjectURL(prev._galleryBlobUrl);
+        } catch (e0) {}
+        prev._galleryBlobUrl = null;
+      }
+      ssLastDrawingLocId = lid;
+    }
+    var hasImg = loc.imageDataUrl != null && String(loc.imageDataUrl).trim() !== '';
+    var dg =
+      loc.drawingGalleryVersionId != null &&
+      loc.drawingGalleryVersionId !== '' &&
+      isFinite(Number(loc.drawingGalleryVersionId)) &&
+      Number(loc.drawingGalleryVersionId) >= 1;
+    if (!hasImg && !dg) {
+      showDrawingClearEmptyChrome();
+      return;
+    }
+    if (hasImg) {
+      empty.style.display = 'none';
+      stage.style.display = 'block';
+      img.onload = function () {
+        onDrawingImageDecoded(loc);
+      };
+      img.onerror = null;
+      img.src = loc.imageDataUrl;
+      meta.textContent = loc.name + ' · Block ' + loc.block + ' · Floor ' + loc.floor;
+      return;
+    }
+    showDrawingFromGallery(loc);
   }
 
   function renderPins() {
@@ -3688,19 +3926,57 @@
       var name = (document.getElementById('nlName').value || '').trim();
       var block = (document.getElementById('nlBlock').value || '').trim();
       var floor = (document.getElementById('nlFloor').value || '').trim();
-      var file = document.getElementById('nlFile').files[0];
+      var ptmNew = parseFloat(document.getElementById('nlPixelsToMm').value);
+      if (!isFinite(ptmNew) || ptmNew <= 0) ptmNew = 1;
+      var useGallery = document.getElementById('nlSourceGallery') && document.getElementById('nlSourceGallery').checked;
       if (!pid || !name) {
         toast('Project and drawing name are required.');
         return;
       }
+      if (useGallery) {
+        var gsel = document.getElementById('nlGalleryVersion');
+        var vid = gsel && gsel.value ? parseInt(gsel.value, 10) : NaN;
+        if (!Number.isInteger(vid) || vid < 1) {
+          toast('Select a plan from Drawing Gallery.');
+          return;
+        }
+        var locG = {
+          id: uid(),
+          projectId: pid,
+          name: name,
+          block: block || '—',
+          floor: floor || '—',
+          imageDataUrl: '',
+          pixelsToMm: ptmNew,
+          drawingGalleryVersionId: vid
+        };
+        state.locations.push(locG);
+        saveState();
+        document.getElementById('filterProject').value = pid;
+        fillLocationSelect();
+        document.getElementById('selectLocation').value = locG.id;
+        showDrawing(locG);
+        renderPins();
+        renderSnagList();
+        var nmG = bootstrap.Modal.getInstance(document.getElementById('modalNewLocation'));
+        if (nmG) nmG.hide();
+        document.getElementById('nlName').value = '';
+        document.getElementById('nlBlock').value = '';
+        document.getElementById('nlFloor').value = '';
+        document.getElementById('nlFile').value = '';
+        document.getElementById('nlPixelsToMm').value = '1';
+        document.getElementById('nlSourceUpload').checked = true;
+        syncNlSourceUi();
+        toast('Drawing saved.');
+        return;
+      }
+      var file = document.getElementById('nlFile').files[0];
       if (!file) {
         toast('Please choose an image file.');
         return;
       }
       var reader = new FileReader();
       reader.onload = function () {
-        var ptmNew = parseFloat(document.getElementById('nlPixelsToMm').value);
-        if (!isFinite(ptmNew) || ptmNew <= 0) ptmNew = 1;
         var loc = {
           id: uid(),
           projectId: pid,
@@ -3708,7 +3984,8 @@
           block: block || '—',
           floor: floor || '—',
           imageDataUrl: reader.result,
-          pixelsToMm: ptmNew
+          pixelsToMm: ptmNew,
+          drawingGalleryVersionId: null
         };
         state.locations.push(loc);
         saveState();
@@ -3729,6 +4006,23 @@
       };
       reader.readAsDataURL(file);
     });
+
+    var nlSrcUp = document.getElementById('nlSourceUpload');
+    var nlSrcGal = document.getElementById('nlSourceGallery');
+    var nlProj = document.getElementById('nlProject');
+    if (nlSrcUp) nlSrcUp.addEventListener('change', syncNlSourceUi);
+    if (nlSrcGal) nlSrcGal.addEventListener('change', syncNlSourceUi);
+    if (nlProj) {
+      nlProj.addEventListener('change', function () {
+        if (nlSrcGal && nlSrcGal.checked) refreshNlGallerySelect(nlProj.value);
+      });
+    }
+    var modalNl = document.getElementById('modalNewLocation');
+    if (modalNl) {
+      modalNl.addEventListener('show.bs.modal', function () {
+        syncNlSourceUi();
+      });
+    }
 
     document.getElementById('snagSave').addEventListener('click', saveSnagFromModal);
     document.getElementById('snagDelete').addEventListener('click', deleteSnag);

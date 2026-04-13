@@ -132,11 +132,24 @@ async function getWorkspace(req, res) {
     const prefs = await pool.query('SELECT show_archived FROM site_snag_prefs WHERE company_id = $1', [companyId]);
     const showArchived = prefs.rows[0] ? !!prefs.rows[0].show_archived : false;
 
-    const dr = await pool.query(
-      `SELECT id, project_id, name, block, floor, image_data, pixels_to_mm
-       FROM site_snag_drawings WHERE company_id = $1 ORDER BY created_at`,
-      [companyId]
-    );
+    let dr;
+    try {
+      dr = await pool.query(
+        `SELECT id, project_id, name, block, floor, image_data, pixels_to_mm, drawing_gallery_version_id
+         FROM site_snag_drawings WHERE company_id = $1 ORDER BY created_at`,
+        [companyId]
+      );
+    } catch (err) {
+      if (err.code === '42703') {
+        dr = await pool.query(
+          `SELECT id, project_id, name, block, floor, image_data, pixels_to_mm
+           FROM site_snag_drawings WHERE company_id = $1 ORDER BY created_at`,
+          [companyId]
+        );
+      } else {
+        throw err;
+      }
+    }
     const locations = dr.rows.map((row) => ({
       id: row.id,
       projectId: String(row.project_id),
@@ -145,6 +158,8 @@ async function getWorkspace(req, res) {
       floor: row.floor,
       imageDataUrl: row.image_data || '',
       pixelsToMm: row.pixels_to_mm != null ? Number(row.pixels_to_mm) : 1,
+      drawingGalleryVersionId:
+        row.drawing_gallery_version_id != null ? Number(row.drawing_gallery_version_id) : null,
     }));
 
     const drawingIds = locations.map((l) => l.id);
@@ -253,6 +268,30 @@ async function assertManagerIdsForCompany(client, companyId, ids) {
   return new Set(r.rows.map((x) => x.id));
 }
 
+async function assertDrawingGalleryVersionForLocation(client, companyId, projectId, versionId) {
+  const vid = parseInt(versionId, 10);
+  if (!Number.isInteger(vid) || vid < 1) {
+    return { ok: false, message: 'Invalid Drawing Gallery version id.' };
+  }
+  try {
+    const r = await client.query(
+      `SELECT v.id FROM drawing_version v
+       INNER JOIN drawing_series s ON s.id = v.series_id
+       WHERE v.id = $1 AND s.company_id = $2 AND s.project_id = $3`,
+      [vid, companyId, projectId]
+    );
+    if (!r.rows.length) {
+      return { ok: false, message: 'Drawing Gallery version does not match this project or company.' };
+    }
+    return { ok: true };
+  } catch (e) {
+    if (e.code === '42P01') {
+      return { ok: false, message: 'Drawing Gallery tables are missing. Run scripts/create_drawing_gallery_tables.sql' };
+    }
+    throw e;
+  }
+}
+
 function validateWorkspaceBody(body) {
   if (!body || typeof body !== 'object') return 'Invalid body.';
   if (!Array.isArray(body.locations)) return 'locations must be an array.';
@@ -347,6 +386,31 @@ async function putWorkspace(req, res) {
       }
     }
 
+    for (let i = 0; i < locations.length; i++) {
+      const loc = locations[i];
+      const pid = parseInt(loc.projectId, 10);
+      const hasImg = loc.imageDataUrl != null && String(loc.imageDataUrl).trim() !== '';
+      let dgVid = null;
+      if (loc.drawingGalleryVersionId != null && loc.drawingGalleryVersionId !== '') {
+        const p = parseInt(loc.drawingGalleryVersionId, 10);
+        if (Number.isInteger(p) && p >= 1) dgVid = p;
+      }
+      if (!hasImg && dgVid == null) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: `Drawing "${loc.name || loc.id}" needs an image or a Drawing Gallery version.`,
+        });
+      }
+      if (dgVid != null) {
+        const chk = await assertDrawingGalleryVersionForLocation(client, companyId, pid, dgVid);
+        if (!chk.ok) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ success: false, message: chk.message });
+        }
+      }
+    }
+
     await client.query('DELETE FROM site_snag_measurements WHERE drawing_id IN (SELECT id FROM site_snag_drawings WHERE company_id = $1)', [
       companyId,
     ]);
@@ -368,22 +432,42 @@ async function putWorkspace(req, res) {
     for (let i = 0; i < locations.length; i++) {
       const loc = locations[i];
       const pid = parseInt(loc.projectId, 10);
-      await client.query(
-        `INSERT INTO site_snag_drawings (id, company_id, project_id, name, block, floor, image_data, pixels_to_mm, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [
-          String(loc.id),
-          companyId,
-          pid,
-          String(loc.name || '').slice(0, 500),
-          String(loc.block || '—').slice(0, 200),
-          String(loc.floor || '—').slice(0, 200),
-          loc.imageDataUrl != null ? String(loc.imageDataUrl) : null,
-          loc.pixelsToMm != null && isFinite(Number(loc.pixelsToMm)) ? Number(loc.pixelsToMm) : 1,
-          now,
-          now,
-        ]
-      );
+      const hasImg = loc.imageDataUrl != null && String(loc.imageDataUrl).trim() !== '';
+      let dgVid = null;
+      if (loc.drawingGalleryVersionId != null && loc.drawingGalleryVersionId !== '') {
+        const p = parseInt(loc.drawingGalleryVersionId, 10);
+        if (Number.isInteger(p) && p >= 1) dgVid = p;
+      }
+      try {
+        await client.query(
+          `INSERT INTO site_snag_drawings (id, company_id, project_id, name, block, floor, image_data, pixels_to_mm, drawing_gallery_version_id, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            String(loc.id),
+            companyId,
+            pid,
+            String(loc.name || '').slice(0, 500),
+            String(loc.block || '—').slice(0, 200),
+            String(loc.floor || '—').slice(0, 200),
+            hasImg ? String(loc.imageDataUrl) : null,
+            loc.pixelsToMm != null && isFinite(Number(loc.pixelsToMm)) ? Number(loc.pixelsToMm) : 1,
+            dgVid,
+            now,
+            now,
+          ]
+        );
+      } catch (insErr) {
+        if (insErr.code === '42703') {
+          await client.query('ROLLBACK');
+          return res.status(503).json({
+            success: false,
+            code: 'site_snags_drawing_gallery_column_missing',
+            message:
+              'Database migration required for Drawing Gallery link: run scripts/alter_site_snag_drawings_drawing_gallery.sql',
+          });
+        }
+        throw insErr;
+      }
     }
 
     for (let i = 0; i < snags.length; i++) {
@@ -477,7 +561,11 @@ async function putWorkspace(req, res) {
     await client.query('COMMIT');
     return res.json({ success: true });
   } catch (err) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      /* ignore */
+    }
     if (err.code === '42P01') {
       return res.status(503).json({
         success: false,
@@ -663,6 +751,31 @@ async function putWorkspaceSupervisor(req, res) {
       }
     }
 
+    for (let i = 0; i < locations.length; i++) {
+      const loc = locations[i];
+      const pid = parseInt(loc.projectId, 10);
+      const hasImg = loc.imageDataUrl != null && String(loc.imageDataUrl).trim() !== '';
+      let dgVid = null;
+      if (loc.drawingGalleryVersionId != null && loc.drawingGalleryVersionId !== '') {
+        const p = parseInt(loc.drawingGalleryVersionId, 10);
+        if (Number.isInteger(p) && p >= 1) dgVid = p;
+      }
+      if (!hasImg && dgVid == null) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: `Drawing "${loc.name || loc.id}" needs an image or a Drawing Gallery version.`,
+        });
+      }
+      if (dgVid != null) {
+        const chk = await assertDrawingGalleryVersionForLocation(client, companyId, pid, dgVid);
+        if (!chk.ok) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ success: false, message: chk.message });
+        }
+      }
+    }
+
     const existingDr = await client.query(
       `SELECT id FROM site_snag_drawings WHERE company_id = $1 AND project_id = $2`,
       [companyId, projectId]
@@ -685,22 +798,42 @@ async function putWorkspaceSupervisor(req, res) {
     for (let i = 0; i < locations.length; i++) {
       const loc = locations[i];
       const pid = parseInt(loc.projectId, 10);
-      await client.query(
-        `INSERT INTO site_snag_drawings (id, company_id, project_id, name, block, floor, image_data, pixels_to_mm, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [
-          String(loc.id),
-          companyId,
-          pid,
-          String(loc.name || '').slice(0, 500),
-          String(loc.block || '—').slice(0, 200),
-          String(loc.floor || '—').slice(0, 200),
-          loc.imageDataUrl != null ? String(loc.imageDataUrl) : null,
-          loc.pixelsToMm != null && isFinite(Number(loc.pixelsToMm)) ? Number(loc.pixelsToMm) : 1,
-          now,
-          now,
-        ]
-      );
+      const hasImg = loc.imageDataUrl != null && String(loc.imageDataUrl).trim() !== '';
+      let dgVid = null;
+      if (loc.drawingGalleryVersionId != null && loc.drawingGalleryVersionId !== '') {
+        const p = parseInt(loc.drawingGalleryVersionId, 10);
+        if (Number.isInteger(p) && p >= 1) dgVid = p;
+      }
+      try {
+        await client.query(
+          `INSERT INTO site_snag_drawings (id, company_id, project_id, name, block, floor, image_data, pixels_to_mm, drawing_gallery_version_id, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            String(loc.id),
+            companyId,
+            pid,
+            String(loc.name || '').slice(0, 500),
+            String(loc.block || '—').slice(0, 200),
+            String(loc.floor || '—').slice(0, 200),
+            hasImg ? String(loc.imageDataUrl) : null,
+            loc.pixelsToMm != null && isFinite(Number(loc.pixelsToMm)) ? Number(loc.pixelsToMm) : 1,
+            dgVid,
+            now,
+            now,
+          ]
+        );
+      } catch (insErr) {
+        if (insErr.code === '42703') {
+          await client.query('ROLLBACK');
+          return res.status(503).json({
+            success: false,
+            code: 'site_snags_drawing_gallery_column_missing',
+            message:
+              'Database migration required for Drawing Gallery link: run scripts/alter_site_snag_drawings_drawing_gallery.sql',
+          });
+        }
+        throw insErr;
+      }
     }
 
     for (let i = 0; i < snags.length; i++) {
@@ -794,7 +927,11 @@ async function putWorkspaceSupervisor(req, res) {
     await client.query('COMMIT');
     return res.json({ success: true });
   } catch (err) {
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      /* ignore */
+    }
     if (err.code === '42P01') {
       return res.status(503).json({
         success: false,
