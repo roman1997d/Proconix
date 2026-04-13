@@ -495,7 +495,7 @@
             <label class="form-label">Sheet source</label>
             <div class="d-flex flex-column gap-1">
               <label class="d-flex align-items-center gap-2 mb-0"><input type="radio" name="nlSource" id="nlSourceUpload" value="upload" checked> Upload image file</label>
-              <label class="d-flex align-items-center gap-2 mb-0"><input type="radio" name="nlSource" id="nlSourceGallery" value="gallery"> Drawing Gallery (project plans)</label>
+              <label class="d-flex align-items-center gap-2 mb-0"><input type="radio" name="nlSource" id="nlSourceGallery" value="gallery"> Select from Drawing Gallery</label>
             </div>
           </div>
           <div class="mb-2" id="nlUploadWrap">
@@ -504,11 +504,15 @@
             <div class="form-text text-secondary">PDF/DWG in Gallery are not shown here; use an image version.</div>
           </div>
           <div class="mb-2" id="nlGalleryWrap" style="display:none;">
-            <label class="form-label">Plan from Drawing Gallery</label>
-            <select class="form-select" id="nlGalleryVersion">
-              <option value="">— Select project with API sync first —</option>
+            <label class="form-label" for="nlGalleryDiscipline">Discipline</label>
+            <select class="form-select" id="nlGalleryDiscipline">
+              <option value="">— Select discipline —</option>
             </select>
-            <div class="form-text text-secondary" id="nlGalleryHint">Loads the active version of each series (image types only).</div>
+            <label class="form-label mt-2" for="nlGalleryDrawing">Drawing</label>
+            <select class="form-select" id="nlGalleryDrawing" disabled>
+              <option value="">— Select drawing —</option>
+            </select>
+            <div class="form-text text-secondary" id="nlGalleryHint">Choose discipline, then the plan (active image version only).</div>
           </div>
         </div>
         <div class="modal-footer">
@@ -1354,6 +1358,18 @@
     }
   }
 
+  /** Series rows with image active version (for New drawing → Drawing Gallery). */
+  var nlGallerySeriesCache = [];
+  /** Sentinel value for option[value] when API discipline is null/empty. */
+  var NL_GALLERY_DISC_NONE = '__ss_disc_none__';
+
+  function nlGalleryDisciplineKeyFromRow(row) {
+    if (row.discipline != null && String(row.discipline).trim() !== '') {
+      return String(row.discipline).trim();
+    }
+    return NL_GALLERY_DISC_NONE;
+  }
+
   function syncNlSourceUi() {
     var gal = document.getElementById('nlSourceGallery');
     var up = document.getElementById('nlUploadWrap');
@@ -1365,7 +1381,7 @@
     gw.style.display = useGal ? 'block' : 'none';
     if (hint) {
       hint.textContent = siteSnagsApiEnabled()
-        ? 'Loads the active version of each series (image types only).'
+        ? 'Choose discipline, then the plan (active image version only).'
         : 'Use manager or supervisor session (server sync) to pick from Drawing Gallery.';
     }
     if (useGal && siteSnagsApiEnabled()) {
@@ -1375,17 +1391,59 @@
     }
   }
 
+  function resetNlGalleryDrawingSelect() {
+    var drawSel = document.getElementById('nlGalleryDrawing');
+    if (drawSel) {
+      drawSel.innerHTML = '<option value="">— Select drawing —</option>';
+      drawSel.disabled = true;
+    }
+  }
+
+  function populateNlGalleryDrawingsForDiscipline(disciplineKey) {
+    var drawSel = document.getElementById('nlGalleryDrawing');
+    if (!drawSel) return;
+    drawSel.innerHTML = '<option value="">— Select drawing —</option>';
+    if (disciplineKey == null || disciplineKey === '') {
+      drawSel.disabled = true;
+      return;
+    }
+    drawSel.disabled = false;
+    var key = String(disciplineKey);
+    nlGallerySeriesCache.forEach(function (row) {
+      if (nlGalleryDisciplineKeyFromRow(row) !== key) return;
+      var vid = row.active_version_id;
+      var mime = (row.mime_type || '').toLowerCase();
+      if (vid == null || mime.indexOf('image/') !== 0) return;
+      var label = (row.title || 'Series') + ' (v' + (row.version_number != null ? row.version_number : '?') + ')';
+      var opt = document.createElement('option');
+      opt.value = String(vid);
+      opt.textContent = label;
+      opt.setAttribute('data-mime', mime);
+      drawSel.appendChild(opt);
+    });
+    if (drawSel.options.length <= 1) {
+      drawSel.innerHTML = '<option value="">No drawings in this discipline</option>';
+      drawSel.disabled = true;
+    }
+  }
+
   function refreshNlGallerySelect(projectId) {
-    var sel = document.getElementById('nlGalleryVersion');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">Loading…</option>';
+    var discSel = document.getElementById('nlGalleryDiscipline');
+    var drawSel = document.getElementById('nlGalleryDrawing');
+    if (!discSel || !drawSel) return;
+    nlGallerySeriesCache = [];
+    discSel.innerHTML = '<option value="">Loading…</option>';
+    if (drawSel) {
+      drawSel.innerHTML = '<option value="">— Select drawing —</option>';
+      drawSel.disabled = true;
+    }
     if (!siteSnagsApiEnabled()) {
-      sel.innerHTML = '<option value="">Server session required</option>';
+      discSel.innerHTML = '<option value="">Server session required</option>';
       return;
     }
     var gh = getDrawingGalleryFetchHeaders();
     if (!gh || (!gh['X-Manager-Id'] && !gh['X-Operative-Token'])) {
-      sel.innerHTML = '<option value="">Server session required</option>';
+      discSel.innerHTML = '<option value="">Server session required</option>';
       return;
     }
     var url = siteSnagsApiUrl('/api/drawing-gallery/projects/' + encodeURIComponent(projectId) + '/series');
@@ -1396,30 +1454,39 @@
         });
       })
       .then(function (out) {
-        sel.innerHTML = '<option value="">— Select a plan —</option>';
+        discSel.innerHTML = '<option value="">— Select discipline —</option>';
+        resetNlGalleryDrawingSelect();
         if (!out.res.ok || !out.j || !out.j.success || !Array.isArray(out.j.series)) {
-          sel.innerHTML = '<option value="">Could not load gallery</option>';
+          discSel.innerHTML = '<option value="">Could not load gallery</option>';
           return;
         }
-        var n = 0;
         out.j.series.forEach(function (row) {
           var vid = row.active_version_id;
           var mime = (row.mime_type || '').toLowerCase();
           if (vid == null || mime.indexOf('image/') !== 0) return;
-          var label = (row.title || 'Series') + ' (v' + (row.version_number != null ? row.version_number : '?') + ')';
-          var opt = document.createElement('option');
-          opt.value = String(vid);
-          opt.textContent = label;
-          opt.setAttribute('data-mime', mime);
-          sel.appendChild(opt);
-          n++;
+          nlGallerySeriesCache.push(row);
         });
-        if (!n) {
-          sel.innerHTML = '<option value="">No image plans in gallery for this project</option>';
+        if (!nlGallerySeriesCache.length) {
+          discSel.innerHTML = '<option value="">No image plans in gallery for this project</option>';
+          return;
         }
+        var discSet = {};
+        nlGallerySeriesCache.forEach(function (row) {
+          discSet[nlGalleryDisciplineKeyFromRow(row)] = true;
+        });
+        var discKeys = Object.keys(discSet).sort(function (a, b) {
+          if (a === NL_GALLERY_DISC_NONE) return 1;
+          if (b === NL_GALLERY_DISC_NONE) return -1;
+          return a.localeCompare(b);
+        });
+        discKeys.forEach(function (k) {
+          var label = k === NL_GALLERY_DISC_NONE ? '(No discipline)' : k;
+          discSel.appendChild(new Option(label, k));
+        });
       })
       .catch(function () {
-        sel.innerHTML = '<option value="">Gallery request failed</option>';
+        discSel.innerHTML = '<option value="">Gallery request failed</option>';
+        resetNlGalleryDrawingSelect();
       });
   }
 
@@ -3934,10 +4001,10 @@
         return;
       }
       if (useGallery) {
-        var gsel = document.getElementById('nlGalleryVersion');
-        var vid = gsel && gsel.value ? parseInt(gsel.value, 10) : NaN;
+        var gsel = document.getElementById('nlGalleryDrawing');
+        var vid = gsel && gsel.value && !gsel.disabled ? parseInt(gsel.value, 10) : NaN;
         if (!Number.isInteger(vid) || vid < 1) {
-          toast('Select a plan from Drawing Gallery.');
+          toast('Select a discipline and a drawing from the gallery.');
           return;
         }
         var locG = {
@@ -4015,6 +4082,12 @@
     if (nlProj) {
       nlProj.addEventListener('change', function () {
         if (nlSrcGal && nlSrcGal.checked) refreshNlGallerySelect(nlProj.value);
+      });
+    }
+    var nlDiscEl = document.getElementById('nlGalleryDiscipline');
+    if (nlDiscEl) {
+      nlDiscEl.addEventListener('change', function () {
+        populateNlGalleryDrawingsForDiscipline(nlDiscEl.value);
       });
     }
     var modalNl = document.getElementById('modalNewLocation');
