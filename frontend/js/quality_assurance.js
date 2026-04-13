@@ -243,14 +243,40 @@
       });
   }
 
+  /** Unify API shape (camelCase vs snake_case) and treat empty as null. */
+  function normalizeMaterialRow(m) {
+    if (!m || typeof m !== 'object') return m;
+    var raw = m.categoryId != null && m.categoryId !== '' ? m.categoryId : m.category_id;
+    if (raw === undefined || raw === null || String(raw).trim() === '') {
+      return Object.assign({}, m, { categoryId: null });
+    }
+    return Object.assign({}, m, { categoryId: raw });
+  }
+
+  function qaMaterialCategoryIdString(m) {
+    if (!m || m.categoryId == null || m.categoryId === '') return '';
+    return String(m.categoryId).trim();
+  }
+
+  function qaCategoryIdsMatch(materialCat, selectedVal) {
+    if (selectedVal == null || selectedVal === '') return false;
+    var a = String(materialCat).trim();
+    var b = String(selectedVal).trim();
+    if (a === b) return true;
+    var na = Number(a);
+    var nb = Number(b);
+    return Number.isFinite(na) && Number.isFinite(nb) && na === nb;
+  }
+
   function loadJobCreateMaterialsCatalog() {
     var pid = projectSelect && projectSelect.value;
-    jobCreateMaterialsCache = [];
     if (!pid || !(window.QA_CONFIG && window.QA_CONFIG.useBackend)) {
+      jobCreateMaterialsCache = [];
       return Promise.resolve();
     }
     return fetchMaterialsForProject(pid).then(function (rows) {
-      jobCreateMaterialsCache = Array.isArray(rows) ? rows : [];
+      var raw = Array.isArray(rows) ? rows : [];
+      jobCreateMaterialsCache = raw.map(normalizeMaterialRow);
     });
   }
 
@@ -267,8 +293,8 @@
   }
 
   function loadJobCreateCategoriesCatalog() {
-    jobCreateCategoriesCache = [];
     if (!(window.QA_CONFIG && window.QA_CONFIG.useBackend)) {
+      jobCreateCategoriesCache = [];
       return Promise.resolve();
     }
     return fetchMaterialCategories().then(function (rows) {
@@ -283,7 +309,7 @@
 
   function fillMaterialsForCategory(stepKey, categoryVal) {
     var wrap = null;
-    document.querySelectorAll('.qa-job-step-material-mats').forEach(function (w) {
+    document.querySelectorAll('#qa-view-job-create .qa-job-step-material-mats').forEach(function (w) {
       if (w.getAttribute('data-step-key') === stepKey) wrap = w;
     });
     if (!wrap) return;
@@ -292,11 +318,21 @@
       wrap.innerHTML = '<p class="qa-message" style="margin-top:0.35rem;">Select a category to list materials.</p>';
       return;
     }
+    var selectedCat =
+      categoryVal !== '__all__' && categoryVal !== '__uncat__'
+        ? jobCreateCategoriesCache.find(function (c) {
+            return qaCategoryIdsMatch(c.id, categoryVal);
+          })
+        : null;
+    var selectedNameNorm = selectedCat && selectedCat.name ? String(selectedCat.name).trim().toLowerCase() : '';
+
     var list = jobCreateMaterialsCache.filter(function (m) {
-      var cid = m.categoryId != null && m.categoryId !== '' ? String(m.categoryId) : '';
+      var cid = qaMaterialCategoryIdString(m);
       if (categoryVal === '__all__') return true;
       if (categoryVal === '__uncat__') return !cid;
-      return cid === String(categoryVal);
+      if (cid && qaCategoryIdsMatch(cid, categoryVal)) return true;
+      if (selectedNameNorm && String(m.categoryName || '').trim().toLowerCase() === selectedNameNorm) return true;
+      return false;
     });
     if (!list.length) {
       wrap.innerHTML = '<p class="qa-message" style="margin-top:0.35rem;">No materials in this category for this project.</p>';
@@ -345,7 +381,7 @@
     container.innerHTML = '';
     var hasCategories = jobCreateCategoriesCache.length > 0;
     var hasUncat = jobCreateMaterialsCache.some(function (m) {
-      return m.categoryId == null || m.categoryId === '';
+      return !qaMaterialCategoryIdString(m);
     });
 
     templateT.steps.forEach(function (s, i) {
