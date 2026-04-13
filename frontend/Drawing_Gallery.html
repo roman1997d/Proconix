@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="icon" href="/favicon_io/favicon.ico" sizes="any">
+  <title>Drawing Gallery – Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --dg-bg: #f1f5f9;
+      --dg-card: #fff;
+      --dg-border: #e2e8f0;
+      --dg-text: #0f172a;
+      --dg-muted: #64748b;
+      --dg-accent: #2563eb;
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--dg-bg);
+      color: var(--dg-text);
+      min-height: 100vh;
+    }
+    .dg-shell { max-width: 1200px; margin: 0 auto; padding: 1rem 1.25rem 2rem; }
+    .dg-header {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .dg-title { font-size: 1.35rem; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 0.5rem; }
+    .dg-badge { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 999px; background: #e0e7ff; color: #3730a3; }
+    .dg-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+    .dg-filters { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    .dg-filters input, .dg-filters select { font-size: 0.875rem; }
+    .dg-card {
+      background: var(--dg-card); border: 1px solid var(--dg-border); border-radius: 12px;
+      padding: 1rem; margin-bottom: 0.75rem; box-shadow: 0 1px 3px rgba(15,23,42,0.06);
+    }
+    .dg-card h3 { font-size: 1rem; margin: 0 0 0.35rem; }
+    .dg-meta { font-size: 0.8rem; color: var(--dg-muted); }
+    .dg-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.65rem; }
+    .dg-tag-active { background: #dcfce7; color: #166534; font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 6px; font-weight: 600; }
+    .dg-tag-arch { background: #f1f5f9; color: var(--dg-muted); font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 6px; }
+    .dg-viewer-modal .modal-body { padding: 0; background: #0f172a; min-height: 60vh; position: relative; }
+    .dg-viewer-toolbar {
+      display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.5rem 0.75rem; background: #1e293b;
+      align-items: center;
+    }
+    .dg-viewer-toolbar button { font-size: 0.8rem; }
+    .dg-viewer-frame-wrap {
+      height: min(78vh, 820px); overflow: auto; display: flex; align-items: flex-start; justify-content: center;
+      padding: 0.5rem;
+    }
+    .dg-viewer-frame-wrap iframe { width: 100%; height: 100%; min-height: 70vh; border: none; background: #fff; }
+    .dg-viewer-frame-wrap img { max-width: 100%; height: auto; transform-origin: center center; transition: transform 0.15s ease; }
+    .dg-viewer-frame-wrap.dg-pan { cursor: grab; }
+    .dg-side-panel { max-height: 220px; overflow-y: auto; font-size: 0.85rem; }
+    .dg-comment { border-bottom: 1px solid var(--dg-border); padding: 0.35rem 0; }
+    .dg-toast { position: fixed; bottom: 1rem; right: 1rem; z-index: 1080; }
+    .dg-dwg-hint { color: #fbbf24; padding: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="dg-shell">
+    <header class="dg-header">
+      <h1 class="dg-title"><i class="bi bi-diagram-3"></i> Drawing Gallery</h1>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span id="dg-role-badge" class="dg-badge">…</span>
+        <button type="button" class="btn btn-outline-secondary btn-sm position-relative d-none" id="dg-btn-notifications" title="Notifications">
+          <i class="bi bi-bell"></i>
+          <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="dg-notif-count">0</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="dg-toolbar">
+      <label class="mb-0 small text-muted">Project</label>
+      <select id="dg-project" class="form-select form-select-sm" style="max-width: 280px;"></select>
+      <button type="button" class="btn btn-primary btn-sm d-none" id="dg-btn-upload"><i class="bi bi-cloud-upload"></i> Upload drawing</button>
+    </div>
+
+    <div class="dg-filters dg-card py-2">
+      <input type="search" id="dg-q" class="form-control form-control-sm" placeholder="Search title / keywords" style="max-width: 200px;">
+      <input type="text" id="dg-floor" class="form-control form-control-sm" placeholder="Floor" style="max-width: 120px;">
+      <input type="text" id="dg-zone" class="form-control form-control-sm" placeholder="Zone" style="max-width: 120px;">
+      <select id="dg-discipline" class="form-select form-select-sm" style="max-width: 160px;">
+        <option value="">All disciplines</option>
+        <option>Drywall</option>
+        <option>MEP</option>
+        <option>Electrical</option>
+        <option>Structural</option>
+        <option>Architectural</option>
+        <option>General</option>
+        <option>Other</option>
+      </select>
+      <button type="button" class="btn btn-sm btn-outline-primary" id="dg-btn-apply">Apply filters</button>
+    </div>
+
+    <div id="dg-alert"></div>
+    <div id="dg-list"><p class="text-muted">Select a project.</p></div>
+  </div>
+
+  <!-- Upload modal -->
+  <div class="modal fade" id="dg-modal-upload" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Upload drawing</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="dg-form-upload">
+            <div class="mb-2">
+              <label class="form-label">Title <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="title" required maxlength="500" placeholder="Drawing title">
+              <div class="form-text">Same title as an existing plan creates a new version; previous becomes Archived.</div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">File <span class="text-danger">*</span></label>
+              <input type="file" class="form-control" name="file" required accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.dwg">
+            </div>
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="form-label">Floor</label>
+                <input type="text" class="form-control" name="floor_label" placeholder="e.g. Level 2">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Zone</label>
+                <input type="text" class="form-control" name="zone_label" placeholder="e.g. Wing A">
+              </div>
+            </div>
+            <div class="mb-2 mt-2">
+              <label class="form-label">Discipline</label>
+              <select class="form-select" name="discipline">
+                <option value="">—</option>
+                <option>Drywall</option>
+                <option>MEP</option>
+                <option>Electrical</option>
+                <option>Structural</option>
+                <option>Architectural</option>
+                <option>General</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Description (optional)</label>
+              <textarea class="form-control" name="description" rows="2" maxlength="4000"></textarea>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Keywords (optional)</label>
+              <input type="text" class="form-control" name="keywords" placeholder="Comma-separated">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Version note (optional)</label>
+              <input type="text" class="form-control" name="version_description" placeholder="What changed">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Replace specific series (optional)</label>
+              <input type="number" class="form-control" name="series_id" min="1" placeholder="Series ID — leave empty to match by title">
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="dg-submit-upload">Upload</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Viewer modal -->
+  <div class="modal fade dg-viewer-modal" id="dg-modal-viewer" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-fullscreen">
+      <div class="modal-content bg-dark">
+        <div class="modal-header border-secondary py-2">
+          <h5 class="modal-title text-white" id="dg-viewer-title">Viewer</h5>
+          <div class="d-flex gap-2 align-items-center">
+            <button type="button" class="btn btn-sm btn-outline-light" id="dg-viewer-zoom-out" title="Zoom out">−</button>
+            <button type="button" class="btn btn-sm btn-outline-light" id="dg-viewer-zoom-in" title="Zoom in">+</button>
+            <button type="button" class="btn btn-sm btn-outline-light" id="dg-viewer-rotate" title="Rotate"><i class="bi bi-arrow-clockwise"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-light" id="dg-viewer-fullscreen"><i class="bi bi-arrows-fullscreen"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-light" id="dg-viewer-download"><i class="bi bi-download"></i></button>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="dg-viewer-toolbar text-white-50 small">
+            <span id="dg-viewer-meta"></span>
+            <button type="button" class="btn btn-sm btn-outline-light ms-auto" id="dg-copy-version-id">Copy version ID</button>
+          </div>
+          <div class="row g-0">
+            <div class="col-lg-9">
+              <div class="dg-viewer-frame-wrap" id="dg-viewer-wrap">
+                <iframe id="dg-viewer-iframe" class="d-none" title="PDF"></iframe>
+                <img id="dg-viewer-img" class="d-none" alt="Drawing" />
+                <div id="dg-viewer-dwg" class="dg-dwg-hint d-none">DWG files cannot be previewed in the browser. Use Download.</div>
+              </div>
+            </div>
+            <div class="col-lg-3 border-start border-secondary p-2 bg-dark text-white-50">
+              <div class="small fw-bold text-white mb-1">Version history</div>
+              <div id="dg-version-list" class="dg-side-panel mb-2"></div>
+              <div class="small fw-bold text-white mb-1">Comments</div>
+              <div id="dg-comments-list" class="dg-side-panel mb-2"></div>
+              <textarea id="dg-comment-input" class="form-control form-control-sm mb-1" rows="2" placeholder="Add a comment…"></textarea>
+              <button type="button" class="btn btn-sm btn-primary w-100" id="dg-comment-send">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notifications offcanvas -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="dg-offcanvas-notif">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title">Drawing notifications</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body" id="dg-notif-body"></div>
+  </div>
+
+  <div class="toast-container dg-toast">
+    <div id="dg-toast" class="toast align-items-center text-bg-dark border-0" role="status">
+      <div class="d-flex">
+        <div class="toast-body" id="dg-toast-body"></div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+(function () {
+  'use strict';
+
+  var API = '/api/drawing-gallery';
+
+  function getAuthHeaders() {
+    try {
+      var ms = localStorage.getItem('proconix_manager_session') || sessionStorage.getItem('proconix_manager_session');
+      if (ms) {
+        var s = JSON.parse(ms);
+        if (s.manager_id != null && s.email) {
+          return { 'X-Manager-Id': String(s.manager_id), 'X-Manager-Email': s.email };
+        }
+      }
+    } catch (e) {}
+    var tok = localStorage.getItem('proconix_operative_token') || sessionStorage.getItem('proconix_operative_token');
+    if (tok) return { 'X-Operative-Token': tok };
+    return {};
+  }
+
+  function isManager() {
+    return !!getAuthHeaders()['X-Manager-Id'];
+  }
+
+  function api(path, opts) {
+    var o = opts || {};
+    var headers = Object.assign({}, getAuthHeaders(), o.headers || {});
+    if (o.body && !(o.body instanceof FormData) && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+    o.headers = headers;
+    o.credentials = 'same-origin';
+    return fetch(API + path, o).then(function (res) {
+      var ct = res.headers.get('Content-Type') || '';
+      if (ct.indexOf('application/json') !== -1) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, status: res.status, data: data };
+        });
+      }
+      return res.text().then(function (t) {
+        return { ok: res.ok, status: res.status, data: { message: t } };
+      });
+    });
+  }
+
+  var el = {
+    project: document.getElementById('dg-project'),
+    list: document.getElementById('dg-list'),
+    alert: document.getElementById('dg-alert'),
+    btnUpload: document.getElementById('dg-btn-upload'),
+    btnApply: document.getElementById('dg-btn-apply'),
+    q: document.getElementById('dg-q'),
+    floor: document.getElementById('dg-floor'),
+    zone: document.getElementById('dg-zone'),
+    discipline: document.getElementById('dg-discipline'),
+    roleBadge: document.getElementById('dg-role-badge'),
+    btnNotif: document.getElementById('dg-btn-notifications'),
+    notifCount: document.getElementById('dg-notif-count'),
+    notifBody: document.getElementById('dg-notif-body'),
+  };
+
+  function showAlert(msg, kind) {
+    if (!el.alert) return;
+    el.alert.innerHTML = '<div class="alert alert-' + (kind || 'info') + ' py-2">' + escapeHtml(msg) + '</div>';
+  }
+
+  function clearAlert() {
+    if (el.alert) el.alert.innerHTML = '';
+  }
+
+  function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function toast(msg) {
+    var t = document.getElementById('dg-toast');
+    var b = document.getElementById('dg-toast-body');
+    if (b) b.textContent = msg;
+    if (t && window.bootstrap) {
+      var x = new bootstrap.Toast(t);
+      x.show();
+    }
+  }
+
+  function loadProjects() {
+    el.project.innerHTML = '<option value="">Loading…</option>';
+    if (isManager()) {
+      return fetch('/api/projects/list', { headers: getAuthHeaders(), credentials: 'same-origin' })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          el.project.innerHTML = '';
+          var rows = (data && data.projects) || [];
+          if (!rows.length) {
+            el.project.innerHTML = '<option value="">No projects</option>';
+            return;
+          }
+          rows.forEach(function (p) {
+            var opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = (p.project_name || p.name || 'Project') + ' (#' + p.id + ')';
+            el.project.appendChild(opt);
+          });
+          el.project.value = rows[0].id;
+          refreshList();
+        })
+        .catch(function () {
+          el.project.innerHTML = '<option value="">Failed to load</option>';
+        });
+    }
+    return fetch('/api/operatives/project/current', {
+      headers: getAuthHeaders(),
+      credentials: 'same-origin',
+    }).then(function (res) { return res.json(); }).then(function (data) {
+      el.project.innerHTML = '';
+      if (!data.success || !data.project) {
+        el.project.innerHTML = '<option value="">No project assigned</option>';
+        showAlert('No project assigned to your account.', 'warning');
+        return;
+      }
+      var opt = document.createElement('option');
+      opt.value = data.project.id;
+      opt.textContent = data.project.name + ' (#' + data.project.id + ')';
+      el.project.appendChild(opt);
+      refreshList();
+    }).catch(function () {
+      el.project.innerHTML = '<option value="">Error</option>';
+    });
+  }
+
+  function refreshList() {
+    var pid = el.project.value;
+    if (!pid) return;
+    clearAlert();
+    el.list.innerHTML = '<p class="text-muted">Loading…</p>';
+    var qs = new URLSearchParams();
+    var q = el.q.value.trim();
+    if (q) qs.set('q', q);
+    if (el.floor.value.trim()) qs.set('floor', el.floor.value.trim());
+    if (el.zone.value.trim()) qs.set('zone', el.zone.value.trim());
+    if (el.discipline.value) qs.set('discipline', el.discipline.value);
+    var qstr = qs.toString();
+    api('/projects/' + encodeURIComponent(pid) + '/series' + (qstr ? '?' + qstr : '')).then(function (out) {
+      if (!out.ok || !out.data.success) {
+        el.list.innerHTML = '<p class="text-danger">' + escapeHtml(out.data.message || 'Failed to load') + '</p>';
+        return;
+      }
+      var series = out.data.series || [];
+      if (!series.length) {
+        el.list.innerHTML = '<p class="text-muted">No drawings yet.' + (isManager() ? ' Upload one to get started.' : '') + '</p>';
+        return;
+      }
+      el.list.innerHTML = series.map(function (s) {
+        var active = s.active_version_id;
+        var tag = active
+          ? '<span class="dg-tag-active">Active v' + s.version_number + '</span>'
+          : '<span class="dg-tag-arch">No active file</span>';
+        return (
+          '<div class="dg-card" data-series-id="' + s.id + '">' +
+          '<h3>' + escapeHtml(s.title || '') + '</h3>' +
+          '<div class="dg-meta">' +
+          [s.floor_label, s.zone_label, s.discipline].filter(Boolean).map(escapeHtml).join(' · ') +
+          ' · ' + (s.version_count || 0) + ' version(s)</div>' +
+          '<div class="dg-meta">Series #' + s.id + '</div>' +
+          '<div class="mt-1">' + tag + '</div>' +
+          '<div class="dg-actions">' +
+          (active
+            ? '<button type="button" class="btn btn-sm btn-primary dg-btn-view" data-version="' + active + '" data-mime="' + escapeHtml(s.mime_type || '') + '">View</button>'
+            : '') +
+          (active
+            ? '<a class="btn btn-sm btn-outline-secondary" href="' + API + '/versions/' + active + '/file?download=1" data-dl="' + active + '">Download</a>'
+            : '') +
+          '</div></div>'
+        );
+      }).join('');
+
+      el.list.querySelectorAll('.dg-btn-view').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          openViewer(parseInt(btn.getAttribute('data-version'), 10), btn.getAttribute('data-mime') || '');
+        });
+      });
+      el.list.querySelectorAll('a[data-dl]').forEach(function (a) {
+        a.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          downloadBlob(parseInt(a.getAttribute('data-dl'), 10), 'drawing');
+        });
+      });
+    });
+  }
+
+  var viewerState = { versionId: null, seriesId: null, blobUrl: null, scale: 1, rotation: 0 };
+
+  function revokeBlob() {
+    if (viewerState.blobUrl) {
+      try { URL.revokeObjectURL(viewerState.blobUrl); } catch (e) {}
+      viewerState.blobUrl = null;
+    }
+  }
+
+  function openViewer(versionId, mimeHint) {
+    viewerState.versionId = versionId;
+    viewerState.scale = 1;
+    viewerState.rotation = 0;
+    revokeBlob();
+    var iframe = document.getElementById('dg-viewer-iframe');
+    var img = document.getElementById('dg-viewer-img');
+    var dwg = document.getElementById('dg-viewer-dwg');
+    iframe.classList.add('d-none');
+    img.classList.add('d-none');
+    dwg.classList.add('d-none');
+    img.style.transform = 'scale(1) rotate(0deg)';
+
+    api('/versions/' + versionId + '/meta').then(function (out) {
+      if (out.ok && out.data.success && out.data.version) {
+        var v = out.data.version;
+        viewerState.seriesId = v.series_id;
+        document.getElementById('dg-viewer-title').textContent = v.title || 'Drawing';
+        document.getElementById('dg-viewer-meta').textContent =
+          'v' + v.version_number + ' · ' + (v.discipline || '—') + ' · version #' + v.id;
+        document.getElementById('dg-copy-version-id').onclick = function () {
+          navigator.clipboard.writeText(String(v.id));
+          toast('Version ID copied');
+        };
+        loadVersionSidebar(v.series_id, versionId);
+        loadComments(versionId);
+
+        var mime = (v.mime_type || mimeHint || '').toLowerCase();
+        var isDwg = mime.indexOf('dwg') >= 0 || mime.indexOf('cad') >= 0;
+        var isPdf = mime.indexOf('pdf') >= 0;
+
+        fetch(API + '/versions/' + versionId + '/file', { headers: getAuthHeaders(), credentials: 'same-origin' })
+          .then(function (res) {
+            if (!res.ok) throw new Error('Failed to load file');
+            return res.blob();
+          })
+          .then(function (blob) {
+            if (isDwg) {
+              dwg.classList.remove('d-none');
+              return;
+            }
+            var url = URL.createObjectURL(blob);
+            viewerState.blobUrl = url;
+            if (isPdf || blob.type.indexOf('pdf') >= 0) {
+              iframe.classList.remove('d-none');
+              iframe.src = url;
+            } else {
+              img.classList.remove('d-none');
+              img.src = url;
+            }
+          })
+          .catch(function () {
+            toast('Could not load file');
+          });
+      }
+    });
+
+    var modal = new bootstrap.Modal(document.getElementById('dg-modal-viewer'));
+    modal.show();
+    document.getElementById('dg-modal-viewer').addEventListener('hidden.bs.modal', function onHide() {
+      document.getElementById('dg-modal-viewer').removeEventListener('hidden.bs.modal', onHide);
+      revokeBlob();
+      if (iframe) iframe.src = 'about:blank';
+      if (img) img.removeAttribute('src');
+    }, { once: true });
+  }
+
+  function loadVersionSidebar(seriesId, currentVid) {
+    api('/series/' + seriesId).then(function (out) {
+      var box = document.getElementById('dg-version-list');
+      if (!out.ok || !out.data.success || !box) return;
+      var vers = out.data.versions || [];
+      box.innerHTML = vers.map(function (v) {
+        var active = v.status === 'active';
+        return (
+          '<div class="mb-1"><button type="button" class="btn btn-link btn-sm p-0 text-start dg-open-ver" data-vid="' + v.id + '">' +
+          'v' + v.version_number + ' — ' + v.status + (active ? ' ●' : '') +
+          '</button></div>'
+        );
+      }).join('');
+      box.querySelectorAll('.dg-open-ver').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var vid = parseInt(b.getAttribute('data-vid'), 10);
+          if (vid !== currentVid) openViewer(vid, '');
+        });
+      });
+    });
+  }
+
+  function loadComments(versionId) {
+    api('/comments?version_id=' + encodeURIComponent(versionId)).then(function (out) {
+      var box = document.getElementById('dg-comments-list');
+      if (!box) return;
+      if (!out.ok || !out.data.success) {
+        box.innerHTML = '<span class="text-muted">No comments</span>';
+        return;
+      }
+      var list = out.data.comments || [];
+      box.innerHTML = list.length
+        ? list.map(function (c) {
+            return '<div class="dg-comment"><span class="text-white-50">' + escapeHtml(c.author_kind) + '</span> — ' + escapeHtml(c.body) + '</div>';
+          }).join('')
+        : '<span class="text-muted">No comments yet</span>';
+    });
+  }
+
+  document.getElementById('dg-comment-send').addEventListener('click', function () {
+    var vid = viewerState.versionId;
+    var body = document.getElementById('dg-comment-input').value.trim();
+    if (!vid || !body) return;
+    api('/comments', {
+      method: 'POST',
+      body: JSON.stringify({ version_id: vid, body: body }),
+    }).then(function (out) {
+      if (out.ok && out.data.success) {
+        document.getElementById('dg-comment-input').value = '';
+        loadComments(vid);
+        toast('Comment saved');
+      } else {
+        toast(out.data.message || 'Failed');
+      }
+    });
+  });
+
+  function downloadBlob(versionId, filename) {
+    fetch(API + '/versions/' + versionId + '/file?download=1', { headers: getAuthHeaders(), credentials: 'same-origin' })
+      .then(function (res) { return res.blob(); })
+      .then(function (blob) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename || 'drawing';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch(function () { toast('Download failed'); });
+  }
+
+  document.getElementById('dg-viewer-download').addEventListener('click', function () {
+    if (viewerState.versionId) downloadBlob(viewerState.versionId, 'drawing');
+  });
+
+  document.getElementById('dg-viewer-zoom-in').addEventListener('click', function () {
+    viewerState.scale = Math.min(4, viewerState.scale + 0.15);
+    applyImgTransform();
+  });
+  document.getElementById('dg-viewer-zoom-out').addEventListener('click', function () {
+    viewerState.scale = Math.max(0.25, viewerState.scale - 0.15);
+    applyImgTransform();
+  });
+  document.getElementById('dg-viewer-rotate').addEventListener('click', function () {
+    viewerState.rotation = (viewerState.rotation + 90) % 360;
+    applyImgTransform();
+  });
+  function applyImgTransform() {
+    var img = document.getElementById('dg-viewer-img');
+    if (!img.classList.contains('d-none')) {
+      img.style.transform = 'scale(' + viewerState.scale + ') rotate(' + viewerState.rotation + 'deg)';
+    }
+  }
+  document.getElementById('dg-viewer-fullscreen').addEventListener('click', function () {
+    var el = document.getElementById('dg-viewer-wrap');
+    if (!document.fullscreenElement) el.requestFullscreen && el.requestFullscreen();
+    else document.exitFullscreen && document.exitFullscreen();
+  });
+
+  document.getElementById('dg-submit-upload').addEventListener('click', function () {
+    var form = document.getElementById('dg-form-upload');
+    var pid = el.project.value;
+    if (!form.checkValidity() || !pid) return;
+    var fd = new FormData(form);
+    var fileInput = form.querySelector('[name="file"]');
+    if (!fileInput.files || !fileInput.files[0]) {
+      toast('Choose a file');
+      return;
+    }
+    fetch(API + '/projects/' + encodeURIComponent(pid) + '/upload', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: fd,
+      credentials: 'same-origin',
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.success) {
+          toast('Uploaded');
+          var uploadModalEl = document.getElementById('dg-modal-upload');
+          var uploadInst = uploadModalEl && window.bootstrap ? bootstrap.Modal.getInstance(uploadModalEl) : null;
+          if (uploadInst) uploadInst.hide();
+          form.reset();
+          refreshList();
+          loadNotifications();
+        } else {
+          toast(data.message || 'Upload failed');
+        }
+      })
+      .catch(function () { toast('Upload failed'); });
+  });
+
+  el.btnUpload.addEventListener('click', function () {
+    new bootstrap.Modal(document.getElementById('dg-modal-upload')).show();
+  });
+  el.btnApply.addEventListener('click', refreshList);
+  el.project.addEventListener('change', refreshList);
+
+  function loadNotifications() {
+    if (!isManager() && !getAuthHeaders()['X-Operative-Token']) return;
+    api('/notifications?limit=50').then(function (out) {
+      if (!out.ok || !out.data.success) return;
+      var rows = out.data.notifications || [];
+      var unread = rows.filter(function (n) { return !n.read_at; }).length;
+      if (el.notifCount) {
+        el.notifCount.textContent = unread > 99 ? '99+' : String(unread);
+        el.notifCount.classList.toggle('d-none', unread === 0);
+      }
+      if (el.notifBody) {
+        el.notifBody.innerHTML = rows.length
+          ? rows.map(function (n) {
+              return (
+                '<div class="border-bottom py-2">' +
+                '<div class="small">' + escapeHtml(n.series_title || '') + ' · v' + n.version_number + '</div>' +
+                '<button type="button" class="btn btn-sm btn-link p-0 dg-mark-read" data-id="' + n.id + '">Mark read</button>' +
+                '</div>'
+              );
+            }).join('')
+          : '<p class="text-muted">No notifications</p>';
+        el.notifBody.querySelectorAll('.dg-mark-read').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var id = b.getAttribute('data-id');
+            api('/notifications/' + id + '/read', { method: 'PATCH' }).then(function () { loadNotifications(); });
+          });
+        });
+      }
+    });
+  }
+
+  el.btnNotif.addEventListener('click', function () {
+    loadNotifications();
+    new bootstrap.Offcanvas(document.getElementById('dg-offcanvas-notif')).show();
+  });
+
+  /* init */
+  el.roleBadge.textContent = isManager() ? 'Manager' : 'Field / operative';
+  el.btnUpload.classList.toggle('d-none', !isManager());
+  el.btnNotif.classList.remove('d-none');
+
+  if (!getAuthHeaders()['X-Manager-Id'] && !getAuthHeaders()['X-Operative-Token']) {
+    showAlert('Sign in from the manager dashboard or operative app to use Drawing Gallery.', 'warning');
+    el.roleBadge.textContent = 'Not signed in';
+    el.btnNotif.classList.add('d-none');
+  }
+
+  loadProjects().then(function () { loadNotifications(); });
+
+  /* fix download links for manager/operative — use blob */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-dl]');
+    if (!a) return;
+    e.preventDefault();
+    downloadBlob(parseInt(a.getAttribute('data-dl'), 10), 'drawing');
+  });
+})();
+  </script>
+</body>
+</html>

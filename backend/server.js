@@ -25,6 +25,7 @@ const planningRoutes = require('./routes/planningRoutes');
 const crewRoutes = require('./routes/crewRoutes');
 const platformAdminRoutes = require('./routes/platformAdminRoutes');
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
+const drawingGalleryRoutes = require('./routes/drawingGalleryRoutes');
 const digitalDocumentsRoutes = require('./routes/digitalDocumentsRoutes');
 const { metricsMiddleware } = require('./middleware/metricsMiddleware');
 const { printStartupConsoleBanner } = require('./lib/startupConsoleBanner');
@@ -117,6 +118,9 @@ app.use('/api/platform-admin', platformAdminRoutes);
 
 // Site Snags (per-company JSON state; requires site_snags_state table)
 app.use('/api/site-snags', siteSnagsRoutes);
+
+// Drawing Gallery (plans per project; requires create_drawing_gallery_tables.sql)
+app.use('/api/drawing-gallery', drawingGalleryRoutes);
 
 // API 404 – ensure all unmatched /api/* return JSON (no HTML)
 app.use('/api', (req, res) => {

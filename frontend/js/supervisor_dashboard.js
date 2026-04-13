@@ -24,6 +24,7 @@
   var moduleTitles = {
     'manage-material': 'Material Management',
     'task-planning': 'Tasks',
+    'drawing-gallery': 'Drawing Gallery',
     'site-snags': 'Site Snags',
     'quality-assurance': 'Quality Assurance',
   };
@@ -186,6 +187,20 @@
         '<iframe src="' +
         iframeModuleSrc('supervisor_manage_material.html') +
         '" class="dashboard-qa-iframe" title="Material Management"></iframe>';
+      contentEl.classList.remove('dashboard-content-fade-out');
+      contentEl.classList.add('dashboard-content-fade-in');
+      if (pushState !== false) history.pushState({ module: module }, '', '#');
+      return;
+    }
+
+    if (module === 'drawing-gallery') {
+      contentEl.classList.add('dashboard-content-fade-out');
+      setActiveItem(module);
+      updateHeaderTitle(module);
+      contentEl.innerHTML =
+        '<iframe src="' +
+        iframeModuleSrc('Drawing_Gallery.html') +
+        '" class="dashboard-qa-iframe" title="Drawing Gallery"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
       if (pushState !== false) history.pushState({ module: module }, '', '#');

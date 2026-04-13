@@ -29,6 +29,7 @@
     'quality-assurance': 'Quality Assurance',
     'digital-signature': 'Documents & Signatures',
     'task-planning': 'Task & Planning',
+    'drawing-gallery': 'Drawing Gallery',
     'site-snags': 'Site Snags',
     'profile-settings': 'Profile Settings',
     'my-company-settings': 'My Company Settings'
@@ -157,6 +158,20 @@
         '<iframe src="' +
         iframeModuleSrc('Task_Planning.html') +
         '" class="dashboard-qa-iframe" title="Task &amp; Planning"></iframe>';
+      contentEl.classList.remove('dashboard-content-fade-out');
+      contentEl.classList.add('dashboard-content-fade-in');
+      if (pushState !== false) history.pushState({ module: module }, '', '#');
+      return;
+    }
+
+    if (module === 'drawing-gallery') {
+      contentEl.classList.add('dashboard-content-fade-out');
+      setActiveItem(module);
+      updateHeaderTitle(module);
+      contentEl.innerHTML =
+        '<iframe src="' +
+        iframeModuleSrc('Drawing_Gallery.html') +
+        '" class="dashboard-qa-iframe" title="Drawing Gallery"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
       if (pushState !== false) history.pushState({ module: module }, '', '#');
