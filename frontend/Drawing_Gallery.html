@@ -612,9 +612,13 @@
       body: fd,
       credentials: 'same-origin',
     })
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        if (data.success) {
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (out.data && out.data.success) {
           toast('Uploaded');
           var uploadModalEl = document.getElementById('dg-modal-upload');
           var uploadInst = uploadModalEl && window.bootstrap ? bootstrap.Modal.getInstance(uploadModalEl) : null;
@@ -623,10 +627,19 @@
           refreshList();
           loadNotifications();
         } else {
-          toast(data.message || 'Upload failed');
+          var msg = (out.data && out.data.message) || 'Upload failed';
+          if (out.status === 401) msg = 'Session expired — refresh the dashboard and try again.';
+          if (out.status === 503) msg = (out.data && out.data.message) || 'Database not ready for Drawing Gallery.';
+          if (out.data && out.data.detail) {
+            msg += (msg ? ': ' : '') + out.data.detail;
+          }
+          if (out.data && out.data.code) {
+            msg += ' (' + out.data.code + ')';
+          }
+          toast(msg);
         }
       })
-      .catch(function () { toast('Upload failed'); });
+      .catch(function () { toast('Network error — try again.'); });
   });
 
   el.btnUpload.addEventListener('click', function () {

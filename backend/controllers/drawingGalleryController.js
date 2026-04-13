@@ -91,16 +91,34 @@ async function assertVersionReadAccess(req, row) {
   return { ok: true };
 }
 
-async function notifyNewVersion(client, { companyId, projectId, versionId, seriesTitle }) {
+async function notifyNewVersion(client, { companyId, projectId, versionId }) {
   try {
-    const mgrs = await client.query(
-      'SELECT id FROM manager WHERE company_id = $1 AND active = true',
-      [companyId]
-    );
-    const users = await client.query(
-      'SELECT id FROM users WHERE company_id = $1 AND project_id = $2',
-      [companyId, projectId]
-    );
+    let mgrs;
+    try {
+      mgrs = await client.query(
+        'SELECT id FROM manager WHERE company_id = $1 AND (active = true OR active IS NULL)',
+        [companyId]
+      );
+    } catch (e) {
+      if (e.code === '42703') {
+        mgrs = await client.query('SELECT id FROM manager WHERE company_id = $1', [companyId]);
+      } else {
+        throw e;
+      }
+    }
+    let users;
+    try {
+      users = await client.query(
+        'SELECT id FROM users WHERE company_id = $1 AND project_id = $2',
+        [companyId, projectId]
+      );
+    } catch (e) {
+      if (e.code === '42703') {
+        users = { rows: [] };
+      } else {
+        throw e;
+      }
+    }
     for (const m of mgrs.rows) {
       await client.query(
         `INSERT INTO drawing_gallery_notification
@@ -117,10 +135,12 @@ async function notifyNewVersion(client, { companyId, projectId, versionId, serie
         [companyId, projectId, versionId, u.id]
       );
     }
-    return msg;
   } catch (e) {
-    if (e.code === '42P01') return null;
-    throw e;
+    if (e.code === '42P01') {
+      return;
+    }
+    console.error('drawingGallery notifyNewVersion (non-fatal):', e.message || e);
+    /* Do not fail the upload if notifications fail. */
   }
 }
 
@@ -256,8 +276,23 @@ async function uploadDrawing(req, res) {
   }
 
   const tk = titleKey(title);
-  const relativeBase = path.relative(UPLOADS_ROOT, req.file.path);
-  const relPath = relativeBase.split(path.sep).join('/');
+  const folderName = req.digitalDocsFolderName;
+  const relPath =
+    folderName && req.file && req.file.filename
+      ? `${String(folderName)}/drawings/project_${projectId}/${req.file.filename}`.replace(/\\/g, '/')
+      : path
+          .relative(UPLOADS_ROOT, req.file.path)
+          .split(path.sep)
+          .join('/');
+  if (!relPath || relPath.startsWith('..')) {
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(500).json({
+      success: false,
+      message: 'Could not resolve file path for storage. Re-open the page and try again.',
+    });
+  }
 
   const client = await pool.connect();
   try {
@@ -335,13 +370,11 @@ async function uploadDrawing(req, res) {
     );
 
     const versionId = insV.rows[0].id;
-    const sTitle = title;
 
     await notifyNewVersion(client, {
       companyId,
       projectId,
       versionId,
-      seriesTitle: sTitle,
     });
 
     await client.query('COMMIT');
@@ -370,7 +403,14 @@ async function uploadDrawing(req, res) {
       });
     }
     console.error('drawingGallery uploadDrawing:', err);
-    return res.status(500).json({ success: false, message: 'Upload failed.' });
+    const safeDetail =
+      err && err.message && String(err.message).length < 500 ? String(err.message) : 'Unknown error';
+    return res.status(500).json({
+      success: false,
+      message: 'Upload failed.',
+      detail: safeDetail,
+      code: err && err.code ? err.code : undefined,
+    });
   } finally {
     client.release();
   }
