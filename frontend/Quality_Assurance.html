@@ -123,13 +123,12 @@
         <nav class="qa-tabs" role="tablist" aria-label="Job sections">
           <button type="button" class="qa-tab is-active" role="tab" aria-selected="true" data-tab="template" id="qa-job-tab-template">Template</button>
           <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="quantities" id="qa-job-tab-quantities">Step quantities</button>
-          <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="materials" id="qa-job-tab-materials">Step materials</button>
           <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="details" id="qa-job-tab-details">Job details</button>
           <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="cost" id="qa-job-tab-cost">Cost</button>
           <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="personnel" id="qa-job-tab-personnel">Personnel</button>
         </nav>
         <div class="qa-tab-panel" id="qa-job-panel-template" role="tabpanel">
-          <p class="qa-message">Choose which template this job is based on. Step quantities and the price estimate are driven by that template’s steps.</p>
+          <p class="qa-message">Choose which template this job is based on. Step quantities and the price estimate are driven by that template’s steps. Default materials per step are set when you <strong>create or edit a template</strong> (use <strong>Next</strong> after the steps screen).</p>
           <div class="qa-checklist" id="qa-job-templates-list"></div>
         </div>
         <div class="qa-tab-panel d-none" id="qa-job-panel-quantities" role="tabpanel" hidden>
@@ -140,10 +139,6 @@
             <p class="qa-price-estimate__value" id="qa-job-estimated-price">—</p>
             <p class="qa-message" id="qa-job-estimated-price-hint" style="margin-top:0.35rem;"></p>
           </div>
-        </div>
-        <div class="qa-tab-panel d-none" id="qa-job-panel-materials" role="tabpanel" hidden>
-          <p class="qa-message">For each step: choose a <strong>category</strong>, then tick the <strong>materials</strong> from that category. You can switch category to add more items. Catalogue is managed under <strong>Dashboard → Materials</strong>.</p>
-          <div id="qa-job-step-materials"></div>
         </div>
         <div class="qa-tab-panel d-none" id="qa-job-panel-details" role="tabpanel" hidden>
           <div class="qa-form-grid">
@@ -352,19 +347,27 @@
       </div>
       <div class="qa-drawer__body">
         <input type="hidden" id="qa-edit-template-id" value="">
-        <div class="qa-field" style="margin-bottom:1rem;">
-          <label class="qa-label" for="qa-template-name">Template name</label>
-          <input type="text" id="qa-template-name" class="qa-input" placeholder="e.g. Standard inspection" autocomplete="off">
+        <div id="qa-template-wizard-step-1">
+          <div class="qa-field" style="margin-bottom:1rem;">
+            <label class="qa-label" for="qa-template-name">Template name</label>
+            <input type="text" id="qa-template-name" class="qa-input" placeholder="e.g. Standard inspection" autocomplete="off">
+          </div>
+          <p class="qa-label">Steps</p>
+          <div class="qa-steps-sortable" id="qa-template-steps-container"></div>
+          <div class="qa-add-step-foot">
+            <button type="button" class="qa-btn qa-btn--secondary" id="qa-template-add-step"><i data-lucide="plus"></i> Add step</button>
+          </div>
         </div>
-        <p class="qa-label">Steps</p>
-        <div class="qa-steps-sortable" id="qa-template-steps-container"></div>
-        <div class="qa-add-step-foot">
-          <button type="button" class="qa-btn qa-btn--secondary" id="qa-template-add-step"><i data-lucide="plus"></i> Add step</button>
+        <div id="qa-template-wizard-step-2" class="d-none">
+          <p class="qa-message">For each step: choose a <strong>category</strong>, then tick the <strong>materials</strong> from that category. Catalogue is managed under <strong>Dashboard → Materials</strong>.</p>
+          <div id="qa-template-step-materials"></div>
         </div>
       </div>
       <div class="qa-drawer__footer">
         <button type="button" class="qa-btn qa-btn--secondary" id="qa-template-cancel">Cancel</button>
-        <button type="button" class="qa-btn qa-btn--primary" id="qa-template-save">Save</button>
+        <button type="button" class="qa-btn qa-btn--secondary d-none" id="qa-template-back">Back</button>
+        <button type="button" class="qa-btn qa-btn--primary" id="qa-template-next">Next</button>
+        <button type="button" class="qa-btn qa-btn--primary d-none" id="qa-template-save">Save</button>
       </div>
     </aside>
   </div>

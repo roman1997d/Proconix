@@ -185,10 +185,13 @@ async function getTemplate(req, res) {
       stepList = stepsWithoutPrices(stepList);
     }
 
+    const stepMaterials = await fetchTemplateStepMaterialsMap(pool, id);
+
     return res.status(200).json({
       id: String(row.id),
       name: row.name || '',
       steps: stepList,
+      stepMaterials,
       createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
       createdBy: row.createdBy || '',
     });
@@ -220,53 +223,76 @@ async function createTemplate(req, res) {
     if (projectCheck.rows.length === 0) {
       return res.status(403).json({ message: 'Project not found or access denied.' });
     }
-    const insert = await pool.query(
-      `INSERT INTO qa_templates (name, created_by, company_id, project_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at, created_by`,
-      [name, createdBy, companyId, projectId]
-    );
-    const templateId = insert.rows[0].id;
-    const createdAt = insert.rows[0].created_at;
 
-    for (let i = 0; i < steps.length; i++) {
-      const s = steps[i] || {};
-      await pool.query(
-        `INSERT INTO qa_template_steps (template_id, sort_order, description, price_per_m2, price_per_unit, price_per_linear, step_external_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          templateId,
-          i,
-          (s.description != null && String(s.description)) || '',
-          (s.pricePerM2 != null && String(s.pricePerM2)) || '',
-          (s.pricePerUnit != null && String(s.pricePerUnit)) || '',
-          (s.pricePerLinear != null && String(s.pricePerLinear)) || '',
-          (s.id && String(s.id)) || null,
-        ]
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const insert = await client.query(
+        `INSERT INTO qa_templates (name, created_by, company_id, project_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at, created_by`,
+        [name, createdBy, companyId, projectId]
       );
+      const templateId = insert.rows[0].id;
+      const createdAt = insert.rows[0].created_at;
+
+      for (let i = 0; i < steps.length; i++) {
+        const s = steps[i] || {};
+        await client.query(
+          `INSERT INTO qa_template_steps (template_id, sort_order, description, price_per_m2, price_per_unit, price_per_linear, step_external_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            templateId,
+            i,
+            (s.description != null && String(s.description)) || '',
+            (s.pricePerM2 != null && String(s.pricePerM2)) || '',
+            (s.pricePerUnit != null && String(s.pricePerUnit)) || '',
+            (s.pricePerLinear != null && String(s.pricePerLinear)) || '',
+            (s.id && String(s.id)) || null,
+          ]
+        );
+      }
+
+      const stepsResult = await client.query(
+        `SELECT id, step_external_id, description, price_per_m2 AS "pricePerM2",
+                price_per_unit AS "pricePerUnit", price_per_linear AS "pricePerLinear"
+         FROM qa_template_steps WHERE template_id = $1 ORDER BY sort_order, id`,
+        [templateId]
+      );
+      const stepList = stepsResult.rows.map((s) => ({
+        id: s.step_external_id || String(s.id),
+        description: s.description || '',
+        pricePerM2: s.pricePerM2 || '',
+        pricePerUnit: s.pricePerUnit || '',
+        pricePerLinear: s.pricePerLinear || '',
+      }));
+
+      if (Object.prototype.hasOwnProperty.call(b, 'stepMaterials')) {
+        await saveTemplateStepMaterials(client, templateId, projectId, companyId, stepList, b.stepMaterials);
+      }
+
+      await client.query('COMMIT');
+
+      const stepMaterials = await fetchTemplateStepMaterialsMap(pool, templateId);
+
+      return res.status(201).json({
+        id: String(templateId),
+        name,
+        steps: stepList,
+        stepMaterials,
+        createdAt: createdAt ? new Date(createdAt).toISOString() : null,
+        createdBy,
+      });
+    } catch (inner) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
+      throw inner;
+    } finally {
+      client.release();
     }
-
-    const stepsResult = await pool.query(
-      `SELECT id, step_external_id, description, price_per_m2 AS "pricePerM2",
-              price_per_unit AS "pricePerUnit", price_per_linear AS "pricePerLinear"
-       FROM qa_template_steps WHERE template_id = $1 ORDER BY sort_order, id`,
-      [templateId]
-    );
-    const stepList = stepsResult.rows.map((s) => ({
-      id: s.step_external_id || String(s.id),
-      description: s.description || '',
-      pricePerM2: s.pricePerM2 || '',
-      pricePerUnit: s.pricePerUnit || '',
-      pricePerLinear: s.pricePerLinear || '',
-    }));
-
-    return res.status(201).json({
-      id: String(templateId),
-      name,
-      steps: stepList,
-      createdAt: createdAt ? new Date(createdAt).toISOString() : null,
-      createdBy,
-    });
   } catch (err) {
     console.error('QA createTemplate:', err);
+    if (err && err.code === 'BAD_MATERIAL') return res.status(400).json({ message: err.message });
+    if (err && err.code === 'MATERIALS_SCHEMA') return res.status(503).json({ message: err.message });
     return res.status(500).json({ message: err.message || 'Failed to create template.' });
   }
 }
@@ -285,59 +311,82 @@ async function updateTemplate(req, res) {
 
   try {
     const existing = await pool.query(
-      'SELECT id, created_at, created_by FROM qa_templates WHERE id = $1 AND company_id = $2',
+      'SELECT id, created_at, created_by, project_id FROM qa_templates WHERE id = $1 AND company_id = $2',
       [id, companyId]
     );
     if (existing.rows.length === 0) return res.status(404).json({ message: 'Template not found.' });
     const createdBy = existing.rows[0].created_by;
     const createdAt = existing.rows[0].created_at;
+    const projectId = existing.rows[0].project_id;
 
-    await pool.query(
-      'UPDATE qa_templates SET name = $1, updated_at = NOW(), updated_by = $2 WHERE id = $3',
-      [name, getCreatedBy(req), id]
-    );
-    await pool.query('DELETE FROM qa_template_steps WHERE template_id = $1', [id]);
-
-    for (let i = 0; i < steps.length; i++) {
-      const s = steps[i] || {};
-      await pool.query(
-        `INSERT INTO qa_template_steps (template_id, sort_order, description, price_per_m2, price_per_unit, price_per_linear, step_external_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          id,
-          i,
-          (s.description != null && String(s.description)) || '',
-          (s.pricePerM2 != null && String(s.pricePerM2)) || '',
-          (s.pricePerUnit != null && String(s.pricePerUnit)) || '',
-          (s.pricePerLinear != null && String(s.pricePerLinear)) || '',
-          (s.id && String(s.id)) || null,
-        ]
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'UPDATE qa_templates SET name = $1, updated_at = NOW(), updated_by = $2 WHERE id = $3',
+        [name, getCreatedBy(req), id]
       );
+      await client.query('DELETE FROM qa_template_steps WHERE template_id = $1', [id]);
+
+      for (let i = 0; i < steps.length; i++) {
+        const s = steps[i] || {};
+        await client.query(
+          `INSERT INTO qa_template_steps (template_id, sort_order, description, price_per_m2, price_per_unit, price_per_linear, step_external_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            id,
+            i,
+            (s.description != null && String(s.description)) || '',
+            (s.pricePerM2 != null && String(s.pricePerM2)) || '',
+            (s.pricePerUnit != null && String(s.pricePerUnit)) || '',
+            (s.pricePerLinear != null && String(s.pricePerLinear)) || '',
+            (s.id && String(s.id)) || null,
+          ]
+        );
+      }
+
+      const stepsResult = await client.query(
+        `SELECT id, step_external_id, description, price_per_m2 AS "pricePerM2",
+                price_per_unit AS "pricePerUnit", price_per_linear AS "pricePerLinear"
+         FROM qa_template_steps WHERE template_id = $1 ORDER BY sort_order, id`,
+        [id]
+      );
+      const stepList = stepsResult.rows.map((s) => ({
+        id: s.step_external_id || String(s.id),
+        description: s.description || '',
+        pricePerM2: s.pricePerM2 || '',
+        pricePerUnit: s.pricePerUnit || '',
+        pricePerLinear: s.pricePerLinear || '',
+      }));
+
+      if (Object.prototype.hasOwnProperty.call(b, 'stepMaterials')) {
+        await saveTemplateStepMaterials(client, id, projectId, companyId, stepList, b.stepMaterials);
+      }
+
+      await client.query('COMMIT');
+
+      const stepMaterials = await fetchTemplateStepMaterialsMap(pool, id);
+
+      return res.status(200).json({
+        id: String(id),
+        name,
+        steps: stepList,
+        stepMaterials,
+        createdAt: createdAt ? new Date(createdAt).toISOString() : null,
+        createdBy: createdBy || '',
+      });
+    } catch (inner) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
+      throw inner;
+    } finally {
+      client.release();
     }
-
-    const stepsResult = await pool.query(
-      `SELECT id, step_external_id, description, price_per_m2 AS "pricePerM2",
-              price_per_unit AS "pricePerUnit", price_per_linear AS "pricePerLinear"
-       FROM qa_template_steps WHERE template_id = $1 ORDER BY sort_order, id`,
-      [id]
-    );
-    const stepList = stepsResult.rows.map((s) => ({
-      id: s.step_external_id || String(s.id),
-      description: s.description || '',
-      pricePerM2: s.pricePerM2 || '',
-      pricePerUnit: s.pricePerUnit || '',
-      pricePerLinear: s.pricePerLinear || '',
-    }));
-
-    return res.status(200).json({
-      id: String(id),
-      name,
-      steps: stepList,
-      createdAt: createdAt ? new Date(createdAt).toISOString() : null,
-      createdBy: createdBy || '',
-    });
   } catch (err) {
     console.error('QA updateTemplate:', err);
+    if (err && err.code === 'BAD_MATERIAL') return res.status(400).json({ message: err.message });
+    if (err && err.code === 'MATERIALS_SCHEMA') return res.status(503).json({ message: err.message });
     return res.status(500).json({ message: err.message || 'Failed to update template.' });
   }
 }
@@ -493,6 +542,66 @@ async function validateStepMaterialsForProject(poolConn, projectId, companyId, r
       throw err;
     }
     throw e;
+  }
+}
+
+/** step_external_id -> material id strings (for template editor / job defaults). */
+async function fetchTemplateStepMaterialsMap(poolConn, templateId) {
+  const out = {};
+  try {
+    const r = await poolConn.query(
+      `SELECT step_external_id, material_id FROM qa_template_step_materials WHERE template_id = $1 ORDER BY step_external_id, material_id`,
+      [templateId]
+    );
+    r.rows.forEach((row) => {
+      const k = row.step_external_id != null ? String(row.step_external_id) : '';
+      if (!k) return;
+      if (!out[k]) out[k] = [];
+      out[k].push(String(row.material_id));
+    });
+  } catch (e) {
+    if (e.code === '42P01') return out;
+    throw e;
+  }
+  return out;
+}
+
+/**
+ * Replace template step materials. `raw` keys must match step client ids (step_external_id).
+ * @param {import('pg').Pool|import('pg').PoolClient} poolConn
+ */
+async function saveTemplateStepMaterials(poolConn, templateId, projectId, companyId, stepsFromClient, raw) {
+  const validIds = new Set();
+  (stepsFromClient || []).forEach((s) => {
+    if (s && s.id != null && String(s.id).trim()) validIds.add(String(s.id).trim());
+  });
+  const filtered = {};
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [k, v] of Object.entries(raw)) {
+      const key = String(k).trim();
+      if (!validIds.has(key)) continue;
+      const arr = Array.isArray(v) ? v : [];
+      const ids = arr.map((x) => parseInt(String(x), 10)).filter((n) => Number.isInteger(n));
+      if (ids.length) filtered[key] = ids;
+    }
+  }
+  try {
+    await poolConn.query('DELETE FROM qa_template_step_materials WHERE template_id = $1', [templateId]);
+  } catch (e) {
+    if (e.code === '42P01') return;
+    throw e;
+  }
+  if (!Object.keys(filtered).length) return;
+  await validateStepMaterialsForProject(poolConn, projectId, companyId, filtered);
+  for (const [stepExt, mids] of Object.entries(filtered)) {
+    for (const materialId of mids) {
+      await poolConn.query(
+        `INSERT INTO qa_template_step_materials (template_id, step_external_id, material_id)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (template_id, step_external_id, material_id) DO NOTHING`,
+        [templateId, stepExt, materialId]
+      );
+    }
   }
 }
 
