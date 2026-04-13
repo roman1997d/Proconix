@@ -132,9 +132,7 @@
           <div class="qa-checklist" id="qa-job-templates-list"></div>
         </div>
         <div class="qa-tab-panel d-none" id="qa-job-panel-quantities" role="tabpanel" hidden>
-          <p class="qa-message">For each step, enter totals only for the rate types defined on the template (m², linear m, or units).</p>
-          <div id="qa-job-step-quantities"></div>
-          <div class="qa-job-mat-preview" id="qa-job-material-preview-section" style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--qa-border, rgba(0,0,0,0.08));">
+          <div class="qa-job-mat-preview qa-job-mat-preview--sticky" id="qa-job-material-preview-section">
             <h3 class="qa-label" style="font-size:1rem;margin-bottom:0.35rem;">Estimated materials (auto)</h3>
             <p class="qa-message" id="qa-job-material-preview-placeholder">Select a template and enter step quantities to calculate consumption from Material Management rules.</p>
             <div id="qa-job-material-preview-table-wrap" class="d-none"></div>
@@ -143,7 +141,10 @@
               <p class="qa-message" id="qa-job-material-allocate-hint" style="margin-top:0.5rem;">Confirms subtraction from current project stock for the quantities shown above. You can create the QA job before or after.</p>
             </div>
           </div>
-          <div class="qa-price-estimate" id="qa-job-price-estimate-block" style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--qa-border, rgba(0,0,0,0.08));">
+          <p class="qa-message" style="margin-top:1rem;">For each step, enter totals only for the rate types defined on the template (m², linear m, or units).</p>
+          <div id="qa-job-step-quantities"></div>
+          <div class="qa-price-estimate qa-job-labour-price" id="qa-job-price-estimate-block">
+            <p class="qa-job-labour-price__kicker">Labour price</p>
             <p class="qa-label" style="margin-bottom:0.25rem;">Price estimate (from template × quantities)</p>
             <p class="qa-price-estimate__value" id="qa-job-estimated-price">—</p>
             <p class="qa-message" id="qa-job-estimated-price-hint" style="margin-top:0.35rem;"></p>

@@ -747,6 +747,38 @@
   background: #fafafa;
 }
 
+/* Create job — material preview (sticky at top of Step quantities tab) */
+#qa-job-panel-quantities .qa-job-mat-preview--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  margin: 0 0 1rem;
+  padding: 0.75rem 0 1rem;
+  background: var(--qa-card);
+  border-bottom: 1px solid var(--qa-border);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+#qa-job-panel-quantities .qa-job-mat-preview--sticky .qa-job-mat-preview__scroll {
+  max-height: min(42vh, 320px);
+  overflow: auto;
+}
+
+.qa-job-labour-price {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--qa-border);
+}
+
+.qa-job-labour-price__kicker {
+  margin: 0 0 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
 /* Create job — material preview */
 .qa-job-mat-preview__scroll {
   overflow-x: auto;
