@@ -106,24 +106,40 @@
     </div>
 
     <div class="card mm-card">
-      <div class="card-header bg-white d-flex flex-wrap align-items-center gap-2">
-        <h5 class="mb-0 me-auto">Materials</h5>
-        <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="Search by name..." style="max-width: 200px;">
-        <select id="filterCategory" class="form-select form-select-sm" style="max-width: 160px;">
-          <option value="">All categories</option>
-        </select>
-        <select id="filterStatus" class="form-select form-select-sm" style="max-width: 140px;">
-          <option value="">All statuses</option>
-          <option value="normal">Normal</option>
-          <option value="low">Low Stock</option>
-          <option value="out">Out of Stock</option>
-        </select>
-        <select id="filterSupplier" class="form-select form-select-sm" style="max-width: 160px;">
-          <option value="">All suppliers</option>
-        </select>
-        <button type="button" class="btn btn-sm btn-success" id="btnExportExcel">
-          <i class="bi bi-file-earmark-excel"></i> Export Excel
-        </button>
+      <div class="card-header bg-white">
+        <div class="d-flex flex-wrap align-items-end gap-3">
+          <h5 class="mb-0 me-auto align-self-center">Materials</h5>
+          <div>
+            <label for="filterSearch" class="form-label small text-muted mb-0">Search items</label>
+            <input type="search" id="filterSearch" class="form-control form-control-sm" placeholder="Name, category, supplier, unit…" style="min-width: 200px; max-width: 260px;" autocomplete="off" aria-label="Search materials">
+          </div>
+          <div>
+            <label for="filterCategory" class="form-label small text-muted mb-0">Category</label>
+            <select id="filterCategory" class="form-select form-select-sm" style="min-width: 160px;" aria-label="Filter by category">
+              <option value="">All categories</option>
+            </select>
+          </div>
+          <div>
+            <label for="filterStatus" class="form-label small text-muted mb-0">Status</label>
+            <select id="filterStatus" class="form-select form-select-sm" style="min-width: 140px;" aria-label="Filter by stock status">
+              <option value="">All statuses</option>
+              <option value="normal">Normal</option>
+              <option value="low">Low Stock</option>
+              <option value="out">Out of Stock</option>
+            </select>
+          </div>
+          <div>
+            <label for="filterSupplier" class="form-label small text-muted mb-0">Supplier</label>
+            <select id="filterSupplier" class="form-select form-select-sm" style="min-width: 160px;" aria-label="Filter by supplier">
+              <option value="">All suppliers</option>
+            </select>
+          </div>
+          <div class="align-self-end pb-1">
+            <button type="button" class="btn btn-sm btn-success" id="btnExportExcel">
+              <i class="bi bi-file-earmark-excel"></i> Export Excel
+            </button>
+          </div>
+        </div>
       </div>
       <div class="card-body p-0 mm-table-wrap">
         <table class="table table-hover mb-0 mm-table" id="materialsTable">
@@ -539,16 +555,25 @@
     }
   }
 
+  function materialSearchHaystack(m) {
+    return [
+      m.name || '',
+      m.categoryName || '',
+      m.supplierName || '',
+      m.unit || ''
+    ].join(' ').toLowerCase();
+  }
+
   function getFilteredMaterials() {
-    var search = (document.getElementById('filterSearch') && document.getElementById('filterSearch').value || '').toLowerCase();
+    var search = (document.getElementById('filterSearch') && document.getElementById('filterSearch').value || '').trim().toLowerCase();
     var cat = document.getElementById('filterCategory') && document.getElementById('filterCategory').value;
     var status = document.getElementById('filterStatus') && document.getElementById('filterStatus').value;
     var supplier = document.getElementById('filterSupplier') && document.getElementById('filterSupplier').value;
     var list = materials.filter(function (m) {
-      if (search && (m.name || '').toLowerCase().indexOf(search) === -1) return false;
-      if (cat && m.categoryId !== cat) return false;
+      if (search && materialSearchHaystack(m).indexOf(search) === -1) return false;
+      if (cat && String(m.categoryId || '') !== String(cat)) return false;
       if (status && m.status !== status) return false;
-      if (supplier && m.supplierId !== supplier) return false;
+      if (supplier && String(m.supplierId || '') !== String(supplier)) return false;
       return true;
     });
     if (sortKey) {
