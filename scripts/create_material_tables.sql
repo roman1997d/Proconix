@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS materials (
   low_stock_threshold NUMERIC(18,4) CHECK (low_stock_threshold IS NULL OR low_stock_threshold >= 0),
   status              VARCHAR(20) NOT NULL DEFAULT 'normal' CHECK (status IN ('normal','low','out')),
   email_notify        BOOLEAN NOT NULL DEFAULT FALSE,
+  unit_coverage       NUMERIC(18,4) CHECK (unit_coverage IS NULL OR unit_coverage >= 0),
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by_id       INT NOT NULL,
   created_by_name     VARCHAR(255) NOT NULL,

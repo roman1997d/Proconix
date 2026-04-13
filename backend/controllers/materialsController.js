@@ -406,6 +406,15 @@ function computeStatus(remaining, threshold) {
   return 'normal';
 }
 
+/** Optional: amount in the same stock unit covered or represented by one pack/item (from client as unitCoverage). */
+function parseUnitCoverage(body) {
+  if (!body || body.unitCoverage === undefined) return undefined;
+  if (body.unitCoverage === null || body.unitCoverage === '') return null;
+  const n = parseFloat(body.unitCoverage);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
 /** Ensure project belongs to manager's company */
 async function assertProjectBelongsToCompany(projectId, companyId) {
   const r = await pool.query('SELECT id FROM projects WHERE id = $1 AND company_id = $2', [projectId, companyId]);
@@ -431,6 +440,7 @@ async function getMaterials(req, res) {
     const result = await pool.query(
       `SELECT m.id, m.name, m.category_id, m.supplier_id, m.unit,
               m.quantity_initial, m.quantity_used, m.quantity_remaining, m.low_stock_threshold, m.status, m.email_notify,
+              m.unit_coverage,
               c.name AS category_name, s.name AS supplier_name
        FROM materials m
        LEFT JOIN material_categories c ON c.id = m.category_id AND c.deleted_at IS NULL
@@ -453,6 +463,7 @@ async function getMaterials(req, res) {
       lowStockThreshold: r.low_stock_threshold != null ? Number(r.low_stock_threshold) : null,
       status: r.status || 'normal',
       emailNotify: !!r.email_notify,
+      unitCoverage: r.unit_coverage != null ? Number(r.unit_coverage) : null,
     }));
     return res.json(rows);
   } catch (err) {
@@ -482,6 +493,8 @@ async function createMaterial(req, res) {
   const quantityRemaining = Number.isFinite(quantityInitial) && quantityInitial >= 0 ? quantityInitial : 0;
   const lowStockThreshold = body.lowStockThreshold != null && body.lowStockThreshold !== '' ? parseFloat(body.lowStockThreshold) : null;
   const emailNotify = !!body.emailNotify;
+  let unitCoverageVal = parseUnitCoverage(body);
+  if (unitCoverageVal === undefined) unitCoverageVal = null;
   let categoryId = body.categoryId != null && body.categoryId !== '' ? parseInt(String(body.categoryId), 10) : null;
   let supplierId = body.supplierId != null && body.supplierId !== '' ? parseInt(String(body.supplierId), 10) : null;
   if (!Number.isInteger(projectId) || projectId < 1) {
@@ -506,9 +519,10 @@ async function createMaterial(req, res) {
       `INSERT INTO materials (
         project_id, company_id, name, category_id, supplier_id, unit,
         quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, status, email_notify,
+        unit_coverage,
         created_by_id, created_by_name
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      RETURNING id, name, category_id, supplier_id, unit, quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, status, email_notify`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      RETURNING id, name, category_id, supplier_id, unit, quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, status, email_notify, unit_coverage`,
       [
         projectId,
         companyId,
@@ -522,6 +536,7 @@ async function createMaterial(req, res) {
         lowStockThreshold,
         status,
         emailNotify,
+        unitCoverageVal,
         createdById,
         createdByName,
       ]
@@ -540,6 +555,7 @@ async function createMaterial(req, res) {
       lowStockThreshold: r.low_stock_threshold != null ? Number(r.low_stock_threshold) : null,
       status: r.status,
       emailNotify: !!r.email_notify,
+      unitCoverage: r.unit_coverage != null ? Number(r.unit_coverage) : null,
     });
   } catch (err) {
     if (err.message === 'Project not found or access denied.') {
@@ -569,7 +585,7 @@ async function updateMaterial(req, res) {
 
   try {
     const existing = await pool.query(
-      'SELECT id, project_id, name, category_id, supplier_id, unit, quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, email_notify FROM materials WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL',
+      'SELECT id, project_id, name, category_id, supplier_id, unit, quantity_initial, quantity_used, quantity_remaining, low_stock_threshold, email_notify, unit_coverage FROM materials WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL',
       [id, companyId]
     );
     if (existing.rows.length === 0) {
@@ -586,6 +602,7 @@ async function updateMaterial(req, res) {
     let quantityRemaining = Number(row.quantity_remaining);
     let lowStockThreshold = row.low_stock_threshold != null ? Number(row.low_stock_threshold) : null;
     let emailNotify = row.email_notify;
+    let unitCoverage = row.unit_coverage != null ? Number(row.unit_coverage) : null;
 
     if (body.name !== undefined) name = String(body.name).trim() || name;
     if (body.categoryId !== undefined) categoryId = body.categoryId === '' || body.categoryId == null ? null : parseInt(String(body.categoryId), 10);
@@ -596,6 +613,10 @@ async function updateMaterial(req, res) {
     if (body.quantityRemaining !== undefined) quantityRemaining = parseFloat(body.quantityRemaining);
     if (body.lowStockThreshold !== undefined) lowStockThreshold = body.lowStockThreshold === '' || body.lowStockThreshold == null ? null : parseFloat(body.lowStockThreshold);
     if (body.emailNotify !== undefined) emailNotify = !!body.emailNotify;
+    if (body.unitCoverage !== undefined) {
+      const parsed = parseUnitCoverage(body);
+      unitCoverage = parsed === undefined ? unitCoverage : parsed;
+    }
 
     if (!Number.isFinite(quantityInitial) || quantityInitial < 0) quantityInitial = 0;
     if (!Number.isFinite(quantityUsed) || quantityUsed < 0) quantityUsed = 0;
@@ -608,8 +629,9 @@ async function updateMaterial(req, res) {
       `UPDATE materials SET
         name = $1, category_id = $2, supplier_id = $3, unit = $4,
         quantity_initial = $5, quantity_used = $6, quantity_remaining = $7, low_stock_threshold = $8, status = $9, email_notify = $10,
-        updated_at = NOW(), updated_by_id = $11, updated_by_name = $12
-       WHERE id = $13 AND company_id = $14 AND deleted_at IS NULL`,
+        unit_coverage = $11,
+        updated_at = NOW(), updated_by_id = $12, updated_by_name = $13
+       WHERE id = $14 AND company_id = $15 AND deleted_at IS NULL`,
       [
         name,
         categoryId,
@@ -621,6 +643,7 @@ async function updateMaterial(req, res) {
         lowStockThreshold,
         status,
         emailNotify,
+        unitCoverage,
         updatedById,
         updatedByName,
         id,
@@ -640,6 +663,7 @@ async function updateMaterial(req, res) {
       lowStockThreshold,
       status,
       emailNotify,
+      unitCoverage,
     });
   } catch (err) {
     console.error('materials updateMaterial:', err);

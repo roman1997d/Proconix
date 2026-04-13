@@ -149,6 +149,7 @@
               <th data-sort="category">Category <i class="bi bi-arrow-down-up sort-icon"></i></th>
               <th data-sort="supplier">Supplier <i class="bi bi-arrow-down-up sort-icon"></i></th>
               <th data-sort="unit">Unit <i class="bi bi-arrow-down-up sort-icon"></i></th>
+              <th data-sort="unitCoverage">Per pack/item <i class="bi bi-arrow-down-up sort-icon"></i></th>
               <th data-sort="quantityInitial">Qty Initial <i class="bi bi-arrow-down-up sort-icon"></i></th>
               <th data-sort="quantityUsed">Qty Used <i class="bi bi-arrow-down-up sort-icon"></i></th>
               <th data-sort="quantityRemaining">Qty Remaining <i class="bi bi-arrow-down-up sort-icon"></i></th>
@@ -157,7 +158,7 @@
             </tr>
           </thead>
           <tbody id="materialsTbody">
-            <tr><td colspan="9" class="text-center text-muted py-4">Select a project to load materials.</td></tr>
+            <tr><td colspan="10" class="text-center text-muted py-4">Select a project to load materials.</td></tr>
           </tbody>
         </table>
       </div>
@@ -309,6 +310,8 @@
     var cat = m.category != null ? String(m.category) : (m.categoryName || '');
     var catId = m.categoryId != null ? String(m.categoryId) : (m.category ? m.category : '');
     var supId = m.supplierId != null ? String(m.supplierId) : '';
+    var uc = m.unitCoverage != null && m.unitCoverage !== '' ? Number(m.unitCoverage) : null;
+    if (uc != null && !isFinite(uc)) uc = null;
     return {
       id: id,
       name: m.name || '',
@@ -317,6 +320,7 @@
       supplierId: supId,
       supplierName: m.supplierName || '',
       unit: m.unit || 'kg',
+      unitCoverage: uc,
       quantityInitial: Number(m.quantityInitial) || 0,
       quantityUsed: Number(m.quantityUsed) || 0,
       quantityRemaining: m.quantityRemaining != null ? Number(m.quantityRemaining) : (Number(m.quantityInitial) || 0) - (Number(m.quantityUsed) || 0),
@@ -340,8 +344,8 @@
   function getProjectMaterialsMock(projectId) {
     if (!projectId) return [];
     return [
-      { id: 'm1', name: 'Portland Cement', categoryId: 'c1', categoryName: 'Cement', supplierId: 's1', supplierName: 'BuildCo Ltd', unit: 'kg', quantityInitial: 5000, quantityUsed: 3200, quantityRemaining: 1800, lowStockThreshold: 500, status: 'normal', emailNotify: true },
-      { id: 'm2', name: 'Timber 2x4', categoryId: 'c2', categoryName: 'Timber', supplierId: 's2', supplierName: 'TimberWorld', unit: 'm', quantityInitial: 200, quantityUsed: 180, quantityRemaining: 20, lowStockThreshold: 50, status: 'low', emailNotify: false }
+      { id: 'm1', name: 'Portland Cement', categoryId: 'c1', categoryName: 'Cement', supplierId: 's1', supplierName: 'BuildCo Ltd', unit: 'kg', unitCoverage: 25, quantityInitial: 5000, quantityUsed: 3200, quantityRemaining: 1800, lowStockThreshold: 500, status: 'normal', emailNotify: true },
+      { id: 'm2', name: 'Timber 2x4', categoryId: 'c2', categoryName: 'Timber', supplierId: 's2', supplierName: 'TimberWorld', unit: 'm', unitCoverage: 2.4, quantityInitial: 200, quantityUsed: 180, quantityRemaining: 20, lowStockThreshold: 50, status: 'low', emailNotify: false }
     ];
   }
   function getForecastMock(projectId) { return projectId ? { thisWeek: 420, lastWeek: 380 } : { thisWeek: 0, lastWeek: 0 }; }
@@ -560,7 +564,8 @@
       m.name || '',
       m.categoryName || '',
       m.supplierName || '',
-      m.unit || ''
+      m.unit || '',
+      m.unitCoverage != null ? String(m.unitCoverage) : ''
     ].join(' ').toLowerCase();
   }
 
@@ -592,7 +597,7 @@
     if (!tbody) return;
     var list = getFilteredMaterials();
     if (list.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No materials match the filters.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">No materials match the filters.</td></tr>';
       return;
     }
     tbody.innerHTML = list.map(function (m) {
@@ -603,6 +608,7 @@
         '<td>' + escapeHtml(m.categoryName || '—') + '</td>' +
         '<td>' + escapeHtml(m.supplierName || '—') + '</td>' +
         '<td>' + escapeHtml(m.unit || '—') + '</td>' +
+        '<td>' + (m.unitCoverage != null ? m.unitCoverage : '—') + '</td>' +
         '<td>' + (m.quantityInitial != null ? m.quantityInitial : '—') + '</td>' +
         '<td>' + (m.quantityUsed != null ? m.quantityUsed : '—') + '</td>' +
         '<td>' + (m.quantityRemaining != null ? m.quantityRemaining : '—') + '</td>' +
@@ -659,7 +665,7 @@
       return;
     }
     var rows = [
-      ['Material Name', 'Category', 'Supplier', 'Unit', 'Quantity Initial', 'Quantity Used', 'Quantity Remaining', 'Status']
+      ['Material Name', 'Category', 'Supplier', 'Unit', 'Per pack/item', 'Quantity Initial', 'Quantity Used', 'Quantity Remaining', 'Status']
     ];
     list.forEach(function (m) {
       rows.push([
@@ -667,6 +673,7 @@
         m.categoryName || '',
         m.supplierName || '',
         m.unit || '',
+        m.unitCoverage != null ? m.unitCoverage : '',
         m.quantityInitial != null ? m.quantityInitial : '',
         m.quantityUsed != null ? m.quantityUsed : '',
         m.quantityRemaining != null ? m.quantityRemaining : '',
