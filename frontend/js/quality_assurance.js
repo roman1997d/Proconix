@@ -101,6 +101,9 @@
   /** Company crews from GET /api/crews (manager); used in Create QA Job personnel tab. */
   var crewsData = [];
 
+  /** Materials catalogue for the selected project (Create QA Job → Step materials). */
+  var jobCreateMaterialsCache = [];
+
   var qaApiLocal = (function () {
     var _templates = [];
     var _jobs = [];
@@ -220,6 +223,91 @@
       }
     } catch (e) {}
     return {};
+  }
+
+  function fetchMaterialsForProject(projectId) {
+    var url = QA_SUPERVISOR_MODE
+      ? '/api/materials/supervisor?projectId=' + encodeURIComponent(projectId)
+      : '/api/materials?projectId=' + encodeURIComponent(projectId);
+    return fetch(url, { credentials: 'same-origin', headers: getQASessionHeaders() })
+      .then(function (res) {
+        if (!res.ok) return [];
+        return res.json();
+      })
+      .catch(function () {
+        return [];
+      });
+  }
+
+  function loadJobCreateMaterialsCatalog() {
+    var pid = projectSelect && projectSelect.value;
+    jobCreateMaterialsCache = [];
+    if (!pid || !(window.QA_CONFIG && window.QA_CONFIG.useBackend)) {
+      return Promise.resolve();
+    }
+    return fetchMaterialsForProject(pid).then(function (rows) {
+      jobCreateMaterialsCache = Array.isArray(rows) ? rows : [];
+    });
+  }
+
+  function renderJobStepMaterialsForm(templateT) {
+    var container = document.getElementById('qa-job-step-materials');
+    if (!container) return;
+    if (!templateT || !templateT.steps || !templateT.steps.length) {
+      container.innerHTML =
+        '<p class="qa-message">Select a template on the <strong>Template</strong> tab first. The checklist mirrors that template’s steps.</p>';
+      return;
+    }
+    if (!jobCreateMaterialsCache.length) {
+      container.innerHTML =
+        '<p class="qa-message">No materials in the catalogue for this project. Add items under <strong>Dashboard → Materials</strong>, then reopen Create QA Job or switch project and back.</p>';
+      return;
+    }
+    container.innerHTML = '';
+    templateT.steps.forEach(function (s, i) {
+      var key = jobStepKey(templateT.id, s.id);
+      var title = 'Step ' + (i + 1) + (s.description ? ' — ' + String(s.description).trim() : '');
+      var sec = document.createElement('div');
+      sec.className = 'qa-step-materials-block';
+      sec.style.marginBottom = '1.25rem';
+      var h = document.createElement('div');
+      h.className = 'qa-label';
+      h.style.marginBottom = '0.5rem';
+      h.textContent = title;
+      sec.appendChild(h);
+      var list = document.createElement('div');
+      list.className = 'qa-checklist';
+      jobCreateMaterialsCache.forEach(function (m) {
+        var mid = String(m.id);
+        var nm = (m.name || '') + (m.categoryName ? ' · ' + m.categoryName : '');
+        if (m.unit) nm += ' (' + m.unit + ')';
+        var lab = document.createElement('label');
+        lab.className = 'qa-check-item';
+        lab.innerHTML =
+          '<input type="checkbox" class="qa-job-mat-cb" data-step-key="' +
+          escapeHtml(key) +
+          '" value="' +
+          escapeHtml(mid) +
+          '"> <span>' +
+          escapeHtml(nm) +
+          '</span>';
+        list.appendChild(lab);
+      });
+      sec.appendChild(list);
+      container.appendChild(sec);
+    });
+  }
+
+  function collectJobCreateStepMaterials() {
+    var out = {};
+    document.querySelectorAll('.qa-job-mat-cb:checked').forEach(function (cb) {
+      var sk = cb.getAttribute('data-step-key');
+      var mid = cb.value;
+      if (!sk || !mid) return;
+      if (!out[sk]) out[sk] = [];
+      if (out[sk].indexOf(mid) === -1) out[sk].push(mid);
+    });
+    return out;
   }
 
   if (window.QA_CONFIG && window.QA_CONFIG.useBackend) {
@@ -1075,7 +1163,19 @@
   projectSelect.addEventListener('change', function () {
     enableModuleCards();
     rebuildJobFloorSelect(false);
-    if (currentView === 'job-create') refreshJobNumberPreview();
+    if (currentView === 'job-create') {
+      refreshJobNumberPreview();
+      loadJobCreateMaterialsCatalog().then(function () {
+        var tid = getJobCreateBaseTemplateId();
+        if (tid) {
+          qaApi.getTemplate(tid).then(renderJobStepMaterialsForm).catch(function () {
+            renderJobStepMaterialsForm(null);
+          });
+        } else {
+          renderJobStepMaterialsForm(null);
+        }
+      });
+    }
     if (currentView === 'jobs') renderJobsOverview(true);
     if (currentView === 'templates') renderTemplateLibrary();
   });
@@ -1525,6 +1625,7 @@
     if (!container) return;
     if (!templateId) {
       container.innerHTML = '<p class="qa-message">Select a template on the Template tab to load steps.</p>';
+      renderJobStepMaterialsForm(null);
       updateJobPriceEstimateDisplay();
       return;
     }
@@ -1532,6 +1633,7 @@
     qaApi.getTemplate(templateId).then(function (t) {
       if (!t || !t.steps || !t.steps.length) {
         container.innerHTML = '<p class="qa-message">This template has no steps.</p>';
+        renderJobStepMaterialsForm(null);
         updateJobPriceEstimateDisplay();
         iconsRefresh();
         return;
@@ -1587,10 +1689,12 @@
         block.innerHTML = inner;
         container.appendChild(block);
       });
+      renderJobStepMaterialsForm(t);
       updateJobPriceEstimateDisplay();
       iconsRefresh();
     }).catch(function () {
       container.innerHTML = '<p class="qa-message">Could not load template steps.</p>';
+      renderJobStepMaterialsForm(null);
       updateJobPriceEstimateDisplay();
     });
   }
@@ -1634,6 +1738,9 @@
       if (!templates.length) {
         jobTemplatesList.innerHTML = '<p class="qa-message">No templates yet.</p>';
         renderJobStepQuantityForm('');
+        loadJobCreateMaterialsCatalog().then(function () {
+          renderJobStepMaterialsForm(null);
+        });
         updateJobPriceEstimateDisplay();
         iconsRefresh();
         return;
@@ -1646,6 +1753,16 @@
         jobTemplatesList.appendChild(label);
       });
       renderJobStepQuantityForm('');
+      loadJobCreateMaterialsCatalog().then(function () {
+        var tid = getJobCreateBaseTemplateId();
+        if (tid) {
+          qaApi.getTemplate(tid).then(renderJobStepMaterialsForm).catch(function () {
+            renderJobStepMaterialsForm(null);
+          });
+        } else {
+          renderJobStepMaterialsForm(null);
+        }
+      });
       updateJobPriceEstimateDisplay();
       iconsRefresh();
     });
@@ -1826,7 +1943,8 @@
       workerIds: workerIds,
       crewIds: crewIds,
       status: 'new',
-      notes: ''
+      notes: '',
+      stepMaterials: collectJobCreateStepMaterials()
     };
     qaApi.createJob(job).then(function () {
       showToast('Job created.', 'success');

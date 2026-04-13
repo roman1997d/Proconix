@@ -123,6 +123,7 @@
         <nav class="qa-tabs" role="tablist" aria-label="Job sections">
           <button type="button" class="qa-tab is-active" role="tab" aria-selected="true" data-tab="template" id="qa-job-tab-template">Template</button>
           <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="quantities" id="qa-job-tab-quantities">Step quantities</button>
+          <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="materials" id="qa-job-tab-materials">Step materials</button>
           <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="details" id="qa-job-tab-details">Job details</button>
           <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="cost" id="qa-job-tab-cost">Cost</button>
           <button type="button" class="qa-tab" role="tab" aria-selected="false" data-tab="personnel" id="qa-job-tab-personnel">Personnel</button>
@@ -139,6 +140,10 @@
             <p class="qa-price-estimate__value" id="qa-job-estimated-price">—</p>
             <p class="qa-message" id="qa-job-estimated-price-hint" style="margin-top:0.35rem;"></p>
           </div>
+        </div>
+        <div class="qa-tab-panel d-none" id="qa-job-panel-materials" role="tabpanel" hidden>
+          <p class="qa-message">For each template step, tick the materials from your project catalogue that will be needed on site. Materials are managed under <strong>Dashboard → Materials</strong>.</p>
+          <div id="qa-job-step-materials"></div>
         </div>
         <div class="qa-tab-panel d-none" id="qa-job-panel-details" role="tabpanel" hidden>
           <div class="qa-form-grid">

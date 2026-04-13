@@ -436,6 +436,139 @@ function normalizeStepQuantitiesInput(raw) {
   return Object.keys(out).length ? out : null;
 }
 
+/** Normalize client stepMaterials: object stepKey -> materialId[] or array of { stepKey, materialIds }. */
+function normalizeStepMaterialsForDb(raw) {
+  const rows = [];
+  if (raw == null) return rows;
+  if (Array.isArray(raw)) {
+    raw.forEach((item) => {
+      if (!item || typeof item !== 'object') return;
+      const sk = item.stepKey != null ? String(item.stepKey).trim() : '';
+      const mids = Array.isArray(item.materialIds) ? item.materialIds : [];
+      mids.forEach((mid) => {
+        const id = parseInt(String(mid), 10);
+        if (sk && sk.length <= 120 && !sk.includes('..') && Number.isInteger(id)) {
+          rows.push({ stepKey: sk, materialId: id });
+        }
+      });
+    });
+    return rows;
+  }
+  if (typeof raw === 'object') {
+    for (const [sk, arr] of Object.entries(raw)) {
+      const stepKey = String(sk).trim();
+      if (!stepKey || stepKey.length > 120 || stepKey.includes('..')) continue;
+      const list = Array.isArray(arr) ? arr : [];
+      list.forEach((mid) => {
+        const id = parseInt(String(mid), 10);
+        if (Number.isInteger(id)) rows.push({ stepKey, materialId: id });
+      });
+    }
+  }
+  return rows;
+}
+
+async function validateStepMaterialsForProject(poolConn, projectId, companyId, raw) {
+  const rows = normalizeStepMaterialsForDb(raw);
+  if (!rows.length) return;
+  const midSet = [...new Set(rows.map((r) => r.materialId))];
+  try {
+    const chk = await poolConn.query(
+      `SELECT id FROM materials WHERE id = ANY($1::int[]) AND project_id = $2 AND company_id = $3 AND deleted_at IS NULL`,
+      [midSet, projectId, companyId]
+    );
+    const allowed = new Set(chk.rows.map((x) => x.id));
+    for (const r of rows) {
+      if (!allowed.has(r.materialId)) {
+        const err = new Error('One or more materials are invalid for this project.');
+        err.code = 'BAD_MATERIAL';
+        throw err;
+      }
+    }
+  } catch (e) {
+    if (e && e.code === 'BAD_MATERIAL') throw e;
+    if (e && e.code === '42P01') {
+      const err = new Error('Material tables not set up; run scripts/create_material_tables.sql');
+      err.code = 'MATERIALS_SCHEMA';
+      throw err;
+    }
+    throw e;
+  }
+}
+
+/**
+ * @param {import('pg').Pool} poolConn
+ * @param {number[]} jobIds
+ * @returns {Promise<Map<number, Record<string, string[]>>>}
+ */
+async function fetchStepMaterialsMapByJobIds(poolConn, jobIds) {
+  const map = new Map();
+  if (!jobIds.length) return map;
+  try {
+    const r = await poolConn.query(
+      `SELECT job_id, step_key, material_id FROM qa_job_step_materials WHERE job_id = ANY($1::int[]) ORDER BY job_id, step_key, material_id`,
+      [jobIds]
+    );
+    r.rows.forEach((row) => {
+      const jid = row.job_id;
+      if (!map.has(jid)) map.set(jid, {});
+      const o = map.get(jid);
+      const sk = String(row.step_key);
+      if (!o[sk]) o[sk] = [];
+      o[sk].push(String(row.material_id));
+    });
+  } catch (e) {
+    if (e.code === '42P01') return map;
+    throw e;
+  }
+  return map;
+}
+
+async function saveJobStepMaterials(poolConn, jobId, projectId, companyId, raw) {
+  const rows = normalizeStepMaterialsForDb(raw);
+  try {
+    await poolConn.query('DELETE FROM qa_job_step_materials WHERE job_id = $1', [jobId]);
+  } catch (e) {
+    if (e.code === '42P01') return;
+    throw e;
+  }
+  if (!rows.length) return;
+  const midSet = [...new Set(rows.map((r) => r.materialId))];
+  let chk;
+  try {
+    chk = await poolConn.query(
+      `SELECT id FROM materials WHERE id = ANY($1::int[]) AND project_id = $2 AND company_id = $3 AND deleted_at IS NULL`,
+      [midSet, projectId, companyId]
+    );
+  } catch (e) {
+    if (e.code === '42P01') {
+      const err = new Error('Material tables not set up; run scripts/create_material_tables.sql');
+      err.code = 'MATERIALS_SCHEMA';
+      throw err;
+    }
+    throw e;
+  }
+  const allowed = new Set(chk.rows.map((x) => x.id));
+  for (const r of rows) {
+    if (!allowed.has(r.materialId)) {
+      const err = new Error('One or more materials are invalid for this project.');
+      err.code = 'BAD_MATERIAL';
+      throw err;
+    }
+  }
+  for (const r of rows) {
+    try {
+      await poolConn.query(
+        `INSERT INTO qa_job_step_materials (job_id, step_key, material_id) VALUES ($1, $2, $3) ON CONFLICT (job_id, step_key, material_id) DO NOTHING`,
+        [jobId, r.stepKey, r.materialId]
+      );
+    } catch (e) {
+      if (e.code === '42P01') return;
+      throw e;
+    }
+  }
+}
+
 /** Sum per-step quantities into legacy job sqm / linear_meters / total_units columns (reporting / planning). */
 function aggregateQuantitiesFromStepJson(sq) {
   if (!sq || typeof sq !== 'object') return { sqm: null, linearMeters: null, totalUnits: null };
@@ -601,8 +734,10 @@ async function fetchApprovedQaPriceWorkFullData(companyId, qaJobId) {
   };
 }
 
-function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, responsibleUserId, forSupervisor, crewIds) {
+function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCode, responsibleUserId, forSupervisor, crewIds, stepMaterials) {
   const responsibleId = responsibleUserId != null ? String(responsibleUserId) : (row.responsible_id != null ? String(row.responsible_id) : '');
+  const sm =
+    stepMaterials && typeof stepMaterials === 'object' && !Array.isArray(stepMaterials) ? stepMaterials : {};
   const base = {
     id: String(row.id),
     projectId: String(row.project_id),
@@ -614,6 +749,7 @@ function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCo
     linearMeters: row.linear_meters || '',
     totalUnits: row.total_units || '',
     stepQuantities: stepQuantitiesFromRow(row),
+    stepMaterials: sm,
     specification: row.specification || '',
     description: row.description || '',
     targetCompletionDate: row.target_completion_date ? row.target_completion_date.toISOString().slice(0, 10) : '',
@@ -774,6 +910,13 @@ async function listJobs(req, res) {
       crewByJob[r.job_id].push(String(r.crew_id));
     });
 
+    let stepMatByJob = new Map();
+    try {
+      stepMatByJob = await fetchStepMaterialsMapByJobIds(pool, jobIds);
+    } catch (_) {
+      stepMatByJob = new Map();
+    }
+
     const list = jobs.rows.map((row) => {
       const j = jobRowToJson(
         row,
@@ -784,7 +927,8 @@ async function listJobs(req, res) {
         row.status_id ? statusMap[row.status_id] : null,
         row.responsible_user_id,
         !!req.supervisor,
-        crewByJob[row.id] || []
+        crewByJob[row.id] || [],
+        stepMatByJob.get(row.id) || {}
       );
       j.stepPhotoCount = photoAgg.counts[row.id] || 0;
       j.stepPhotoPreviewUrl = photoAgg.previews[row.id] || null;
@@ -837,6 +981,14 @@ async function getJob(req, res) {
     const costCode = costRow.rows[0] ? costRow.rows[0].code : null;
     const floorCode = floorRow.rows[0] ? floorRow.rows[0].code : row.floor_code;
 
+    let stepMat = {};
+    try {
+      const m = await fetchStepMaterialsMapByJobIds(pool, [id]);
+      stepMat = m.get(id) || {};
+    } catch (_) {
+      stepMat = {};
+    }
+
     const payload = jobRowToJson(
       row,
       templateIds,
@@ -846,7 +998,8 @@ async function getJob(req, res) {
       statusCode,
       row.responsible_user_id,
       !!req.supervisor,
-      crewIds
+      crewIds,
+      stepMat
     );
     try {
       const qaPrice = await fetchApprovedQaPriceWorkFullData(companyId, id);
@@ -935,6 +1088,16 @@ async function createJob(req, res) {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(b, 'stepMaterials')) {
+    try {
+      await validateStepMaterialsForProject(pool, projectId, companyId, b.stepMaterials);
+    } catch (e) {
+      if (e && e.code === 'BAD_MATERIAL') return res.status(400).json({ message: e.message });
+      if (e && e.code === 'MATERIALS_SCHEMA') return res.status(503).json({ message: e.message });
+      throw e;
+    }
+  }
+
   const stepQtyNorm = normalizeStepQuantitiesInput(b.stepQuantities);
   let sqmVal = (b.sqm != null && String(b.sqm)) || null;
   let linearVal = (b.linearMeters != null && String(b.linearMeters)) || null;
@@ -1019,6 +1182,17 @@ async function createJob(req, res) {
       }
     }
 
+    if (Object.prototype.hasOwnProperty.call(b, 'stepMaterials')) {
+      try {
+        await saveJobStepMaterials(pool, jobId, projectId, companyId, b.stepMaterials);
+      } catch (e) {
+        if (e && e.code === 'MATERIALS_SCHEMA') {
+          return res.status(503).json({ message: e.message });
+        }
+        if (e && e.code !== '42P01') throw e;
+      }
+    }
+
     const [tplLinks, workerUserLinks, crewLinksOut] = await Promise.all([
       pool.query('SELECT template_id FROM qa_job_templates WHERE job_id = $1', [jobId]),
       pool.query('SELECT user_id FROM qa_job_user_workers WHERE job_id = $1', [jobId]).catch(() => ({ rows: [] })),
@@ -1027,6 +1201,13 @@ async function createJob(req, res) {
     const outTemplateIds = tplLinks.rows.map((r) => String(r.template_id));
     const outWorkerIds = (workerUserLinks.rows || []).map((r) => String(r.user_id));
     const outCrewIds = (crewLinksOut.rows || []).map((r) => String(r.crew_id));
+
+    let stepMatOut = {};
+    try {
+      stepMatOut = (await fetchStepMaterialsMapByJobIds(pool, [jobId])).get(jobId) || {};
+    } catch (_) {
+      stepMatOut = {};
+    }
 
     // --- Auto sync into Task & Planning (Gantt + Kanban) ---
     // Make QA jobs visible in Planning and keep them in sync on updates/deletes.
@@ -1053,7 +1234,8 @@ async function createJob(req, res) {
         statusCode,
         row.responsible_user_id,
         !!req.supervisor,
-        outCrewIds
+        outCrewIds,
+        stepMatOut
       )
     );
   } catch (err) {
@@ -1346,14 +1528,16 @@ async function updateJob(req, res) {
   const companyId = getQaCompanyId(req);
   if (companyId == null) return res.status(403).json({ message: 'Access denied.' });
 
+  let jobProjectId = null;
   try {
     const existing = await pool.query(
       `SELECT j.id, j.project_id FROM qa_jobs j INNER JOIN projects p ON p.id = j.project_id AND p.company_id = $1 WHERE j.id = $2`,
       [companyId, id]
     );
     if (existing.rows.length === 0) return res.status(404).json({ message: 'Job not found.' });
+    jobProjectId = existing.rows[0].project_id;
     if (req.supervisor) {
-      const m = supervisorProjectMismatch(req, existing.rows[0].project_id);
+      const m = supervisorProjectMismatch(req, jobProjectId);
       if (m) return res.status(403).json({ message: m });
     }
   } catch (e) {
@@ -1399,6 +1583,7 @@ async function updateJob(req, res) {
   }
   const workerIdsProvided = b.workerIds !== undefined;
   const crewIdsProvided = b.crewIds !== undefined;
+  const stepMaterialsProvided = Object.prototype.hasOwnProperty.call(b, 'stepMaterials');
   if (workerIdsProvided) {
     const workerIds = Array.isArray(b.workerIds) ? b.workerIds : [];
     const parsedWorkers = [];
@@ -1437,7 +1622,7 @@ async function updateJob(req, res) {
       }
     }
   }
-  if (updates.length === 0 && !workerIdsProvided && !crewIdsProvided) {
+  if (updates.length === 0 && !workerIdsProvided && !crewIdsProvided && !stepMaterialsProvided) {
     return res.status(400).json({ message: 'No fields to update.' });
   }
   updates.push(`updated_at = NOW()`, `updated_by = $${idx++}`);
@@ -1473,6 +1658,16 @@ async function updateJob(req, res) {
             cid,
           ])
           .catch(() => {});
+      }
+    }
+    if (stepMaterialsProvided && jobProjectId != null) {
+      try {
+        await validateStepMaterialsForProject(pool, jobProjectId, companyId, b.stepMaterials);
+        await saveJobStepMaterials(pool, id, jobProjectId, companyId, b.stepMaterials);
+      } catch (e) {
+        if (e && e.code === 'BAD_MATERIAL') return res.status(400).json({ message: e.message });
+        if (e && e.code === 'MATERIALS_SCHEMA') return res.status(503).json({ message: e.message });
+        throw e;
       }
     }
     // Keep Planning synchronized with this QA job update.
