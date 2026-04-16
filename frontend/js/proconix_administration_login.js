@@ -1,5 +1,5 @@
 /**
- * Conflow platform administration – sign-in (POST /api/platform-admin/login).
+ * Proconix platform administration – sign-in (POST /api/platform-admin/login).
  */
 (function () {
   'use strict';

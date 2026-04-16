@@ -1,5 +1,5 @@
 /**
- * Approximate disk usage of the Conflow project tree (all files under repo root).
+ * Approximate disk usage of the Proconix project tree (all files under repo root).
  * Cached to avoid blocking the event loop on every admin refresh.
  */
 

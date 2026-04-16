@@ -7,7 +7,7 @@
  */
 function getStartupConsoleBannerLines(opts) {
   const dbOk = !!opts.dbOk;
-  const dbName = opts.dbName || process.env.PGDATABASE || process.env.DB_NAME || 'ConflowDB';
+  const dbName = opts.dbName || process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB';
   const dbError = opts.dbError == null ? null : String(opts.dbError);
 
   const HOST = process.env.HOST || 'localhost';
@@ -16,7 +16,7 @@ function getStartupConsoleBannerLines(opts) {
   const lines = [
     '-------------------------------------------',
     `  Server:       http://${HOST}:${PORT}/`,
-    `  Conflow:     http://${HOST}:${PORT}/`,
+    `  Proconix:     http://${HOST}:${PORT}/`,
     `  Register:     http://${HOST}:${PORT}/register_company.html`,
     `  API health:   http://${HOST}:${PORT}/api/health`,
     `  API create:   POST http://${HOST}:${PORT}/api/companies/create`,

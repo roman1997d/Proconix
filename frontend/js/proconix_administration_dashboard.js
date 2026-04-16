@@ -1,5 +1,5 @@
 /**
- * Conflow platform administration console – validates session with GET /api/platform-admin/me.
+ * Proconix platform administration console – validates session with GET /api/platform-admin/me.
  */
 (function () {
   'use strict';

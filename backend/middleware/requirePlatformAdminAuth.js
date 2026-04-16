@@ -1,5 +1,5 @@
 /**
- * Middleware: valid session for Conflow platform administrators.
+ * Middleware: valid session for Proconix platform administrators.
  * Headers: X-Platform-Admin-Id, X-Platform-Admin-Email (from frontend after login).
  */
 

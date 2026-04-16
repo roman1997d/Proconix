@@ -1,5 +1,5 @@
 /**
- * Projects API per Conflow spec.
+ * Projects API per Proconix spec.
  * Manager-only: list, create, update, deactivate.
  * Manager or Operative: get one project (company / assigned project check in controller).
  */

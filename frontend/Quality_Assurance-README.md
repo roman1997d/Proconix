@@ -1,7 +1,7 @@
 # Quality Assurance Module – Rezumat
 
 ## Pagina principală
-- **Header:** logo Conflow + link către Dashboard.
+- **Header:** logo Proconix + link către Dashboard.
 - **Titlu:** „Quality Assurance Module”.
 - **Select Project:** dropdown (ex.: Project Alpha, Beta, Gamma). Fără proiect selectat, butoanele de acțiune sunt dezactivate.
 - **Mesaj:** „You must select a project before creating templates or jobs.”
