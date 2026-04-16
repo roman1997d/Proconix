@@ -334,6 +334,7 @@
   var chatReqSaveStatusBtn = document.getElementById('op-chat-request-save-status');
   var chatReqViewPhotos = document.getElementById('op-chat-request-view-photos');
   var chatReqActionsWrap = document.getElementById('op-chat-request-actions');
+  var chatReqActionsCompleteWrap = document.getElementById('op-chat-request-actions-complete-wrap');
   var chatReqPhotoInput = document.getElementById('op-chat-request-photo-upload');
   var chatReqPhotoUploadBtn = document.getElementById('op-chat-request-upload-photo');
   var chatReqCompleteBtn = document.getElementById('op-chat-request-complete');
@@ -412,6 +413,27 @@
   }
 
   /** Bold `[Repost from #n]`, normal weight for the rest of the summary line. */
+  function chatSortMessagesByTime(arr) {
+    if (!Array.isArray(arr)) return arr;
+    arr.sort(function (a, b) {
+      var ta = new Date(a.created_at || 0).getTime();
+      var tb = new Date(b.created_at || 0).getTime();
+      if (ta !== tb) return ta - tb;
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
+    return arr;
+  }
+
+  /** User-posted root requests only (excludes agent auto-reposts). */
+  function chatIsOriginalMaterialRequest(m) {
+    if (!m || m.type !== 'material_request') return false;
+    if (m.is_auto_repost === true) return false;
+    var ro = m.repost_of_message_id;
+    if (ro != null && ro !== '' && !isNaN(Number(ro)) && Number(ro) > 0) return false;
+    if (/^\[Repost from #/i.test(String(m.summary || ''))) return false;
+    return true;
+  }
+
   function chatMaterialRequestSummaryHtml(summary) {
     var s = summary == null ? '' : String(summary);
     var m = /^\[Repost from #(\d+)\]\s*([\s\S]*)$/.exec(s);
@@ -496,11 +518,7 @@
     var prevTop = chatFeedEl.scrollTop;
     var prevHeight = chatFeedEl.scrollHeight;
     var visible = chatState.requestOnly
-      ? chatState.messages.filter(function (m) {
-          if (m.type === 'material_request') return true;
-          if (m.type === 'system' && /^Chat Agent/i.test(String(m.text || '').trim())) return true;
-          return false;
-        })
+      ? chatState.messages.filter(chatIsOriginalMaterialRequest)
       : chatState.messages;
     if (!visible.length) {
       chatFeedEl.innerHTML = '<p class="op-text-muted" style="margin:0">No messages yet. Start the conversation.</p>';
@@ -510,8 +528,10 @@
       .map(function (m) {
         var mine = !!m.is_mine;
         var rawAgentText = String(m.text || '').trim();
-        var isChatAgent = m.type === 'system' && /^Chat Agent/i.test(rawAgentText);
-        var isChatAgentReminder = isChatAgent && /\bRepost sent\b/i.test(rawAgentText);
+        var isUndeliveredLine = /^Undelivered request\s*#/i.test(rawAgentText);
+        var isChatAgent =
+          m.type === 'system' && (/^Chat Agent/i.test(rawAgentText) || isUndeliveredLine);
+        var isChatAgentReminder = isUndeliveredLine;
         var baseCls =
           'op-chat-msg' +
           (mine ? ' op-chat-msg--mine' : '') +
@@ -588,8 +608,22 @@
                 .join('')
             : '<p class="op-text-muted" style="margin:0">No photos yet.</p>';
         }
+        var isAgentRepostSummary = /^\[Repost from #/i.test(String(msg.summary || ''));
+        var hasRepostRoot =
+          (msg.repost_of_message_id != null &&
+            msg.repost_of_message_id !== '' &&
+            !isNaN(Number(msg.repost_of_message_id))) ||
+          isAgentRepostSummary;
+        var canEditStatus =
+          msg.can_edit_status === true ||
+          (msg.type === 'material_request' &&
+            !['delivered', 'completed'].includes(String(msg.status || '').trim().toLowerCase()) &&
+            (msg.can_complete || hasRepostRoot));
         if (chatReqActionsWrap) {
-          chatReqActionsWrap.classList.toggle('d-none', !msg.can_complete);
+          chatReqActionsWrap.classList.toggle('d-none', !canEditStatus);
+        }
+        if (chatReqActionsCompleteWrap) {
+          chatReqActionsCompleteWrap.classList.toggle('d-none', !msg.can_complete);
         }
         openModal(modalChatRequestView);
       });
@@ -651,6 +685,7 @@
         row.status = chatNormalizeRequestStatus(row.status);
       }
     });
+    chatSortMessagesByTime(chatState.messages);
     chatState.unreadCount = chatState.notifications.filter(function (x) { return !x.read; }).length;
   }
 
@@ -696,6 +731,7 @@
 
   function chatAddLocalMessage(msg) {
     chatState.messages.push(msg);
+    chatSortMessagesByTime(chatState.messages);
     chatSaveFallback();
     chatRenderMessages();
   }
@@ -800,6 +836,7 @@
           }
           return m;
         });
+        chatSortMessagesByTime(chatState.messages);
         chatSaveFallback();
         if (modalSiteChat && modalSiteChat.classList.contains('is-open')) {
           chatRenderMessages();

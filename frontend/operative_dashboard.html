@@ -250,11 +250,13 @@
               <option value="Delivered">Delivered</option>
             </select>
             <button type="button" class="op-btn op-btn-secondary" id="op-chat-request-save-status" style="margin-top:10px;">Save Status</button>
-            <label for="op-chat-request-photo-upload">Add completion photo</label>
-            <input type="file" id="op-chat-request-photo-upload" accept="image/*">
-            <div class="op-field-row" style="margin-top:10px;">
-              <button type="button" class="op-btn op-btn-secondary" id="op-chat-request-upload-photo">Upload Photo</button>
-              <button type="button" class="op-btn op-btn-primary" id="op-chat-request-complete">Complete</button>
+            <div id="op-chat-request-actions-complete-wrap" class="d-none">
+              <label for="op-chat-request-photo-upload">Add completion photo</label>
+              <input type="file" id="op-chat-request-photo-upload" accept="image/*">
+              <div class="op-field-row" style="margin-top:10px;">
+                <button type="button" class="op-btn op-btn-secondary" id="op-chat-request-upload-photo">Upload Photo</button>
+                <button type="button" class="op-btn op-btn-primary" id="op-chat-request-complete">Complete</button>
+              </div>
             </div>
           </div>
         </div>

@@ -141,12 +141,7 @@ async function runSiteChatAgentReminders() {
       }
       const rec = u.rows[0];
       const summaryRaw = String(rec.request_summary || '').trim();
-      const summaryShort = summaryRaw.slice(0, 140);
-      const waitOpen = formatWaitingTimeEnglish(Date.now() - new Date(rec.created_at).getTime());
-      const reminderBody =
-        `${CHAT_AGENT_NAME}: #${rec.id} still open (${waitOpen}).` +
-        (summaryShort ? ` ${summaryShort}.` : '') +
-        ' Repost sent.';
+      const reminderBody = `Undelivered request #${rec.id}`;
       const sysIns = await c.query(
         `INSERT INTO site_chat_message
          (company_id, project_id, sender_kind, sender_id, sender_name, message_type, body)
@@ -161,7 +156,7 @@ async function runSiteChatAgentReminders() {
         actorKind: CHAT_AGENT_SENDER_KIND,
         actorId: CHAT_AGENT_SENDER_ID,
         kind: 'chat_agent_reminder',
-        title: CHAT_AGENT_NAME,
+        title: 'Undelivered request',
         body: reminderBody.slice(0, 240),
       });
 
@@ -212,20 +207,37 @@ async function runSiteChatAgentReminders() {
   }
 }
 
-/** If this material row is an auto-repost, mirror status (and delivered time) onto the root request. */
+/** If this row is an auto-repost, mirror status (and delivered time) onto the root in the same room. */
 async function syncOriginalMaterialRequestIfRepost(client, materialRowId, nextStatus) {
-  const r = await client.query(
-    `SELECT repost_of_message_id FROM site_chat_message WHERE id = $1 AND message_type = 'material_request'`,
-    [materialRowId]
-  );
-  const rootId = r.rows[0] && r.rows[0].repost_of_message_id;
-  if (!rootId) return;
   await client.query(
-    `UPDATE site_chat_message
-     SET request_status = $1,
-         request_delivered_at = CASE WHEN $1 = 'Delivered' THEN NOW() ELSE NULL END
-     WHERE id = $2 AND message_type = 'material_request'`,
-    [nextStatus, rootId]
+    `UPDATE site_chat_message AS m
+     SET request_status = $2,
+         request_delivered_at = CASE WHEN $2 = 'Delivered' THEN NOW() ELSE NULL END
+     FROM site_chat_message AS r
+     WHERE r.id = $1
+       AND r.message_type = 'material_request'
+       AND m.id = r.repost_of_message_id
+       AND m.message_type = 'material_request'
+       AND m.company_id = r.company_id
+       AND m.project_id = r.project_id`,
+    [materialRowId, nextStatus]
+  );
+}
+
+/** When the root material request changes status, mirror onto all agent repost rows for that root. */
+async function syncRepostsMaterialRequestsFromRoot(client, rootMessageId, nextStatus) {
+  await client.query(
+    `UPDATE site_chat_message AS child
+     SET request_status = $2,
+         request_delivered_at = CASE WHEN $2 = 'Delivered' THEN NOW() ELSE NULL END
+     FROM site_chat_message AS root
+     WHERE root.id = $1
+       AND root.message_type = 'material_request'
+       AND child.repost_of_message_id = root.id
+       AND child.message_type = 'material_request'
+       AND child.company_id = root.company_id
+       AND child.project_id = root.project_id`,
+    [rootMessageId, nextStatus]
   );
 }
 
@@ -367,6 +379,7 @@ async function listMessages(req, res) {
               m.request_status AS status, m.request_summary AS summary, m.request_details AS details,
               m.request_urgency AS urgency, m.request_location AS location, m.created_at,
               m.repost_of_message_id AS repost_of_message_id,
+              COALESCE(m.is_auto_repost, false) AS is_auto_repost,
               m.sender_kind, m.sender_id, m.sender_name,
               COALESCE(
                 NULLIF(TRIM(
@@ -389,7 +402,7 @@ async function listMessages(req, res) {
        LEFT JOIN users usr
          ON m.sender_kind = 'operative' AND m.sender_id = usr.id AND usr.company_id = m.company_id
        WHERE m.company_id = $1 AND m.project_id = $2 ${whereExtra}
-       ORDER BY m.created_at DESC
+       ORDER BY m.created_at DESC, m.id DESC
        LIMIT $3`,
       params
     );
@@ -418,15 +431,27 @@ async function listMessages(req, res) {
         photoByMessage = {};
       }
     }
-    const rows = rowsRaw.map((m) => ({
-      ...m,
-      photos: photoByMessage[String(m.id)] || [],
-      can_complete:
-        m.type === 'material_request' &&
-        !(m.sender_kind === actor.kind && Number(m.sender_id) === Number(actor.id)) &&
-        !['delivered', 'completed'].includes(String(m.status || '').trim().toLowerCase()),
-      is_mine: m.sender_kind === actor.kind && Number(m.sender_id) === Number(actor.id),
-    }));
+    const rows = rowsRaw.map((m) => {
+      const stLow = String(m.status || '').trim().toLowerCase();
+      const isDelivered = ['delivered', 'completed'].includes(stLow);
+      const isAuthor = m.sender_kind === actor.kind && Number(m.sender_id) === Number(actor.id);
+      const isAgentRepost =
+        m.type === 'material_request' && m.repost_of_message_id != null && Number(m.repost_of_message_id) > 0;
+      return {
+        ...m,
+        photos: photoByMessage[String(m.id)] || [],
+        can_complete:
+          m.type === 'material_request' &&
+          !isAuthor &&
+          !isDelivered,
+        /** Author can change status on agent auto-reposts; others use same rules as before. */
+        can_edit_status:
+          m.type === 'material_request' &&
+          !isDelivered &&
+          (!isAuthor || isAgentRepost),
+        is_mine: isAuthor,
+      };
+    });
     return res.json({ success: true, messages: rows });
   } catch (err) {
     if (tableMissing(err)) {
@@ -483,9 +508,20 @@ async function completeMaterialRequest(req, res) {
          WHERE id = $1`,
         [messageId]
       );
+      await client.query('SAVEPOINT site_chat_req_sync');
       try {
         await syncOriginalMaterialRequestIfRepost(client, messageId, 'Delivered');
+        const link = await client.query(
+          `SELECT repost_of_message_id FROM site_chat_message WHERE id = $1`,
+          [messageId]
+        );
+        const ro = link.rows[0] && link.rows[0].repost_of_message_id;
+        if (!ro) {
+          await syncRepostsMaterialRequestsFromRoot(client, messageId, 'Delivered');
+        }
+        await client.query('RELEASE SAVEPOINT site_chat_req_sync');
       } catch (syncErr) {
+        await client.query('ROLLBACK TO SAVEPOINT site_chat_req_sync');
         if (!columnMissing(syncErr)) throw syncErr;
       }
       const sys = await client.query(
@@ -562,9 +598,20 @@ async function updateMaterialRequestStatus(req, res) {
          WHERE id = $1`,
         [messageId, nextStatus]
       );
+      await client.query('SAVEPOINT site_chat_req_sync');
       try {
         await syncOriginalMaterialRequestIfRepost(client, messageId, nextStatus);
+        const link = await client.query(
+          `SELECT repost_of_message_id FROM site_chat_message WHERE id = $1`,
+          [messageId]
+        );
+        const ro = link.rows[0] && link.rows[0].repost_of_message_id;
+        if (!ro) {
+          await syncRepostsMaterialRequestsFromRoot(client, messageId, nextStatus);
+        }
+        await client.query('RELEASE SAVEPOINT site_chat_req_sync');
       } catch (syncErr) {
+        await client.query('ROLLBACK TO SAVEPOINT site_chat_req_sync');
         if (!columnMissing(syncErr)) throw syncErr;
       }
       const text =
@@ -710,13 +757,16 @@ async function postMessage(req, res) {
 
       const msgId = ins.rows[0].id;
       if (type === 'material_request') {
+        await client.query('SAVEPOINT site_chat_agent_insight');
         try {
           await insertChatAgentNewRequestInsight(client, {
             companyId: actor.companyId,
             projectId: project.id,
             newRequestId: msgId,
           });
+          await client.query('RELEASE SAVEPOINT site_chat_agent_insight');
         } catch (agentErr) {
+          await client.query('ROLLBACK TO SAVEPOINT site_chat_agent_insight');
           if (!columnMissing(agentErr)) throw agentErr;
         }
       }
