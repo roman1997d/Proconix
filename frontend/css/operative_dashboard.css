@@ -1624,6 +1624,41 @@ a.op-doc-row:active {
   background: #dff7ef;
 }
 
+.op-chat-msg-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.op-chat-msg-head .op-chat-msg-user {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.op-chat-msg-delete {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #94a3a8;
+  padding: 2px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.op-chat-msg-delete:hover {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.op-chat-msg--mine .op-chat-msg-delete {
+  color: #64748b;
+}
+
 .op-chat-msg-user {
   font-size: 0.72rem;
   color: #5f7d77;

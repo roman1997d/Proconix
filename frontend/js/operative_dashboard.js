@@ -609,13 +609,23 @@
         } else {
           body = '<div class="op-chat-msg-text">' + chatEsc(m.text || '') + '</div>';
         }
+        var showDelete = mine && m.type !== 'system';
+        var head =
+          '<div class="op-chat-msg-head">' +
+          '<div class="op-chat-msg-user">' +
+          chatEsc(chatDisplayName(m)) +
+          '</div>' +
+          (showDelete
+            ? '<button type="button" class="op-chat-msg-delete" data-chat-delete-id="' +
+              chatEsc(String(m.id || '')) +
+              '" aria-label="Delete message" title="Delete"><i class="bi bi-trash"></i></button>'
+            : '') +
+          '</div>';
         return (
           '<div class="' +
           baseCls +
           '">' +
-          '<div class="op-chat-msg-user">' +
-          chatEsc(chatDisplayName(m)) +
-          '</div>' +
+          head +
           body +
           '<div class="op-chat-msg-time">' +
           chatFormatTime(m.created_at) +
@@ -1017,7 +1027,40 @@
   if (chatFeedEl) {
     chatFeedEl.addEventListener('click', function (e) {
       var t = e.target;
-      if (!t || !t.classList || !t.classList.contains('op-chat-feed-thumb')) return;
+      if (!t) return;
+      var delBtn = t.closest && t.closest('.op-chat-msg-delete');
+      if (delBtn) {
+        e.preventDefault();
+        var mid = delBtn.getAttribute('data-chat-delete-id');
+        if (!mid || !chatState.projectId) return;
+        if (!window.confirm('Delete this message? This cannot be undone.')) return;
+        chatApi(
+          '/messages/' + encodeURIComponent(mid) + '?project_id=' + encodeURIComponent(chatState.projectId),
+          { method: 'DELETE' }
+        )
+          .then(function (out) {
+            if (!out.ok || !out.data.success) {
+              var errMsg =
+                (out.data && (out.data.message || out.data.error)) || 'Could not delete message';
+              throw new Error(errMsg);
+            }
+            chatState.messages = (chatState.messages || []).filter(function (x) {
+              return String(x.id) !== String(mid);
+            });
+            if (String(chatState.selectedRequestId) === String(mid) && modalChatRequestView) {
+              closeModal(modalChatRequestView);
+              chatState.selectedRequestId = null;
+            }
+            chatSaveFallback();
+            chatRenderMessages();
+            chatToast('Message deleted');
+          })
+          .catch(function (err) {
+            chatToast(err && err.message ? err.message : 'Could not delete message');
+          });
+        return;
+      }
+      if (!t.classList || !t.classList.contains('op-chat-feed-thumb')) return;
       var wrap = t.closest('.op-chat-feed-photos');
       var imgs = wrap
         ? Array.prototype.slice

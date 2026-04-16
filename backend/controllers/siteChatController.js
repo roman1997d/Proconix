@@ -926,6 +926,60 @@ async function listNotifications(req, res) {
   }
 }
 
+async function deleteOwnMessage(req, res) {
+  const actor = getActor(req);
+  if (!actor) return res.status(403).json({ success: false, message: 'Access denied.' });
+  const messageId = parseInt(req.params.messageId, 10);
+  if (!Number.isInteger(messageId) || messageId < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid message id.' });
+  }
+  const projectIdHint =
+    req.query.project_id != null ? req.query.project_id : req.body && req.body.project_id != null ? req.body.project_id : null;
+  try {
+    const msg = await pool.query(
+      `SELECT id, company_id, project_id, sender_kind, sender_id, message_type
+       FROM site_chat_message WHERE id = $1`,
+      [messageId]
+    );
+    if (!msg.rows.length) return res.status(404).json({ success: false, message: 'Message not found.' });
+    const row = msg.rows[0];
+    if (row.message_type === 'system') {
+      return res.status(403).json({ success: false, message: 'This message cannot be deleted.' });
+    }
+    if (row.sender_kind !== actor.kind || Number(row.sender_id) !== Number(actor.id)) {
+      return res.status(403).json({ success: false, message: 'You can only delete your own messages.' });
+    }
+    const project = await resolveProjectForRequest(req, actor, projectIdHint != null ? projectIdHint : row.project_id);
+    if (!project || Number(project.id) !== Number(row.project_id)) {
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+    const del = await pool.query(
+      `DELETE FROM site_chat_message
+       WHERE id = $1 AND company_id = $2 AND project_id = $3
+         AND sender_kind = $4 AND sender_id = $5
+         AND message_type <> 'system'
+       RETURNING id`,
+      [messageId, row.company_id, row.project_id, actor.kind, actor.id]
+    );
+    if (!del.rows.length) {
+      return res.status(404).json({ success: false, message: 'Message not found.' });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    if (tableMissing(err)) {
+      return res.status(503).json({
+        success: false,
+        message: 'Site chat tables are not installed. Run scripts/create_site_chat_tables.sql',
+      });
+    }
+    console.error('siteChat deleteOwnMessage:', err);
+    return res.status(500).json({
+      success: false,
+      message: err && err.message ? String(err.message) : 'Failed to delete message.',
+    });
+  }
+}
+
 async function markNotificationsRead(req, res) {
   const actor = getActor(req);
   if (!actor) return res.status(403).json({ success: false, message: 'Access denied.' });
@@ -957,6 +1011,7 @@ module.exports = {
   postMessage,
   completeMaterialRequest,
   updateMaterialRequestStatus,
+  deleteOwnMessage,
   uploadMaterialRequestPhoto,
   listNotifications,
   markNotificationsRead,
