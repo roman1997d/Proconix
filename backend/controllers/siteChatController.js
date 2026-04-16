@@ -508,6 +508,7 @@ async function completeMaterialRequest(req, res) {
     return res.status(400).json({ success: false, message: 'Invalid message id.' });
   }
   try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
     const msg = await pool.query(
       `SELECT id, company_id, project_id, sender_kind, sender_id, request_status, message_type, repost_of_message_id
        FROM site_chat_message WHERE id = $1`,
@@ -518,7 +519,7 @@ async function completeMaterialRequest(req, res) {
     if (row.message_type !== 'material_request') {
       return res.status(400).json({ success: false, message: 'Message is not a material request.' });
     }
-    const projectIdHint = req.body.project_id != null ? req.body.project_id : row.project_id;
+    const projectIdHint = body.project_id != null ? body.project_id : row.project_id;
     const project = await resolveProjectForRequest(req, actor, projectIdHint);
     if (!project || Number(project.id) !== Number(row.project_id)) {
       return res.status(403).json({ success: false, message: 'Access denied.' });
@@ -536,6 +537,8 @@ async function completeMaterialRequest(req, res) {
       ' as delivered on ' +
       completedAt.toLocaleString();
     const client = await pool.connect();
+    let notifyAfterCommit = null;
+    let systemMessageId = null;
     try {
       await client.query('BEGIN');
       await client.query(
@@ -567,7 +570,8 @@ async function completeMaterialRequest(req, res) {
          RETURNING id, created_at`,
         [row.company_id, row.project_id, actor.kind, actor.id, actorName, completedText]
       );
-      await notifyProjectRecipients(client, {
+      systemMessageId = sys.rows[0].id;
+      notifyAfterCommit = {
         companyId: row.company_id,
         projectId: row.project_id,
         messageId: sys.rows[0].id,
@@ -576,15 +580,27 @@ async function completeMaterialRequest(req, res) {
         kind: 'request_updated',
         title: 'Request Updated',
         body: completedText,
-      });
+      };
       await client.query('COMMIT');
-      return res.json({ success: true, system_message_id: sys.rows[0].id });
     } catch (e) {
-      await client.query('ROLLBACK');
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
       throw e;
     } finally {
       client.release();
     }
+    if (notifyAfterCommit) {
+      const nc = await pool.connect();
+      try {
+        await notifyProjectRecipients(nc, notifyAfterCommit);
+      } catch (ne) {
+        console.error('siteChat completeMaterialRequest notify:', ne);
+      } finally {
+        nc.release();
+      }
+    }
+    return res.json({ success: true, system_message_id: systemMessageId });
   } catch (err) {
     if (tableMissing(err)) {
       return res.status(503).json({
@@ -593,7 +609,10 @@ async function completeMaterialRequest(req, res) {
       });
     }
     console.error('siteChat completeMaterialRequest:', err);
-    return res.status(500).json({ success: false, message: 'Failed to complete request.' });
+    return res.status(500).json({
+      success: false,
+      message: err && err.message ? String(err.message) : 'Failed to complete request.',
+    });
   }
 }
 
@@ -601,7 +620,8 @@ async function updateMaterialRequestStatus(req, res) {
   const actor = getActor(req);
   if (!actor) return res.status(403).json({ success: false, message: 'Access denied.' });
   const messageId = parseInt(req.params.messageId, 10);
-  const nextStatus = String(req.body.status || '').trim();
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const nextStatus = String(body.status || '').trim();
   if (!Number.isInteger(messageId) || messageId < 1) {
     return res.status(400).json({ success: false, message: 'Invalid message id.' });
   }
@@ -619,13 +639,14 @@ async function updateMaterialRequestStatus(req, res) {
     if (row.message_type !== 'material_request') {
       return res.status(400).json({ success: false, message: 'Message is not a material request.' });
     }
-    const projectIdHint = req.body.project_id != null ? req.body.project_id : row.project_id;
+    const projectIdHint = body.project_id != null ? body.project_id : row.project_id;
     const project = await resolveProjectForRequest(req, actor, projectIdHint);
     if (!project || Number(project.id) !== Number(row.project_id)) {
       return res.status(403).json({ success: false, message: 'Access denied.' });
     }
     const actorName = await resolveActorDisplayName(actor);
     const client = await pool.connect();
+    let notifyAfterCommit = null;
     try {
       await client.query('BEGIN');
       await client.query(
@@ -667,7 +688,7 @@ async function updateMaterialRequestStatus(req, res) {
          RETURNING id`,
         [row.company_id, row.project_id, actor.kind, actor.id, actorName, text]
       );
-      await notifyProjectRecipients(client, {
+      notifyAfterCommit = {
         companyId: row.company_id,
         projectId: row.project_id,
         messageId: sys.rows[0].id,
@@ -676,15 +697,27 @@ async function updateMaterialRequestStatus(req, res) {
         kind: 'request_updated',
         title: 'Request Updated',
         body: text,
-      });
+      };
       await client.query('COMMIT');
-      return res.json({ success: true });
     } catch (e) {
-      await client.query('ROLLBACK');
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
       throw e;
     } finally {
       client.release();
     }
+    if (notifyAfterCommit) {
+      const nc = await pool.connect();
+      try {
+        await notifyProjectRecipients(nc, notifyAfterCommit);
+      } catch (ne) {
+        console.error('siteChat updateMaterialRequestStatus notify:', ne);
+      } finally {
+        nc.release();
+      }
+    }
+    return res.json({ success: true });
   } catch (err) {
     if (tableMissing(err)) {
       return res.status(503).json({
@@ -693,7 +726,10 @@ async function updateMaterialRequestStatus(req, res) {
       });
     }
     console.error('siteChat updateMaterialRequestStatus:', err);
-    return res.status(500).json({ success: false, message: 'Failed to update status.' });
+    return res.status(500).json({
+      success: false,
+      message: err && err.message ? String(err.message) : 'Failed to update status.',
+    });
   }
 }
 
