@@ -173,27 +173,31 @@ async function listMessages(req, res) {
       .map((m) => m.id);
     let photoByMessage = {};
     if (reqIds.length) {
-      const pr = await pool.query(
-        `SELECT id, message_id, file_url, created_at, uploaded_by_kind, uploaded_by_id
-         FROM site_chat_request_photo
-         WHERE message_id = ANY($1::bigint[])
-         ORDER BY created_at ASC`,
-        [reqIds]
-      );
-      photoByMessage = pr.rows.reduce((acc, p) => {
-        const k = String(p.message_id);
-        if (!acc[k]) acc[k] = [];
-        acc[k].push(p);
-        return acc;
-      }, {});
+      try {
+        const pr = await pool.query(
+          `SELECT id, message_id, file_url, created_at, uploaded_by_kind, uploaded_by_id
+           FROM site_chat_request_photo
+           WHERE message_id = ANY($1::bigint[])
+           ORDER BY created_at ASC`,
+          [reqIds]
+        );
+        photoByMessage = pr.rows.reduce((acc, p) => {
+          const k = String(p.message_id);
+          if (!acc[k]) acc[k] = [];
+          acc[k].push(p);
+          return acc;
+        }, {});
+      } catch (photoErr) {
+        if (!tableMissing(photoErr)) throw photoErr;
+        photoByMessage = {};
+      }
     }
     const rows = rowsRaw.map((m) => ({
       ...m,
       photos: photoByMessage[String(m.id)] || [],
       can_complete:
         m.type === 'material_request' &&
-        m.sender_kind !== actor.kind &&
-        Number(m.sender_id) !== Number(actor.id) &&
+        !(m.sender_kind === actor.kind && Number(m.sender_id) === Number(actor.id)) &&
         String(m.status || '').toLowerCase() !== 'completed',
       is_mine: m.sender_kind === actor.kind && Number(m.sender_id) === Number(actor.id),
     }));
