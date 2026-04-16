@@ -29,11 +29,11 @@ async function resolveActorDisplayName(actor) {
   if (actor.kind === 'manager') return actor.name || 'Manager';
   try {
     const r = await pool.query(
-      'SELECT name, surname, email FROM users WHERE id = $1 AND company_id = $2 LIMIT 1',
+      'SELECT name, email FROM users WHERE id = $1 AND company_id = $2 LIMIT 1',
       [actor.id, actor.companyId]
     );
     if (r.rows[0]) {
-      const nm = [r.rows[0].name, r.rows[0].surname].filter(Boolean).join(' ').trim();
+      const nm = String(r.rows[0].name || '').trim();
       return nm || r.rows[0].email || actor.name || 'User';
     }
   } catch (e) {
@@ -146,7 +146,7 @@ async function listMessages(req, res) {
                 NULLIF(TRIM(
                   CASE
                     WHEN m.sender_kind = 'manager' THEN CONCAT(COALESCE(mgr.name, ''), ' ', COALESCE(mgr.surname, ''))
-                    WHEN m.sender_kind = 'operative' THEN CONCAT(COALESCE(usr.name, ''), ' ', COALESCE(usr.surname, ''))
+                    WHEN m.sender_kind = 'operative' THEN COALESCE(usr.name, '')
                     ELSE ''
                   END
                 ), ''),
