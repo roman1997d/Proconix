@@ -113,7 +113,7 @@ app.use('/api/materials', materialsRoutes);
 // Planning (Task & Planning module)
 app.use('/api/planning', planningRoutes);
 
-// Platform administrators (Proconix operator console)
+// Platform administrators (Conflow operator console)
 app.use('/api/platform-admin', platformAdminRoutes);
 
 // Site Snags (per-company JSON state; requires site_snags_state table)
@@ -158,7 +158,7 @@ app.use((err, req, res, next) => {
 // Start server
 app.listen(PORT, HOST, async () => {
   const dbStatus = await testConnection();
-  const dbName = process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB';
+  const dbName = process.env.PGDATABASE || process.env.DB_NAME || 'ConflowDB';
 
   printStartupConsoleBanner({
     dbOk: dbStatus.ok,

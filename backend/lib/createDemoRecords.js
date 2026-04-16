@@ -1,5 +1,5 @@
 /**
- * Proconix — Create a full demo tenant (company, head manager, operatives, projects,
+ * Conflow — Create a full demo tenant (company, head manager, operatives, projects,
  * work logs, tasks, planning, materials, QA, issues, work hours) for client previews.
  * Used by POST /api/platform-admin/create-demo-records and scripts/create_demo_records.js.
  */
@@ -764,7 +764,7 @@ async function runCreateDemoRecords(client, options) {
         'Intumescent paint touch-up where exposed.',
       ]);
       const tplMep = await insertQaTemplate('MEP first fix coordination', projectId2, [
-        'Set-out vs grid; clashes logged in Proconix.',
+        'Set-out vs grid; clashes logged in Conflow.',
         'Box-outs and riser sleeves verified.',
         'Drylining clearance for cable containment.',
       ]);

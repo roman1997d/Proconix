@@ -1,5 +1,5 @@
 /**
- * Proconix platform administrators (table proconix_admin).
+ * Conflow platform administrators (table proconix_admin).
  * Not company managers — separate auth and routes under /api/platform-admin.
  */
 

@@ -1,5 +1,5 @@
 /**
- * Proconix Landing Page – main script
+ * Conflow Landing Page – main script
  * Optional: smooth scroll, nav highlight, or other small interactions
  */
 

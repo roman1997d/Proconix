@@ -16,7 +16,7 @@ var pgPassword = process.env.PGPASSWORD != null && process.env.PGPASSWORD !== ''
 const pool = new Pool({
   host: process.env.PGHOST || process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.PGPORT || process.env.DB_PORT || '5432', 10),
-  database: process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB',
+  database: process.env.PGDATABASE || process.env.DB_NAME || 'ConflowDB',
   user: process.env.PGUSER || process.env.DB_USER || 'postgres',
   password: pgPassword,
   max: 10,

@@ -97,7 +97,7 @@ function plainTextLinesFromPriceWorkTables(tables) {
  *   photoConfirmationHtml?: string,
  * }} o
  */
-function buildProconixEmailHtml(o) {
+function buildConflowEmailHtml(o) {
   var rowsHtml = o.rows
     .map(function (r) {
       return (
@@ -228,7 +228,7 @@ function buildProconixEmailHtml(o) {
     photoConf +
     '</td></tr>' +
     '<tr><td style="padding:16px 32px 24px 32px;border-top:1px solid #334155;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
-    '<p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;">· <strong style="color:#94a3b8;">Proconix</strong> — construction workflow platform</p>' +
+    '<p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;">· <strong style="color:#94a3b8;">Conflow</strong> — construction workflow platform</p>' +
     '<p style="margin:8px 0 0 0;font-size:12px;color:#475569;">Use <strong style="color:#94a3b8;">Reply</strong> to respond directly to the sender.</p>' +
     '</td></tr></table></td></tr></table></body></html>'
   );
@@ -281,8 +281,8 @@ function buildClientCommunicationEmailHtml(o) {
     '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background-color:#efe8dd;border:1px solid #d4c4b0;border-radius:14px;overflow:hidden;box-shadow:0 12px 28px rgba(74,63,53,0.08);">' +
     '<tr><td style="height:4px;background-color:#a89888;font-size:0;line-height:0;">&nbsp;</td></tr>' +
     '<tr><td style="padding:26px 32px 8px 32px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
-    '<p style="margin:0 0 2px 0;font-size:17px;font-weight:700;letter-spacing:0.02em;color:#4a3f35;">Proconix</p>' +
-    '<p style="margin:0 0 22px 0;font-size:12px;line-height:1.45;color:#6b5d52;">Proconix — construction workflow platform</p>' +
+    '<p style="margin:0 0 2px 0;font-size:17px;font-weight:700;letter-spacing:0.02em;color:#4a3f35;">Conflow</p>' +
+    '<p style="margin:0 0 22px 0;font-size:12px;line-height:1.45;color:#6b5d52;">Conflow — construction workflow platform</p>' +
     '<h2 style="margin:0 0 14px 0;font-size:17px;font-weight:600;line-height:1.35;color:#4a3f35;letter-spacing:-0.01em;">' +
     title +
     '</h2>' +
@@ -312,7 +312,7 @@ function buildClientCommunicationEmailHtml(o) {
       : '') +
     '</td></tr>' +
     '<tr><td style="padding:12px 32px 18px 32px;border-top:1px solid #d4c4b0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
-    '<p style="margin:0;font-size:11px;line-height:1.45;color:#9a8e84;">Proconix</p>' +
+    '<p style="margin:0;font-size:11px;line-height:1.45;color:#9a8e84;">Conflow</p>' +
     '</td></tr></table></td></tr></table></body></html>'
   );
 }
@@ -328,7 +328,7 @@ function buildCompanyWelcomeEmailHtml(p) {
     escapeHtml(p.managerFirstName) +
     '</strong>, wonderful news — <strong style="color:#f8fafc;">' +
     escapeHtml(p.companyName) +
-    '</strong> is now registered on Proconix! We are genuinely excited to have you on board and cannot wait to help your teams work smarter.</p>';
+    '</strong> is now registered on Conflow! We are genuinely excited to have you on board and cannot wait to help your teams work smarter.</p>';
 
   const rows = [
     { label: 'Company created on', value: p.createdAtFormatted },
@@ -361,7 +361,7 @@ function buildCompanyWelcomeEmailHtml(p) {
     escapeHtml(tokenDisplay) +
     '</span></p>' +
     '<p style="margin:12px 0 0 0;font-size:14px;line-height:1.55;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
-    "You will use this token whenever you contact Proconix support about your account, billing, or any changes — it helps us verify it is really you." +
+    "You will use this token whenever you contact Conflow support about your account, billing, or any changes — it helps us verify it is really you." +
     '</p></td></tr></table>';
 
   const nextSteps =
@@ -378,23 +378,23 @@ function buildCompanyWelcomeEmailHtml(p) {
 
   const thankYou =
     '<p style="margin:24px 0 0 0;font-size:15px;line-height:1.65;color:#cbd5e1;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
-    "Thank you for choosing <strong style=\"color:#f8fafc;\">Proconix</strong> — we are cheering for your next project win." +
+    "Thank you for choosing <strong style=\"color:#f8fafc;\">Conflow</strong> — we are cheering for your next project win." +
     '</p>';
 
   const signature =
     '<p style="margin:24px 0 0 0;font-size:15px;line-height:1.6;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
     'Kindest regards,<br>' +
     '<strong style="color:#f8fafc;font-size:16px;">Roman Demian</strong><br>' +
-    '<span style="color:#94a3b8;font-size:14px;">CEO &amp; Founder, Proconix</span></p>';
+    '<span style="color:#94a3b8;font-size:14px;">CEO &amp; Founder, Conflow</span></p>';
 
   const footer =
-    '<p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;">You received this because you completed company registration on Proconix.</p>';
+    '<p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;">You received this because you completed company registration on Conflow.</p>';
 
   return (
     '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
     '<meta http-equiv="x-ua-compatible" content="ie=edge"></head><body style="margin:0;padding:0;background-color:#020617;">' +
     '<div style="display:none;font-size:1px;color:#020617;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">' +
-    escapeHtml(`${p.companyName} is registered on Proconix — here are your details`) +
+    escapeHtml(`${p.companyName} is registered on Conflow — here are your details`) +
     '</div>' +
     '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#020617;padding:32px 16px;">' +
     '<tr><td align="center">' +
@@ -405,7 +405,7 @@ function buildCompanyWelcomeEmailHtml(p) {
     'Welcome aboard' +
     '</span>' +
     '<h1 style="margin:12px 0 0 0;font-size:24px;font-weight:700;line-height:1.25;color:#f8fafc;letter-spacing:-0.02em;">' +
-    'Your company is officially on Proconix' +
+    'Your company is officially on Conflow' +
     '</h1></td></tr>' +
     '<tr><td style="padding:8px 32px 0 32px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
     intro +
@@ -437,7 +437,7 @@ function buildManagerActivatedEmailHtml(p) {
     escapeHtml(p.firstName) +
     '</strong>, wonderful news — your manager account for <strong style="color:#f8fafc;">' +
     escapeHtml(p.companyName) +
-    '</strong> is now <strong style="color:#4ade80;">active</strong>. You can sign in and start exploring everything Proconix has to offer.</p>';
+    '</strong> is now <strong style="color:#4ade80;">active</strong>. You can sign in and start exploring everything Conflow has to offer.</p>';
 
   const access =
     '<p style="margin:0 0 16px 0;font-size:15px;line-height:1.65;color:#cbd5e1;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
@@ -465,7 +465,7 @@ function buildManagerActivatedEmailHtml(p) {
     'First things first' +
     '</span>' +
     '<p style="margin:0;font-size:15px;line-height:1.65;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
-    'Before anything else, <strong style="color:#f8fafc;">create your first project</strong> from the dashboard. Projects tie your sites, teams, and daily work together — it is the step that really brings Proconix to life for your company.</p>' +
+    'Before anything else, <strong style="color:#f8fafc;">create your first project</strong> from the dashboard. Projects tie your sites, teams, and daily work together — it is the step that really brings Conflow to life for your company.</p>' +
     '<p style="margin:12px 0 0 0;font-size:14px;line-height:1.55;color:#94a3b8;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
     'Log in, open <strong style="color:#cbd5e1;">Projects</strong>, and add one site or job — you can refine details anytime.</p>' +
     '</td></tr></table>';
@@ -479,16 +479,16 @@ function buildManagerActivatedEmailHtml(p) {
     '<p style="margin:24px 0 0 0;font-size:15px;line-height:1.6;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
     'Kindest regards,<br>' +
     '<strong style="color:#f8fafc;font-size:16px;">Roman Demian</strong><br>' +
-    '<span style="color:#94a3b8;font-size:14px;">CEO &amp; Founder, Proconix</span></p>';
+    '<span style="color:#94a3b8;font-size:14px;">CEO &amp; Founder, Conflow</span></p>';
 
   const footer =
-    '<p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;">You received this because your Proconix manager account was activated.</p>';
+    '<p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;">You received this because your Conflow manager account was activated.</p>';
 
   return (
     '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
     '<meta http-equiv="x-ua-compatible" content="ie=edge"></head><body style="margin:0;padding:0;background-color:#020617;">' +
     '<div style="display:none;font-size:1px;color:#020617;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">' +
-    escapeHtml(`Your Proconix account is active — sign in and create your first project`) +
+    escapeHtml(`Your Conflow account is active — sign in and create your first project`) +
     '</div>' +
     '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#020617;padding:32px 16px;">' +
     '<tr><td align="center">' +
@@ -531,7 +531,7 @@ async function sendManagerAccountActivatedEmail(p) {
     throw err;
   }
 
-  const subject = 'Your Proconix account is active — welcome aboard!';
+  const subject = 'Your Conflow account is active — welcome aboard!';
   const text = [
     `Hi ${p.firstName},`,
     '',
@@ -539,13 +539,13 @@ async function sendManagerAccountActivatedEmail(p) {
     '',
     'You have access to all modules in your plan: projects, work logs, quality assurance, planning, materials, site snags, and your dashboard.',
     '',
-    'First things first: create your first project from the dashboard. That connects your sites, teams, and daily work — it is what really brings Proconix to life.',
+    'First things first: create your first project from the dashboard. That connects your sites, teams, and daily work — it is what really brings Conflow to life.',
     '',
     'We are glad you are here. Reply to this email if you need help.',
     '',
     'Kindest regards,',
     'Roman Demian',
-    'CEO & Founder, Proconix',
+    'CEO & Founder, Conflow',
   ].join('\n');
 
   const html = buildManagerActivatedEmailHtml({
@@ -586,7 +586,7 @@ function buildOperativeWelcomeEmailHtml(p) {
     '<p style="margin:0 0 18px 0;font-size:16px;line-height:1.65;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
     'Hi <strong style="color:#f8fafc;">' +
     escapeHtml(p.firstName) +
-    '</strong>, you have been registered on <strong style="color:#f8fafc;">Proconix</strong> by <strong style="color:#f8fafc;">' +
+    '</strong>, you have been registered on <strong style="color:#f8fafc;">Conflow</strong> by <strong style="color:#f8fafc;">' +
     escapeHtml(p.managerName) +
     '</strong> at <strong style="color:#f8fafc;">' +
     escapeHtml(p.companyName) +
@@ -626,23 +626,23 @@ function buildOperativeWelcomeEmailHtml(p) {
 
   const thankYou =
     '<p style="margin:24px 0 0 0;font-size:15px;line-height:1.65;color:#cbd5e1;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
-    'Thank you for choosing Proconix — we are glad to have you on the team.' +
+    'Thank you for choosing Conflow — we are glad to have you on the team.' +
     '</p>';
 
   const signature =
     '<p style="margin:24px 0 0 0;font-size:15px;line-height:1.6;color:#e2e8f0;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
     'Kindest regards,<br>' +
     '<strong style="color:#f8fafc;font-size:16px;">Roman Demian</strong><br>' +
-    '<span style="color:#94a3b8;font-size:14px;">Founder &amp; CEO, Proconix</span></p>';
+    '<span style="color:#94a3b8;font-size:14px;">Founder &amp; CEO, Conflow</span></p>';
 
   const footer =
-    '<p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;">This message was sent because a company manager added you to Proconix.</p>';
+    '<p style="margin:0;font-size:12px;line-height:1.5;color:#64748b;">This message was sent because a company manager added you to Conflow.</p>';
 
   return (
     '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">' +
     '<meta http-equiv="x-ua-compatible" content="ie=edge"></head><body style="margin:0;padding:0;background-color:#020617;">' +
     '<div style="display:none;font-size:1px;color:#020617;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">' +
-    escapeHtml(`Your Proconix login details — sign in with your temporary password`) +
+    escapeHtml(`Your Conflow login details — sign in with your temporary password`) +
     '</div>' +
     '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#020617;padding:32px 16px;">' +
     '<tr><td align="center">' +
@@ -653,7 +653,7 @@ function buildOperativeWelcomeEmailHtml(p) {
     'Team invitation' +
     '</span>' +
     '<h1 style="margin:12px 0 0 0;font-size:24px;font-weight:700;line-height:1.25;color:#f8fafc;letter-spacing:-0.02em;">' +
-    'You are invited to Proconix' +
+    'You are invited to Conflow' +
     '</h1></td></tr>' +
     '<tr><td style="padding:8px 32px 28px 32px;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
     intro +
@@ -693,11 +693,11 @@ async function sendOperativeWelcomeEmail(p) {
   }
 
   const roleLabel = p.isSupervisor ? 'Supervisor' : p.role;
-  const subject = 'Welcome to Proconix — your temporary login details';
+  const subject = 'Welcome to Conflow — your temporary login details';
   const text = [
     `Hi ${p.firstName},`,
     '',
-    `You have been registered on Proconix by ${p.managerName} at ${p.companyName} in the role of ${roleLabel}.`,
+    `You have been registered on Conflow by ${p.managerName} at ${p.companyName} in the role of ${roleLabel}.`,
     '',
     'Temporary sign-in details:',
     `Email: ${p.email}`,
@@ -707,11 +707,11 @@ async function sendOperativeWelcomeEmail(p) {
     '',
     'Need help? Our in-app chat supports English, Romanian, and Russian. You can also email info@proconix.com.',
     '',
-    'Thank you for choosing Proconix.',
+    'Thank you for choosing Conflow.',
     '',
     'Kindest regards,',
     'Roman Demian',
-    'Founder & CEO, Proconix',
+    'Founder & CEO, Conflow',
   ].join('\n');
 
   const html = buildOperativeWelcomeEmailHtml({
@@ -762,11 +762,11 @@ async function sendCompanyWelcomeEmail(p) {
     throw err;
   }
 
-  const subject = `Welcome to Proconix — ${p.companyName} is registered!`;
+  const subject = `Welcome to Conflow — ${p.companyName} is registered!`;
   const text = [
     `Hi ${p.managerFirstName},`,
     '',
-    `Great news — "${p.companyName}" is now registered on Proconix! We are excited to have you with us.`,
+    `Great news — "${p.companyName}" is now registered on Conflow! We are excited to have you with us.`,
     '',
     'Here are your registration details:',
     `- Company created on: ${p.createdAtFormatted}`,
@@ -775,16 +775,16 @@ async function sendCompanyWelcomeEmail(p) {
     '',
     'Security information:',
     `Your security token is: ${p.securityToken}`,
-    "Keep it safe — you'll need it when contacting Proconix support about your account or any changes.",
+    "Keep it safe — you'll need it when contacting Conflow support about your account or any changes.",
     '',
     'What happens next:',
     `Your profile will be reviewed and approved by our platform team. If we need anything, we will reach out at ${p.managerEmail}.`,
     '',
-    'Thank you for choosing Proconix!',
+    'Thank you for choosing Conflow!',
     '',
     'Kindest regards,',
     'Roman Demian',
-    'CEO & Founder, Proconix',
+    'CEO & Founder, Conflow',
   ].join('\n');
 
   const html = buildCompanyWelcomeEmailHtml({
@@ -850,7 +850,7 @@ async function sendCallbackRequestEmail(payload) {
     throw err;
   }
 
-  const subject = `Proconix — Callback request from ${fullName}`;
+  const subject = `Conflow — Callback request from ${fullName}`;
   const text = [
     'New callback request (See plans / Request a Callback form)',
     '',
@@ -859,7 +859,7 @@ async function sendCallbackRequestEmail(payload) {
     `Phone: ${phone}`,
   ].join('\n');
 
-  const html = buildProconixEmailHtml({
+  const html = buildConflowEmailHtml({
     preheader: `${fullName} requested a callback — ${phone}`,
     badge: 'Plans · Request a callback',
     title: 'Someone asked for a callback',
@@ -898,7 +898,7 @@ async function sendContactUsEmail(payload) {
   }
 
   const roleLine = role ? `Role: ${role}` : 'Role: (not specified)';
-  const subject = `Proconix — Contact form from ${name}`;
+  const subject = `Conflow — Contact form from ${name}`;
   const text = [
     'New message (Contact Us page)',
     '',
@@ -913,7 +913,7 @@ async function sendContactUsEmail(payload) {
   ].join('\n');
 
   const roleDisplay = role || 'Not specified';
-  const html = buildProconixEmailHtml({
+  const html = buildConflowEmailHtml({
     preheader: `${name} · ${company} — new Contact form message`,
     badge: 'Website · Contact us',
     title: 'New message from your site',
@@ -957,7 +957,7 @@ async function sendBookDemoEmail(payload) {
   }
 
   const roleDisplay = role && String(role).trim() ? String(role).trim() : 'Not specified';
-  const subject = `Proconix — Book a demo: ${fullName}`;
+  const subject = `Conflow — Book a demo: ${fullName}`;
   const text = [
     'New “Book a demo” request (index.html)',
     '',
@@ -967,7 +967,7 @@ async function sendBookDemoEmail(payload) {
     `Role: ${roleDisplay}`,
   ].join('\n');
 
-  const html = buildProconixEmailHtml({
+  const html = buildConflowEmailHtml({
     preheader: `${fullName} wants a demo — ${email}`,
     badge: 'Website · Book a demo',
     title: 'Someone booked a demo',
@@ -1020,7 +1020,7 @@ async function sendSeatLimitReachedEmail(p) {
     throw err;
   }
 
-  const subject = `Proconix — Seat limit reached (${companyName})`;
+  const subject = `Conflow — Seat limit reached (${companyName})`;
   const roBody =
     `Managerul "${managerFullName}", adresa de email "${managerEmail}", a încercat să adauge ${attemptLabelRo} în companie, ` +
     `dar nu a putut din cauză că a ajuns la limita abonamentului ales. ` +
@@ -1037,7 +1037,7 @@ async function sendSeatLimitReachedEmail(p) {
     roBody,
   ].join('\n');
 
-  const html = buildProconixEmailHtml({
+  const html = buildConflowEmailHtml({
     preheader: `${managerFullName} · limit reached · ${companyName}`,
     badge: 'Billing · Seat limit',
     title: 'User limit reached',
@@ -1107,8 +1107,8 @@ async function sendPlatformAdminClientEmail(p) {
   });
 
   const text = [
-    'Proconix',
-    'Proconix — construction workflow platform',
+    'Conflow',
+    'Conflow — construction workflow platform',
     '',
     subject,
     '',
@@ -1120,7 +1120,7 @@ async function sendPlatformAdminClientEmail(p) {
     marketingLine,
     '',
     '—',
-    'Proconix',
+    'Conflow',
   ].join('\n');
 
   await transport.sendMail({
@@ -1162,12 +1162,12 @@ async function sendDemoTenantWelcomeEmail(p) {
   const adminName = String(p.adminName || '').trim();
 
   const greeting = headManagerName ? `Hello ${headManagerName},` : 'Hello,';
-  const subject = `Your Proconix demo — ${companyName || 'your workspace'}`;
+  const subject = `Your Conflow demo — ${companyName || 'your workspace'}`;
 
   const bodyText = [
     greeting,
     '',
-    'Your Proconix demo workspace is ready. Use the details below to sign in to the manager dashboard and the operative app. The same password works for both accounts.',
+    'Your Conflow demo workspace is ready. Use the details below to sign in to the manager dashboard and the operative app. The same password works for both accounts.',
     '',
     `Company: ${companyName}`,
     '',
@@ -1181,11 +1181,11 @@ async function sendDemoTenantWelcomeEmail(p) {
     `• Email: ${primaryOperativeEmail}`,
     '• Password: same as above',
     '',
-    'The demo includes sample projects, work logs, planning, materials, quality assurance, and more so you can see how teams use Proconix day to day.',
+    'The demo includes sample projects, work logs, planning, materials, quality assurance, and more so you can see how teams use Conflow day to day.',
     '',
     'If you have any questions, reply to this email.',
     '',
-    `— ${adminName || 'Proconix'}`,
+    `— ${adminName || 'Conflow'}`,
   ].join('\n');
 
   await sendPlatformAdminClientEmail({
@@ -1222,22 +1222,22 @@ async function sendSignedDocumentEmail(o) {
     .slice(0, 72);
   const attachName = o.filename || `signed-${safe || 'document'}.pdf`;
   const first = o.managerFirstName ? String(o.managerFirstName).trim() : '';
-  const subject = `Proconix — Signed document: ${title}`;
+  const subject = `Conflow — Signed document: ${title}`;
   const text = [
     first ? `Hello ${first},` : 'Hello,',
     '',
     `Attached is the signed copy of your document: "${title}".`,
     'Signature images and completed fields (dates, checkboxes, text) are merged onto the original PDF pages.',
     '',
-    '— Proconix',
+    '— Conflow',
   ].join('\n');
 
-  const html = buildProconixEmailHtml({
+  const html = buildConflowEmailHtml({
     preheader: `Signed PDF attached — ${title}`,
     badge: 'Documents & signatures',
     title: 'Your signed document',
     subtitle:
-      'The PDF attached includes operative signatures and field responses as recorded in Proconix. You can download it anytime from the manager dashboard.',
+      'The PDF attached includes operative signatures and field responses as recorded in Conflow. You can download it anytime from the manager dashboard.',
     rows: [
       { label: 'Document', value: title },
       { label: 'Sent to', value: to },
@@ -1326,13 +1326,13 @@ async function sendWorkLogInvoiceCopyEmail(p) {
     'A PDF invoice summary is attached to this message.',
     'This email was sent because the operative asked for a copy to be sent to the company.',
     photoGroups.length ? '\n(Photos: see HTML “Photo confirmation” or the attached PDF.)' : '',
-    '— Proconix',
+    '— Conflow',
   ].join('\n');
 
   const messageText = description || '—';
   const photoConfirmationHtml = buildInvoicePhotoConfirmationHtml(photoGroups);
 
-  const html = buildProconixEmailHtml({
+  const html = buildConflowEmailHtml({
     preheader: `Invoice summary ${jobDisplayId} for ${companyName}`,
     badge: 'Work log · invoice summary',
     title: 'Operative work entry (invoice-style summary)',

@@ -1,5 +1,5 @@
 /**
- * Proconix platform administration API (operators), not company managers.
+ * Conflow platform administration API (operators), not company managers.
  */
 
 const express = require('express');

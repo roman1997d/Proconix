@@ -104,7 +104,7 @@ async function getSystemHealth(req, res) {
   let dbOk = false;
   let dbLatencyMs = null;
   let dbError = null;
-  const dbName = process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB';
+  const dbName = process.env.PGDATABASE || process.env.DB_NAME || 'ConflowDB';
   try {
     const t0 = Date.now();
     await pool.query('SELECT 1');

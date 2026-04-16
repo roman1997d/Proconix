@@ -1,5 +1,5 @@
 /**
- * Proconix Landing Page – index.js
+ * Conflow Landing Page – index.js
  * Operative login modal, scroll reveal, smooth scroll.
  */
 

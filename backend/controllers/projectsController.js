@@ -1,5 +1,5 @@
 /**
- * Projects API per Proconix spec.
+ * Projects API per Conflow spec.
  * Managers: create, edit, deactivate, view all company projects.
  * Operatives: view only their assigned project (users.project_id).
  * All SQL parameterized; company scoped.
@@ -445,7 +445,7 @@ async function update(req, res) {
       return res.status(503).json({
         success: false,
         message:
-          'Trade categories need the project_trades table. On the server run: psql -d ProconixDB -f scripts/create_project_trades.sql',
+          'Trade categories need the project_trades table. On the server run: psql -d ConflowDB -f scripts/create_project_trades.sql',
         detail: err.message,
       });
     }
@@ -453,7 +453,7 @@ async function update(req, res) {
       return res.status(503).json({
         success: false,
         message:
-          'Database schema is missing columns (e.g. planned_end_date or project_name). On the server run: psql -d ProconixDB -f scripts/migrate_projects_to_spec.sql and -f scripts/alter_projects_add_location.sql',
+          'Database schema is missing columns (e.g. planned_end_date or project_name). On the server run: psql -d ConflowDB -f scripts/migrate_projects_to_spec.sql and -f scripts/alter_projects_add_location.sql',
         detail: err.message,
       });
     }

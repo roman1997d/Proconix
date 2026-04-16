@@ -1,5 +1,5 @@
 /**
- * Proconix QA Module — enterprise UI (views, drawers, full pages)
+ * Conflow QA Module — enterprise UI (views, drawers, full pages)
  */
 (function () {
   'use strict';

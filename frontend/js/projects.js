@@ -1,5 +1,5 @@
 /**
- * Projects module – Proconix spec.
+ * Projects module – Conflow spec.
  * Manager: create, edit, deactivate, view all company projects. No full page refresh.
  * Token validation on load; fetch() for all API calls.
  */
