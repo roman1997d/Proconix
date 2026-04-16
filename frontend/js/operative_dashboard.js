@@ -412,6 +412,15 @@
     return escapeHtml(s == null ? '' : String(s));
   }
 
+  /** True if URL likely points to an image (for inline preview in chat). */
+  function chatIsImageFileUrl(url) {
+    var s = String(url || '')
+      .trim()
+      .toLowerCase();
+    if (!s) return false;
+    return /\.(jpe?g|png|gif|webp|bmp|heic|avif)(\?|#|$)/i.test(s);
+  }
+
   /** Bold `[Repost from #n]`, normal weight for the rest of the summary line. */
   function chatSortMessagesByTime(arr) {
     if (!Array.isArray(arr)) return arr;
@@ -540,6 +549,22 @@
         var body = '';
         if (m.type === 'material_request') {
           var stNorm = chatNormalizeRequestStatus(m.status);
+          var feedPhotos = '';
+          var pArr = Array.isArray(m.photos) ? m.photos : [];
+          var photoParts = pArr
+            .map(function (p) {
+              var u = p && p.file_url ? String(p.file_url).trim() : '';
+              if (!u) return '';
+              return (
+                '<img class="op-chat-feed-thumb op-chat-req-thumb" src="' +
+                chatEsc(u) +
+                '" alt="" loading="lazy">'
+              );
+            })
+            .filter(Boolean);
+          if (photoParts.length) {
+            feedPhotos = '<div class="op-chat-feed-photos">' + photoParts.join('') + '</div>';
+          }
           body =
             '<div class="op-chat-msg-text"><span class="op-chat-request-heading">Material Request #' +
             chatEsc(String(m.id || '')) +
@@ -551,11 +576,36 @@
             '">' +
             chatEsc(stNorm) +
             '</span>' +
+            feedPhotos +
             '<div style="margin-top:8px;"><button type="button" class="op-btn op-btn-secondary op-btn-sm" data-chat-request-id="' +
             chatEsc(String(m.id || '')) +
             '">View details</button></div>';
         } else if (m.type === 'file') {
-          body = '<div class="op-chat-msg-text"><i class="bi bi-paperclip"></i> ' + chatEsc(m.file_name || 'Attachment') + '</div>';
+          var furl = m.file_url ? String(m.file_url).trim() : '';
+          var showImg = furl && chatIsImageFileUrl(furl);
+          if (showImg) {
+            body =
+              '<div class="op-chat-feed-photos op-chat-feed-photos--single">' +
+              '<img class="op-chat-feed-thumb op-chat-req-thumb" src="' +
+              chatEsc(furl) +
+              '" alt="" loading="lazy">' +
+              '</div>' +
+              '<div class="op-chat-msg-text"><i class="bi bi-paperclip"></i> ' +
+              chatEsc(m.file_name || 'Attachment') +
+              '</div>';
+          } else if (furl) {
+            body =
+              '<div class="op-chat-msg-text"><a href="' +
+              chatEsc(furl) +
+              '" target="_blank" rel="noopener" class="op-chat-file-link"><i class="bi bi-paperclip"></i> ' +
+              chatEsc(m.file_name || 'Attachment') +
+              '</a></div>';
+          } else {
+            body =
+              '<div class="op-chat-msg-text"><i class="bi bi-paperclip"></i> ' +
+              chatEsc(m.file_name || 'Attachment') +
+              '</div>';
+          }
         } else {
           body = '<div class="op-chat-msg-text">' + chatEsc(m.text || '') + '</div>';
         }
@@ -961,6 +1011,26 @@
       var file = chatFileInput.files && chatFileInput.files[0];
       if (file) chatSendFile(file);
       chatFileInput.value = '';
+    });
+  }
+
+  if (chatFeedEl) {
+    chatFeedEl.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains('op-chat-feed-thumb')) return;
+      var wrap = t.closest('.op-chat-feed-photos');
+      var imgs = wrap
+        ? Array.prototype.slice
+            .call(wrap.querySelectorAll('img.op-chat-feed-thumb'))
+            .map(function (el) {
+              return el.getAttribute('src') || '';
+            })
+            .filter(Boolean)
+        : [];
+      var cur = t.getAttribute('src') || '';
+      var idx = imgs.indexOf(cur);
+      chatOpenReqPhotoViewer(imgs.length ? imgs : [cur], idx >= 0 ? idx : 0);
+      e.preventDefault();
     });
   }
 

@@ -1788,6 +1788,27 @@ body.op-chat-open {
   cursor: zoom-in;
 }
 
+.op-chat-feed-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.op-chat-feed-photos img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 101, 88, 0.18);
+}
+
+.op-chat-feed-photos--single img {
+  width: min(100%, 220px);
+  height: auto;
+  max-height: 200px;
+}
+
 .op-modal-req-img {
   z-index: 280;
 }
