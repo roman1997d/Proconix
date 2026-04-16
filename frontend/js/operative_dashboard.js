@@ -1331,18 +1331,32 @@
     dgToolShare.addEventListener('click', function (e) {
       e.stopPropagation();
       if (!dgCurrentVersionId) return;
-      var shareUrl = window.location.origin + '/api/drawing-gallery/versions/' + dgCurrentVersionId + '/file';
-      if (navigator.share) {
-        navigator
-          .share({
-            title: 'Drawing',
-            text: 'Drawing preview link',
-            url: shareUrl,
-          })
-          .catch(function () {});
-      } else if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(shareUrl).catch(function () {});
-      }
+      fetch('/api/drawing-gallery/versions/' + dgCurrentVersionId + '/public-share', {
+        method: 'POST',
+        headers: { 'X-Operative-Token': getToken() || '' },
+        credentials: 'same-origin',
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { ok: res.ok, data: data };
+          });
+        })
+        .then(function (out) {
+          if (!out.ok || !out.data || !out.data.success || !out.data.url) throw new Error('share');
+          var shareUrl = out.data.url;
+          if (navigator.share) {
+            navigator
+              .share({
+                title: 'Drawing',
+                text: 'Public drawing link',
+                url: shareUrl,
+              })
+              .catch(function () {});
+          } else if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(shareUrl).catch(function () {});
+          }
+        })
+        .catch(function () {});
     });
   }
 

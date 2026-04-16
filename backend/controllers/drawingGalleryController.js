@@ -6,6 +6,10 @@ const fs = require('fs');
 const path = require('path');
 const { pool } = require('../db/pool');
 const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
+const {
+  createPublicDrawingToken,
+  verifyPublicDrawingToken,
+} = require('../utils/publicDrawingToken');
 
 function tableMissing(err) {
   return err && err.code === '42P01';
@@ -606,6 +610,79 @@ async function getVersionMeta(req, res) {
   });
 }
 
+function getPublicBaseUrl(req) {
+  return String(process.env.PUBLIC_APP_URL || process.env.SITE_URL || process.env.PROCONIX_PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+}
+
+/**
+ * POST /versions/:versionId/public-share
+ * Authenticated manager/operative gets a signed public link (read-only).
+ */
+async function createPublicShareLink(req, res) {
+  const versionId = parseInt(req.params.versionId, 10);
+  if (!Number.isInteger(versionId) || versionId < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid version id.' });
+  }
+  const row = await loadVersionForAccess(versionId);
+  const acc = await assertVersionReadAccess(req, row);
+  if (!acc.ok) return res.status(acc.code).json({ success: false, message: acc.message });
+  const token = createPublicDrawingToken(versionId);
+  const base = getPublicBaseUrl(req);
+  const url = `${base}/public_drawing_view.html?t=${encodeURIComponent(token)}`;
+  return res.json({ success: true, token, url });
+}
+
+/**
+ * GET /public/:token/meta
+ */
+async function getPublicVersionMeta(req, res) {
+  const token = String(req.params.token || '');
+  const parsed = verifyPublicDrawingToken(token);
+  if (!parsed) return res.status(401).json({ success: false, message: 'Invalid or expired share link.' });
+  const row = await loadVersionForAccess(parsed.version_id);
+  if (!row) return res.status(404).json({ success: false, message: 'Drawing not found.' });
+  return res.json({
+    success: true,
+    version: {
+      id: row.id,
+      series_id: row.series_id,
+      version_number: row.version_number,
+      status: row.status,
+      mime_type: row.mime_type,
+      title: row.title,
+      floor_label: row.floor_label,
+      zone_label: row.zone_label,
+      discipline: row.discipline,
+      project_id: row.project_id,
+      uploaded_at: row.uploaded_at,
+      file_url: `/api/drawing-gallery/public/${encodeURIComponent(token)}/file`,
+    },
+  });
+}
+
+/**
+ * GET /public/:token/file
+ */
+async function downloadPublicVersionFile(req, res) {
+  const token = String(req.params.token || '');
+  const parsed = verifyPublicDrawingToken(token);
+  if (!parsed) return res.status(401).json({ success: false, message: 'Invalid or expired share link.' });
+  const row = await loadVersionForAccess(parsed.version_id);
+  if (!row) return res.status(404).json({ success: false, message: 'Drawing not found.' });
+  const abs = path.join(UPLOADS_ROOT, row.relative_path.split('/').join(path.sep));
+  if (!fs.existsSync(abs)) {
+    return res.status(404).json({ success: false, message: 'File missing on server.' });
+  }
+  const download = req.query.download === '1' || req.query.download === 'true';
+  res.setHeader('Content-Type', row.mime_type || 'application/octet-stream');
+  if (download) {
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(row.stored_filename || 'drawing')}"`);
+  } else {
+    res.setHeader('Content-Disposition', 'inline');
+  }
+  return res.sendFile(path.resolve(abs));
+}
+
 /**
  * GET /comments?version_id=
  */
@@ -748,6 +825,9 @@ module.exports = {
   uploadDrawing,
   downloadVersionFile,
   getVersionMeta,
+  createPublicShareLink,
+  getPublicVersionMeta,
+  downloadPublicVersionFile,
   listComments,
   postComment,
   listNotifications,

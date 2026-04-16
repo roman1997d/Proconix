@@ -48,6 +48,10 @@ router.post(
 
 router.get('/versions/:versionId/file', requireManagerOrOperativeAuth, ctrl.downloadVersionFile);
 router.get('/versions/:versionId/meta', requireManagerOrOperativeAuth, ctrl.getVersionMeta);
+router.post('/versions/:versionId/public-share', requireManagerOrOperativeAuth, ctrl.createPublicShareLink);
+
+router.get('/public/:token/meta', ctrl.getPublicVersionMeta);
+router.get('/public/:token/file', ctrl.downloadPublicVersionFile);
 
 router.get('/comments', requireManagerOrOperativeAuth, ctrl.listComments);
 router.post('/comments', requireManagerOrOperativeAuth, ctrl.postComment);
