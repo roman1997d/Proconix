@@ -1689,6 +1689,10 @@ a.op-doc-row,
   gap: 6px;
 }
 
+.op-dg-tool-btn-back {
+  margin-right: auto;
+}
+
 .op-dg-tool-btn:active {
   transform: translateY(1px);
 }

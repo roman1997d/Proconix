@@ -767,6 +767,7 @@
   var dgToolCalibrate = document.getElementById('op-dg-tool-calibrate');
   var dgToolShare = document.getElementById('op-dg-tool-share');
   var dgToolDownload = document.getElementById('op-dg-tool-download');
+  var dgToolBack = document.getElementById('op-dg-tool-back');
   var dgPrevBtn = document.getElementById('op-dg-prev');
   var dgNextBtn = document.getElementById('op-dg-next');
   var dgCalibrateOverlay = document.getElementById('op-dg-calibrate-overlay');
@@ -776,6 +777,7 @@
   var dgDrawings = [];
   var dgCurrentDrawingIndex = -1;
   var dgCurrentVersionBlobUrl = null;
+  var dgThumbBlobUrls = [];
   var dgViewerState = { scale: 1, translateX: 0, translateY: 0 };
   var dgCalibrateState = {
     active: false,
@@ -909,9 +911,42 @@
 
   function dgThumbFor(d) {
     if ((d.mime_type || '').indexOf('image/') === 0) {
-      return '<img src="' + dgEsc(d.thumbnail_url || '') + '" alt="" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid rgba(15,101,88,0.16);margin-right:10px;">';
+      return '<img data-dg-thumb-version="' + dgEsc(String(d.id)) + '" alt="" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid rgba(15,101,88,0.16);margin-right:10px;background:#e7f7f2;">';
     }
     return '<span style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:8px;background:#ecfbf7;border:1px solid rgba(15,101,88,0.16);margin-right:10px;"><i class="bi bi-file-earmark-text" style="font-size:20px;color:#1d7b6a;"></i></span>';
+  }
+
+  function dgClearThumbBlobUrls() {
+    if (!Array.isArray(dgThumbBlobUrls)) return;
+    dgThumbBlobUrls.forEach(function (u) {
+      try {
+        URL.revokeObjectURL(u);
+      } catch (_) {}
+    });
+    dgThumbBlobUrls = [];
+  }
+
+  function dgHydrateImageThumbnails(drawings) {
+    if (!Array.isArray(drawings) || !drawings.length || !dgListEl) return;
+    drawings.forEach(function (d) {
+      if (!d || (d.mime_type || '').indexOf('image/') !== 0) return;
+      var imgEl = dgListEl.querySelector('img[data-dg-thumb-version="' + String(d.id) + '"]');
+      if (!imgEl) return;
+      fetch('/api/drawing-gallery/versions/' + d.id + '/file', {
+        headers: { 'X-Operative-Token': getToken() || '' },
+        credentials: 'same-origin',
+      })
+        .then(function (res) {
+          if (!res.ok) throw new Error('thumb');
+          return res.blob();
+        })
+        .then(function (blob) {
+          var u = URL.createObjectURL(blob);
+          dgThumbBlobUrls.push(u);
+          imgEl.src = u;
+        })
+        .catch(function () {});
+    });
   }
 
   function dgLoadDrawings() {
@@ -928,6 +963,7 @@
         '/drawings'
     )
       .then(function (out) {
+        dgClearThumbBlobUrls();
         if (!out.ok || !out.data.success) throw new Error(out.data.message || 'Failed');
         var rows = out.data.drawings || [];
         dgDrawings = rows.slice();
@@ -975,8 +1011,10 @@
             if (idx >= 0) dgOpenViewerAtIndex(idx);
           });
         });
+        dgHydrateImageThumbnails(rows);
       })
       .catch(function () {
+        dgClearThumbBlobUrls();
         dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">Could not load drawings.</p>';
       });
   }
@@ -1222,11 +1260,11 @@
     });
   }
 
-  if (modalDrawingViewer) {
-    modalDrawingViewer.addEventListener('click', function () {
-      closeModal(modalDrawingViewer);
-      dgResetViewerFinal();
-    });
+  function dgCloseViewerToDrawings() {
+    closeModal(modalDrawingViewer);
+    dgResetViewerFinal();
+    dgNav.level = 'drawings';
+    dgSetPath();
   }
 
   if (dgViewerWrap) {
@@ -1305,6 +1343,13 @@
       } else if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(shareUrl).catch(function () {});
       }
+    });
+  }
+
+  if (dgToolBack) {
+    dgToolBack.addEventListener('click', function (e) {
+      e.stopPropagation();
+      dgCloseViewerToDrawings();
     });
   }
 
