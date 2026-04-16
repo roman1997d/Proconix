@@ -16,6 +16,160 @@ function tableMissing(err) {
   return err && err.code === '42P01';
 }
 
+function columnMissing(err) {
+  return err && err.code === '42703';
+}
+
+const CHAT_AGENT_NAME = 'Chat Agent';
+const CHAT_AGENT_SENDER_KIND = 'manager';
+const CHAT_AGENT_SENDER_ID = 0;
+
+/** Human-readable wait duration in Romanian (minutes / hours). */
+function formatWaitRomanian(ms) {
+  const totalMin = Math.max(0, Math.floor(Number(ms) / 60000));
+  if (totalMin < 60) {
+    const n = Math.max(1, totalMin);
+    return `${n} ${n === 1 ? 'minut' : 'minute'}`;
+  }
+  const h = Math.floor(totalMin / 60);
+  const rem = totalMin % 60;
+  let s = `${h} ${h === 1 ? 'oră' : 'ore'}`;
+  if (rem > 0) s += ` și ${rem} ${rem === 1 ? 'minut' : 'minute'}`;
+  return s;
+}
+
+/**
+ * After a new material request, post a Chat Agent system message with wait stats
+ * from the last delivered request in the same project room.
+ */
+async function insertChatAgentNewRequestInsight(client, { companyId, projectId, newRequestId }) {
+  let prev;
+  try {
+    const r = await client.query(
+      `SELECT id, created_at, request_delivered_at
+       FROM site_chat_message
+       WHERE company_id = $1 AND project_id = $2
+         AND message_type = 'material_request'
+         AND id <> $3
+         AND request_delivered_at IS NOT NULL
+       ORDER BY request_delivered_at DESC
+       LIMIT 1`,
+      [companyId, projectId, newRequestId]
+    );
+    prev = r.rows[0];
+  } catch (err) {
+    if (columnMissing(err)) return;
+    throw err;
+  }
+
+  let body;
+  if (!prev) {
+    body =
+      `${CHAT_AGENT_NAME}: Acesta este primul request de materiale în această cameră de șantier. Vă rugăm să comandați din timp materialele necesare.`;
+  } else {
+    const waitMs = new Date(prev.request_delivered_at).getTime() - new Date(prev.created_at).getTime();
+    const fmt = formatWaitRomanian(waitMs);
+    body = `${CHAT_AGENT_NAME}: Pe baza ultimului request finalizat (#${prev.id}), timpul de așteptare pentru livrarea materialelor a fost de ${fmt}. Vă rugăm să aveți în vedere acest interval și să comandați materialele din timp.`;
+  }
+
+  const ins = await client.query(
+    `INSERT INTO site_chat_message
+     (company_id, project_id, sender_kind, sender_id, sender_name, message_type, body)
+     VALUES ($1,$2,$3,$4,$5,'system',$6)
+     RETURNING id`,
+    [companyId, projectId, CHAT_AGENT_SENDER_KIND, CHAT_AGENT_SENDER_ID, CHAT_AGENT_NAME, body]
+  );
+  await notifyProjectRecipients(client, {
+    companyId,
+    projectId,
+    messageId: ins.rows[0].id,
+    actorKind: CHAT_AGENT_SENDER_KIND,
+    actorId: CHAT_AGENT_SENDER_ID,
+    kind: 'chat_agent',
+    title: CHAT_AGENT_NAME,
+    body: body.slice(0, 240),
+  });
+}
+
+/**
+ * One reminder per material request if still not delivered after N minutes (default 1).
+ * Called periodically from the HTTP server process.
+ */
+async function runSiteChatAgentReminders() {
+  const reminderMin = Math.max(1, parseInt(process.env.SITE_CHAT_AGENT_REMINDER_MINUTES || '1', 10));
+  const threshold = new Date(Date.now() - reminderMin * 60 * 1000).toISOString();
+  let pending;
+  try {
+    const r = await pool.query(
+      `SELECT id
+       FROM site_chat_message
+       WHERE message_type = 'material_request'
+         AND LOWER(TRIM(COALESCE(request_status, ''))) NOT IN ('delivered', 'completed')
+         AND created_at <= $1::timestamptz
+         AND agent_reminder_at IS NULL
+       ORDER BY created_at ASC
+       LIMIT 40`,
+      [threshold]
+    );
+    pending = r.rows;
+  } catch (err) {
+    if (columnMissing(err) || tableMissing(err)) return;
+    console.error('siteChat runSiteChatAgentReminders (list):', err);
+    return;
+  }
+
+  for (const row of pending) {
+    const c = await pool.connect();
+    try {
+      await c.query('BEGIN');
+      const u = await c.query(
+        `UPDATE site_chat_message
+         SET agent_reminder_at = NOW()
+         WHERE id = $1 AND agent_reminder_at IS NULL
+         RETURNING id, company_id, project_id, request_summary`,
+        [row.id]
+      );
+      if (!u.rows.length) {
+        await c.query('ROLLBACK');
+        continue;
+      }
+      const rec = u.rows[0];
+      const summary = String(rec.request_summary || '').trim().slice(0, 140);
+      const body =
+        `${CHAT_AGENT_NAME} — Reminder: request de materiale #${rec.id} nu este încă livrat.` +
+        (summary ? ` Rezumat: ${summary}.` : '') +
+        ' Vă rugăm să urmăriți statusul livrării.';
+      const ins = await c.query(
+        `INSERT INTO site_chat_message
+         (company_id, project_id, sender_kind, sender_id, sender_name, message_type, body)
+         VALUES ($1,$2,$3,$4,$5,'system',$6)
+         RETURNING id`,
+        [rec.company_id, rec.project_id, CHAT_AGENT_SENDER_KIND, CHAT_AGENT_SENDER_ID, CHAT_AGENT_NAME, body]
+      );
+      await notifyProjectRecipients(c, {
+        companyId: rec.company_id,
+        projectId: rec.project_id,
+        messageId: ins.rows[0].id,
+        actorKind: CHAT_AGENT_SENDER_KIND,
+        actorId: CHAT_AGENT_SENDER_ID,
+        kind: 'chat_agent_reminder',
+        title: CHAT_AGENT_NAME,
+        body: body.slice(0, 240),
+      });
+      await c.query('COMMIT');
+    } catch (err) {
+      try {
+        await c.query('ROLLBACK');
+      } catch (_) {}
+      if (!columnMissing(err) && !tableMissing(err)) {
+        console.error('siteChat runSiteChatAgentReminders (row):', err);
+      }
+    } finally {
+      c.release();
+    }
+  }
+}
+
 function getActor(req) {
   if (req.userType === 'manager' && req.manager) {
     return {
@@ -265,7 +419,7 @@ async function completeMaterialRequest(req, res) {
       await client.query('BEGIN');
       await client.query(
         `UPDATE site_chat_message
-         SET request_status = 'Delivered'
+         SET request_status = 'Delivered', request_delivered_at = NOW()
          WHERE id = $1`,
         [messageId]
       );
@@ -338,7 +492,8 @@ async function updateMaterialRequestStatus(req, res) {
       await client.query('BEGIN');
       await client.query(
         `UPDATE site_chat_message
-         SET request_status = $2
+         SET request_status = $2,
+             request_delivered_at = CASE WHEN $2 = 'Delivered' THEN NOW() ELSE NULL END
          WHERE id = $1`,
         [messageId, nextStatus]
       );
@@ -484,6 +639,17 @@ async function postMessage(req, res) {
       );
 
       const msgId = ins.rows[0].id;
+      if (type === 'material_request') {
+        try {
+          await insertChatAgentNewRequestInsight(client, {
+            companyId: actor.companyId,
+            projectId: project.id,
+            newRequestId: msgId,
+          });
+        } catch (agentErr) {
+          if (!columnMissing(agentErr)) throw agentErr;
+        }
+      }
       const notifKind =
         type === 'material_request' ? 'new_material_request' : type === 'system' ? 'system_message' : 'new_message';
       await notifyProjectRecipients(client, {
@@ -601,5 +767,6 @@ module.exports = {
   uploadMaterialRequestPhoto,
   listNotifications,
   markNotificationsRead,
+  runSiteChatAgentReminders,
 };
 

@@ -481,7 +481,11 @@
     var prevTop = chatFeedEl.scrollTop;
     var prevHeight = chatFeedEl.scrollHeight;
     var visible = chatState.requestOnly
-      ? chatState.messages.filter(function (m) { return m.type === 'material_request'; })
+      ? chatState.messages.filter(function (m) {
+          if (m.type === 'material_request') return true;
+          if (m.type === 'system' && /^Chat Agent/i.test(String(m.text || '').trim())) return true;
+          return false;
+        })
       : chatState.messages;
     if (!visible.length) {
       chatFeedEl.innerHTML = '<p class="op-text-muted" style="margin:0">No messages yet. Start the conversation.</p>';
@@ -490,7 +494,13 @@
     chatFeedEl.innerHTML = visible
       .map(function (m) {
         var mine = !!m.is_mine;
-        var baseCls = 'op-chat-msg' + (mine ? ' op-chat-msg--mine' : '') + (m.type === 'material_request' ? ' op-chat-msg--request' : '');
+        var isChatAgent =
+          m.type === 'system' && /^Chat Agent/i.test(String(m.text || '').trim());
+        var baseCls =
+          'op-chat-msg' +
+          (mine ? ' op-chat-msg--mine' : '') +
+          (m.type === 'material_request' ? ' op-chat-msg--request' : '') +
+          (isChatAgent ? ' op-chat-msg--agent' : '');
         var body = '';
         if (m.type === 'material_request') {
           var stNorm = chatNormalizeRequestStatus(m.status);

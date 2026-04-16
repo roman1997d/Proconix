@@ -1,0 +1,6 @@
+-- Chat Agent: delivery timestamp + one-shot reminder flag for material requests.
+-- Run after create_site_chat_tables.sql if the table already exists without these columns.
+
+ALTER TABLE site_chat_message
+  ADD COLUMN IF NOT EXISTS request_delivered_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS agent_reminder_at TIMESTAMPTZ;

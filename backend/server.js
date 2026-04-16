@@ -27,6 +27,7 @@ const platformAdminRoutes = require('./routes/platformAdminRoutes');
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
 const drawingGalleryRoutes = require('./routes/drawingGalleryRoutes');
 const siteChatRoutes = require('./routes/siteChatRoutes');
+const { runSiteChatAgentReminders } = require('./controllers/siteChatController');
 const digitalDocumentsRoutes = require('./routes/digitalDocumentsRoutes');
 const { metricsMiddleware } = require('./middleware/metricsMiddleware');
 const { printStartupConsoleBanner } = require('./lib/startupConsoleBanner');
@@ -169,4 +170,10 @@ app.listen(PORT, HOST, async () => {
     dbName,
     dbError: dbStatus.error || null,
   });
+
+  const agentPollMs = Math.max(15000, parseInt(process.env.SITE_CHAT_AGENT_POLL_MS || '30000', 10));
+  setInterval(() => {
+    runSiteChatAgentReminders().catch(() => {});
+  }, agentPollMs);
+  runSiteChatAgentReminders().catch(() => {});
 });

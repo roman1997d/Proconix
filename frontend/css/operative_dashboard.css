@@ -1649,6 +1649,17 @@ a.op-doc-row:active {
   background: #fff7e6;
 }
 
+.op-chat-msg--agent {
+  border-left: 4px solid #14b8a6;
+  background: linear-gradient(135deg, #ecfeff 0%, #f0fdfa 100%);
+  align-self: stretch;
+}
+
+.op-chat-msg--agent .op-chat-msg-user {
+  color: #0f766e;
+  font-weight: 700;
+}
+
 .op-chat-request-status {
   display: inline-flex;
   margin-top: 4px;

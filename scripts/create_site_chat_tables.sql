@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS site_chat_message (
   request_details TEXT,
   request_urgency VARCHAR(50),
   request_location VARCHAR(255),
+  request_delivered_at TIMESTAMPTZ,
+  agent_reminder_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
