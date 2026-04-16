@@ -1657,7 +1657,33 @@ a.op-doc-row:active {
 
 .op-chat-msg--agent .op-chat-msg-user {
   color: #0f766e;
+  font-weight: 600;
+}
+
+.op-chat-msg--agent-reminder {
+  border-left: 4px solid #dc2626;
+  background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);
+  align-self: stretch;
+}
+
+.op-chat-msg--agent-reminder .op-chat-msg-user {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.op-chat-request-heading {
+  font-weight: 400;
+  color: #12342f;
+}
+
+.op-chat-repost-prefix {
   font-weight: 700;
+  color: #12342f;
+}
+
+.op-chat-repost-title {
+  font-weight: 400;
+  color: #12342f;
 }
 
 .op-chat-request-status {

@@ -59,11 +59,11 @@ async function insertChatAgentNewRequestInsight(client, { companyId, projectId, 
 
   let body;
   if (!prev) {
-    body = `${CHAT_AGENT_NAME}: This is the first material request in this project room. Please plan ahead and order materials in good time.`;
+    body = `${CHAT_AGENT_NAME}: First material request here — order early.`;
   } else {
     const waitMs = new Date(prev.request_delivered_at).getTime() - new Date(prev.created_at).getTime();
     const fmt = formatWaitingTimeEnglish(waitMs);
-    body = `${CHAT_AGENT_NAME}: Based on the last delivered material request (#${prev.id}), typical lead time was ${fmt}. Please plan ahead and order materials in good time.`;
+    body = `${CHAT_AGENT_NAME}: Last delivery #${prev.id}: ${fmt}. Order early.`;
   }
 
   const ins = await client.query(
@@ -144,9 +144,9 @@ async function runSiteChatAgentReminders() {
       const summaryShort = summaryRaw.slice(0, 140);
       const waitOpen = formatWaitingTimeEnglish(Date.now() - new Date(rec.created_at).getTime());
       const reminderBody =
-        `${CHAT_AGENT_NAME}: Undelivered material request #${rec.id}. ${waitOpen} since this request was posted.` +
-        (summaryShort ? ` Summary: ${summaryShort}.` : '') +
-        ' Reposting the request below until it is marked Delivered.';
+        `${CHAT_AGENT_NAME}: #${rec.id} still open (${waitOpen}).` +
+        (summaryShort ? ` ${summaryShort}.` : '') +
+        ' Repost sent.';
       const sysIns = await c.query(
         `INSERT INTO site_chat_message
          (company_id, project_id, sender_kind, sender_id, sender_name, message_type, body)
@@ -170,9 +170,9 @@ async function runSiteChatAgentReminders() {
       const repostIns = await c.query(
         `INSERT INTO site_chat_message
          (company_id, project_id, sender_kind, sender_id, sender_name, message_type, body,
-          request_status, request_summary, request_details, request_urgency, request_location, is_auto_repost)
+          request_status, request_summary, request_details, request_urgency, request_location, is_auto_repost, repost_of_message_id)
          VALUES ($1,$2,$3,$4,$5,'material_request', NULL,
-          'Pending', $6, $7, $8, $9, true)
+          'Pending', $6, $7, $8, $9, true, $10)
          RETURNING id`,
         [
           rec.company_id,
@@ -184,6 +184,7 @@ async function runSiteChatAgentReminders() {
           String(rec.request_details || '').trim(),
           String(rec.request_urgency || 'Normal'),
           String(rec.request_location || '').trim(),
+          rec.id,
         ]
       );
       const newId = repostIns.rows[0].id;
@@ -209,6 +210,23 @@ async function runSiteChatAgentReminders() {
       c.release();
     }
   }
+}
+
+/** If this material row is an auto-repost, mirror status (and delivered time) onto the root request. */
+async function syncOriginalMaterialRequestIfRepost(client, materialRowId, nextStatus) {
+  const r = await client.query(
+    `SELECT repost_of_message_id FROM site_chat_message WHERE id = $1 AND message_type = 'material_request'`,
+    [materialRowId]
+  );
+  const rootId = r.rows[0] && r.rows[0].repost_of_message_id;
+  if (!rootId) return;
+  await client.query(
+    `UPDATE site_chat_message
+     SET request_status = $1,
+         request_delivered_at = CASE WHEN $1 = 'Delivered' THEN NOW() ELSE NULL END
+     WHERE id = $2 AND message_type = 'material_request'`,
+    [nextStatus, rootId]
+  );
 }
 
 function getActor(req) {
@@ -348,6 +366,7 @@ async function listMessages(req, res) {
       `SELECT m.id, m.message_type AS type, m.body AS text, m.file_name, m.file_url,
               m.request_status AS status, m.request_summary AS summary, m.request_details AS details,
               m.request_urgency AS urgency, m.request_location AS location, m.created_at,
+              m.repost_of_message_id AS repost_of_message_id,
               m.sender_kind, m.sender_id, m.sender_name,
               COALESCE(
                 NULLIF(TRIM(
@@ -430,7 +449,7 @@ async function completeMaterialRequest(req, res) {
   }
   try {
     const msg = await pool.query(
-      `SELECT id, company_id, project_id, sender_kind, sender_id, request_status, message_type
+      `SELECT id, company_id, project_id, sender_kind, sender_id, request_status, message_type, repost_of_message_id
        FROM site_chat_message WHERE id = $1`,
       [messageId]
     );
@@ -464,6 +483,11 @@ async function completeMaterialRequest(req, res) {
          WHERE id = $1`,
         [messageId]
       );
+      try {
+        await syncOriginalMaterialRequestIfRepost(client, messageId, 'Delivered');
+      } catch (syncErr) {
+        if (!columnMissing(syncErr)) throw syncErr;
+      }
       const sys = await client.query(
         `INSERT INTO site_chat_message
          (company_id, project_id, sender_kind, sender_id, sender_name, message_type, body)
@@ -514,7 +538,7 @@ async function updateMaterialRequestStatus(req, res) {
   }
   try {
     const msg = await pool.query(
-      `SELECT id, company_id, project_id, sender_kind, sender_id, request_status, message_type
+      `SELECT id, company_id, project_id, sender_kind, sender_id, request_status, message_type, repost_of_message_id
        FROM site_chat_message WHERE id = $1`,
       [messageId]
     );
@@ -538,6 +562,11 @@ async function updateMaterialRequestStatus(req, res) {
          WHERE id = $1`,
         [messageId, nextStatus]
       );
+      try {
+        await syncOriginalMaterialRequestIfRepost(client, messageId, nextStatus);
+      } catch (syncErr) {
+        if (!columnMissing(syncErr)) throw syncErr;
+      }
       const text =
         'User "' +
         actorName +

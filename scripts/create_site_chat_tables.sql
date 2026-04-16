@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS site_chat_message (
   request_delivered_at TIMESTAMPTZ,
   agent_reminder_at TIMESTAMPTZ,
   is_auto_repost BOOLEAN NOT NULL DEFAULT FALSE,
+  repost_of_message_id BIGINT REFERENCES site_chat_message(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

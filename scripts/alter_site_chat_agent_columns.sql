@@ -5,3 +5,6 @@ ALTER TABLE site_chat_message
   ADD COLUMN IF NOT EXISTS request_delivered_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS agent_reminder_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS is_auto_repost BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE site_chat_message
+  ADD COLUMN IF NOT EXISTS repost_of_message_id BIGINT REFERENCES site_chat_message(id) ON DELETE SET NULL;

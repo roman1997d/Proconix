@@ -411,6 +411,21 @@
     return escapeHtml(s == null ? '' : String(s));
   }
 
+  /** Bold `[Repost from #n]`, normal weight for the rest of the summary line. */
+  function chatMaterialRequestSummaryHtml(summary) {
+    var s = summary == null ? '' : String(summary);
+    var m = /^\[Repost from #(\d+)\]\s*([\s\S]*)$/.exec(s);
+    if (!m) return chatEsc(s);
+    var head = '[Repost from #' + m[1] + ']';
+    return (
+      '<strong class="op-chat-repost-prefix">' +
+      chatEsc(head) +
+      '</strong> <span class="op-chat-repost-title">' +
+      chatEsc(m[2] || '') +
+      '</span>'
+    );
+  }
+
   function chatNormalizeRequestStatus(status) {
     var s = String(status == null ? '' : status).trim();
     var low = s.toLowerCase();
@@ -494,21 +509,22 @@
     chatFeedEl.innerHTML = visible
       .map(function (m) {
         var mine = !!m.is_mine;
-        var isChatAgent =
-          m.type === 'system' && /^Chat Agent/i.test(String(m.text || '').trim());
+        var rawAgentText = String(m.text || '').trim();
+        var isChatAgent = m.type === 'system' && /^Chat Agent/i.test(rawAgentText);
+        var isChatAgentReminder = isChatAgent && /\bRepost sent\b/i.test(rawAgentText);
         var baseCls =
           'op-chat-msg' +
           (mine ? ' op-chat-msg--mine' : '') +
           (m.type === 'material_request' ? ' op-chat-msg--request' : '') +
-          (isChatAgent ? ' op-chat-msg--agent' : '');
+          (isChatAgent ? (isChatAgentReminder ? ' op-chat-msg--agent-reminder' : ' op-chat-msg--agent') : '');
         var body = '';
         if (m.type === 'material_request') {
           var stNorm = chatNormalizeRequestStatus(m.status);
           body =
-            '<div class="op-chat-msg-text"><strong>Material Request #' +
+            '<div class="op-chat-msg-text"><span class="op-chat-request-heading">Material Request #' +
             chatEsc(String(m.id || '')) +
-            '</strong><br>' +
-            chatEsc(m.summary || '') +
+            '</span><br>' +
+            chatMaterialRequestSummaryHtml(m.summary) +
             '</div>' +
             '<span class="' +
             chatEsc(chatRequestStatusBadgeClass(stNorm)) +
