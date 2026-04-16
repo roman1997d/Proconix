@@ -766,9 +766,15 @@
   var dgImg = document.getElementById('op-dg-img');
   var dgDwg = document.getElementById('op-dg-dwg');
   var dgViewerPlaceholder = document.getElementById('op-dg-viewer-placeholder');
+  var dgViewerWrap = document.getElementById('op-dg-viewer');
   var dgCurrentProjectId = null;
   var dgCurrentSeriesId = null;
   var dgCurrentVersionId = null;
+  var dgViewerState = {
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+  };
 
   function dgApi(path, opts) {
     var token = getToken();
@@ -892,6 +898,9 @@
 
   function dgResetViewer() {
     dgCurrentVersionId = null;
+    dgViewerState.scale = 1;
+    dgViewerState.translateX = 0;
+    dgViewerState.translateY = 0;
     if (dgIframe) {
       dgIframe.style.display = 'none';
       dgIframe.src = 'about:blank';
@@ -899,6 +908,7 @@
     if (dgImg) {
       dgImg.style.display = 'none';
       dgImg.removeAttribute('src');
+      dgImg.style.transform = '';
     }
     if (dgDwg) dgDwg.style.display = 'none';
     if (dgViewerPlaceholder) dgViewerPlaceholder.style.display = 'flex';
@@ -940,12 +950,144 @@
           if (dgImg) {
             dgImg.style.display = 'block';
             dgImg.src = url;
+            dgViewerState.scale = 1;
+            dgViewerState.translateX = 0;
+            dgViewerState.translateY = 0;
+            dgApplyImgTransform();
           }
         }
       })
       .catch(function () {
         dgResetViewer();
       });
+  }
+
+  function dgApplyImgTransform() {
+    if (!dgImg || dgImg.style.display === 'none') return;
+    dgImg.style.transform =
+      'translate(' +
+      dgViewerState.translateX +
+      'px,' +
+      dgViewerState.translateY +
+      'px) scale(' +
+      dgViewerState.scale +
+      ')';
+  }
+
+  function dgSetupGestures() {
+    if (!dgViewerWrap || !dgImg) return;
+    var drag = null;
+    var pinchStartDist = 0;
+    var pinchStartScale = 1;
+    var panTouch = null;
+
+    function touchDist(a, b) {
+      var dx = a.clientX - b.clientX;
+      var dy = a.clientY - b.clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    dgViewerWrap.addEventListener(
+      'wheel',
+      function (e) {
+        if (dgImg.style.display === 'none') return;
+        e.preventDefault();
+        var z = e.deltaY < 0 ? 1.08 : 0.92;
+        dgViewerState.scale = Math.max(0.2, Math.min(5, dgViewerState.scale * z));
+        dgApplyImgTransform();
+      },
+      { passive: false }
+    );
+
+    dgViewerWrap.addEventListener('mousedown', function (e) {
+      if (dgImg.style.display === 'none' || e.button !== 0) return;
+      e.preventDefault();
+      drag = {
+        x: e.clientX,
+        y: e.clientY,
+        tx: dgViewerState.translateX,
+        ty: dgViewerState.translateY,
+      };
+    });
+
+    document.addEventListener('mousemove', function (e) {
+      if (!drag) return;
+      dgViewerState.translateX = drag.tx + (e.clientX - drag.x);
+      dgViewerState.translateY = drag.ty + (e.clientY - drag.y);
+      dgApplyImgTransform();
+    });
+
+    document.addEventListener('mouseup', function () {
+      drag = null;
+    });
+
+    dgViewerWrap.addEventListener(
+      'touchstart',
+      function (e) {
+        if (dgImg.style.display === 'none') return;
+        if (e.touches.length === 2) {
+          pinchStartDist = touchDist(e.touches[0], e.touches[1]);
+          pinchStartScale = dgViewerState.scale;
+          panTouch = null;
+        } else if (e.touches.length === 1) {
+          panTouch = {
+            x: e.touches[0].clientX,
+            y: e.touches[0].clientY,
+            tx: dgViewerState.translateX,
+            ty: dgViewerState.translateY,
+          };
+          pinchStartDist = 0;
+        }
+      },
+      { passive: false }
+    );
+
+    dgViewerWrap.addEventListener(
+      'touchmove',
+      function (e) {
+        if (dgImg.style.display === 'none') return;
+        e.preventDefault();
+        if (e.touches.length === 2 && pinchStartDist > 0) {
+          var d = touchDist(e.touches[0], e.touches[1]);
+          var ratio = d / pinchStartDist;
+          dgViewerState.scale = Math.max(0.2, Math.min(5, pinchStartScale * ratio));
+          dgApplyImgTransform();
+        } else if (e.touches.length === 1 && panTouch) {
+          dgViewerState.translateX = panTouch.tx + (e.touches[0].clientX - panTouch.x);
+          dgViewerState.translateY = panTouch.ty + (e.touches[0].clientY - panTouch.y);
+          dgApplyImgTransform();
+        }
+      },
+      { passive: false }
+    );
+
+    dgViewerWrap.addEventListener('touchend', function (e) {
+      if (e.touches.length === 0) {
+        pinchStartDist = 0;
+        panTouch = null;
+      } else if (e.touches.length === 1) {
+        pinchStartDist = 0;
+        panTouch = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY,
+          tx: dgViewerState.translateX,
+          ty: dgViewerState.translateY,
+        };
+      }
+    });
+
+    // Tap / click image to toggle fullscreen
+    if (dgImg) {
+      dgImg.addEventListener('click', function () {
+        var el = dgViewerWrap;
+        if (!el) return;
+        if (!document.fullscreenElement && el.requestFullscreen) {
+          el.requestFullscreen();
+        } else if (document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      });
+    }
   }
 
   if (dgOpenBtn && dgSummaryEl && modalDrawing) {
@@ -964,6 +1106,7 @@
       }
     });
     if (dgApplyBtn) dgApplyBtn.addEventListener('click', dgRefreshList);
+    dgSetupGestures();
   }
 
   // ----- Log Work (list from API GET /work-log) -----

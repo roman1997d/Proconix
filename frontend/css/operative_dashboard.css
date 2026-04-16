@@ -1687,6 +1687,8 @@ a.op-doc-row,
 .op-dg-img {
   object-fit: contain;
   background: #0f172a;
+  cursor: grab;
+  touch-action: none;
 }
 
 .op-dg-dwg-hint {
