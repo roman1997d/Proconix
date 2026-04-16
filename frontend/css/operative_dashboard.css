@@ -1406,3 +1406,164 @@ a.op-doc-row:active {
     border-radius: var(--op-radius);
   }
 }
+
+/* newdesign.jpg inspired refresh: mint gradients + soft cards */
+.operative-dashboard {
+  --op-bg: #31c7ad;
+  --op-card: #f6fffc;
+  --op-card-border: rgba(15, 101, 88, 0.12);
+  --op-text: #12342f;
+  --op-text-muted: #5f7d77;
+  --op-accent: #19b394;
+  --op-success: #22c55e;
+  --op-danger: #ef4444;
+  background: linear-gradient(155deg, #35cbb2 0%, #25b79d 48%, #21a58f 100%);
+}
+
+.op-header {
+  background: rgba(246, 255, 252, 0.72);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.op-logo {
+  color: #0c3a34;
+}
+
+.op-user-name,
+.op-logout {
+  color: #2b635a;
+}
+
+.op-main {
+  padding: 14px;
+}
+
+.op-hero-card {
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 14px;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.95), rgba(236, 255, 250, 0.92));
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 14px 28px rgba(14, 84, 73, 0.2);
+}
+
+.op-hero-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.op-hero-kicker {
+  margin: 0 0 4px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #54867c;
+  font-weight: 700;
+}
+
+.op-hero-title {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.2;
+  color: #103731;
+}
+
+.op-hero-menu {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(25, 179, 148, 0.2);
+  background: rgba(25, 179, 148, 0.08);
+  color: #147563;
+}
+
+.op-hero-badges {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.op-hero-badge {
+  font-size: 0.76rem;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 6px 10px;
+}
+
+.op-hero-badge-positive {
+  background: rgba(16, 185, 129, 0.16);
+  color: #0f766e;
+}
+
+.op-hero-badge-neutral {
+  background: rgba(20, 184, 166, 0.14);
+  color: #0f766e;
+}
+
+.op-card {
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f5fffb 100%);
+  border: 1px solid rgba(15, 101, 88, 0.1);
+  box-shadow: 0 10px 24px rgba(12, 70, 61, 0.16);
+}
+
+.op-card-title i,
+.op-weekly-total,
+.op-clock-hours,
+.op-worklog-item-id {
+  color: #11a68b;
+}
+
+.op-project-content,
+.op-task-meta,
+.op-worklog-item-meta,
+.op-tasks-hint,
+.op-worklog-hint {
+  color: #577a73;
+}
+
+.op-btn-primary {
+  background: linear-gradient(135deg, #1bc6a5, #16a085);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(21, 144, 121, 0.22);
+}
+
+.op-btn-secondary,
+.op-action-btn {
+  background: #ecfbf7;
+  border-color: rgba(23, 127, 111, 0.2);
+  color: #1d5d54;
+}
+
+.op-action-btn i {
+  color: #149d85;
+}
+
+.op-worklog-item,
+.op-pwb-step,
+.op-wr-job-card,
+a.op-doc-row,
+.op-pwb-pick-card,
+.op-pwb-overview-block {
+  background: #f7fffd;
+  border-color: rgba(15, 101, 88, 0.14);
+}
+
+.op-bottom-nav {
+  background: rgba(249, 255, 253, 0.92);
+  border-top: 1px solid rgba(15, 101, 88, 0.15);
+  backdrop-filter: blur(8px);
+}
+
+.op-nav-item {
+  color: #5a7f77;
+}
+
+.op-nav-item:hover,
+.op-nav-item:focus {
+  color: #10957c;
+}
