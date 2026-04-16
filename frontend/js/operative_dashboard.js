@@ -767,10 +767,14 @@
   var dgToolCalibrate = document.getElementById('op-dg-tool-calibrate');
   var dgToolShare = document.getElementById('op-dg-tool-share');
   var dgToolDownload = document.getElementById('op-dg-tool-download');
+  var dgPrevBtn = document.getElementById('op-dg-prev');
+  var dgNextBtn = document.getElementById('op-dg-next');
   var dgCalibrateOverlay = document.getElementById('op-dg-calibrate-overlay');
   var dgCalibrateLine = document.getElementById('op-dg-calibrate-line');
   var dgCurrentProjectId = null;
   var dgCurrentVersionId = null;
+  var dgDrawings = [];
+  var dgCurrentDrawingIndex = -1;
   var dgCurrentVersionBlobUrl = null;
   var dgViewerState = { scale: 1, translateX: 0, translateY: 0 };
   var dgCalibrateState = {
@@ -926,6 +930,9 @@
       .then(function (out) {
         if (!out.ok || !out.data.success) throw new Error(out.data.message || 'Failed');
         var rows = out.data.drawings || [];
+        dgDrawings = rows.slice();
+        dgCurrentDrawingIndex = -1;
+        dgUpdateNavButtons();
         if (!rows.length) {
           dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">No drawings in this category.</p>';
           return;
@@ -957,8 +964,15 @@
         dgListEl.querySelectorAll('[data-dg-version]').forEach(function (btn) {
           btn.addEventListener('click', function () {
             var vid = parseInt(btn.getAttribute('data-dg-version') || '0', 10);
-            var mime = btn.getAttribute('data-dg-mime') || '';
-            if (vid) dgOpenViewerFinal(vid, mime);
+            if (!vid) return;
+            var idx = -1;
+            for (var i = 0; i < dgDrawings.length; i += 1) {
+              if (Number(dgDrawings[i].id) === Number(vid)) {
+                idx = i;
+                break;
+              }
+            }
+            if (idx >= 0) dgOpenViewerAtIndex(idx);
           });
         });
       })
@@ -969,6 +983,7 @@
 
   function dgResetViewerFinal() {
     dgCurrentVersionId = null;
+    dgCurrentDrawingIndex = -1;
     dgViewerState.scale = 1;
     dgViewerState.translateX = 0;
     dgViewerState.translateY = 0;
@@ -998,6 +1013,29 @@
       } catch (_) {}
       dgCurrentVersionBlobUrl = null;
     }
+    dgUpdateNavButtons();
+  }
+
+  function dgResetToBasePosition() {
+    dgViewerState.scale = 1;
+    dgViewerState.translateX = 0;
+    dgViewerState.translateY = 0;
+    dgApplyViewerTransform();
+  }
+
+  function dgUpdateNavButtons() {
+    if (dgPrevBtn) dgPrevBtn.disabled = !(dgCurrentDrawingIndex > 0);
+    if (dgNextBtn) dgNextBtn.disabled = !(dgCurrentDrawingIndex >= 0 && dgCurrentDrawingIndex < dgDrawings.length - 1);
+  }
+
+  function dgOpenViewerAtIndex(index) {
+    if (!Array.isArray(dgDrawings) || index < 0 || index >= dgDrawings.length) return;
+    dgCurrentDrawingIndex = index;
+    dgUpdateNavButtons();
+    var d = dgDrawings[index];
+    dgOpenViewerFinal(d.id, d.mime_type || '');
+    dgCurrentDrawingIndex = index;
+    dgUpdateNavButtons();
   }
 
   function dgApplyViewerTransform() {
@@ -1220,8 +1258,8 @@
   if (dgToolCalibrate) {
     dgToolCalibrate.addEventListener('click', function (e) {
       e.stopPropagation();
-      if (!dgImg || dgImg.style.display === 'none') return;
-      dgCalibrateState.active = true;
+      dgResetToBasePosition();
+      dgCalibrateState.active = false;
       dgCalibrateState.firstPoint = null;
       dgCalibrateState.secondPoint = null;
       if (dgCalibrateOverlay) dgCalibrateOverlay.style.display = 'none';
@@ -1266,6 +1304,24 @@
           .catch(function () {});
       } else if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(shareUrl).catch(function () {});
+      }
+    });
+  }
+
+  if (dgPrevBtn) {
+    dgPrevBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (dgCurrentDrawingIndex > 0) {
+        dgOpenViewerAtIndex(dgCurrentDrawingIndex - 1);
+      }
+    });
+  }
+
+  if (dgNextBtn) {
+    dgNextBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (dgCurrentDrawingIndex >= 0 && dgCurrentDrawingIndex < dgDrawings.length - 1) {
+        dgOpenViewerAtIndex(dgCurrentDrawingIndex + 1);
       }
     });
   }

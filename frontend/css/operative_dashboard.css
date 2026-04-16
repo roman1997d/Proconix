@@ -1734,6 +1734,32 @@ a.op-doc-row,
   stroke-dasharray: 6 4;
 }
 
+.op-dg-nav-dock {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 6;
+  display: flex;
+  gap: 8px;
+}
+
+.op-dg-nav-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(7, 12, 20, 0.78);
+  color: #f8fafc;
+  font-size: 1.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.op-dg-nav-btn:disabled {
+  opacity: 0.35;
+}
+
 .op-bottom-nav {
   background: rgba(249, 255, 253, 0.92);
   border-top: 1px solid rgba(15, 101, 88, 0.15);
