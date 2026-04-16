@@ -40,9 +40,15 @@
           <p class="op-hero-kicker">Operative dashboard</p>
           <h1 class="op-hero-title">Site Chat</h1>
         </div>
-        <button type="button" class="op-hero-menu" aria-label="Menu shortcuts">
-          <i class="bi bi-list"></i>
-        </button>
+        <div class="op-chat-hero-actions">
+          <button type="button" class="op-hero-menu op-chat-notif-btn" id="op-chat-notif-open" aria-label="Notifications">
+            <i class="bi bi-bell"></i>
+            <span class="op-chat-notif-badge d-none" id="op-chat-unread-badge">0</span>
+          </button>
+          <button type="button" class="op-hero-menu" id="op-chat-open" aria-label="Open site chat">
+            <i class="bi bi-chat-dots"></i>
+          </button>
+        </div>
       </div>
       <div class="op-hero-badges">
         <span class="op-hero-badge op-hero-badge-positive">Project room</span>
@@ -134,6 +140,89 @@
   </nav>
 
   <!-- Modal: Drawing Gallery (inline operative viewer) -->
+  <div class="op-modal op-modal-chat" id="op-modal-site-chat" aria-hidden="true" role="dialog" aria-labelledby="op-chat-title">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog op-modal-dialog-chat">
+      <div class="op-modal-content">
+        <div class="op-chat-header">
+          <button type="button" class="op-chat-header-btn" data-dismiss="modal" aria-label="Close chat"><i class="bi bi-arrow-left"></i></button>
+          <div class="op-chat-header-title-wrap">
+            <h3 id="op-chat-title" class="op-chat-header-title">Site Chat</h3>
+            <p id="op-chat-project-name" class="op-chat-header-subtitle">Project room</p>
+          </div>
+          <button type="button" class="op-chat-header-btn" id="op-chat-header-notif" aria-label="Open notifications">
+            <i class="bi bi-bell"></i>
+            <span class="op-chat-notif-badge d-none" id="op-chat-header-unread">0</span>
+          </button>
+        </div>
+        <div class="op-chat-feed" id="op-chat-feed" aria-live="polite"></div>
+        <form class="op-chat-composer" id="op-chat-form">
+          <input type="text" id="op-chat-input" placeholder="Write a message..." maxlength="4000" autocomplete="off">
+          <label class="op-chat-file-btn" for="op-chat-file"><i class="bi bi-paperclip"></i></label>
+          <input type="file" id="op-chat-file" class="d-none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
+          <button type="button" class="op-chat-request-btn" id="op-chat-new-request">Request</button>
+          <button type="submit" class="op-chat-send-btn"><i class="bi bi-send-fill"></i></button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="op-modal" id="op-modal-chat-request" aria-hidden="true" role="dialog" aria-labelledby="op-chat-request-title">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3 id="op-chat-request-title">Material Request</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <form id="op-chat-request-form">
+            <div class="op-field">
+              <label for="op-chat-request-summary">Summary</label>
+              <input type="text" id="op-chat-request-summary" placeholder="e.g. Cement x10, Bricks x200" required>
+            </div>
+            <div class="op-field">
+              <label for="op-chat-request-details">Details</label>
+              <textarea id="op-chat-request-details" rows="3" placeholder="Full list, quantities, notes"></textarea>
+            </div>
+            <div class="op-field-row">
+              <div class="op-field">
+                <label for="op-chat-request-urgency">Urgency</label>
+                <select id="op-chat-request-urgency">
+                  <option value="Normal">Normal</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </div>
+              <div class="op-field">
+                <label for="op-chat-request-location">Location</label>
+                <input type="text" id="op-chat-request-location" placeholder="Zone / floor">
+              </div>
+            </div>
+            <button type="submit" class="op-btn op-btn-primary">Send Material Request</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="op-modal" id="op-modal-chat-notifications" aria-hidden="true" role="dialog" aria-labelledby="op-chat-notif-title">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3 id="op-chat-notif-title">Notifications</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <div id="op-chat-notif-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="op-chat-toast" id="op-chat-toast" role="status" aria-live="polite"></div>
+
   <div class="op-modal op-modal-dg" id="op-modal-dg" aria-hidden="true" role="dialog" aria-labelledby="op-dg-title">
     <div class="op-modal-backdrop" data-dismiss="modal"></div>
     <div class="op-modal-dialog op-modal-dialog-dg">

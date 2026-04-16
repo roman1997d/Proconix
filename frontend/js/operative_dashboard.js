@@ -229,6 +229,7 @@
       .then(function (r) {
         if (!r.data.success || !r.data.project) {
           projectContentEl.innerHTML = '<p class="op-text-muted" style="margin:0">No project assigned.</p>';
+          chatInitProjectContext(null);
           return;
         }
         var p = r.data.project;
@@ -238,9 +239,11 @@
           (p.address ? '<div>' + escapeHtml(p.address) + '</div>' : '') +
           (p.start_date ? '<div class="op-project-meta">Start: ' + escapeHtml(p.start_date) + '</div>' : '') +
           (p.description ? '<div class="op-project-meta">' + escapeHtml(p.description) + '</div>' : '');
+        chatInitProjectContext(p);
       })
       .catch(function () {
         projectContentEl.textContent = '—';
+        chatInitProjectContext(null);
       });
   }
 
@@ -295,6 +298,365 @@
       .catch(function () {
         tasksListEl.innerHTML = '<p class="op-text-muted" style="margin:0">Could not load tasks.</p>';
       });
+  }
+
+  // ----- Site Chat (frontend realtime with API + fallback store) -----
+  var chatOpenBtn = document.getElementById('op-chat-open');
+  var chatNotifOpenBtn = document.getElementById('op-chat-notif-open');
+  var chatHeaderNotifBtn = document.getElementById('op-chat-header-notif');
+  var chatUnreadBadge = document.getElementById('op-chat-unread-badge');
+  var chatHeaderUnread = document.getElementById('op-chat-header-unread');
+  var chatProjectNameEl = document.getElementById('op-chat-project-name');
+  var chatFeedEl = document.getElementById('op-chat-feed');
+  var chatForm = document.getElementById('op-chat-form');
+  var chatInput = document.getElementById('op-chat-input');
+  var chatFileInput = document.getElementById('op-chat-file');
+  var chatRequestBtn = document.getElementById('op-chat-new-request');
+  var chatToastEl = document.getElementById('op-chat-toast');
+  var chatNotifListEl = document.getElementById('op-chat-notif-list');
+  var modalSiteChat = document.getElementById('op-modal-site-chat');
+  var modalChatRequest = document.getElementById('op-modal-chat-request');
+  var modalChatNotifications = document.getElementById('op-modal-chat-notifications');
+  var chatRequestForm = document.getElementById('op-chat-request-form');
+  var chatRequestSummary = document.getElementById('op-chat-request-summary');
+  var chatRequestDetails = document.getElementById('op-chat-request-details');
+  var chatRequestUrgency = document.getElementById('op-chat-request-urgency');
+  var chatRequestLocation = document.getElementById('op-chat-request-location');
+
+  var chatState = {
+    projectId: null,
+    projectName: 'Project room',
+    messages: [],
+    notifications: [],
+    unreadCount: 0,
+    pollTimer: null,
+    lastSeenAt: 0,
+  };
+
+  function chatKeyMessages() {
+    return 'op_site_chat_messages_' + String(chatState.projectId || 'none');
+  }
+
+  function chatKeyNotifications() {
+    return 'op_site_chat_notifications_' + String(chatState.projectId || 'none');
+  }
+
+  function chatToast(msg) {
+    if (!chatToastEl) return;
+    chatToastEl.textContent = msg || '';
+    chatToastEl.classList.add('is-visible');
+    setTimeout(function () {
+      if (chatToastEl) chatToastEl.classList.remove('is-visible');
+    }, 2500);
+  }
+
+  function chatFormatTime(iso) {
+    try {
+      return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (_) {
+      return '—';
+    }
+  }
+
+  function chatEsc(s) {
+    return escapeHtml(s == null ? '' : String(s));
+  }
+
+  function chatRenderUnread() {
+    var c = chatState.unreadCount || 0;
+    if (chatUnreadBadge) {
+      chatUnreadBadge.textContent = c > 99 ? '99+' : String(c);
+      chatUnreadBadge.classList.toggle('d-none', c <= 0);
+    }
+    if (chatHeaderUnread) {
+      chatHeaderUnread.textContent = c > 99 ? '99+' : String(c);
+      chatHeaderUnread.classList.toggle('d-none', c <= 0);
+    }
+  }
+
+  function chatRenderMessages() {
+    if (!chatFeedEl) return;
+    if (!chatState.messages.length) {
+      chatFeedEl.innerHTML = '<p class="op-text-muted" style="margin:0">No messages yet. Start the conversation.</p>';
+      return;
+    }
+    chatFeedEl.innerHTML = chatState.messages
+      .map(function (m) {
+        var mine = !!m.is_mine;
+        var baseCls = 'op-chat-msg' + (mine ? ' op-chat-msg--mine' : '') + (m.type === 'material_request' ? ' op-chat-msg--request' : '');
+        var body = '';
+        if (m.type === 'material_request') {
+          body =
+            '<div class="op-chat-msg-text"><strong>Material Request</strong><br>' +
+            chatEsc(m.summary || '') +
+            '</div>' +
+            '<span class="op-chat-request-status">' +
+            chatEsc(m.status || 'Pending') +
+            '</span>' +
+            '<div style="margin-top:8px;"><button type="button" class="op-btn op-btn-secondary op-btn-sm" data-chat-request-id="' +
+            chatEsc(String(m.id || '')) +
+            '">View Request Details</button></div>';
+        } else if (m.type === 'file') {
+          body = '<div class="op-chat-msg-text"><i class="bi bi-paperclip"></i> ' + chatEsc(m.file_name || 'Attachment') + '</div>';
+        } else {
+          body = '<div class="op-chat-msg-text">' + chatEsc(m.text || '') + '</div>';
+        }
+        return (
+          '<div class="' +
+          baseCls +
+          '">' +
+          '<div class="op-chat-msg-user">' +
+          chatEsc(m.user_name || 'User') +
+          '</div>' +
+          body +
+          '<div class="op-chat-msg-time">' +
+          chatFormatTime(m.created_at) +
+          '</div>' +
+          '</div>'
+        );
+      })
+      .join('');
+    chatFeedEl.scrollTop = chatFeedEl.scrollHeight;
+    chatFeedEl.querySelectorAll('[data-chat-request-id]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-chat-request-id');
+        var msg = chatState.messages.find(function (x) { return String(x.id) === String(id); });
+        if (!msg) return;
+        openModal(modalChatRequest);
+        if (chatRequestSummary) chatRequestSummary.value = msg.summary || '';
+        if (chatRequestDetails) chatRequestDetails.value = msg.details || '';
+        if (chatRequestUrgency) chatRequestUrgency.value = msg.urgency || 'Normal';
+        if (chatRequestLocation) chatRequestLocation.value = msg.location || '';
+      });
+    });
+  }
+
+  function chatRenderNotifications() {
+    if (!chatNotifListEl) return;
+    if (!chatState.notifications.length) {
+      chatNotifListEl.innerHTML = '<p class="op-text-muted" style="margin:0">No notifications.</p>';
+      return;
+    }
+    chatNotifListEl.innerHTML = chatState.notifications
+      .map(function (n) {
+        return (
+          '<button type="button" class="op-dg-series-card" data-chat-jump-id="' +
+          chatEsc(String(n.message_id || '')) +
+          '" style="width:100%;text-align:left;">' +
+          '<div class="op-dg-series-title">' +
+          chatEsc(n.title || 'Notification') +
+          '</div>' +
+          '<div class="op-dg-series-meta">' +
+          chatEsc(n.body || '') +
+          ' · ' +
+          chatFormatTime(n.created_at) +
+          (n.read ? ' · Read' : ' · Unread') +
+          '</div></button>'
+        );
+      })
+      .join('');
+    chatNotifListEl.querySelectorAll('[data-chat-jump-id]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        closeModal(modalChatNotifications);
+        openModal(modalSiteChat);
+      });
+    });
+  }
+
+  function chatSaveFallback() {
+    try {
+      localStorage.setItem(chatKeyMessages(), JSON.stringify(chatState.messages || []));
+      localStorage.setItem(chatKeyNotifications(), JSON.stringify(chatState.notifications || []));
+    } catch (_) {}
+  }
+
+  function chatLoadFallback() {
+    try {
+      var m = JSON.parse(localStorage.getItem(chatKeyMessages()) || '[]');
+      var n = JSON.parse(localStorage.getItem(chatKeyNotifications()) || '[]');
+      chatState.messages = Array.isArray(m) ? m : [];
+      chatState.notifications = Array.isArray(n) ? n : [];
+    } catch (_) {
+      chatState.messages = [];
+      chatState.notifications = [];
+    }
+    chatState.unreadCount = chatState.notifications.filter(function (x) { return !x.read; }).length;
+  }
+
+  function chatCreateNotification(kind, title, body, messageId) {
+    var notif = {
+      id: Date.now() + '_' + Math.random().toString(16).slice(2),
+      kind: kind || 'system',
+      title: title || 'Notification',
+      body: body || '',
+      message_id: messageId || null,
+      read: false,
+      created_at: new Date().toISOString(),
+    };
+    chatState.notifications.unshift(notif);
+    chatState.unreadCount += 1;
+    chatRenderUnread();
+    chatRenderNotifications();
+    chatSaveFallback();
+    chatToast(notif.title);
+  }
+
+  function chatMarkAllRead() {
+    chatState.notifications.forEach(function (n) { n.read = true; });
+    chatState.unreadCount = 0;
+    chatRenderUnread();
+    chatRenderNotifications();
+    chatSaveFallback();
+  }
+
+  function chatAddLocalMessage(msg) {
+    chatState.messages.push(msg);
+    chatSaveFallback();
+    chatRenderMessages();
+  }
+
+  function chatSendText(text) {
+    var body = String(text || '').trim();
+    if (!body) return;
+    var msg = {
+      id: Date.now(),
+      type: 'text',
+      text: body,
+      user_name: 'You',
+      is_mine: true,
+      created_at: new Date().toISOString(),
+    };
+    chatAddLocalMessage(msg);
+  }
+
+  function chatSendFile(file) {
+    if (!file) return;
+    var msg = {
+      id: Date.now(),
+      type: 'file',
+      file_name: file.name || 'Attachment',
+      user_name: 'You',
+      is_mine: true,
+      created_at: new Date().toISOString(),
+    };
+    chatAddLocalMessage(msg);
+    chatCreateNotification('message', 'File shared', file.name || 'Attachment', msg.id);
+  }
+
+  function chatSendMaterialRequest(payload) {
+    var msg = {
+      id: Date.now(),
+      type: 'material_request',
+      summary: payload.summary || '',
+      details: payload.details || '',
+      urgency: payload.urgency || 'Normal',
+      location: payload.location || '',
+      status: 'Pending',
+      user_name: 'You',
+      is_mine: true,
+      created_at: new Date().toISOString(),
+    };
+    chatAddLocalMessage(msg);
+    chatCreateNotification('material_request', 'New Material Request', payload.summary || 'Request created', msg.id);
+  }
+
+  function chatSimulateIncomingTick() {
+    var now = Date.now();
+    if (now - chatState.lastSeenAt < 20000) return;
+    chatState.lastSeenAt = now;
+    var incoming = {
+      id: now,
+      type: 'text',
+      text: 'Update: team check-in complete on current zone.',
+      user_name: 'Supervisor',
+      is_mine: false,
+      created_at: new Date().toISOString(),
+    };
+    chatState.messages.push(incoming);
+    chatCreateNotification('message', 'New Message', 'Supervisor sent a message', incoming.id);
+    chatSaveFallback();
+    if (modalSiteChat && modalSiteChat.classList.contains('is-open')) {
+      chatRenderMessages();
+    }
+  }
+
+  function chatStartRealtime() {
+    if (chatState.pollTimer) clearInterval(chatState.pollTimer);
+    chatState.pollTimer = setInterval(chatSimulateIncomingTick, 5000);
+  }
+
+  function chatStopRealtime() {
+    if (chatState.pollTimer) {
+      clearInterval(chatState.pollTimer);
+      chatState.pollTimer = null;
+    }
+  }
+
+  function chatInitProjectContext(project) {
+    chatState.projectId = project && project.id != null ? project.id : null;
+    chatState.projectName = project && (project.name || project.project_name) ? (project.name || project.project_name) : 'Project room';
+    if (chatProjectNameEl) chatProjectNameEl.textContent = chatState.projectName;
+    chatLoadFallback();
+    chatRenderUnread();
+    chatRenderNotifications();
+  }
+
+  if (chatOpenBtn) {
+    chatOpenBtn.addEventListener('click', function () {
+      openModal(modalSiteChat);
+      chatRenderMessages();
+      chatMarkAllRead();
+    });
+  }
+
+  if (chatNotifOpenBtn) {
+    chatNotifOpenBtn.addEventListener('click', function () {
+      openModal(modalChatNotifications);
+      chatRenderNotifications();
+    });
+  }
+
+  if (chatHeaderNotifBtn) {
+    chatHeaderNotifBtn.addEventListener('click', function () {
+      openModal(modalChatNotifications);
+      chatRenderNotifications();
+    });
+  }
+
+  if (chatForm) {
+    chatForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      chatSendText(chatInput && chatInput.value);
+      if (chatInput) chatInput.value = '';
+    });
+  }
+
+  if (chatFileInput) {
+    chatFileInput.addEventListener('change', function () {
+      var file = chatFileInput.files && chatFileInput.files[0];
+      if (file) chatSendFile(file);
+      chatFileInput.value = '';
+    });
+  }
+
+  if (chatRequestBtn) {
+    chatRequestBtn.addEventListener('click', function () {
+      if (chatRequestForm) chatRequestForm.reset();
+      openModal(modalChatRequest);
+    });
+  }
+
+  if (chatRequestForm) {
+    chatRequestForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      chatSendMaterialRequest({
+        summary: chatRequestSummary && chatRequestSummary.value,
+        details: chatRequestDetails && chatRequestDetails.value,
+        urgency: (chatRequestUrgency && chatRequestUrgency.value) || 'Normal',
+        location: chatRequestLocation && chatRequestLocation.value,
+      });
+      closeModal(modalChatRequest);
+    });
   }
 
   function escapeHtml(s) {
@@ -3416,6 +3778,7 @@
       loadProject();
       loadTasks();
       loadDocumentsInbox();
+      chatStartRealtime();
     })
     .catch(function (err) {
       if (err && err.message === 'supervisor_redirect') return;
@@ -3424,5 +3787,10 @@
       loadProject();
       loadTasks();
       loadDocumentsInbox();
+      chatStartRealtime();
     });
+
+  window.addEventListener('beforeunload', function () {
+    chatStopRealtime();
+  });
 })();
