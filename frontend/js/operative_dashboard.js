@@ -305,6 +305,7 @@
   var chatBackBtn = document.getElementById('op-chat-back');
   var chatNotifOpenBtn = document.getElementById('op-chat-notif-open');
   var chatHeaderNotifBtn = document.getElementById('op-chat-header-notif');
+  var chatFilterRequestBtn = document.getElementById('op-chat-filter-request');
   var chatUnreadBadge = document.getElementById('op-chat-unread-badge');
   var chatHeaderUnread = document.getElementById('op-chat-header-unread');
   var chatProjectNameEl = document.getElementById('op-chat-project-name');
@@ -332,6 +333,7 @@
     unreadCount: 0,
     pollTimer: null,
     lastSeenAt: 0,
+    requestOnly: false,
   };
 
   function chatKeyMessages() {
@@ -377,11 +379,14 @@
 
   function chatRenderMessages() {
     if (!chatFeedEl) return;
-    if (!chatState.messages.length) {
+    var visible = chatState.requestOnly
+      ? chatState.messages.filter(function (m) { return m.type === 'material_request'; })
+      : chatState.messages;
+    if (!visible.length) {
       chatFeedEl.innerHTML = '<p class="op-text-muted" style="margin:0">No messages yet. Start the conversation.</p>';
       return;
     }
-    chatFeedEl.innerHTML = chatState.messages
+    chatFeedEl.innerHTML = visible
       .map(function (m) {
         var mine = !!m.is_mine;
         var baseCls = 'op-chat-msg' + (mine ? ' op-chat-msg--mine' : '') + (m.type === 'material_request' ? ' op-chat-msg--request' : '');
@@ -631,6 +636,14 @@
     chatHeaderNotifBtn.addEventListener('click', function () {
       openModal(modalChatNotifications);
       chatRenderNotifications();
+    });
+  }
+
+  if (chatFilterRequestBtn) {
+    chatFilterRequestBtn.addEventListener('click', function () {
+      chatState.requestOnly = !chatState.requestOnly;
+      chatFilterRequestBtn.classList.toggle('is-active', chatState.requestOnly);
+      chatRenderMessages();
     });
   }
 

@@ -1569,6 +1569,23 @@ a.op-doc-row:active {
   min-width: 0;
 }
 
+.op-chat-header-filter {
+  min-height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 101, 88, 0.2);
+  background: rgba(25, 179, 148, 0.08);
+  color: #145f52;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0 10px;
+}
+
+.op-chat-header-filter.is-active {
+  background: #19b394;
+  color: #fff;
+  border-color: #19b394;
+}
+
 .op-chat-header-title {
   margin: 0;
   font-size: 1rem;
