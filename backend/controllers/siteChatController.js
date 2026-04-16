@@ -24,6 +24,24 @@ function getActor(req) {
   return null;
 }
 
+async function resolveActorDisplayName(actor) {
+  if (!actor) return 'User';
+  if (actor.kind === 'manager') return actor.name || 'Manager';
+  try {
+    const r = await pool.query(
+      'SELECT name, surname, email FROM users WHERE id = $1 AND company_id = $2 LIMIT 1',
+      [actor.id, actor.companyId]
+    );
+    if (r.rows[0]) {
+      const nm = [r.rows[0].name, r.rows[0].surname].filter(Boolean).join(' ').trim();
+      return nm || r.rows[0].email || actor.name || 'Operative';
+    }
+  } catch (e) {
+    if (e.code !== '42703' && e.code !== '42P01') throw e;
+  }
+  return actor.name || 'Operative';
+}
+
 async function resolveProjectForRequest(req, actor, explicitProjectId) {
   if (!actor) return null;
   if (actor.kind === 'operative') {
@@ -130,8 +148,34 @@ async function listMessages(req, res) {
        LIMIT $3`,
       params
     );
-    const rows = r.rows.reverse().map((m) => ({
+    const rowsRaw = r.rows.reverse();
+    const reqIds = rowsRaw
+      .filter((m) => m.type === 'material_request')
+      .map((m) => m.id);
+    let photoByMessage = {};
+    if (reqIds.length) {
+      const pr = await pool.query(
+        `SELECT id, message_id, file_url, created_at, uploaded_by_kind, uploaded_by_id
+         FROM site_chat_request_photo
+         WHERE message_id = ANY($1::bigint[])
+         ORDER BY created_at ASC`,
+        [reqIds]
+      );
+      photoByMessage = pr.rows.reduce((acc, p) => {
+        const k = String(p.message_id);
+        if (!acc[k]) acc[k] = [];
+        acc[k].push(p);
+        return acc;
+      }, {});
+    }
+    const rows = rowsRaw.map((m) => ({
       ...m,
+      photos: photoByMessage[String(m.id)] || [],
+      can_complete:
+        m.type === 'material_request' &&
+        m.sender_kind !== actor.kind &&
+        Number(m.sender_id) !== Number(actor.id) &&
+        String(m.status || '').toLowerCase() !== 'completed',
       is_mine: m.sender_kind === actor.kind && Number(m.sender_id) === Number(actor.id),
     }));
     return res.json({ success: true, messages: rows });
@@ -144,6 +188,134 @@ async function listMessages(req, res) {
     }
     console.error('siteChat listMessages:', err);
     return res.status(500).json({ success: false, message: 'Failed to load messages.' });
+  }
+}
+
+async function completeMaterialRequest(req, res) {
+  const actor = getActor(req);
+  if (!actor) return res.status(403).json({ success: false, message: 'Access denied.' });
+  const messageId = parseInt(req.params.messageId, 10);
+  if (!Number.isInteger(messageId) || messageId < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid message id.' });
+  }
+  try {
+    const msg = await pool.query(
+      `SELECT id, company_id, project_id, sender_kind, sender_id, request_status, message_type
+       FROM site_chat_message WHERE id = $1`,
+      [messageId]
+    );
+    if (!msg.rows.length) return res.status(404).json({ success: false, message: 'Request not found.' });
+    const row = msg.rows[0];
+    if (row.message_type !== 'material_request') {
+      return res.status(400).json({ success: false, message: 'Message is not a material request.' });
+    }
+    const project = await resolveProjectForRequest(req, actor, row.project_id);
+    if (!project || Number(project.id) !== Number(row.project_id)) {
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+    if (row.sender_kind === actor.kind && Number(row.sender_id) === Number(actor.id)) {
+      return res.status(400).json({ success: false, message: 'Requester cannot complete own request.' });
+    }
+    const actorName = await resolveActorDisplayName(actor);
+    const completedAt = new Date();
+    const completedText =
+      'User "' +
+      actorName +
+      '" complete request #' +
+      String(messageId) +
+      ' on ' +
+      completedAt.toLocaleString();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE site_chat_message
+         SET request_status = 'Completed'
+         WHERE id = $1`,
+        [messageId]
+      );
+      const sys = await client.query(
+        `INSERT INTO site_chat_message
+         (company_id, project_id, sender_kind, sender_id, sender_name, message_type, body)
+         VALUES ($1,$2,$3,$4,$5,'system',$6)
+         RETURNING id, created_at`,
+        [row.company_id, row.project_id, actor.kind, actor.id, actorName, completedText]
+      );
+      await notifyProjectRecipients(client, {
+        companyId: row.company_id,
+        projectId: row.project_id,
+        messageId: sys.rows[0].id,
+        actorKind: actor.kind,
+        actorId: actor.id,
+        kind: 'request_updated',
+        title: 'Request Updated',
+        body: completedText,
+      });
+      await client.query('COMMIT');
+      return res.json({ success: true, system_message_id: sys.rows[0].id });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    if (tableMissing(err)) {
+      return res.status(503).json({
+        success: false,
+        message: 'Site chat tables are not installed. Run scripts/create_site_chat_tables.sql',
+      });
+    }
+    console.error('siteChat completeMaterialRequest:', err);
+    return res.status(500).json({ success: false, message: 'Failed to complete request.' });
+  }
+}
+
+async function uploadMaterialRequestPhoto(req, res) {
+  const actor = getActor(req);
+  if (!actor) return res.status(403).json({ success: false, message: 'Access denied.' });
+  const messageId = parseInt(req.params.messageId, 10);
+  if (!Number.isInteger(messageId) || messageId < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid message id.' });
+  }
+  if (!req.file || !req.body.file_url) {
+    return res.status(400).json({ success: false, message: 'Image file is required.' });
+  }
+  if (!String(req.file.mimetype || '').startsWith('image/')) {
+    return res.status(400).json({ success: false, message: 'Only image uploads are allowed.' });
+  }
+  try {
+    const msg = await pool.query(
+      `SELECT id, company_id, project_id, message_type
+       FROM site_chat_message WHERE id = $1`,
+      [messageId]
+    );
+    if (!msg.rows.length) return res.status(404).json({ success: false, message: 'Request not found.' });
+    const row = msg.rows[0];
+    if (row.message_type !== 'material_request') {
+      return res.status(400).json({ success: false, message: 'Message is not a material request.' });
+    }
+    const project = await resolveProjectForRequest(req, actor, row.project_id);
+    if (!project || Number(project.id) !== Number(row.project_id)) {
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+    const ins = await pool.query(
+      `INSERT INTO site_chat_request_photo
+       (company_id, project_id, message_id, file_url, uploaded_by_kind, uploaded_by_id)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING id, message_id, file_url, created_at, uploaded_by_kind, uploaded_by_id`,
+      [row.company_id, row.project_id, messageId, String(req.body.file_url), actor.kind, actor.id]
+    );
+    return res.status(201).json({ success: true, photo: ins.rows[0] });
+  } catch (err) {
+    if (tableMissing(err)) {
+      return res.status(503).json({
+        success: false,
+        message: 'Site chat tables are not installed. Run scripts/create_site_chat_tables.sql',
+      });
+    }
+    console.error('siteChat uploadMaterialRequestPhoto:', err);
+    return res.status(500).json({ success: false, message: 'Failed to upload photo.' });
   }
 }
 
@@ -164,6 +336,7 @@ async function postMessage(req, res) {
   try {
     const project = await resolveProjectForRequest(req, actor, projectId);
     if (!project) return res.status(404).json({ success: false, message: 'No project room found.' });
+    const actorName = await resolveActorDisplayName(actor);
     const fileName = req.file ? req.file.originalname : req.body.file_name || null;
     const fileUrl = req.body.file_url || null;
     const client = await pool.connect();
@@ -180,7 +353,7 @@ async function postMessage(req, res) {
           project.id,
           actor.kind,
           actor.id,
-          actor.name,
+          actorName,
           type,
           text || null,
           fileName,
@@ -226,7 +399,7 @@ async function postMessage(req, res) {
           urgency: type === 'material_request' ? String(req.body.request_urgency || 'Normal') : null,
           location: type === 'material_request' ? String(req.body.request_location || '').trim() : null,
           created_at: ins.rows[0].created_at,
-          user_name: actor.name,
+          user_name: actorName,
           is_mine: true,
         },
       });
@@ -306,6 +479,8 @@ module.exports = {
   getRoom,
   listMessages,
   postMessage,
+  completeMaterialRequest,
+  uploadMaterialRequestPhoto,
   listNotifications,
   markNotificationsRead,
 };

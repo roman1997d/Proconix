@@ -318,12 +318,23 @@
   var chatNotifListEl = document.getElementById('op-chat-notif-list');
   var modalSiteChat = document.getElementById('op-modal-site-chat');
   var modalChatRequest = document.getElementById('op-modal-chat-request');
+  var modalChatRequestView = document.getElementById('op-modal-chat-request-view');
   var modalChatNotifications = document.getElementById('op-modal-chat-notifications');
   var chatRequestForm = document.getElementById('op-chat-request-form');
   var chatRequestSummary = document.getElementById('op-chat-request-summary');
   var chatRequestDetails = document.getElementById('op-chat-request-details');
   var chatRequestUrgency = document.getElementById('op-chat-request-urgency');
   var chatRequestLocation = document.getElementById('op-chat-request-location');
+  var chatReqViewSummary = document.getElementById('op-chat-request-view-summary');
+  var chatReqViewDetails = document.getElementById('op-chat-request-view-details');
+  var chatReqViewUrgency = document.getElementById('op-chat-request-view-urgency');
+  var chatReqViewLocation = document.getElementById('op-chat-request-view-location');
+  var chatReqViewStatus = document.getElementById('op-chat-request-view-status');
+  var chatReqViewPhotos = document.getElementById('op-chat-request-view-photos');
+  var chatReqActionsWrap = document.getElementById('op-chat-request-actions');
+  var chatReqPhotoInput = document.getElementById('op-chat-request-photo-upload');
+  var chatReqPhotoUploadBtn = document.getElementById('op-chat-request-upload-photo');
+  var chatReqCompleteBtn = document.getElementById('op-chat-request-complete');
 
   var chatState = {
     projectId: null,
@@ -334,6 +345,7 @@
     pollTimer: null,
     lastSeenAt: 0,
     requestOnly: false,
+    selectedRequestId: null,
   };
 
   function chatKeyMessages() {
@@ -403,6 +415,10 @@
 
   function chatRenderMessages() {
     if (!chatFeedEl) return;
+    var isNearBottom =
+      chatFeedEl.scrollHeight - chatFeedEl.scrollTop - chatFeedEl.clientHeight < 80;
+    var prevTop = chatFeedEl.scrollTop;
+    var prevHeight = chatFeedEl.scrollHeight;
     var visible = chatState.requestOnly
       ? chatState.messages.filter(function (m) { return m.type === 'material_request'; })
       : chatState.messages;
@@ -446,17 +462,37 @@
         );
       })
       .join('');
-    chatFeedEl.scrollTop = chatFeedEl.scrollHeight;
+    if (isNearBottom) {
+      chatFeedEl.scrollTop = chatFeedEl.scrollHeight;
+    } else {
+      var delta = chatFeedEl.scrollHeight - prevHeight;
+      chatFeedEl.scrollTop = prevTop + (delta > 0 ? delta : 0);
+    }
     chatFeedEl.querySelectorAll('[data-chat-request-id]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var id = btn.getAttribute('data-chat-request-id');
         var msg = chatState.messages.find(function (x) { return String(x.id) === String(id); });
         if (!msg) return;
-        openModal(modalChatRequest);
-        if (chatRequestSummary) chatRequestSummary.value = msg.summary || '';
-        if (chatRequestDetails) chatRequestDetails.value = msg.details || '';
-        if (chatRequestUrgency) chatRequestUrgency.value = msg.urgency || 'Normal';
-        if (chatRequestLocation) chatRequestLocation.value = msg.location || '';
+        chatState.selectedRequestId = msg.id;
+        if (chatReqViewSummary) chatReqViewSummary.value = msg.summary || '';
+        if (chatReqViewDetails) chatReqViewDetails.value = msg.details || '';
+        if (chatReqViewUrgency) chatReqViewUrgency.value = msg.urgency || 'Normal';
+        if (chatReqViewLocation) chatReqViewLocation.value = msg.location || '';
+        if (chatReqViewStatus) chatReqViewStatus.value = msg.status || 'Pending';
+        if (chatReqViewPhotos) {
+          var photos = Array.isArray(msg.photos) ? msg.photos : [];
+          chatReqViewPhotos.innerHTML = photos.length
+            ? photos
+                .map(function (p) {
+                  return '<img src="' + chatEsc(p.file_url || '') + '" alt="Request photo">';
+                })
+                .join('')
+            : '<p class="op-text-muted" style="margin:0">No photos yet.</p>';
+        }
+        if (chatReqActionsWrap) {
+          chatReqActionsWrap.classList.toggle('d-none', !msg.can_complete);
+        }
+        openModal(modalChatRequestView);
       });
     });
   }
@@ -653,7 +689,10 @@
       .then(function (out) {
         if (!out.ok || !out.data.success) throw new Error('messages');
         var prevLen = chatState.messages.length;
-        chatState.messages = out.data.messages || [];
+        chatState.messages = (out.data.messages || []).map(function (m) {
+          if (!m.user_name) m.user_name = m.sender_name || 'User';
+          return m;
+        });
         chatSaveFallback();
         if (modalSiteChat && modalSiteChat.classList.contains('is-open')) {
           chatRenderMessages();
@@ -798,6 +837,46 @@
         location: chatRequestLocation && chatRequestLocation.value,
       });
       closeModal(modalChatRequest);
+    });
+  }
+
+  if (chatReqPhotoUploadBtn) {
+    chatReqPhotoUploadBtn.addEventListener('click', function () {
+      var mid = chatState.selectedRequestId;
+      var file = chatReqPhotoInput && chatReqPhotoInput.files && chatReqPhotoInput.files[0];
+      if (!mid || !file) return;
+      var fd = new FormData();
+      fd.append('file', file);
+      chatApi('/messages/' + encodeURIComponent(mid) + '/photos', { method: 'POST', body: fd })
+        .then(function (out) {
+          if (!out.ok || !out.data.success) throw new Error('upload');
+          if (chatReqPhotoInput) chatReqPhotoInput.value = '';
+          return chatReloadMessages();
+        })
+        .then(function () {
+          var msg = chatState.messages.find(function (m) { return String(m.id) === String(mid); });
+          if (msg && chatReqViewPhotos) {
+            var photos = Array.isArray(msg.photos) ? msg.photos : [];
+            chatReqViewPhotos.innerHTML = photos.length
+              ? photos.map(function (p) { return '<img src="' + chatEsc(p.file_url || '') + '" alt="Request photo">'; }).join('')
+              : '<p class="op-text-muted" style="margin:0">No photos yet.</p>';
+          }
+        })
+        .catch(function () {});
+    });
+  }
+
+  if (chatReqCompleteBtn) {
+    chatReqCompleteBtn.addEventListener('click', function () {
+      var mid = chatState.selectedRequestId;
+      if (!mid) return;
+      chatApi('/messages/' + encodeURIComponent(mid) + '/complete', { method: 'PATCH' })
+        .then(function (out) {
+          if (!out.ok || !out.data.success) throw new Error('complete');
+          closeModal(modalChatRequestView);
+          return chatReloadMessages().then(function () { return chatReloadNotifications(); });
+        })
+        .catch(function () {});
     });
   }
 

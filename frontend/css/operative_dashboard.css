@@ -1718,6 +1718,20 @@ body.op-chat-open {
   transform: translateX(-50%) translateY(0);
 }
 
+.op-chat-request-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.op-chat-request-photos img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 101, 88, 0.18);
+}
+
 .op-card {
   border-radius: 18px;
   background: linear-gradient(180deg, #ffffff 0%, #f5fffb 100%);

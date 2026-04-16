@@ -7,6 +7,14 @@ const ctrl = require('../controllers/siteChatController');
 router.get('/room', requireManagerOrOperativeAuth, ctrl.getRoom);
 router.get('/messages', requireManagerOrOperativeAuth, ctrl.listMessages);
 router.post('/messages', requireManagerOrOperativeAuth, uploadDocumentFile, injectFileUrl('documents'), ctrl.postMessage);
+router.patch('/messages/:messageId/complete', requireManagerOrOperativeAuth, ctrl.completeMaterialRequest);
+router.post(
+  '/messages/:messageId/photos',
+  requireManagerOrOperativeAuth,
+  uploadDocumentFile,
+  injectFileUrl('documents'),
+  ctrl.uploadMaterialRequestPhoto
+);
 router.get('/notifications', requireManagerOrOperativeAuth, ctrl.listNotifications);
 router.patch('/notifications/read-all', requireManagerOrOperativeAuth, ctrl.markNotificationsRead);
 

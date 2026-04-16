@@ -207,6 +207,54 @@
     </div>
   </div>
 
+  <div class="op-modal" id="op-modal-chat-request-view" aria-hidden="true" role="dialog" aria-labelledby="op-chat-request-view-title">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3 id="op-chat-request-view-title">Material Request Details</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <div class="op-field">
+            <label>Summary</label>
+            <input type="text" id="op-chat-request-view-summary" readonly>
+          </div>
+          <div class="op-field">
+            <label>Details</label>
+            <textarea id="op-chat-request-view-details" rows="3" readonly></textarea>
+          </div>
+          <div class="op-field-row">
+            <div class="op-field">
+              <label>Urgency</label>
+              <input type="text" id="op-chat-request-view-urgency" readonly>
+            </div>
+            <div class="op-field">
+              <label>Location</label>
+              <input type="text" id="op-chat-request-view-location" readonly>
+            </div>
+          </div>
+          <div class="op-field">
+            <label>Status</label>
+            <input type="text" id="op-chat-request-view-status" readonly>
+          </div>
+          <div class="op-field">
+            <label>Photos</label>
+            <div id="op-chat-request-view-photos" class="op-chat-request-photos"></div>
+          </div>
+          <div class="op-field d-none" id="op-chat-request-actions">
+            <label for="op-chat-request-photo-upload">Add completion photo</label>
+            <input type="file" id="op-chat-request-photo-upload" accept="image/*">
+            <div class="op-field-row" style="margin-top:10px;">
+              <button type="button" class="op-btn op-btn-secondary" id="op-chat-request-upload-photo">Upload Photo</button>
+              <button type="button" class="op-btn op-btn-primary" id="op-chat-request-complete">Complete</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="op-modal" id="op-modal-chat-notifications" aria-hidden="true" role="dialog" aria-labelledby="op-chat-notif-title">
     <div class="op-modal-backdrop" data-dismiss="modal"></div>
     <div class="op-modal-dialog">
