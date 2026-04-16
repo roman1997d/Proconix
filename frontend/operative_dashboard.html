@@ -60,10 +60,13 @@
       <div id="op-clock-feedback" class="op-feedback d-none" role="alert" aria-live="assertive"></div>
     </section>
 
-    <!-- Current Project -->
-    <section class="op-card" id="op-project">
-      <h2 class="op-card-title"><i class="bi bi-building"></i> Current Project</h2>
-      <div id="op-project-content" class="op-project-content">Loading…</div>
+    <!-- Site Chat -->
+    <section class="op-card" id="op-site-chat">
+      <h2 class="op-card-title"><i class="bi bi-chat-dots"></i> Site Chat</h2>
+      <div id="op-site-chat-content" class="op-project-content">Loading…</div>
+      <button type="button" class="op-btn op-btn-primary" id="op-btn-site-chat-open">
+        <i class="bi bi-chat-left-text"></i> Open Site Chat
+      </button>
     </section>
 
     <!-- Drawing Gallery (inline for operatives) -->
@@ -128,10 +131,34 @@
   <!-- Bottom nav (optional) -->
   <nav class="op-bottom-nav" aria-label="Main">
     <a href="#op-clock" class="op-nav-item"><i class="bi bi-clock"></i><span>Clock</span></a>
-    <a href="#op-project" class="op-nav-item"><i class="bi bi-building"></i><span>Project</span></a>
+    <a href="#op-site-chat" class="op-nav-item"><i class="bi bi-chat-dots"></i><span>Chat</span></a>
     <a href="#op-worklog" class="op-nav-item"><i class="bi bi-journal-plus"></i><span>Work</span></a>
     <a href="#op-tasks" class="op-nav-item"><i class="bi bi-list-task"></i><span>Tasks</span></a>
   </nav>
+
+  <div class="op-modal" id="op-modal-site-chat" aria-hidden="true" role="dialog">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3>Site Chat</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <p class="op-tasks-hint" id="op-site-chat-modal-context">Project room.</p>
+          <div class="op-worklog-item" style="margin-bottom:10px;">
+            <div class="op-worklog-item-meta">System</div>
+            <div>Site chat module is ready for integration with your preferred real-time backend.</div>
+          </div>
+          <div class="op-field">
+            <label for="op-site-chat-input">Message</label>
+            <input type="text" id="op-site-chat-input" placeholder="Type your message" disabled>
+          </div>
+          <button type="button" class="op-btn op-btn-primary" disabled>Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal: Drawing Gallery (inline operative viewer) -->
   <div class="op-modal op-modal-dg" id="op-modal-dg" aria-hidden="true" role="dialog" aria-labelledby="op-dg-title">
