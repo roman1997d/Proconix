@@ -141,8 +141,27 @@ async function listMessages(req, res) {
       `SELECT m.id, m.message_type AS type, m.body AS text, m.file_name, m.file_url,
               m.request_status AS status, m.request_summary AS summary, m.request_details AS details,
               m.request_urgency AS urgency, m.request_location AS location, m.created_at,
-              m.sender_kind, m.sender_id, m.sender_name
+              m.sender_kind, m.sender_id, m.sender_name,
+              COALESCE(
+                NULLIF(TRIM(
+                  CASE
+                    WHEN m.sender_kind = 'manager' THEN CONCAT(COALESCE(mgr.name, ''), ' ', COALESCE(mgr.surname, ''))
+                    WHEN m.sender_kind = 'operative' THEN CONCAT(COALESCE(usr.name, ''), ' ', COALESCE(usr.surname, ''))
+                    ELSE ''
+                  END
+                ), ''),
+                NULLIF(m.sender_name, ''),
+                CASE
+                  WHEN m.sender_kind = 'manager' THEN COALESCE(mgr.email, 'Manager')
+                  WHEN m.sender_kind = 'operative' THEN COALESCE(usr.email, 'Operative')
+                  ELSE 'User'
+                END
+              ) AS user_name
        FROM site_chat_message m
+       LEFT JOIN manager mgr
+         ON m.sender_kind = 'manager' AND m.sender_id = mgr.id AND mgr.company_id = m.company_id
+       LEFT JOIN users usr
+         ON m.sender_kind = 'operative' AND m.sender_id = usr.id AND usr.company_id = m.company_id
        WHERE m.company_id = $1 AND m.project_id = $2 ${whereExtra}
        ORDER BY m.created_at DESC
        LIMIT $3`,
