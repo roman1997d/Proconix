@@ -26,6 +26,7 @@ const crewRoutes = require('./routes/crewRoutes');
 const platformAdminRoutes = require('./routes/platformAdminRoutes');
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
 const drawingGalleryRoutes = require('./routes/drawingGalleryRoutes');
+const siteChatRoutes = require('./routes/siteChatRoutes');
 const digitalDocumentsRoutes = require('./routes/digitalDocumentsRoutes');
 const { metricsMiddleware } = require('./middleware/metricsMiddleware');
 const { printStartupConsoleBanner } = require('./lib/startupConsoleBanner');
@@ -121,6 +122,9 @@ app.use('/api/site-snags', siteSnagsRoutes);
 
 // Drawing Gallery (plans per project; requires create_drawing_gallery_tables.sql)
 app.use('/api/drawing-gallery', drawingGalleryRoutes);
+
+// Site chat (project room, material requests, notifications)
+app.use('/api/site-chat', siteChatRoutes);
 
 // API 404 – ensure all unmatched /api/* return JSON (no HTML)
 app.use('/api', (req, res) => {

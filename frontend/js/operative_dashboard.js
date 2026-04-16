@@ -344,6 +344,30 @@
     return 'op_site_chat_notifications_' + String(chatState.projectId || 'none');
   }
 
+  function chatApi(path, options) {
+    var token = getToken();
+    if (!token) return Promise.reject(new Error('No session'));
+    var opts = options || {};
+    var headers = opts.headers || {};
+    headers['X-Operative-Token'] = token;
+    if (opts.body && !(opts.body instanceof FormData) && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+    opts.headers = headers;
+    opts.credentials = 'same-origin';
+    return fetch('/api/site-chat' + path, opts).then(function (res) {
+      var ct = res.headers.get('Content-Type') || '';
+      if (ct.indexOf('application/json') !== -1) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, status: res.status, data: data };
+        });
+      }
+      return res.text().then(function (t) {
+        return { ok: res.ok, status: res.status, data: { message: t } };
+      });
+    });
+  }
+
   function chatToast(msg) {
     if (!chatToastEl) return;
     chatToastEl.textContent = msg || '';
@@ -509,12 +533,25 @@
   }
 
   function chatMarkAllRead() {
-    chatState.notifications.forEach(function (n) { n.read = true; });
-    chatState.notifications = chatState.notifications.filter(function (n) { return !n.read; });
-    chatState.unreadCount = 0;
-    chatRenderUnread();
-    chatRenderNotifications();
-    chatSaveFallback();
+    chatApi('/notifications/read-all', {
+      method: 'PATCH',
+      body: JSON.stringify({ project_id: chatState.projectId }),
+    })
+      .then(function () {
+        chatState.notifications = [];
+        chatState.unreadCount = 0;
+        chatRenderUnread();
+        chatRenderNotifications();
+        chatSaveFallback();
+      })
+      .catch(function () {
+        chatState.notifications.forEach(function (n) { n.read = true; });
+        chatState.notifications = chatState.notifications.filter(function (n) { return !n.read; });
+        chatState.unreadCount = 0;
+        chatRenderUnread();
+        chatRenderNotifications();
+        chatSaveFallback();
+      });
   }
 
   function chatAddLocalMessage(msg) {
@@ -526,71 +563,139 @@
   function chatSendText(text) {
     var body = String(text || '').trim();
     if (!body) return;
-    var msg = {
-      id: Date.now(),
-      type: 'text',
-      text: body,
-      user_name: 'You',
-      is_mine: true,
-      created_at: new Date().toISOString(),
-    };
-    chatAddLocalMessage(msg);
+    chatApi('/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        project_id: chatState.projectId,
+        type: 'text',
+        text: body,
+      }),
+    })
+      .then(function (out) {
+        if (!out.ok || !out.data.success) throw new Error('send');
+        chatReloadMessages();
+      })
+      .catch(function () {
+        var msg = {
+          id: Date.now(),
+          type: 'text',
+          text: body,
+          user_name: 'You',
+          is_mine: true,
+          created_at: new Date().toISOString(),
+        };
+        chatAddLocalMessage(msg);
+      });
   }
 
   function chatSendFile(file) {
     if (!file) return;
-    var msg = {
-      id: Date.now(),
-      type: 'file',
-      file_name: file.name || 'Attachment',
-      user_name: 'You',
-      is_mine: true,
-      created_at: new Date().toISOString(),
-    };
-    chatAddLocalMessage(msg);
-    chatCreateNotification('message', 'File shared', file.name || 'Attachment', msg.id);
+    var fd = new FormData();
+    fd.append('file', file);
+    fd.append('project_id', String(chatState.projectId || ''));
+    fd.append('type', 'file');
+    fd.append('file_name', file.name || 'Attachment');
+    chatApi('/messages', { method: 'POST', body: fd })
+      .then(function (out) {
+        if (!out.ok || !out.data.success) throw new Error('send');
+        chatReloadMessages();
+      })
+      .catch(function () {
+        var msg = {
+          id: Date.now(),
+          type: 'file',
+          file_name: file.name || 'Attachment',
+          user_name: 'You',
+          is_mine: true,
+          created_at: new Date().toISOString(),
+        };
+        chatAddLocalMessage(msg);
+      });
   }
 
   function chatSendMaterialRequest(payload) {
-    var msg = {
-      id: Date.now(),
-      type: 'material_request',
-      summary: payload.summary || '',
-      details: payload.details || '',
-      urgency: payload.urgency || 'Normal',
-      location: payload.location || '',
-      status: 'Pending',
-      user_name: 'You',
-      is_mine: true,
-      created_at: new Date().toISOString(),
-    };
-    chatAddLocalMessage(msg);
-    chatCreateNotification('material_request', 'New Material Request', payload.summary || 'Request created', msg.id);
+    chatApi('/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        project_id: chatState.projectId,
+        type: 'material_request',
+        request_summary: payload.summary || '',
+        request_details: payload.details || '',
+        request_urgency: payload.urgency || 'Normal',
+        request_location: payload.location || '',
+        request_status: 'Pending',
+      }),
+    })
+      .then(function (out) {
+        if (!out.ok || !out.data.success) throw new Error('send');
+        chatReloadMessages();
+      })
+      .catch(function () {
+        var msg = {
+          id: Date.now(),
+          type: 'material_request',
+          summary: payload.summary || '',
+          details: payload.details || '',
+          urgency: payload.urgency || 'Normal',
+          location: payload.location || '',
+          status: 'Pending',
+          user_name: 'You',
+          is_mine: true,
+          created_at: new Date().toISOString(),
+        };
+        chatAddLocalMessage(msg);
+      });
   }
 
-  function chatSimulateIncomingTick() {
-    var now = Date.now();
-    if (now - chatState.lastSeenAt < 20000) return;
-    chatState.lastSeenAt = now;
-    var incoming = {
-      id: now,
-      type: 'text',
-      text: 'Update: team check-in complete on current zone.',
-      user_name: 'Supervisor',
-      is_mine: false,
-      created_at: new Date().toISOString(),
-    };
-    chatState.messages.push(incoming);
-    chatCreateNotification('message', 'New Message', 'Supervisor sent a message', incoming.id);
-    chatSaveFallback();
-    if (modalSiteChat && modalSiteChat.classList.contains('is-open')) {
-      chatRenderMessages();
-    }
+  function chatReloadMessages() {
+    if (!chatState.projectId) return Promise.resolve();
+    return chatApi('/messages?project_id=' + encodeURIComponent(chatState.projectId) + '&limit=120')
+      .then(function (out) {
+        if (!out.ok || !out.data.success) throw new Error('messages');
+        var prevLen = chatState.messages.length;
+        chatState.messages = out.data.messages || [];
+        chatSaveFallback();
+        if (modalSiteChat && modalSiteChat.classList.contains('is-open')) {
+          chatRenderMessages();
+        }
+        if (chatState.messages.length > prevLen && modalSiteChat && !modalSiteChat.classList.contains('is-open')) {
+          chatToast('New message');
+        }
+      })
+      .catch(function () {
+        chatLoadFallback();
+        if (modalSiteChat && modalSiteChat.classList.contains('is-open')) {
+          chatRenderMessages();
+        }
+      });
+  }
+
+  function chatReloadNotifications() {
+    if (!chatState.projectId) return Promise.resolve();
+    return chatApi('/notifications?project_id=' + encodeURIComponent(chatState.projectId) + '&limit=80')
+      .then(function (out) {
+        if (!out.ok || !out.data.success) throw new Error('notifications');
+        chatState.notifications = (out.data.notifications || []).filter(function (n) { return !n.read; });
+        chatState.unreadCount = chatState.notifications.length;
+        chatRenderUnread();
+        chatRenderNotifications();
+        chatSaveFallback();
+      })
+      .catch(function () {
+        chatLoadFallback();
+        chatRenderUnread();
+        chatRenderNotifications();
+      });
   }
 
   function chatStartRealtime() {
     if (chatState.pollTimer) clearInterval(chatState.pollTimer);
-    chatState.pollTimer = setInterval(chatSimulateIncomingTick, 5000);
+    chatReloadMessages();
+    chatReloadNotifications();
+    chatState.pollTimer = setInterval(function () {
+      chatReloadMessages();
+      chatReloadNotifications();
+    }, 5000);
   }
 
   function chatStopRealtime() {
@@ -601,12 +706,25 @@
   }
 
   function chatInitProjectContext(project) {
-    chatState.projectId = project && project.id != null ? project.id : null;
-    chatState.projectName = project && (project.name || project.project_name) ? (project.name || project.project_name) : 'Project room';
-    if (chatProjectNameEl) chatProjectNameEl.textContent = chatState.projectName;
-    chatLoadFallback();
-    chatRenderUnread();
-    chatRenderNotifications();
+    var localProjectId = project && project.id != null ? project.id : null;
+    var localProjectName = project && (project.name || project.project_name) ? (project.name || project.project_name) : 'Project room';
+    chatApi('/room' + (localProjectId ? '?project_id=' + encodeURIComponent(localProjectId) : ''))
+      .then(function (out) {
+        if (!out.ok || !out.data.success || !out.data.room) throw new Error('room');
+        chatState.projectId = out.data.room.project_id;
+        chatState.projectName = out.data.room.project_name || localProjectName;
+        if (chatProjectNameEl) chatProjectNameEl.textContent = chatState.projectName;
+        chatReloadMessages();
+        chatReloadNotifications();
+      })
+      .catch(function () {
+        chatState.projectId = localProjectId;
+        chatState.projectName = localProjectName;
+        if (chatProjectNameEl) chatProjectNameEl.textContent = chatState.projectName;
+        chatLoadFallback();
+        chatRenderUnread();
+        chatRenderNotifications();
+      });
   }
 
   if (chatOpenBtn) {
