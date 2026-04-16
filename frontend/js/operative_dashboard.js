@@ -330,6 +330,8 @@
   var chatReqViewUrgency = document.getElementById('op-chat-request-view-urgency');
   var chatReqViewLocation = document.getElementById('op-chat-request-view-location');
   var chatReqViewStatus = document.getElementById('op-chat-request-view-status');
+  var chatReqStatusSelect = document.getElementById('op-chat-request-status-select');
+  var chatReqSaveStatusBtn = document.getElementById('op-chat-request-save-status');
   var chatReqViewPhotos = document.getElementById('op-chat-request-view-photos');
   var chatReqActionsWrap = document.getElementById('op-chat-request-actions');
   var chatReqPhotoInput = document.getElementById('op-chat-request-photo-upload');
@@ -491,6 +493,7 @@
         if (chatReqViewUrgency) chatReqViewUrgency.value = msg.urgency || 'Normal';
         if (chatReqViewLocation) chatReqViewLocation.value = msg.location || '';
         if (chatReqViewStatus) chatReqViewStatus.value = msg.status || 'Pending';
+        if (chatReqStatusSelect) chatReqStatusSelect.value = msg.status || 'Pending';
         if (chatReqViewPhotos) {
           var photos = Array.isArray(msg.photos) ? msg.photos : [];
           chatReqViewPhotos.innerHTML = photos.length
@@ -873,6 +876,27 @@
               ? photos.map(function (p) { return '<img src="' + chatEsc(p.file_url || '') + '" alt="Request photo">'; }).join('')
               : '<p class="op-text-muted" style="margin:0">No photos yet.</p>';
           }
+        })
+        .catch(function () {});
+    });
+  }
+
+  if (chatReqSaveStatusBtn) {
+    chatReqSaveStatusBtn.addEventListener('click', function () {
+      var mid = chatState.selectedRequestId;
+      var nextStatus = chatReqStatusSelect && chatReqStatusSelect.value;
+      if (!mid || !nextStatus) return;
+      chatApi('/messages/' + encodeURIComponent(mid) + '/status', {
+        method: 'PATCH',
+        body: JSON.stringify({ status: nextStatus }),
+      })
+        .then(function (out) {
+          if (!out.ok || !out.data.success) throw new Error('status');
+          return chatReloadMessages().then(function () { return chatReloadNotifications(); });
+        })
+        .then(function () {
+          var msg = chatState.messages.find(function (m) { return String(m.id) === String(mid); });
+          if (msg && chatReqViewStatus) chatReqViewStatus.value = msg.status || nextStatus;
         })
         .catch(function () {});
     });

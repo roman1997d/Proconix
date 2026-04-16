@@ -290,6 +290,89 @@ async function completeMaterialRequest(req, res) {
   }
 }
 
+async function updateMaterialRequestStatus(req, res) {
+  const actor = getActor(req);
+  if (!actor) return res.status(403).json({ success: false, message: 'Access denied.' });
+  const messageId = parseInt(req.params.messageId, 10);
+  const nextStatus = String(req.body.status || '').trim();
+  const allowed = ['Pending', 'Approved', 'Delivered', 'Completed'];
+  if (!Number.isInteger(messageId) || messageId < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid message id.' });
+  }
+  if (!allowed.includes(nextStatus)) {
+    return res.status(400).json({ success: false, message: 'Invalid status.' });
+  }
+  try {
+    const msg = await pool.query(
+      `SELECT id, company_id, project_id, sender_kind, sender_id, request_status, message_type
+       FROM site_chat_message WHERE id = $1`,
+      [messageId]
+    );
+    if (!msg.rows.length) return res.status(404).json({ success: false, message: 'Request not found.' });
+    const row = msg.rows[0];
+    if (row.message_type !== 'material_request') {
+      return res.status(400).json({ success: false, message: 'Message is not a material request.' });
+    }
+    const project = await resolveProjectForRequest(req, actor, row.project_id);
+    if (!project || Number(project.id) !== Number(row.project_id)) {
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+    const actorName = await resolveActorDisplayName(actor);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE site_chat_message
+         SET request_status = $2
+         WHERE id = $1`,
+        [messageId, nextStatus]
+      );
+      const text =
+        'User "' +
+        actorName +
+        '" changed request #' +
+        String(messageId) +
+        ' status to "' +
+        nextStatus +
+        '" on ' +
+        new Date().toLocaleString();
+      const sys = await client.query(
+        `INSERT INTO site_chat_message
+         (company_id, project_id, sender_kind, sender_id, sender_name, message_type, body)
+         VALUES ($1,$2,$3,$4,$5,'system',$6)
+         RETURNING id`,
+        [row.company_id, row.project_id, actor.kind, actor.id, actorName, text]
+      );
+      await notifyProjectRecipients(client, {
+        companyId: row.company_id,
+        projectId: row.project_id,
+        messageId: sys.rows[0].id,
+        actorKind: actor.kind,
+        actorId: actor.id,
+        kind: 'request_updated',
+        title: 'Request Updated',
+        body: text,
+      });
+      await client.query('COMMIT');
+      return res.json({ success: true });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    if (tableMissing(err)) {
+      return res.status(503).json({
+        success: false,
+        message: 'Site chat tables are not installed. Run scripts/create_site_chat_tables.sql',
+      });
+    }
+    console.error('siteChat updateMaterialRequestStatus:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update status.' });
+  }
+}
+
 async function uploadMaterialRequestPhoto(req, res) {
   const actor = getActor(req);
   if (!actor) return res.status(403).json({ success: false, message: 'Access denied.' });
@@ -499,6 +582,7 @@ module.exports = {
   listMessages,
   postMessage,
   completeMaterialRequest,
+  updateMaterialRequestStatus,
   uploadMaterialRequestPhoto,
   listNotifications,
   markNotificationsRead,

@@ -8,6 +8,7 @@ router.get('/room', requireManagerOrOperativeAuth, ctrl.getRoom);
 router.get('/messages', requireManagerOrOperativeAuth, ctrl.listMessages);
 router.post('/messages', requireManagerOrOperativeAuth, uploadDocumentFile, injectFileUrl('documents'), ctrl.postMessage);
 router.patch('/messages/:messageId/complete', requireManagerOrOperativeAuth, ctrl.completeMaterialRequest);
+router.patch('/messages/:messageId/status', requireManagerOrOperativeAuth, ctrl.updateMaterialRequestStatus);
 router.post(
   '/messages/:messageId/photos',
   requireManagerOrOperativeAuth,

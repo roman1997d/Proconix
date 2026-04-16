@@ -243,6 +243,14 @@
             <div id="op-chat-request-view-photos" class="op-chat-request-photos"></div>
           </div>
           <div class="op-field d-none" id="op-chat-request-actions">
+            <label for="op-chat-request-status-select">Change status</label>
+            <select id="op-chat-request-status-select">
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Delivered">Delivered</option>
+              <option value="Completed">Completed</option>
+            </select>
+            <button type="button" class="op-btn op-btn-secondary" id="op-chat-request-save-status" style="margin-top:10px;">Save Status</button>
             <label for="op-chat-request-photo-upload">Add completion photo</label>
             <input type="file" id="op-chat-request-photo-upload" accept="image/*">
             <div class="op-field-row" style="margin-top:10px;">
