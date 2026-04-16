@@ -38,7 +38,7 @@
       <div class="op-hero-top">
         <div>
           <p class="op-hero-kicker">Operative dashboard</p>
-          <h1 class="op-hero-title">Today at a glance</h1>
+          <h1 class="op-hero-title">Current Project</h1>
         </div>
         <button type="button" class="op-hero-menu" aria-label="Menu shortcuts">
           <i class="bi bi-list"></i>
@@ -66,11 +66,14 @@
       <div id="op-project-content" class="op-project-content">Loading…</div>
     </section>
 
-    <!-- Drawing Gallery (read-only for operatives) -->
+    <!-- Drawing Gallery (inline for operatives) -->
     <section class="op-card">
       <h2 class="op-card-title"><i class="bi bi-diagram-3"></i> Drawing Gallery</h2>
-      <p class="op-tasks-hint">View plans and technical drawings for your project.</p>
-      <a href="Drawing_Gallery.html" class="op-btn op-btn-primary"><i class="bi bi-box-arrow-up-right"></i> Open Drawing Gallery</a>
+      <p class="op-tasks-hint">View plans and technical drawings for your current project without leaving this screen.</p>
+      <div id="op-dg-summary" class="op-dg-summary op-text-muted">Loading…</div>
+      <button type="button" class="op-btn op-btn-primary op-dg-open" id="op-dg-open">
+        <i class="bi bi-layout-wtf"></i> Open Drawing Gallery
+      </button>
     </section>
 
     <!-- Documents to sign (manager-assigned PDFs) -->
@@ -129,6 +132,49 @@
     <a href="#op-worklog" class="op-nav-item"><i class="bi bi-journal-plus"></i><span>Work</span></a>
     <a href="#op-tasks" class="op-nav-item"><i class="bi bi-list-task"></i><span>Tasks</span></a>
   </nav>
+
+  <!-- Modal: Drawing Gallery (inline operative viewer) -->
+  <div class="op-modal op-modal-dg" id="op-modal-dg" aria-hidden="true" role="dialog" aria-labelledby="op-dg-title">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog op-modal-dialog-dg">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <div>
+            <h3 id="op-dg-title">Drawing Gallery</h3>
+            <p class="op-dg-subtitle">Plans and drawings for your current project.</p>
+          </div>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body op-dg-body">
+          <div class="op-dg-filters" id="op-dg-filters">
+            <input type="search" id="op-dg-q" placeholder="Search title / keywords">
+            <input type="text" id="op-dg-floor" placeholder="Floor">
+            <input type="text" id="op-dg-zone" placeholder="Zone">
+            <select id="op-dg-discipline">
+              <option value="">All disciplines</option>
+              <option>Drywall</option>
+              <option>MEP</option>
+              <option>Electrical</option>
+              <option>Structural</option>
+              <option>Architectural</option>
+              <option>General</option>
+              <option>Other</option>
+            </select>
+            <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-dg-apply">Apply</button>
+          </div>
+          <div id="op-dg-list" class="op-dg-list" aria-label="Drawing series list"></div>
+          <div id="op-dg-viewer" class="op-dg-viewer" aria-label="Drawing preview">
+            <div id="op-dg-viewer-placeholder" class="op-dg-viewer-placeholder">
+              <p class="op-text-muted">Pick a drawing from the list to preview it here.</p>
+            </div>
+            <iframe id="op-dg-iframe" class="op-dg-iframe" title="Drawing PDF" loading="lazy"></iframe>
+            <img id="op-dg-img" class="op-dg-img" alt="Drawing preview">
+            <div id="op-dg-dwg" class="op-dg-dwg-hint">This drawing type cannot be previewed here. Use Download.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal: Report Issue -->
   <div class="op-modal" id="op-modal-issue" aria-hidden="true" role="dialog">
