@@ -18,7 +18,7 @@ function getActor(req) {
       kind: 'operative',
       id: req.operative.id,
       companyId: req.operative.company_id,
-      name: req.operative.email || 'Operative',
+      name: req.operative.email || 'User',
     };
   }
   return null;
@@ -34,12 +34,12 @@ async function resolveActorDisplayName(actor) {
     );
     if (r.rows[0]) {
       const nm = [r.rows[0].name, r.rows[0].surname].filter(Boolean).join(' ').trim();
-      return nm || r.rows[0].email || actor.name || 'Operative';
+      return nm || r.rows[0].email || actor.name || 'User';
     }
   } catch (e) {
     if (e.code !== '42703' && e.code !== '42P01') throw e;
   }
-  return actor.name || 'Operative';
+  return actor.name || 'User';
 }
 
 async function resolveProjectForRequest(req, actor, explicitProjectId) {
@@ -152,8 +152,8 @@ async function listMessages(req, res) {
                 ), ''),
                 NULLIF(m.sender_name, ''),
                 CASE
-                  WHEN m.sender_kind = 'manager' THEN COALESCE(mgr.email, 'Manager')
-                  WHEN m.sender_kind = 'operative' THEN COALESCE(usr.email, 'Operative')
+                  WHEN m.sender_kind = 'manager' THEN COALESCE(mgr.email, 'Unknown user')
+                  WHEN m.sender_kind = 'operative' THEN COALESCE(usr.email, 'Unknown user')
                   ELSE 'User'
                 END
               ) AS user_name

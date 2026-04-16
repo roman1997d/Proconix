@@ -401,6 +401,18 @@
     return escapeHtml(s == null ? '' : String(s));
   }
 
+  function chatDisplayName(m) {
+    var raw = '';
+    if (m && typeof m.user_name === 'string') raw = m.user_name.trim();
+    if (!raw && m && typeof m.sender_name === 'string') raw = m.sender_name.trim();
+    if (!raw) raw = 'Unknown user';
+    var low = raw.toLowerCase();
+    if (low === 'operative' || low === 'operatives' || low === 'manager' || low === 'user') {
+      return 'Unknown user';
+    }
+    return raw;
+  }
+
   function chatRenderUnread() {
     var c = chatState.unreadCount || 0;
     if (chatUnreadBadge) {
@@ -452,7 +464,7 @@
           baseCls +
           '">' +
           '<div class="op-chat-msg-user">' +
-          chatEsc(m.user_name || 'User') +
+          chatEsc(chatDisplayName(m)) +
           '</div>' +
           body +
           '<div class="op-chat-msg-time">' +
@@ -690,7 +702,7 @@
         if (!out.ok || !out.data.success) throw new Error('messages');
         var prevLen = chatState.messages.length;
         chatState.messages = (out.data.messages || []).map(function (m) {
-          if (!m.user_name) m.user_name = m.sender_name || 'User';
+          if (!m.user_name) m.user_name = m.sender_name || 'Unknown user';
           return m;
         });
         chatSaveFallback();
