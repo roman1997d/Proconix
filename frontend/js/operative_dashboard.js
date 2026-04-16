@@ -1076,15 +1076,14 @@
       }
     });
 
-    // Tap / click image to toggle fullscreen
-    if (dgImg) {
+    // Tap / click image to bring it to the front inside the modal (hide list/filters)
+    if (dgImg && modalDrawing) {
       dgImg.addEventListener('click', function () {
-        var el = dgViewerWrap;
-        if (!el) return;
-        if (!document.fullscreenElement && el.requestFullscreen) {
-          el.requestFullscreen();
-        } else if (document.fullscreenElement && document.exitFullscreen) {
-          document.exitFullscreen();
+        if (!dgImg || dgImg.style.display === 'none') return;
+        if (modalDrawing.classList.contains('op-dg-full-image')) {
+          modalDrawing.classList.remove('op-dg-full-image');
+        } else {
+          modalDrawing.classList.add('op-dg-full-image');
         }
       });
     }

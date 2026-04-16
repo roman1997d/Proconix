@@ -1577,6 +1577,19 @@ a.op-doc-row,
   }
 }
 
+.op-modal-dg.op-dg-full-image .op-dg-body {
+  display: block;
+}
+
+.op-modal-dg.op-dg-full-image .op-dg-filters,
+.op-modal-dg.op-dg-full-image .op-dg-list {
+  display: none;
+}
+
+.op-modal-dg.op-dg-full-image .op-dg-viewer {
+  min-height: min(80vh, 640px);
+}
+
 .op-dg-filters {
   display: flex;
   flex-wrap: wrap;
