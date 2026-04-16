@@ -205,6 +205,137 @@ async function listSeries(req, res) {
   }
 }
 
+function decodeNavPart(value) {
+  try {
+    return decodeURIComponent(String(value || '')).trim();
+  } catch (_) {
+    return String(value || '').trim();
+  }
+}
+
+const CATEGORY_SQL = "COALESCE(NULLIF(TRIM(s.floor_label), ''), NULLIF(TRIM(s.zone_label), ''), 'General')";
+
+/**
+ * GET /projects/:projectId/disciplines
+ * Read-only hierarchy level 1 with backend-computed totals.
+ */
+async function listDisciplines(req, res) {
+  const projectId = parseInt(req.params.projectId, 10);
+  const acc = await assertProjectReadAccess(req, projectId);
+  if (!acc.ok) return res.status(acc.code).json({ success: false, message: acc.message });
+  try {
+    const result = await pool.query(
+      `SELECT COALESCE(NULLIF(TRIM(s.discipline), ''), 'General') AS discipline,
+              COUNT(*)::int AS total_drawings
+       FROM drawing_series s
+       JOIN drawing_version v ON v.series_id = s.id AND v.status = 'active'
+       WHERE s.project_id = $1
+       GROUP BY COALESCE(NULLIF(TRIM(s.discipline), ''), 'General')
+       ORDER BY discipline ASC`,
+      [projectId]
+    );
+    return res.json({ success: true, disciplines: result.rows });
+  } catch (err) {
+    if (tableMissing(err)) {
+      return res.status(503).json({
+        success: false,
+        message: 'Drawing Gallery tables are not installed. Run scripts/create_drawing_gallery_tables.sql',
+      });
+    }
+    console.error('drawingGallery listDisciplines:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load disciplines.' });
+  }
+}
+
+/**
+ * GET /projects/:projectId/disciplines/:discipline/categories
+ * Read-only hierarchy level 2 with backend-computed totals.
+ */
+async function listCategoriesByDiscipline(req, res) {
+  const projectId = parseInt(req.params.projectId, 10);
+  const acc = await assertProjectReadAccess(req, projectId);
+  if (!acc.ok) return res.status(acc.code).json({ success: false, message: acc.message });
+  const discipline = decodeNavPart(req.params.discipline);
+  if (!discipline) {
+    return res.status(400).json({ success: false, message: 'Invalid discipline.' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT ${CATEGORY_SQL} AS category,
+              COUNT(*)::int AS total_drawings
+       FROM drawing_series s
+       JOIN drawing_version v ON v.series_id = s.id AND v.status = 'active'
+       WHERE s.project_id = $1
+         AND COALESCE(NULLIF(TRIM(s.discipline), ''), 'General') = $2
+       GROUP BY ${CATEGORY_SQL}
+       ORDER BY category ASC`,
+      [projectId, discipline]
+    );
+    return res.json({ success: true, discipline, categories: result.rows });
+  } catch (err) {
+    if (tableMissing(err)) {
+      return res.status(503).json({
+        success: false,
+        message: 'Drawing Gallery tables are not installed. Run scripts/create_drawing_gallery_tables.sql',
+      });
+    }
+    console.error('drawingGallery listCategoriesByDiscipline:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load categories.' });
+  }
+}
+
+/**
+ * GET /projects/:projectId/disciplines/:discipline/categories/:category/drawings
+ * Read-only hierarchy level 3 with list metadata and secure file URLs.
+ */
+async function listDrawingsByCategory(req, res) {
+  const projectId = parseInt(req.params.projectId, 10);
+  const acc = await assertProjectReadAccess(req, projectId);
+  if (!acc.ok) return res.status(acc.code).json({ success: false, message: acc.message });
+  const discipline = decodeNavPart(req.params.discipline);
+  const category = decodeNavPart(req.params.category);
+  if (!discipline || !category) {
+    return res.status(400).json({ success: false, message: 'Invalid discipline/category.' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT s.id AS series_id, s.title, s.discipline,
+              ${CATEGORY_SQL} AS category,
+              v.id AS version_id, v.version_number, v.mime_type, v.uploaded_at
+       FROM drawing_series s
+       JOIN drawing_version v ON v.series_id = s.id AND v.status = 'active'
+       WHERE s.project_id = $1
+         AND COALESCE(NULLIF(TRIM(s.discipline), ''), 'General') = $2
+         AND ${CATEGORY_SQL} = $3
+       ORDER BY s.title ASC`,
+      [projectId, discipline, category]
+    );
+    const drawings = result.rows.map((row) => {
+      const fileUrl = `/api/drawing-gallery/versions/${row.version_id}/file`;
+      return {
+        id: row.version_id,
+        series_id: row.series_id,
+        name: row.title,
+        revision: `v${row.version_number}`,
+        updated_at: row.uploaded_at,
+        mime_type: row.mime_type,
+        thumbnail_url: fileUrl,
+        file_url: fileUrl,
+      };
+    });
+    return res.json({ success: true, discipline, category, drawings });
+  } catch (err) {
+    if (tableMissing(err)) {
+      return res.status(503).json({
+        success: false,
+        message: 'Drawing Gallery tables are not installed. Run scripts/create_drawing_gallery_tables.sql',
+      });
+    }
+    console.error('drawingGallery listDrawingsByCategory:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load drawings.' });
+  }
+}
+
 /**
  * GET /series/:seriesId
  */
@@ -610,6 +741,9 @@ async function markNotificationRead(req, res) {
 
 module.exports = {
   listSeries,
+  listDisciplines,
+  listCategoriesByDiscipline,
+  listDrawingsByCategory,
   getSeriesDetail,
   uploadDrawing,
   downloadVersionFile,

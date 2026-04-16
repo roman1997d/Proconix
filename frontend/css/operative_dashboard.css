@@ -1562,55 +1562,29 @@ a.op-doc-row,
 
 .op-modal-dialog-dg {
   max-width: 100%;
-  width: min(960px, 100%);
+  width: min(560px, 100%);
 }
 
 .op-dg-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr);
-  gap: 12px;
-}
-
-@media (max-width: 720px) {
-  .op-dg-body {
-    grid-template-columns: 1fr;
-  }
-}
-
-.op-modal-dg.op-dg-full-image .op-dg-body {
   display: block;
+  padding-top: 10px;
 }
 
-.op-modal-dg.op-dg-full-image .op-dg-filters,
-.op-modal-dg.op-dg-full-image .op-dg-list {
-  display: none;
-}
-
-.op-modal-dg.op-dg-full-image .op-dg-viewer {
-  min-height: min(80vh, 640px);
-}
-
-.op-dg-filters {
+.op-dg-topbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
-.op-dg-filters input,
-.op-dg-filters select {
-  flex: 1 1 90px;
-  min-width: 0;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 101, 88, 0.16);
-  padding: 6px 10px;
+.op-dg-path {
+  margin: 0;
   font-size: 0.85rem;
-  background: #f7fffd;
-  color: #1a3f38;
+  color: #5f7d77;
 }
 
 .op-dg-list {
-  max-height: min(55vh, 520px);
+  max-height: min(60vh, 560px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   display: flex;
@@ -1665,25 +1639,25 @@ a.op-doc-row,
   color: #475569;
 }
 
-.op-dg-viewer {
-  border-radius: 16px;
-  border: 1px solid rgba(15, 101, 88, 0.18);
-  background: radial-gradient(circle at top left, #f5fffb 0%, #f1fbf6 32%, #e6f7f3 100%);
-  min-height: min(40vh, 360px);
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
+.op-modal-dg-viewer {
+  inset: 0;
+  z-index: 250;
+  background: #0b1018;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
 }
 
-.op-dg-viewer-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  text-align: center;
-  font-size: 0.9rem;
+.op-modal-dg-viewer.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.op-dg-viewer-wrap {
+  position: absolute;
+  inset: 0;
+  background: #0b1018;
+  overflow: hidden;
 }
 
 .op-dg-iframe,
@@ -1699,7 +1673,7 @@ a.op-doc-row,
 
 .op-dg-img {
   object-fit: contain;
-  background: #0f172a;
+  background: #0b1018;
   cursor: grab;
   touch-action: none;
 }

@@ -753,51 +753,354 @@
     hideFeedback(document.getElementById('op-upload-feedback'));
   });
 
-  // ----- Drawing Gallery (inline, operative-friendly) -----
+  // ----- Drawing View Module (operatives, read-only) -----
   var dgSummaryEl = document.getElementById('op-dg-summary');
   var dgOpenBtn = document.getElementById('op-dg-open');
   var dgListEl = document.getElementById('op-dg-list');
-  var dgQEl = document.getElementById('op-dg-q');
-  var dgFloorEl = document.getElementById('op-dg-floor');
-  var dgZoneEl = document.getElementById('op-dg-zone');
-  var dgDisciplineEl = document.getElementById('op-dg-discipline');
-  var dgApplyBtn = document.getElementById('op-dg-apply');
+  var dgBackBtn = document.getElementById('op-dg-back');
+  var dgPathEl = document.getElementById('op-dg-path');
+  var modalDrawingViewer = document.getElementById('op-modal-dg-viewer');
+  var dgViewerWrap = document.getElementById('op-dg-viewer-wrap');
   var dgIframe = document.getElementById('op-dg-iframe');
   var dgImg = document.getElementById('op-dg-img');
   var dgDwg = document.getElementById('op-dg-dwg');
-  var dgViewerPlaceholder = document.getElementById('op-dg-viewer-placeholder');
-  var dgViewerWrap = document.getElementById('op-dg-viewer');
   var dgCurrentProjectId = null;
-  var dgCurrentSeriesId = null;
-  var dgCurrentVersionId = null;
-  var dgViewerState = {
-    scale: 1,
-    translateX: 0,
-    translateY: 0,
+  var dgCurrentVersionBlobUrl = null;
+  var dgViewerState = { scale: 1, translateX: 0, translateY: 0 };
+  var dgNav = {
+    level: 'disciplines',
+    discipline: null,
+    category: null,
   };
 
-  function dgApi(path, opts) {
+  function dgApi(path) {
     var token = getToken();
     if (!token) return Promise.reject(new Error('No token'));
-    var o = opts || {};
-    var headers = o.headers || {};
-    headers['X-Operative-Token'] = token;
-    if (o.body && !(o.body instanceof FormData)) {
-      headers['Content-Type'] = 'application/json';
-    }
-    o.headers = headers;
-    o.credentials = 'same-origin';
-    return fetch('/api/drawing-gallery' + path, o).then(function (res) {
+    return fetch('/api/drawing-gallery' + path, {
+      headers: { 'X-Operative-Token': token },
+      credentials: 'same-origin',
+    }).then(function (res) {
       var ct = res.headers.get('Content-Type') || '';
       if (ct.indexOf('application/json') !== -1) {
         return res.json().then(function (data) {
-          return { ok: res.ok, status: res.status, data: data };
+          return { ok: res.ok, data: data };
         });
       }
       return res.text().then(function (t) {
-        return { ok: res.ok, status: res.status, data: { message: t } };
+        return { ok: res.ok, data: { message: t } };
       });
     });
+  }
+
+  function dgSetPath() {
+    if (!dgPathEl) return;
+    if (dgNav.level === 'disciplines') {
+      dgPathEl.textContent = 'Disciplines';
+      if (dgBackBtn) dgBackBtn.classList.add('d-none');
+      return;
+    }
+    if (dgNav.level === 'categories') {
+      dgPathEl.textContent = 'Disciplines / ' + (dgNav.discipline || '');
+      if (dgBackBtn) dgBackBtn.classList.remove('d-none');
+      return;
+    }
+    dgPathEl.textContent = 'Disciplines / ' + (dgNav.discipline || '') + ' / ' + (dgNav.category || '');
+    if (dgBackBtn) dgBackBtn.classList.remove('d-none');
+  }
+
+  function dgEsc(s) {
+    return escapeHtml(s == null ? '' : String(s));
+  }
+
+  function dgCard(title, meta, attrs) {
+    return (
+      '<button type="button" class="op-dg-series-card" ' +
+      (attrs || '') +
+      '>' +
+      '<div class="op-dg-series-title">' +
+      dgEsc(title) +
+      '</div>' +
+      '<div class="op-dg-series-meta">' +
+      dgEsc(meta) +
+      '</div>' +
+      '</button>'
+    );
+  }
+
+  function dgLoadDisciplines() {
+    dgNav.level = 'disciplines';
+    dgSetPath();
+    if (dgListEl) dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">Loading disciplines…</p>';
+    dgApi('/projects/' + encodeURIComponent(dgCurrentProjectId) + '/disciplines')
+      .then(function (out) {
+        if (!out.ok || !out.data.success) throw new Error(out.data.message || 'Failed');
+        var rows = out.data.disciplines || [];
+        if (!rows.length) {
+          dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">No drawings in this project yet.</p>';
+          return;
+        }
+        dgListEl.innerHTML = rows
+          .map(function (r) {
+            return dgCard(r.discipline || 'General', (r.total_drawings || 0) + ' drawings', 'data-dg-discipline="' + dgEsc(r.discipline || 'General') + '"');
+          })
+          .join('');
+        dgListEl.querySelectorAll('[data-dg-discipline]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            dgNav.discipline = btn.getAttribute('data-dg-discipline');
+            dgLoadCategories();
+          });
+        });
+      })
+      .catch(function () {
+        dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">Could not load disciplines.</p>';
+      });
+  }
+
+  function dgLoadCategories() {
+    dgNav.level = 'categories';
+    dgNav.category = null;
+    dgSetPath();
+    if (dgListEl) dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">Loading categories…</p>';
+    dgApi(
+      '/projects/' +
+        encodeURIComponent(dgCurrentProjectId) +
+        '/disciplines/' +
+        encodeURIComponent(dgNav.discipline || '') +
+        '/categories'
+    )
+      .then(function (out) {
+        if (!out.ok || !out.data.success) throw new Error(out.data.message || 'Failed');
+        var rows = out.data.categories || [];
+        if (!rows.length) {
+          dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">No categories found.</p>';
+          return;
+        }
+        dgListEl.innerHTML = rows
+          .map(function (r) {
+            return dgCard(r.category || 'General', (r.total_drawings || 0) + ' drawings', 'data-dg-category="' + dgEsc(r.category || 'General') + '"');
+          })
+          .join('');
+        dgListEl.querySelectorAll('[data-dg-category]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            dgNav.category = btn.getAttribute('data-dg-category');
+            dgLoadDrawings();
+          });
+        });
+      })
+      .catch(function () {
+        dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">Could not load categories.</p>';
+      });
+  }
+
+  function dgThumbFor(d) {
+    if ((d.mime_type || '').indexOf('image/') === 0) {
+      return '<img src="' + dgEsc(d.thumbnail_url || '') + '" alt="" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid rgba(15,101,88,0.16);margin-right:10px;">';
+    }
+    return '<span style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:8px;background:#ecfbf7;border:1px solid rgba(15,101,88,0.16);margin-right:10px;"><i class="bi bi-file-earmark-text" style="font-size:20px;color:#1d7b6a;"></i></span>';
+  }
+
+  function dgLoadDrawings() {
+    dgNav.level = 'drawings';
+    dgSetPath();
+    if (dgListEl) dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">Loading drawings…</p>';
+    dgApi(
+      '/projects/' +
+        encodeURIComponent(dgCurrentProjectId) +
+        '/disciplines/' +
+        encodeURIComponent(dgNav.discipline || '') +
+        '/categories/' +
+        encodeURIComponent(dgNav.category || '') +
+        '/drawings'
+    )
+      .then(function (out) {
+        if (!out.ok || !out.data.success) throw new Error(out.data.message || 'Failed');
+        var rows = out.data.drawings || [];
+        if (!rows.length) {
+          dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">No drawings in this category.</p>';
+          return;
+        }
+        dgListEl.innerHTML = rows
+          .map(function (d) {
+            var updated = d.updated_at ? new Date(d.updated_at).toLocaleDateString() : '—';
+            return (
+              '<button type="button" class="op-dg-series-card" data-dg-version="' +
+              dgEsc(String(d.id)) +
+              '" data-dg-mime="' +
+              dgEsc(d.mime_type || '') +
+              '">' +
+              '<div style="display:flex;align-items:center;">' +
+              dgThumbFor(d) +
+              '<div style="min-width:0;">' +
+              '<div class="op-dg-series-title" style="margin-bottom:4px;">' +
+              dgEsc(d.name || 'Drawing') +
+              '</div>' +
+              '<div class="op-dg-series-meta">' +
+              dgEsc(d.revision || 'v1') +
+              ' · Updated ' +
+              dgEsc(updated) +
+              '</div>' +
+              '</div></div></button>'
+            );
+          })
+          .join('');
+        dgListEl.querySelectorAll('[data-dg-version]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var vid = parseInt(btn.getAttribute('data-dg-version') || '0', 10);
+            var mime = btn.getAttribute('data-dg-mime') || '';
+            if (vid) dgOpenViewerFinal(vid, mime);
+          });
+        });
+      })
+      .catch(function () {
+        dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">Could not load drawings.</p>';
+      });
+  }
+
+  function dgResetViewerFinal() {
+    dgViewerState.scale = 1;
+    dgViewerState.translateX = 0;
+    dgViewerState.translateY = 0;
+    if (dgIframe) {
+      dgIframe.style.display = 'none';
+      dgIframe.src = 'about:blank';
+    }
+    if (dgImg) {
+      dgImg.style.display = 'none';
+      dgImg.removeAttribute('src');
+      dgImg.style.transform = '';
+    }
+    if (dgDwg) dgDwg.style.display = 'none';
+    if (dgCurrentVersionBlobUrl) {
+      try {
+        URL.revokeObjectURL(dgCurrentVersionBlobUrl);
+      } catch (_) {}
+      dgCurrentVersionBlobUrl = null;
+    }
+  }
+
+  function dgApplyViewerTransform() {
+    if (!dgImg || dgImg.style.display === 'none') return;
+    dgImg.style.transform =
+      'translate(' +
+      dgViewerState.translateX +
+      'px,' +
+      dgViewerState.translateY +
+      'px) scale(' +
+      dgViewerState.scale +
+      ')';
+  }
+
+  function dgOpenViewerFinal(versionId, mimeHint) {
+    dgResetViewerFinal();
+    openModal(modalDrawingViewer);
+    var mime = String(mimeHint || '').toLowerCase();
+    var isPdf = mime.indexOf('pdf') >= 0;
+    var isImage = mime.indexOf('image/') === 0;
+    fetch('/api/drawing-gallery/versions/' + versionId + '/file', {
+      headers: { 'X-Operative-Token': getToken() || '' },
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error('File load failed');
+        return res.blob();
+      })
+      .then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        dgCurrentVersionBlobUrl = url;
+        if (isPdf || blob.type.indexOf('pdf') >= 0) {
+          if (dgIframe) {
+            dgIframe.style.display = 'block';
+            dgIframe.src = url;
+          }
+          return;
+        }
+        if (isImage || blob.type.indexOf('image/') === 0) {
+          if (dgImg) {
+            dgImg.style.display = 'block';
+            dgImg.src = url;
+            dgApplyViewerTransform();
+          }
+          return;
+        }
+        if (dgDwg) dgDwg.style.display = 'block';
+      })
+      .catch(function () {
+        closeModal(modalDrawingViewer);
+        dgResetViewerFinal();
+      });
+  }
+
+  function dgSetupViewerGestures() {
+    if (!dgViewerWrap || !dgImg) return;
+    var drag = null;
+    var pinchStartDist = 0;
+    var pinchStartScale = 1;
+    var panTouch = null;
+    function touchDist(a, b) {
+      var dx = a.clientX - b.clientX;
+      var dy = a.clientY - b.clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    dgViewerWrap.addEventListener(
+      'wheel',
+      function (e) {
+        if (dgImg.style.display === 'none') return;
+        e.preventDefault();
+        var z = e.deltaY < 0 ? 1.08 : 0.92;
+        dgViewerState.scale = Math.max(0.25, Math.min(5, dgViewerState.scale * z));
+        dgApplyViewerTransform();
+      },
+      { passive: false }
+    );
+    dgViewerWrap.addEventListener('mousedown', function (e) {
+      if (dgImg.style.display === 'none' || e.button !== 0) return;
+      drag = { x: e.clientX, y: e.clientY, tx: dgViewerState.translateX, ty: dgViewerState.translateY };
+    });
+    document.addEventListener('mousemove', function (e) {
+      if (!drag) return;
+      dgViewerState.translateX = drag.tx + (e.clientX - drag.x);
+      dgViewerState.translateY = drag.ty + (e.clientY - drag.y);
+      dgApplyViewerTransform();
+    });
+    document.addEventListener('mouseup', function () {
+      drag = null;
+    });
+    dgViewerWrap.addEventListener(
+      'touchstart',
+      function (e) {
+        if (dgImg.style.display === 'none') return;
+        if (e.touches.length === 2) {
+          pinchStartDist = touchDist(e.touches[0], e.touches[1]);
+          pinchStartScale = dgViewerState.scale;
+          panTouch = null;
+        } else if (e.touches.length === 1) {
+          panTouch = {
+            x: e.touches[0].clientX,
+            y: e.touches[0].clientY,
+            tx: dgViewerState.translateX,
+            ty: dgViewerState.translateY,
+          };
+        }
+      },
+      { passive: false }
+    );
+    dgViewerWrap.addEventListener(
+      'touchmove',
+      function (e) {
+        if (dgImg.style.display === 'none') return;
+        e.preventDefault();
+        if (e.touches.length === 2 && pinchStartDist > 0) {
+          var d = touchDist(e.touches[0], e.touches[1]);
+          dgViewerState.scale = Math.max(0.25, Math.min(5, pinchStartScale * (d / pinchStartDist)));
+          dgApplyViewerTransform();
+        } else if (e.touches.length === 1 && panTouch) {
+          dgViewerState.translateX = panTouch.tx + (e.touches[0].clientX - panTouch.x);
+          dgViewerState.translateY = panTouch.ty + (e.touches[0].clientY - panTouch.y);
+          dgApplyViewerTransform();
+        }
+      },
+      { passive: false }
+    );
   }
 
   function loadDrawingProjectSummary() {
@@ -818,294 +1121,37 @@
       });
   }
 
-  function dgBuildSeriesCard(s) {
-    var active = s.active_version_id;
-    var metaParts = [s.floor_label, s.zone_label, s.discipline].filter(Boolean);
-    var meta = metaParts.join(' · ');
-    var tag = active
-      ? '<span class="op-dg-tag-active">Active v' + String(s.version_number || '') + '</span>'
-      : '<span class="op-dg-tag-arch">No active file</span>';
-    return (
-      '<button type="button" class="op-dg-series-card" data-series-id="' +
-      String(s.id) +
-      '" data-version-id="' +
-      (active != null ? String(active) : '') +
-      '" data-mime="' +
-      escapeHtml(s.mime_type || '') +
-      '">' +
-      '<div class="op-dg-series-title">' +
-      escapeHtml(s.title || '') +
-      '</div>' +
-      '<div class="op-dg-series-meta">' +
-      escapeHtml(meta || 'Series #' + String(s.id)) +
-      ' · ' +
-      String(s.version_count || 0) +
-      ' version(s)</div>' +
-      tag +
-      '</button>'
-    );
-  }
-
-  function dgRefreshList() {
-    if (!dgListEl || !dgCurrentProjectId) return;
-    dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">Loading…</p>';
-    var qs = new URLSearchParams();
-    var q = dgQEl && dgQEl.value.trim();
-    if (q) qs.set('q', q);
-    if (dgFloorEl && dgFloorEl.value.trim()) qs.set('floor', dgFloorEl.value.trim());
-    if (dgZoneEl && dgZoneEl.value.trim()) qs.set('zone', dgZoneEl.value.trim());
-    if (dgDisciplineEl && dgDisciplineEl.value) qs.set('discipline', dgDisciplineEl.value);
-    var qstr = qs.toString();
-    dgApi('/projects/' + encodeURIComponent(dgCurrentProjectId) + '/series' + (qstr ? '?' + qstr : ''))
-      .then(function (out) {
-        if (!out.ok || !out.data.success) {
-          dgListEl.innerHTML =
-            '<p class="op-text-muted" style="margin:0">Could not load drawings (' +
-            escapeHtml(out.data.message || 'error') +
-            ').</p>';
-          return;
-        }
-        var series = out.data.series || [];
-        if (!series.length) {
-          dgListEl.innerHTML =
-            '<p class="op-text-muted" style="margin:0">No drawings yet for this project.</p>';
-          return;
-        }
-        dgListEl.innerHTML = series.map(dgBuildSeriesCard).join('');
-        dgListEl.querySelectorAll('.op-dg-series-card').forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            var sid = parseInt(btn.getAttribute('data-series-id') || '0', 10);
-            var vid = parseInt(btn.getAttribute('data-version-id') || '0', 10);
-            var mime = btn.getAttribute('data-mime') || '';
-            dgCurrentSeriesId = sid || null;
-            if (dgListEl) {
-              dgListEl
-                .querySelectorAll('.op-dg-series-card')
-                .forEach(function (b) { b.classList.remove('op-dg-series-card--active'); });
-              btn.classList.add('op-dg-series-card--active');
-            }
-            if (vid) {
-              dgOpenViewer(vid, mime);
-            }
-          });
-        });
-      })
-      .catch(function () {
-        dgListEl.innerHTML =
-          '<p class="op-text-muted" style="margin:0">Could not load drawings. Try again later.</p>';
-      });
-  }
-
-  function dgResetViewer() {
-    dgCurrentVersionId = null;
-    dgViewerState.scale = 1;
-    dgViewerState.translateX = 0;
-    dgViewerState.translateY = 0;
-    if (dgIframe) {
-      dgIframe.style.display = 'none';
-      dgIframe.src = 'about:blank';
-    }
-    if (dgImg) {
-      dgImg.style.display = 'none';
-      dgImg.removeAttribute('src');
-      dgImg.style.transform = '';
-    }
-    if (dgDwg) dgDwg.style.display = 'none';
-    if (dgViewerPlaceholder) dgViewerPlaceholder.style.display = 'flex';
-  }
-
-  function dgOpenViewer(versionId, mimeHint) {
-    dgCurrentVersionId = versionId;
-    if (dgViewerPlaceholder) dgViewerPlaceholder.style.display = 'none';
-    if (dgIframe) dgIframe.style.display = 'none';
-    if (dgImg) dgImg.style.display = 'none';
-    if (dgDwg) dgDwg.style.display = 'none';
-    var mime = (mimeHint || '').toLowerCase();
-    var isDwg = mime.indexOf('dwg') >= 0 || mime.indexOf('cad') >= 0;
-    var isPdf = mime.indexOf('pdf') >= 0;
-    if (isDwg && dgDwg) {
-      dgDwg.style.display = 'block';
-      return;
-    }
-    dgApi('/versions/' + versionId + '/file')
-      .then(function (out) {
-        if (!out.ok) throw new Error('Failed to load file');
-        return fetch('/api/drawing-gallery/versions/' + versionId + '/file', {
-          headers: { 'X-Operative-Token': getToken() || '' },
-          credentials: 'same-origin',
-        });
-      })
-      .then(function (res) {
-        if (!res.ok) throw new Error('Failed to load file');
-        return res.blob();
-      })
-      .then(function (blob) {
-        var url = URL.createObjectURL(blob);
-        if (isPdf || blob.type.indexOf('pdf') >= 0) {
-          if (dgIframe) {
-            dgIframe.style.display = 'block';
-            dgIframe.src = url;
-          }
-        } else {
-          if (dgImg) {
-            dgImg.style.display = 'block';
-            dgImg.src = url;
-            dgViewerState.scale = 1;
-            dgViewerState.translateX = 0;
-            dgViewerState.translateY = 0;
-            dgApplyImgTransform();
-          }
-        }
-      })
-      .catch(function () {
-        dgResetViewer();
-      });
-  }
-
-  function dgApplyImgTransform() {
-    if (!dgImg || dgImg.style.display === 'none') return;
-    dgImg.style.transform =
-      'translate(' +
-      dgViewerState.translateX +
-      'px,' +
-      dgViewerState.translateY +
-      'px) scale(' +
-      dgViewerState.scale +
-      ')';
-  }
-
-  function dgSetupGestures() {
-    if (!dgViewerWrap || !dgImg) return;
-    var drag = null;
-    var pinchStartDist = 0;
-    var pinchStartScale = 1;
-    var panTouch = null;
-
-    function touchDist(a, b) {
-      var dx = a.clientX - b.clientX;
-      var dy = a.clientY - b.clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    dgViewerWrap.addEventListener(
-      'wheel',
-      function (e) {
-        if (dgImg.style.display === 'none') return;
-        e.preventDefault();
-        var z = e.deltaY < 0 ? 1.08 : 0.92;
-        dgViewerState.scale = Math.max(0.2, Math.min(5, dgViewerState.scale * z));
-        dgApplyImgTransform();
-      },
-      { passive: false }
-    );
-
-    dgViewerWrap.addEventListener('mousedown', function (e) {
-      if (dgImg.style.display === 'none' || e.button !== 0) return;
-      e.preventDefault();
-      drag = {
-        x: e.clientX,
-        y: e.clientY,
-        tx: dgViewerState.translateX,
-        ty: dgViewerState.translateY,
-      };
-    });
-
-    document.addEventListener('mousemove', function (e) {
-      if (!drag) return;
-      dgViewerState.translateX = drag.tx + (e.clientX - drag.x);
-      dgViewerState.translateY = drag.ty + (e.clientY - drag.y);
-      dgApplyImgTransform();
-    });
-
-    document.addEventListener('mouseup', function () {
-      drag = null;
-    });
-
-    dgViewerWrap.addEventListener(
-      'touchstart',
-      function (e) {
-        if (dgImg.style.display === 'none') return;
-        if (e.touches.length === 2) {
-          pinchStartDist = touchDist(e.touches[0], e.touches[1]);
-          pinchStartScale = dgViewerState.scale;
-          panTouch = null;
-        } else if (e.touches.length === 1) {
-          panTouch = {
-            x: e.touches[0].clientX,
-            y: e.touches[0].clientY,
-            tx: dgViewerState.translateX,
-            ty: dgViewerState.translateY,
-          };
-          pinchStartDist = 0;
-        }
-      },
-      { passive: false }
-    );
-
-    dgViewerWrap.addEventListener(
-      'touchmove',
-      function (e) {
-        if (dgImg.style.display === 'none') return;
-        e.preventDefault();
-        if (e.touches.length === 2 && pinchStartDist > 0) {
-          var d = touchDist(e.touches[0], e.touches[1]);
-          var ratio = d / pinchStartDist;
-          dgViewerState.scale = Math.max(0.2, Math.min(5, pinchStartScale * ratio));
-          dgApplyImgTransform();
-        } else if (e.touches.length === 1 && panTouch) {
-          dgViewerState.translateX = panTouch.tx + (e.touches[0].clientX - panTouch.x);
-          dgViewerState.translateY = panTouch.ty + (e.touches[0].clientY - panTouch.y);
-          dgApplyImgTransform();
-        }
-      },
-      { passive: false }
-    );
-
-    dgViewerWrap.addEventListener('touchend', function (e) {
-      if (e.touches.length === 0) {
-        pinchStartDist = 0;
-        panTouch = null;
-      } else if (e.touches.length === 1) {
-        pinchStartDist = 0;
-        panTouch = {
-          x: e.touches[0].clientX,
-          y: e.touches[0].clientY,
-          tx: dgViewerState.translateX,
-          ty: dgViewerState.translateY,
-        };
+  if (dgBackBtn) {
+    dgBackBtn.addEventListener('click', function () {
+      if (dgNav.level === 'drawings') {
+        dgLoadCategories();
+      } else if (dgNav.level === 'categories') {
+        dgLoadDisciplines();
       }
     });
+  }
 
-    // Tap / click image to bring it to the front inside the modal (hide list/filters)
-    if (dgImg && modalDrawing) {
-      dgImg.addEventListener('click', function () {
-        if (!dgImg || dgImg.style.display === 'none') return;
-        if (modalDrawing.classList.contains('op-dg-full-image')) {
-          modalDrawing.classList.remove('op-dg-full-image');
-        } else {
-          modalDrawing.classList.add('op-dg-full-image');
-        }
-      });
-    }
+  if (modalDrawingViewer) {
+    modalDrawingViewer.addEventListener('click', function () {
+      closeModal(modalDrawingViewer);
+      dgResetViewerFinal();
+    });
   }
 
   if (dgOpenBtn && dgSummaryEl && modalDrawing) {
     loadDrawingProjectSummary();
+    dgSetupViewerGestures();
     dgOpenBtn.addEventListener('click', function () {
       if (!dgCurrentProjectId) {
         loadDrawingProjectSummary();
       }
-      dgResetViewer();
       openModal(modalDrawing);
-      if (dgCurrentProjectId) {
-        dgRefreshList();
-      } else if (dgListEl) {
-        dgListEl.innerHTML =
-          '<p class="op-text-muted" style="margin:0">No project assigned yet. Your manager needs to attach you to a project before drawings appear here.</p>';
+      if (!dgCurrentProjectId) {
+        dgListEl.innerHTML = '<p class="op-text-muted" style="margin:0">No project assigned yet.</p>';
+        return;
       }
+      dgLoadDisciplines();
     });
-    if (dgApplyBtn) dgApplyBtn.addEventListener('click', dgRefreshList);
-    dgSetupGestures();
   }
 
   // ----- Log Work (list from API GET /work-log) -----

@@ -23,6 +23,17 @@ function handleUploadError(err, req, res, next) {
 }
 
 router.get('/projects/:projectId/series', requireManagerOrOperativeAuth, ctrl.listSeries);
+router.get('/projects/:projectId/disciplines', requireManagerOrOperativeAuth, ctrl.listDisciplines);
+router.get(
+  '/projects/:projectId/disciplines/:discipline/categories',
+  requireManagerOrOperativeAuth,
+  ctrl.listCategoriesByDiscipline
+);
+router.get(
+  '/projects/:projectId/disciplines/:discipline/categories/:category/drawings',
+  requireManagerOrOperativeAuth,
+  ctrl.listDrawingsByCategory
+);
 router.get('/series/:seriesId', requireManagerOrOperativeAuth, ctrl.getSeriesDetail);
 
 router.post(

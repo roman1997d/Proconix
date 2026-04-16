@@ -139,40 +139,27 @@
     <div class="op-modal-dialog op-modal-dialog-dg">
       <div class="op-modal-content">
         <div class="op-modal-header">
-          <div>
-            <h3 id="op-dg-title">Drawing Gallery</h3>
-            <p class="op-dg-subtitle">Plans and drawings for your current project.</p>
-          </div>
+          <h3 id="op-dg-title">Drawing Gallery</h3>
           <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
         </div>
         <div class="op-modal-body op-dg-body">
-          <div class="op-dg-filters" id="op-dg-filters">
-            <input type="search" id="op-dg-q" placeholder="Search title / keywords">
-            <input type="text" id="op-dg-floor" placeholder="Floor">
-            <input type="text" id="op-dg-zone" placeholder="Zone">
-            <select id="op-dg-discipline">
-              <option value="">All disciplines</option>
-              <option>Drywall</option>
-              <option>MEP</option>
-              <option>Electrical</option>
-              <option>Structural</option>
-              <option>Architectural</option>
-              <option>General</option>
-              <option>Other</option>
-            </select>
-            <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-dg-apply">Apply</button>
+          <div class="op-dg-topbar">
+            <button type="button" class="op-btn op-btn-secondary op-btn-sm d-none" id="op-dg-back">
+              <i class="bi bi-arrow-left"></i> Back
+            </button>
+            <p id="op-dg-path" class="op-dg-path">Disciplines</p>
           </div>
-          <div id="op-dg-list" class="op-dg-list" aria-label="Drawing series list"></div>
-          <div id="op-dg-viewer" class="op-dg-viewer" aria-label="Drawing preview">
-            <div id="op-dg-viewer-placeholder" class="op-dg-viewer-placeholder">
-              <p class="op-text-muted">Pick a drawing from the list to preview it here.</p>
-            </div>
-            <iframe id="op-dg-iframe" class="op-dg-iframe" title="Drawing PDF" loading="lazy"></iframe>
-            <img id="op-dg-img" class="op-dg-img" alt="Drawing preview">
-            <div id="op-dg-dwg" class="op-dg-dwg-hint">This drawing type cannot be previewed here. Use Download.</div>
-          </div>
+          <div id="op-dg-list" class="op-dg-list" aria-label="Drawing navigation list"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="op-modal op-modal-dg-viewer" id="op-modal-dg-viewer" aria-hidden="true" role="dialog" aria-label="Drawing viewer">
+    <div id="op-dg-viewer-wrap" class="op-dg-viewer-wrap">
+      <iframe id="op-dg-iframe" class="op-dg-iframe" title="Drawing PDF" loading="lazy"></iframe>
+      <img id="op-dg-img" class="op-dg-img" alt="Drawing preview">
+      <div id="op-dg-dwg" class="op-dg-dwg-hint">This file cannot be previewed. Tap to close and use another drawing.</div>
     </div>
   </div>
 
