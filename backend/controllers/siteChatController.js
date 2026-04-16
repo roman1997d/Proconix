@@ -282,6 +282,41 @@ async function resolveActorDisplayName(actor) {
 async function resolveProjectForRequest(req, actor, explicitProjectId) {
   if (!actor) return null;
   if (actor.kind === 'operative') {
+    const wantPid = parseInt(explicitProjectId, 10);
+    if (Number.isInteger(wantPid) && wantPid >= 1) {
+      try {
+        const access = await pool.query(
+          `SELECT p.id, p.project_name, p.name
+           FROM projects p
+           WHERE p.id = $1 AND p.company_id = $2
+             AND (
+               EXISTS (
+                 SELECT 1 FROM users u
+                 WHERE u.id = $3 AND u.company_id = $2 AND u.project_id IS NOT NULL AND u.project_id = p.id
+               )
+               OR EXISTS (
+                 SELECT 1 FROM project_assignments pa
+                 WHERE pa.user_id = $3 AND pa.project_id = p.id
+               )
+             )
+           LIMIT 1`,
+          [wantPid, actor.companyId, actor.id]
+        );
+        if (access.rows.length) return access.rows[0];
+      } catch (e) {
+        if (e.code !== '42P01') throw e;
+        const simple = await pool.query(
+          `SELECT p.id, p.project_name, p.name
+           FROM projects p
+           INNER JOIN users u ON u.id = $3 AND u.company_id = $2 AND u.project_id = p.id
+           WHERE p.id = $1 AND p.company_id = $2
+           LIMIT 1`,
+          [wantPid, actor.companyId, actor.id]
+        );
+        if (simple.rows.length) return simple.rows[0];
+      }
+    }
+
     let assigned = null;
     try {
       const r = await pool.query('SELECT project_id FROM users WHERE id = $1 AND company_id = $2', [actor.id, actor.companyId]);
@@ -483,7 +518,8 @@ async function completeMaterialRequest(req, res) {
     if (row.message_type !== 'material_request') {
       return res.status(400).json({ success: false, message: 'Message is not a material request.' });
     }
-    const project = await resolveProjectForRequest(req, actor, row.project_id);
+    const projectIdHint = req.body.project_id != null ? req.body.project_id : row.project_id;
+    const project = await resolveProjectForRequest(req, actor, projectIdHint);
     if (!project || Number(project.id) !== Number(row.project_id)) {
       return res.status(403).json({ success: false, message: 'Access denied.' });
     }
@@ -583,7 +619,8 @@ async function updateMaterialRequestStatus(req, res) {
     if (row.message_type !== 'material_request') {
       return res.status(400).json({ success: false, message: 'Message is not a material request.' });
     }
-    const project = await resolveProjectForRequest(req, actor, row.project_id);
+    const projectIdHint = req.body.project_id != null ? req.body.project_id : row.project_id;
+    const project = await resolveProjectForRequest(req, actor, projectIdHint);
     if (!project || Number(project.id) !== Number(row.project_id)) {
       return res.status(403).json({ success: false, message: 'Access denied.' });
     }

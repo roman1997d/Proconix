@@ -1025,10 +1025,18 @@
       if (!mid || !nextStatus) return;
       chatApi('/messages/' + encodeURIComponent(mid) + '/status', {
         method: 'PATCH',
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({
+          status: nextStatus,
+          project_id: chatState.projectId != null ? chatState.projectId : undefined,
+        }),
       })
         .then(function (out) {
-          if (!out.ok || !out.data.success) throw new Error('status');
+          if (!out.ok || !out.data.success) {
+            var errMsg =
+              (out.data && (out.data.message || out.data.error)) ||
+              ('HTTP ' + String(out.status || '') + ' — could not save status');
+            throw new Error(errMsg);
+          }
           return chatReloadMessages().then(function () { return chatReloadNotifications(); });
         })
         .then(function () {
@@ -1036,8 +1044,11 @@
           var st = msg ? chatNormalizeRequestStatus(msg.status) : nextStatus;
           if (msg && chatReqViewStatus) chatReqViewStatus.value = st;
           if (msg && chatReqStatusSelect) chatReqStatusSelect.value = st;
+          chatToast('Status saved');
         })
-        .catch(function () {});
+        .catch(function (err) {
+          chatToast(err && err.message ? err.message : 'Could not save status');
+        });
     });
   }
 
@@ -1045,7 +1056,12 @@
     chatReqCompleteBtn.addEventListener('click', function () {
       var mid = chatState.selectedRequestId;
       if (!mid) return;
-      chatApi('/messages/' + encodeURIComponent(mid) + '/complete', { method: 'PATCH' })
+      chatApi('/messages/' + encodeURIComponent(mid) + '/complete', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          project_id: chatState.projectId != null ? chatState.projectId : undefined,
+        }),
+      })
         .then(function (out) {
           if (!out.ok || !out.data.success) throw new Error('complete');
           closeModal(modalChatRequestView);
