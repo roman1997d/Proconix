@@ -1655,9 +1655,42 @@ a.op-doc-row,
 
 .op-dg-viewer-wrap {
   position: absolute;
-  inset: 0;
+  inset: 62px 0 0 0;
   background: #0b1018;
   overflow: hidden;
+}
+
+.op-dg-viewer-toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 62px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  background: linear-gradient(180deg, rgba(12, 18, 28, 0.95), rgba(12, 18, 28, 0.78));
+  backdrop-filter: blur(6px);
+}
+
+.op-dg-tool-btn {
+  min-height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+  font-size: 0.82rem;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.op-dg-tool-btn:active {
+  transform: translateY(1px);
 }
 
 .op-dg-iframe,
@@ -1684,6 +1717,21 @@ a.op-doc-row,
   font-size: 0.85rem;
   color: #facc15;
   background: #0f172a;
+}
+
+.op-dg-calibrate-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  pointer-events: none;
+}
+
+.op-dg-calibrate-overlay line {
+  stroke: #facc15;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
 }
 
 .op-bottom-nav {

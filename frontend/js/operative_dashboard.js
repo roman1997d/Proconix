@@ -764,9 +764,20 @@
   var dgIframe = document.getElementById('op-dg-iframe');
   var dgImg = document.getElementById('op-dg-img');
   var dgDwg = document.getElementById('op-dg-dwg');
+  var dgToolCalibrate = document.getElementById('op-dg-tool-calibrate');
+  var dgToolShare = document.getElementById('op-dg-tool-share');
+  var dgToolDownload = document.getElementById('op-dg-tool-download');
+  var dgCalibrateOverlay = document.getElementById('op-dg-calibrate-overlay');
+  var dgCalibrateLine = document.getElementById('op-dg-calibrate-line');
   var dgCurrentProjectId = null;
+  var dgCurrentVersionId = null;
   var dgCurrentVersionBlobUrl = null;
   var dgViewerState = { scale: 1, translateX: 0, translateY: 0 };
+  var dgCalibrateState = {
+    active: false,
+    firstPoint: null,
+    secondPoint: null,
+  };
   var dgNav = {
     level: 'disciplines',
     discipline: null,
@@ -957,6 +968,7 @@
   }
 
   function dgResetViewerFinal() {
+    dgCurrentVersionId = null;
     dgViewerState.scale = 1;
     dgViewerState.translateX = 0;
     dgViewerState.translateY = 0;
@@ -970,6 +982,16 @@
       dgImg.style.transform = '';
     }
     if (dgDwg) dgDwg.style.display = 'none';
+    dgCalibrateState.active = false;
+    dgCalibrateState.firstPoint = null;
+    dgCalibrateState.secondPoint = null;
+    if (dgCalibrateOverlay) dgCalibrateOverlay.style.display = 'none';
+    if (dgCalibrateLine) {
+      dgCalibrateLine.setAttribute('x1', '0');
+      dgCalibrateLine.setAttribute('y1', '0');
+      dgCalibrateLine.setAttribute('x2', '0');
+      dgCalibrateLine.setAttribute('y2', '0');
+    }
     if (dgCurrentVersionBlobUrl) {
       try {
         URL.revokeObjectURL(dgCurrentVersionBlobUrl);
@@ -992,6 +1014,7 @@
 
   function dgOpenViewerFinal(versionId, mimeHint) {
     dgResetViewerFinal();
+    dgCurrentVersionId = versionId;
     openModal(modalDrawingViewer);
     var mime = String(mimeHint || '').toLowerCase();
     var isPdf = mime.indexOf('pdf') >= 0;
@@ -1103,6 +1126,36 @@
     );
   }
 
+  function dgNormalizeViewerPoint(evt) {
+    if (!dgViewerWrap) return null;
+    var rect = dgViewerWrap.getBoundingClientRect();
+    var x = evt.clientX - rect.left;
+    var y = evt.clientY - rect.top;
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
+    return {
+      x: (x / rect.width) * 100,
+      y: (y / rect.height) * 100,
+    };
+  }
+
+  function dgFinishCalibration() {
+    if (!dgCalibrateState.firstPoint || !dgCalibrateState.secondPoint) return;
+    var dx = dgCalibrateState.secondPoint.x - dgCalibrateState.firstPoint.x;
+    var dy = dgCalibrateState.secondPoint.y - dgCalibrateState.firstPoint.y;
+    var pixelDistance = Math.sqrt(dx * dx + dy * dy);
+    var realDistance = window.prompt('Distance between selected points (number only):', '1');
+    if (!realDistance) return;
+    var unit = window.prompt('Unit (e.g. m, mm, ft):', 'm') || 'unit';
+    var dist = parseFloat(realDistance);
+    if (!Number.isFinite(dist) || dist <= 0 || pixelDistance <= 0) return;
+    var ratio = dist / pixelDistance;
+    showFeedback(
+      document.getElementById('op-clock-feedback'),
+      'Calibrated: 1 screen unit = ' + ratio.toFixed(4) + ' ' + unit,
+      false
+    );
+  }
+
   function loadDrawingProjectSummary() {
     if (!dgSummaryEl) return;
     dgSummaryEl.textContent = 'Loading…';
@@ -1135,6 +1188,85 @@
     modalDrawingViewer.addEventListener('click', function () {
       closeModal(modalDrawingViewer);
       dgResetViewerFinal();
+    });
+  }
+
+  if (dgViewerWrap) {
+    dgViewerWrap.addEventListener('click', function (e) {
+      if (!dgCalibrateState.active || !dgImg || dgImg.style.display === 'none') return;
+      var p = dgNormalizeViewerPoint(e);
+      if (!p) return;
+      if (!dgCalibrateState.firstPoint) {
+        dgCalibrateState.firstPoint = p;
+        if (dgCalibrateOverlay) dgCalibrateOverlay.style.display = 'block';
+        if (dgCalibrateLine) {
+          dgCalibrateLine.setAttribute('x1', String(p.x));
+          dgCalibrateLine.setAttribute('y1', String(p.y));
+          dgCalibrateLine.setAttribute('x2', String(p.x));
+          dgCalibrateLine.setAttribute('y2', String(p.y));
+        }
+        return;
+      }
+      dgCalibrateState.secondPoint = p;
+      if (dgCalibrateLine) {
+        dgCalibrateLine.setAttribute('x2', String(p.x));
+        dgCalibrateLine.setAttribute('y2', String(p.y));
+      }
+      dgFinishCalibration();
+      dgCalibrateState.active = false;
+    });
+  }
+
+  if (dgToolCalibrate) {
+    dgToolCalibrate.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (!dgImg || dgImg.style.display === 'none') return;
+      dgCalibrateState.active = true;
+      dgCalibrateState.firstPoint = null;
+      dgCalibrateState.secondPoint = null;
+      if (dgCalibrateOverlay) dgCalibrateOverlay.style.display = 'none';
+    });
+  }
+
+  if (dgToolDownload) {
+    dgToolDownload.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (!dgCurrentVersionId) return;
+      fetch('/api/drawing-gallery/versions/' + dgCurrentVersionId + '/file?download=1', {
+        headers: { 'X-Operative-Token': getToken() || '' },
+        credentials: 'same-origin',
+      })
+        .then(function (res) {
+          if (!res.ok) throw new Error('Download failed');
+          return res.blob();
+        })
+        .then(function (blob) {
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'drawing';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        })
+        .catch(function () {});
+    });
+  }
+
+  if (dgToolShare) {
+    dgToolShare.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (!dgCurrentVersionId) return;
+      var shareUrl = window.location.origin + '/api/drawing-gallery/versions/' + dgCurrentVersionId + '/file';
+      if (navigator.share) {
+        navigator
+          .share({
+            title: 'Drawing',
+            text: 'Drawing preview link',
+            url: shareUrl,
+          })
+          .catch(function () {});
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shareUrl).catch(function () {});
+      }
     });
   }
 

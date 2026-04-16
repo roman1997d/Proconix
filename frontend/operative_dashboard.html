@@ -156,9 +156,17 @@
   </div>
 
   <div class="op-modal op-modal-dg-viewer" id="op-modal-dg-viewer" aria-hidden="true" role="dialog" aria-label="Drawing viewer">
+    <div class="op-dg-viewer-toolbar" id="op-dg-viewer-toolbar">
+      <button type="button" class="op-dg-tool-btn" id="op-dg-tool-calibrate"><i class="bi bi-rulers"></i> Calibrate</button>
+      <button type="button" class="op-dg-tool-btn" id="op-dg-tool-share"><i class="bi bi-share"></i> Share</button>
+      <button type="button" class="op-dg-tool-btn" id="op-dg-tool-download"><i class="bi bi-download"></i> Download</button>
+    </div>
     <div id="op-dg-viewer-wrap" class="op-dg-viewer-wrap">
       <iframe id="op-dg-iframe" class="op-dg-iframe" title="Drawing PDF" loading="lazy"></iframe>
       <img id="op-dg-img" class="op-dg-img" alt="Drawing preview">
+      <svg id="op-dg-calibrate-overlay" class="op-dg-calibrate-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <line id="op-dg-calibrate-line" x1="0" y1="0" x2="0" y2="0"></line>
+      </svg>
       <div id="op-dg-dwg" class="op-dg-dwg-hint">This file cannot be previewed. Tap to close and use another drawing.</div>
     </div>
   </div>
