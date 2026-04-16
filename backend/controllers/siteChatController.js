@@ -1,5 +1,17 @@
 const { pool } = require('../db/pool');
 
+const MATERIAL_REQUEST_STATUSES = ['Pending', 'In progress', 'Delivered'];
+
+function normalizeMaterialRequestStatus(s) {
+  const raw = String(s || 'Pending').trim();
+  if (MATERIAL_REQUEST_STATUSES.includes(raw)) return raw;
+  const low = raw.toLowerCase();
+  if (low === 'completed' || low === 'delivered') return 'Delivered';
+  if (low === 'approved' || low === 'in progress' || low === 'in_progress') return 'In progress';
+  if (low === 'pending') return 'Pending';
+  return 'Pending';
+}
+
 function tableMissing(err) {
   return err && err.code === '42P01';
 }
@@ -198,7 +210,7 @@ async function listMessages(req, res) {
       can_complete:
         m.type === 'material_request' &&
         !(m.sender_kind === actor.kind && Number(m.sender_id) === Number(actor.id)) &&
-        String(m.status || '').toLowerCase() !== 'completed',
+        !['delivered', 'completed'].includes(String(m.status || '').trim().toLowerCase()),
       is_mine: m.sender_kind === actor.kind && Number(m.sender_id) === Number(actor.id),
     }));
     return res.json({ success: true, messages: rows });
@@ -244,16 +256,16 @@ async function completeMaterialRequest(req, res) {
     const completedText =
       'User "' +
       actorName +
-      '" complete request #' +
+      '" marked request #' +
       String(messageId) +
-      ' on ' +
+      ' as delivered on ' +
       completedAt.toLocaleString();
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       await client.query(
         `UPDATE site_chat_message
-         SET request_status = 'Completed'
+         SET request_status = 'Delivered'
          WHERE id = $1`,
         [messageId]
       );
@@ -299,11 +311,10 @@ async function updateMaterialRequestStatus(req, res) {
   if (!actor) return res.status(403).json({ success: false, message: 'Access denied.' });
   const messageId = parseInt(req.params.messageId, 10);
   const nextStatus = String(req.body.status || '').trim();
-  const allowed = ['Pending', 'Approved', 'Delivered', 'Completed'];
   if (!Number.isInteger(messageId) || messageId < 1) {
     return res.status(400).json({ success: false, message: 'Invalid message id.' });
   }
-  if (!allowed.includes(nextStatus)) {
+  if (!MATERIAL_REQUEST_STATUSES.includes(nextStatus)) {
     return res.status(400).json({ success: false, message: 'Invalid status.' });
   }
   try {
@@ -464,7 +475,7 @@ async function postMessage(req, res) {
           text || null,
           fileName,
           fileUrl,
-          type === 'material_request' ? String(req.body.request_status || 'Pending') : null,
+          type === 'material_request' ? normalizeMaterialRequestStatus(req.body.request_status) : null,
           type === 'material_request' ? String(req.body.request_summary || '').trim() : null,
           type === 'material_request' ? String(req.body.request_details || '').trim() : null,
           type === 'material_request' ? String(req.body.request_urgency || 'Normal') : null,
@@ -499,7 +510,7 @@ async function postMessage(req, res) {
           text,
           file_name: fileName,
           file_url: fileUrl,
-          status: type === 'material_request' ? String(req.body.request_status || 'Pending') : null,
+          status: type === 'material_request' ? normalizeMaterialRequestStatus(req.body.request_status) : null,
           summary: type === 'material_request' ? String(req.body.request_summary || '').trim() : null,
           details: type === 'material_request' ? String(req.body.request_details || '').trim() : null,
           urgency: type === 'material_request' ? String(req.body.request_urgency || 'Normal') : null,

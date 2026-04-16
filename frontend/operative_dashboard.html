@@ -246,9 +246,8 @@
             <label for="op-chat-request-status-select">Change status</label>
             <select id="op-chat-request-status-select">
               <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
+              <option value="In progress">In progress</option>
               <option value="Delivered">Delivered</option>
-              <option value="Completed">Completed</option>
             </select>
             <button type="button" class="op-btn op-btn-secondary" id="op-chat-request-save-status" style="margin-top:10px;">Save Status</button>
             <label for="op-chat-request-photo-upload">Add completion photo</label>
@@ -260,6 +259,16 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="op-modal op-modal-req-img" id="op-modal-chat-req-img-view" aria-hidden="true" role="dialog" aria-label="Request photo viewer">
+    <div class="op-modal-backdrop"></div>
+    <div class="op-req-img-view" role="document">
+      <button type="button" class="op-modal-close op-req-img-close" aria-label="Close">&times;</button>
+      <button type="button" class="op-req-img-nav op-req-img-prev" id="op-req-img-prev" aria-label="Previous photo"><i class="bi bi-chevron-left"></i></button>
+      <img id="op-req-img-stage" class="op-req-img-stage" alt="Request photo">
+      <button type="button" class="op-req-img-nav op-req-img-next" id="op-req-img-next" aria-label="Next photo"><i class="bi bi-chevron-right"></i></button>
     </div>
   </div>
 

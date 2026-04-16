@@ -1660,6 +1660,21 @@ a.op-doc-row:active {
   color: #92400e;
 }
 
+.op-chat-request-status--pending {
+  background: #fde68a;
+  color: #92400e;
+}
+
+.op-chat-request-status--progress {
+  background: #bfdbfe;
+  color: #1e3a8a;
+}
+
+.op-chat-request-status--delivered {
+  background: #bbf7d0;
+  color: #14532d;
+}
+
 .op-chat-composer {
   display: grid;
   grid-template-columns: 1fr auto auto auto;
@@ -1730,6 +1745,95 @@ body.op-chat-open {
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid rgba(15, 101, 88, 0.18);
+}
+
+.op-chat-req-thumb {
+  cursor: zoom-in;
+}
+
+.op-modal-req-img {
+  z-index: 280;
+}
+
+.op-modal-req-img .op-modal-backdrop {
+  background: rgba(8, 12, 18, 0.88);
+}
+
+.op-req-img-view {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 56px;
+  pointer-events: none;
+}
+
+.op-req-img-view > * {
+  pointer-events: auto;
+}
+
+.op-req-img-stage {
+  max-width: min(96vw, 920px);
+  max-height: min(88vh, 720px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.op-req-img-close {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.op-req-img-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.op-req-img-nav {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 1.25rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.op-req-img-nav:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+.op-req-img-prev {
+  left: 12px;
+}
+
+.op-req-img-next {
+  right: 12px;
+}
+
+.op-req-img-nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .op-card {

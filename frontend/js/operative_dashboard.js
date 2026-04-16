@@ -337,6 +337,12 @@
   var chatReqPhotoInput = document.getElementById('op-chat-request-photo-upload');
   var chatReqPhotoUploadBtn = document.getElementById('op-chat-request-upload-photo');
   var chatReqCompleteBtn = document.getElementById('op-chat-request-complete');
+  var modalChatReqImg = document.getElementById('op-modal-chat-req-img-view');
+  var chatReqImgStage = document.getElementById('op-req-img-stage');
+  var chatReqImgPrev = document.getElementById('op-req-img-prev');
+  var chatReqImgNext = document.getElementById('op-req-img-next');
+  var chatReqViewTitle = document.getElementById('op-chat-request-view-title');
+  var chatReqViewTitleDefault = chatReqViewTitle ? chatReqViewTitle.textContent.trim() : 'Material Request Details';
 
   var chatState = {
     projectId: null,
@@ -348,6 +354,8 @@
     lastSeenAt: 0,
     requestOnly: false,
     selectedRequestId: null,
+    reqPhotoViewerUrls: [],
+    reqPhotoViewerIndex: 0,
   };
 
   function chatKeyMessages() {
@@ -403,6 +411,45 @@
     return escapeHtml(s == null ? '' : String(s));
   }
 
+  function chatNormalizeRequestStatus(status) {
+    var s = String(status == null ? '' : status).trim();
+    var low = s.toLowerCase();
+    if (low === 'completed' || low === 'delivered') return 'Delivered';
+    if (low === 'approved' || low === 'in progress' || low === 'in_progress') return 'In progress';
+    if (low === 'pending') return 'Pending';
+    if (s === 'Pending' || s === 'In progress' || s === 'Delivered') return s;
+    return 'Pending';
+  }
+
+  function chatRequestStatusBadgeClass(norm) {
+    if (norm === 'Delivered') return 'op-chat-request-status op-chat-request-status--delivered';
+    if (norm === 'In progress') return 'op-chat-request-status op-chat-request-status--progress';
+    return 'op-chat-request-status op-chat-request-status--pending';
+  }
+
+  function chatReqPhotoViewerShow() {
+    var urls = chatState.reqPhotoViewerUrls || [];
+    var i = chatState.reqPhotoViewerIndex || 0;
+    if (!chatReqImgStage || !urls.length) return;
+    chatReqImgStage.src = urls[i] || '';
+    if (chatReqImgPrev) {
+      chatReqImgPrev.disabled = urls.length < 2 || i <= 0;
+    }
+    if (chatReqImgNext) {
+      chatReqImgNext.disabled = urls.length < 2 || i >= urls.length - 1;
+    }
+  }
+
+  function chatOpenReqPhotoViewer(urls, index) {
+    if (!modalChatReqImg || !chatReqImgStage) return;
+    chatState.reqPhotoViewerUrls = (urls || []).filter(Boolean);
+    var last = chatState.reqPhotoViewerUrls.length - 1;
+    chatState.reqPhotoViewerIndex = Math.max(0, Math.min(index == null ? 0 : index, last < 0 ? 0 : last));
+    if (!chatState.reqPhotoViewerUrls.length) return;
+    chatReqPhotoViewerShow();
+    openModal(modalChatReqImg);
+  }
+
   function chatDisplayName(m) {
     var raw = '';
     if (m && typeof m.user_name === 'string') raw = m.user_name.trim();
@@ -446,16 +493,21 @@
         var baseCls = 'op-chat-msg' + (mine ? ' op-chat-msg--mine' : '') + (m.type === 'material_request' ? ' op-chat-msg--request' : '');
         var body = '';
         if (m.type === 'material_request') {
+          var stNorm = chatNormalizeRequestStatus(m.status);
           body =
-            '<div class="op-chat-msg-text"><strong>Material Request</strong><br>' +
+            '<div class="op-chat-msg-text"><strong>Material Request #' +
+            chatEsc(String(m.id || '')) +
+            '</strong><br>' +
             chatEsc(m.summary || '') +
             '</div>' +
-            '<span class="op-chat-request-status">' +
-            chatEsc(m.status || 'Pending') +
+            '<span class="' +
+            chatEsc(chatRequestStatusBadgeClass(stNorm)) +
+            '">' +
+            chatEsc(stNorm) +
             '</span>' +
             '<div style="margin-top:8px;"><button type="button" class="op-btn op-btn-secondary op-btn-sm" data-chat-request-id="' +
             chatEsc(String(m.id || '')) +
-            '">View Request Details</button></div>';
+            '">View details</button></div>';
         } else if (m.type === 'file') {
           body = '<div class="op-chat-msg-text"><i class="bi bi-paperclip"></i> ' + chatEsc(m.file_name || 'Attachment') + '</div>';
         } else {
@@ -488,18 +540,24 @@
         var msg = chatState.messages.find(function (x) { return String(x.id) === String(id); });
         if (!msg) return;
         chatState.selectedRequestId = msg.id;
+        var stOpen = chatNormalizeRequestStatus(msg.status);
+        if (chatReqViewTitle) chatReqViewTitle.textContent = chatReqViewTitleDefault + ' · #' + String(msg.id || '');
         if (chatReqViewSummary) chatReqViewSummary.value = msg.summary || '';
         if (chatReqViewDetails) chatReqViewDetails.value = msg.details || '';
         if (chatReqViewUrgency) chatReqViewUrgency.value = msg.urgency || 'Normal';
         if (chatReqViewLocation) chatReqViewLocation.value = msg.location || '';
-        if (chatReqViewStatus) chatReqViewStatus.value = msg.status || 'Pending';
-        if (chatReqStatusSelect) chatReqStatusSelect.value = msg.status || 'Pending';
+        if (chatReqViewStatus) chatReqViewStatus.value = stOpen;
+        if (chatReqStatusSelect) chatReqStatusSelect.value = stOpen;
         if (chatReqViewPhotos) {
           var photos = Array.isArray(msg.photos) ? msg.photos : [];
           chatReqViewPhotos.innerHTML = photos.length
             ? photos
                 .map(function (p) {
-                  return '<img src="' + chatEsc(p.file_url || '') + '" alt="Request photo">';
+                  return (
+                    '<img class="op-chat-req-thumb" src="' +
+                    chatEsc(p.file_url || '') +
+                    '" alt="Request photo" loading="lazy">'
+                  );
                 })
                 .join('')
             : '<p class="op-text-muted" style="margin:0">No photos yet.</p>';
@@ -562,6 +620,11 @@
       chatState.messages = [];
       chatState.notifications = [];
     }
+    (chatState.messages || []).forEach(function (row) {
+      if (row && row.type === 'material_request') {
+        row.status = chatNormalizeRequestStatus(row.status);
+      }
+    });
     chatState.unreadCount = chatState.notifications.filter(function (x) { return !x.read; }).length;
   }
 
@@ -706,6 +769,9 @@
         var prevLen = chatState.messages.length;
         chatState.messages = (out.data.messages || []).map(function (m) {
           if (!m.user_name) m.user_name = m.sender_name || 'Unknown user';
+          if (m.type === 'material_request') {
+            m.status = chatNormalizeRequestStatus(m.status);
+          }
           return m;
         });
         chatSaveFallback();
@@ -873,7 +939,15 @@
           if (msg && chatReqViewPhotos) {
             var photos = Array.isArray(msg.photos) ? msg.photos : [];
             chatReqViewPhotos.innerHTML = photos.length
-              ? photos.map(function (p) { return '<img src="' + chatEsc(p.file_url || '') + '" alt="Request photo">'; }).join('')
+              ? photos
+                  .map(function (p) {
+                    return (
+                      '<img class="op-chat-req-thumb" src="' +
+                      chatEsc(p.file_url || '') +
+                      '" alt="Request photo" loading="lazy">'
+                    );
+                  })
+                  .join('')
               : '<p class="op-text-muted" style="margin:0">No photos yet.</p>';
           }
         })
@@ -896,7 +970,9 @@
         })
         .then(function () {
           var msg = chatState.messages.find(function (m) { return String(m.id) === String(mid); });
-          if (msg && chatReqViewStatus) chatReqViewStatus.value = msg.status || nextStatus;
+          var st = msg ? chatNormalizeRequestStatus(msg.status) : nextStatus;
+          if (msg && chatReqViewStatus) chatReqViewStatus.value = st;
+          if (msg && chatReqStatusSelect) chatReqStatusSelect.value = st;
         })
         .catch(function () {});
     });
@@ -913,6 +989,42 @@
           return chatReloadMessages().then(function () { return chatReloadNotifications(); });
         })
         .catch(function () {});
+    });
+  }
+
+  if (chatReqViewPhotos) {
+    chatReqViewPhotos.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || t.tagName !== 'IMG' || !t.classList.contains('op-chat-req-thumb')) return;
+      var imgs = Array.prototype.slice
+        .call(chatReqViewPhotos.querySelectorAll('img.op-chat-req-thumb'))
+        .map(function (el) {
+          return el.getAttribute('src') || '';
+        })
+        .filter(Boolean);
+      var cur = t.getAttribute('src') || '';
+      var idx = imgs.indexOf(cur);
+      chatOpenReqPhotoViewer(imgs, idx >= 0 ? idx : 0);
+    });
+  }
+
+  if (chatReqImgPrev) {
+    chatReqImgPrev.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (chatState.reqPhotoViewerIndex > 0) {
+        chatState.reqPhotoViewerIndex -= 1;
+        chatReqPhotoViewerShow();
+      }
+    });
+  }
+  if (chatReqImgNext) {
+    chatReqImgNext.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var n = (chatState.reqPhotoViewerUrls || []).length;
+      if (chatState.reqPhotoViewerIndex < n - 1) {
+        chatState.reqPhotoViewerIndex += 1;
+        chatReqPhotoViewerShow();
+      }
     });
   }
 
