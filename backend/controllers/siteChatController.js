@@ -211,8 +211,8 @@ async function runSiteChatAgentReminders() {
 async function syncOriginalMaterialRequestIfRepost(client, materialRowId, nextStatus) {
   await client.query(
     `UPDATE site_chat_message AS m
-     SET request_status = $2,
-         request_delivered_at = CASE WHEN $2 = 'Delivered' THEN NOW() ELSE NULL END
+     SET request_status = ($2)::text,
+         request_delivered_at = CASE WHEN ($2)::text = 'Delivered' THEN NOW() ELSE NULL END
      FROM site_chat_message AS r
      WHERE r.id = $1
        AND r.message_type = 'material_request'
@@ -228,8 +228,8 @@ async function syncOriginalMaterialRequestIfRepost(client, materialRowId, nextSt
 async function syncRepostsMaterialRequestsFromRoot(client, rootMessageId, nextStatus) {
   await client.query(
     `UPDATE site_chat_message AS child
-     SET request_status = $2,
-         request_delivered_at = CASE WHEN $2 = 'Delivered' THEN NOW() ELSE NULL END
+     SET request_status = ($2)::text,
+         request_delivered_at = CASE WHEN ($2)::text = 'Delivered' THEN NOW() ELSE NULL END
      FROM site_chat_message AS root
      WHERE root.id = $1
        AND root.message_type = 'material_request'
@@ -651,8 +651,8 @@ async function updateMaterialRequestStatus(req, res) {
       await client.query('BEGIN');
       await client.query(
         `UPDATE site_chat_message
-         SET request_status = $2,
-             request_delivered_at = CASE WHEN $2 = 'Delivered' THEN NOW() ELSE NULL END
+         SET request_status = ($2)::text,
+             request_delivered_at = CASE WHEN ($2)::text = 'Delivered' THEN NOW() ELSE NULL END
          WHERE id = $1`,
         [messageId, nextStatus]
       );
