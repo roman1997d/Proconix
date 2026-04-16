@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS site_chat_message (
   request_location VARCHAR(255),
   request_delivered_at TIMESTAMPTZ,
   agent_reminder_at TIMESTAMPTZ,
+  is_auto_repost BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

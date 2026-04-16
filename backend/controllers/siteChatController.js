@@ -24,18 +24,12 @@ const CHAT_AGENT_NAME = 'Chat Agent';
 const CHAT_AGENT_SENDER_KIND = 'manager';
 const CHAT_AGENT_SENDER_ID = 0;
 
-/** Human-readable wait duration in Romanian (minutes / hours). */
-function formatWaitRomanian(ms) {
+/** e.g. "Waiting time - 2 H 15 Min" */
+function formatWaitingTimeEnglish(ms) {
   const totalMin = Math.max(0, Math.floor(Number(ms) / 60000));
-  if (totalMin < 60) {
-    const n = Math.max(1, totalMin);
-    return `${n} ${n === 1 ? 'minut' : 'minute'}`;
-  }
   const h = Math.floor(totalMin / 60);
-  const rem = totalMin % 60;
-  let s = `${h} ${h === 1 ? 'oră' : 'ore'}`;
-  if (rem > 0) s += ` și ${rem} ${rem === 1 ? 'minut' : 'minute'}`;
-  return s;
+  const m = totalMin % 60;
+  return `Waiting time - ${h} H ${m} Min`;
 }
 
 /**
@@ -50,6 +44,7 @@ async function insertChatAgentNewRequestInsight(client, { companyId, projectId, 
        FROM site_chat_message
        WHERE company_id = $1 AND project_id = $2
          AND message_type = 'material_request'
+         AND COALESCE(is_auto_repost, false) = false
          AND id <> $3
          AND request_delivered_at IS NOT NULL
        ORDER BY request_delivered_at DESC
@@ -64,12 +59,11 @@ async function insertChatAgentNewRequestInsight(client, { companyId, projectId, 
 
   let body;
   if (!prev) {
-    body =
-      `${CHAT_AGENT_NAME}: Acesta este primul request de materiale în această cameră de șantier. Vă rugăm să comandați din timp materialele necesare.`;
+    body = `${CHAT_AGENT_NAME}: This is the first material request in this project room. Please plan ahead and order materials in good time.`;
   } else {
     const waitMs = new Date(prev.request_delivered_at).getTime() - new Date(prev.created_at).getTime();
-    const fmt = formatWaitRomanian(waitMs);
-    body = `${CHAT_AGENT_NAME}: Pe baza ultimului request finalizat (#${prev.id}), timpul de așteptare pentru livrarea materialelor a fost de ${fmt}. Vă rugăm să aveți în vedere acest interval și să comandați materialele din timp.`;
+    const fmt = formatWaitingTimeEnglish(waitMs);
+    body = `${CHAT_AGENT_NAME}: Based on the last delivered material request (#${prev.id}), typical lead time was ${fmt}. Please plan ahead and order materials in good time.`;
   }
 
   const ins = await client.query(
@@ -92,8 +86,9 @@ async function insertChatAgentNewRequestInsight(client, { companyId, projectId, 
 }
 
 /**
- * One reminder per material request if still not delivered after N minutes (default 1).
- * Called periodically from the HTTP server process.
+ * Every N minutes (default 1): for each user-posted material request still not delivered,
+ * posts an English Chat Agent reminder and a new material_request row (auto repost).
+ * Repeats until delivered. Auto-reposts are excluded from this loop (is_auto_repost = true).
  */
 async function runSiteChatAgentReminders() {
   const reminderMin = Math.max(1, parseInt(process.env.SITE_CHAT_AGENT_REMINDER_MINUTES || '1', 10));
@@ -104,11 +99,14 @@ async function runSiteChatAgentReminders() {
       `SELECT id
        FROM site_chat_message
        WHERE message_type = 'material_request'
+         AND COALESCE(is_auto_repost, false) = false
          AND LOWER(TRIM(COALESCE(request_status, ''))) NOT IN ('delivered', 'completed')
-         AND created_at <= $1::timestamptz
-         AND agent_reminder_at IS NULL
+         AND (
+           (agent_reminder_at IS NULL AND created_at <= $1::timestamptz)
+           OR (agent_reminder_at IS NOT NULL AND agent_reminder_at <= $1::timestamptz)
+         )
        ORDER BY created_at ASC
-       LIMIT 40`,
+       LIMIT 25`,
       [threshold]
     );
     pending = r.rows;
@@ -125,36 +123,79 @@ async function runSiteChatAgentReminders() {
       const u = await c.query(
         `UPDATE site_chat_message
          SET agent_reminder_at = NOW()
-         WHERE id = $1 AND agent_reminder_at IS NULL
-         RETURNING id, company_id, project_id, request_summary`,
-        [row.id]
+         WHERE id = $1
+           AND message_type = 'material_request'
+           AND COALESCE(is_auto_repost, false) = false
+           AND LOWER(TRIM(COALESCE(request_status, ''))) NOT IN ('delivered', 'completed')
+           AND (
+             (agent_reminder_at IS NULL AND created_at <= $2::timestamptz)
+             OR (agent_reminder_at IS NOT NULL AND agent_reminder_at <= $2::timestamptz)
+           )
+         RETURNING id, company_id, project_id, sender_kind, sender_id, sender_name,
+                   request_summary, request_details, request_urgency, request_location, created_at`,
+        [row.id, threshold]
       );
       if (!u.rows.length) {
         await c.query('ROLLBACK');
         continue;
       }
       const rec = u.rows[0];
-      const summary = String(rec.request_summary || '').trim().slice(0, 140);
-      const body =
-        `${CHAT_AGENT_NAME} — Reminder: request de materiale #${rec.id} nu este încă livrat.` +
-        (summary ? ` Rezumat: ${summary}.` : '') +
-        ' Vă rugăm să urmăriți statusul livrării.';
-      const ins = await c.query(
+      const summaryRaw = String(rec.request_summary || '').trim();
+      const summaryShort = summaryRaw.slice(0, 140);
+      const waitOpen = formatWaitingTimeEnglish(Date.now() - new Date(rec.created_at).getTime());
+      const reminderBody =
+        `${CHAT_AGENT_NAME}: Undelivered material request #${rec.id}. ${waitOpen} since this request was posted.` +
+        (summaryShort ? ` Summary: ${summaryShort}.` : '') +
+        ' Reposting the request below until it is marked Delivered.';
+      const sysIns = await c.query(
         `INSERT INTO site_chat_message
          (company_id, project_id, sender_kind, sender_id, sender_name, message_type, body)
          VALUES ($1,$2,$3,$4,$5,'system',$6)
          RETURNING id`,
-        [rec.company_id, rec.project_id, CHAT_AGENT_SENDER_KIND, CHAT_AGENT_SENDER_ID, CHAT_AGENT_NAME, body]
+        [rec.company_id, rec.project_id, CHAT_AGENT_SENDER_KIND, CHAT_AGENT_SENDER_ID, CHAT_AGENT_NAME, reminderBody]
       );
       await notifyProjectRecipients(c, {
         companyId: rec.company_id,
         projectId: rec.project_id,
-        messageId: ins.rows[0].id,
+        messageId: sysIns.rows[0].id,
         actorKind: CHAT_AGENT_SENDER_KIND,
         actorId: CHAT_AGENT_SENDER_ID,
         kind: 'chat_agent_reminder',
         title: CHAT_AGENT_NAME,
-        body: body.slice(0, 240),
+        body: reminderBody.slice(0, 240),
+      });
+
+      const repostSummaryBase = summaryRaw || `Material request #${rec.id}`;
+      const repostSummary = (`[Repost from #${rec.id}] ${repostSummaryBase}`).slice(0, 2000);
+      const repostIns = await c.query(
+        `INSERT INTO site_chat_message
+         (company_id, project_id, sender_kind, sender_id, sender_name, message_type, body,
+          request_status, request_summary, request_details, request_urgency, request_location, is_auto_repost)
+         VALUES ($1,$2,$3,$4,$5,'material_request', NULL,
+          'Pending', $6, $7, $8, $9, true)
+         RETURNING id`,
+        [
+          rec.company_id,
+          rec.project_id,
+          rec.sender_kind,
+          rec.sender_id,
+          rec.sender_name,
+          repostSummary,
+          String(rec.request_details || '').trim(),
+          String(rec.request_urgency || 'Normal'),
+          String(rec.request_location || '').trim(),
+        ]
+      );
+      const newId = repostIns.rows[0].id;
+      await notifyProjectRecipients(c, {
+        companyId: rec.company_id,
+        projectId: rec.project_id,
+        messageId: newId,
+        actorKind: rec.sender_kind,
+        actorId: rec.sender_id,
+        kind: 'new_material_request',
+        title: 'New Material Request',
+        body: repostSummary.slice(0, 200),
       });
       await c.query('COMMIT');
     } catch (err) {
