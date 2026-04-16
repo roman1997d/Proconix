@@ -302,6 +302,7 @@
 
   // ----- Site Chat (frontend realtime with API + fallback store) -----
   var chatOpenBtn = document.getElementById('op-chat-open');
+  var chatBackBtn = document.getElementById('op-chat-back');
   var chatNotifOpenBtn = document.getElementById('op-chat-notif-open');
   var chatHeaderNotifBtn = document.getElementById('op-chat-header-notif');
   var chatUnreadBadge = document.getElementById('op-chat-unread-badge');
@@ -433,11 +434,12 @@
 
   function chatRenderNotifications() {
     if (!chatNotifListEl) return;
-    if (!chatState.notifications.length) {
+    var unreadOnly = (chatState.notifications || []).filter(function (n) { return !n.read; });
+    if (!unreadOnly.length) {
       chatNotifListEl.innerHTML = '<p class="op-text-muted" style="margin:0">No notifications.</p>';
       return;
     }
-    chatNotifListEl.innerHTML = chatState.notifications
+    chatNotifListEl.innerHTML = unreadOnly
       .map(function (n) {
         return (
           '<button type="button" class="op-dg-series-card" data-chat-jump-id="' +
@@ -503,6 +505,7 @@
 
   function chatMarkAllRead() {
     chatState.notifications.forEach(function (n) { n.read = true; });
+    chatState.notifications = chatState.notifications.filter(function (n) { return !n.read; });
     chatState.unreadCount = 0;
     chatRenderUnread();
     chatRenderNotifications();
@@ -604,8 +607,16 @@
   if (chatOpenBtn) {
     chatOpenBtn.addEventListener('click', function () {
       openModal(modalSiteChat);
+      document.body.classList.add('op-chat-open');
       chatRenderMessages();
       chatMarkAllRead();
+    });
+  }
+
+  if (chatBackBtn) {
+    chatBackBtn.addEventListener('click', function () {
+      closeModal(modalSiteChat);
+      document.body.classList.remove('op-chat-open');
     });
   }
 
@@ -656,6 +667,15 @@
         location: chatRequestLocation && chatRequestLocation.value,
       });
       closeModal(modalChatRequest);
+    });
+  }
+
+  if (modalSiteChat) {
+    modalSiteChat.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t && t.classList && (t.classList.contains('op-modal-backdrop') || t.classList.contains('op-modal-close'))) {
+        document.body.classList.remove('op-chat-open');
+      }
     });
   }
 

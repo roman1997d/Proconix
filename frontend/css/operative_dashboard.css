@@ -1536,8 +1536,8 @@ a.op-doc-row:active {
 .op-modal-dialog-chat {
   width: 100%;
   max-width: 100%;
-  height: 100%;
-  max-height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
   border-radius: 0;
 }
 
@@ -1656,6 +1656,7 @@ a.op-doc-row:active {
   border-radius: 999px;
   border: 1px solid rgba(15, 101, 88, 0.16);
   padding: 0 12px;
+  font-size: 16px;
 }
 
 .op-chat-file-btn,
@@ -1671,6 +1672,12 @@ a.op-doc-row:active {
   align-items: center;
   justify-content: center;
   padding: 0 10px;
+  font-size: 16px;
+}
+
+body.op-chat-open {
+  overflow: hidden;
+  height: 100%;
 }
 
 .op-chat-toast {
