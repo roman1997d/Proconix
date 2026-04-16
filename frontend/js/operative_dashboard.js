@@ -110,7 +110,7 @@
   var btnClockIn = document.getElementById('op-btn-clock-in');
   var btnClockOut = document.getElementById('op-btn-clock-out');
   var clockFeedbackEl = document.getElementById('op-clock-feedback');
-  var projectContentEl = document.getElementById('op-site-chat-content');
+  var projectContentEl = document.getElementById('op-project-content');
   var weeklyTotalEl = document.getElementById('op-weekly-total');
   var weeklyBarsEl = document.getElementById('op-weekly-bars');
   var tasksListEl = document.getElementById('op-tasks-list');
@@ -228,17 +228,16 @@
     api('/project/current')
       .then(function (r) {
         if (!r.data.success || !r.data.project) {
-          projectContentEl.innerHTML = '<p class="op-text-muted" style="margin:0">No project room available yet.</p>';
+          projectContentEl.innerHTML = '<p class="op-text-muted" style="margin:0">No project assigned.</p>';
           return;
         }
         var p = r.data.project;
         var pName = p.name || p.project_name || '—';
         projectContentEl.innerHTML =
-          '<div class="op-project-name">Room: ' + escapeHtml(pName) + '</div>' +
-          '<div class="op-project-meta">Team channel for site updates, blockers, and daily coordination.</div>' +
-          '<div class="op-project-meta">Unread: 0 messages</div>';
-        var ctx = document.getElementById('op-site-chat-modal-context');
-        if (ctx) ctx.textContent = 'Project room: ' + pName;
+          '<div class="op-project-name">' + escapeHtml(pName) + '</div>' +
+          (p.address ? '<div>' + escapeHtml(p.address) + '</div>' : '') +
+          (p.start_date ? '<div class="op-project-meta">Start: ' + escapeHtml(p.start_date) + '</div>' : '') +
+          (p.description ? '<div class="op-project-meta">' + escapeHtml(p.description) + '</div>' : '');
       })
       .catch(function () {
         projectContentEl.textContent = '—';
@@ -753,14 +752,6 @@
     if (formUpload) formUpload.reset();
     hideFeedback(document.getElementById('op-upload-feedback'));
   });
-
-  var modalSiteChat = document.getElementById('op-modal-site-chat');
-  var btnSiteChatOpen = document.getElementById('op-btn-site-chat-open');
-  if (btnSiteChatOpen) {
-    btnSiteChatOpen.addEventListener('click', function () {
-      openModal(modalSiteChat);
-    });
-  }
 
   // ----- Drawing View Module (operatives, read-only) -----
   var dgSummaryEl = document.getElementById('op-dg-summary');
