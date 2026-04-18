@@ -1526,9 +1526,37 @@ a.op-doc-row:active {
   color: #0f766e;
 }
 
-.op-chat-hero-actions {
+.op-hero-chat-hint {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #3d6b62;
+}
+
+.op-hero-chat-actions {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  align-items: stretch;
+}
+
+.op-btn-site-chat {
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+  min-height: 46px;
+}
+
+.op-hero-chat-notif {
+  position: relative;
+  flex-shrink: 0;
+  min-width: 46px;
+  min-height: 46px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .op-chat-notif-btn {

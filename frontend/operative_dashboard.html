@@ -34,21 +34,18 @@
   </header>
 
   <main class="op-main">
-    <section class="op-hero-card" aria-label="Dashboard overview">
-      <div class="op-hero-top">
-        <div>
-          <p class="op-hero-kicker">Operative dashboard</p>
-          <h1 class="op-hero-title">Site Chat</h1>
-        </div>
-        <div class="op-chat-hero-actions">
-          <button type="button" class="op-hero-menu op-chat-notif-btn" id="op-chat-notif-open" aria-label="Notifications">
-            <i class="bi bi-bell"></i>
-            <span class="op-chat-notif-badge d-none" id="op-chat-unread-badge">0</span>
-          </button>
-          <button type="button" class="op-hero-menu" id="op-chat-open" aria-label="Open site chat">
-            <i class="bi bi-chat-dots"></i>
-          </button>
-        </div>
+    <section class="op-hero-card op-hero-card--site-chat" aria-label="Site chat">
+      <p class="op-hero-kicker">Operative dashboard</p>
+      <h1 class="op-hero-title">Site chat</h1>
+      <p class="op-hero-chat-hint">Message your project room, share files, and create material requests.</p>
+      <div class="op-hero-chat-actions">
+        <button type="button" class="op-btn op-btn-primary op-btn-site-chat" id="op-chat-open">
+          <i class="bi bi-chat-dots" aria-hidden="true"></i> Open site chat
+        </button>
+        <button type="button" class="op-btn op-btn-secondary op-hero-chat-notif op-chat-notif-btn" id="op-chat-notif-open" aria-label="Chat notifications">
+          <i class="bi bi-bell" aria-hidden="true"></i>
+          <span class="op-chat-notif-badge d-none" id="op-chat-unread-badge">0</span>
+        </button>
       </div>
       <div class="op-hero-badges">
         <span class="op-hero-badge op-hero-badge-positive">Project room</span>
