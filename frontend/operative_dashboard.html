@@ -34,6 +34,12 @@
   </header>
 
   <main class="op-main">
+    <!-- Current Project (first: operative sees assignment context immediately) -->
+    <section class="op-card" id="op-project">
+      <h2 class="op-card-title"><i class="bi bi-building"></i> Current Project</h2>
+      <div id="op-project-content" class="op-project-content">Loading…</div>
+    </section>
+
     <section class="op-hero-card op-hero-card--site-chat" aria-label="Site chat">
       <p class="op-hero-kicker">Operative dashboard</p>
       <h1 class="op-hero-title">Site chat</h1>
@@ -61,12 +67,6 @@
       <button type="button" class="op-btn op-btn-clock-in d-none" id="op-btn-clock-in">Clock In</button>
       <button type="button" class="op-btn op-btn-clock-out d-none" id="op-btn-clock-out">Clock Out</button>
       <div id="op-clock-feedback" class="op-feedback d-none" role="alert" aria-live="assertive"></div>
-    </section>
-
-    <!-- Current Project -->
-    <section class="op-card" id="op-project">
-      <h2 class="op-card-title"><i class="bi bi-building"></i> Current Project</h2>
-      <div id="op-project-content" class="op-project-content">Loading…</div>
     </section>
 
     <!-- Drawing Gallery (inline for operatives) -->
@@ -132,8 +132,8 @@
 
   <!-- Bottom nav (optional) -->
   <nav class="op-bottom-nav" aria-label="Main">
-    <a href="#op-clock" class="op-nav-item"><i class="bi bi-clock"></i><span>Clock</span></a>
     <a href="#op-project" class="op-nav-item"><i class="bi bi-building"></i><span>Project</span></a>
+    <a href="#op-clock" class="op-nav-item"><i class="bi bi-clock"></i><span>Clock</span></a>
     <a href="#op-worklog" class="op-nav-item"><i class="bi bi-journal-plus"></i><span>Work</span></a>
     <a href="#" class="op-nav-item" id="op-nav-tasks-open" role="button"><i class="bi bi-list-task"></i><span>Tasks</span></a>
   </nav>
