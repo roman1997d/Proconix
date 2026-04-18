@@ -89,11 +89,13 @@
       <div id="op-docs-list" class="op-docs-list">Loading…</div>
     </section>
 
-    <!-- Tasks assigned by manager (legacy tasks + Task & Planning) -->
+    <!-- Tasks assigned by manager (legacy tasks + Task & Planning) — list opens in modal -->
     <section class="op-card op-tasks-card" id="op-tasks">
       <h2 class="op-card-title"><i class="bi bi-list-task"></i> My tasks</h2>
       <p class="op-tasks-hint">Tasks your manager assigned to you (including Task &amp; Planning when your name is on the assignment).</p>
-      <div id="op-tasks-list" class="op-tasks-list">Loading…</div>
+      <button type="button" class="op-btn op-btn-primary op-btn-open-tasks" id="op-btn-open-tasks-modal">
+        <i class="bi bi-list-task"></i> View my tasks
+      </button>
     </section>
 
     <!-- Weekly Hours -->
@@ -136,7 +138,7 @@
     <a href="#op-clock" class="op-nav-item"><i class="bi bi-clock"></i><span>Clock</span></a>
     <a href="#op-project" class="op-nav-item"><i class="bi bi-building"></i><span>Project</span></a>
     <a href="#op-worklog" class="op-nav-item"><i class="bi bi-journal-plus"></i><span>Work</span></a>
-    <a href="#op-tasks" class="op-nav-item"><i class="bi bi-list-task"></i><span>Tasks</span></a>
+    <a href="#" class="op-nav-item" id="op-nav-tasks-open" role="button"><i class="bi bi-list-task"></i><span>Tasks</span></a>
   </nav>
 
   <!-- Modal: Drawing Gallery (inline operative viewer) -->
@@ -565,6 +567,25 @@
             <div id="op-upload-feedback" class="op-feedback d-none"></div>
             <button type="submit" class="op-btn op-btn-primary">Upload</button>
           </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: My tasks (list) -->
+  <div class="op-modal op-modal-tasks-list" id="op-modal-tasks-list" aria-hidden="true" role="dialog" aria-labelledby="op-tasks-list-modal-title">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog op-modal-dialog-tasks-list">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3 id="op-tasks-list-modal-title">My tasks</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body op-tasks-list-modal-body">
+          <p class="op-tasks-hint" style="margin-top: 0">
+            Tasks your manager assigned to you (including Task &amp; Planning when your name is on the assignment).
+          </p>
+          <div id="op-tasks-list" class="op-tasks-list">Loading…</div>
         </div>
       </div>
     </div>

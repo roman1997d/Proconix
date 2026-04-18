@@ -247,11 +247,11 @@ a.op-doc-row:active {
   line-height: 1.4;
 }
 
-.op-tasks-card .op-tasks-list {
-  max-height: 420px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+.op-btn-open-tasks {
+  width: 100%;
+  justify-content: center;
 }
+
 
 .op-week-bar {
   display: flex;
@@ -561,10 +561,32 @@ a.op-doc-row:active {
   padding: 12px 0;
 }
 
+/* My tasks list modal (above default modals; task detail stacks on top) */
+.op-modal-tasks-list {
+  z-index: 210;
+}
+
+.op-modal-dialog-tasks-list {
+  max-width: 100%;
+  width: min(520px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.op-tasks-list-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Task detail modal */
 .op-modal-task {
   align-items: center;
   padding: 12px;
+  z-index: 220;
 }
 .op-modal-dialog-task {
   max-width: 100%;

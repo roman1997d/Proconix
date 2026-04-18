@@ -114,6 +114,9 @@
   var weeklyTotalEl = document.getElementById('op-weekly-total');
   var weeklyBarsEl = document.getElementById('op-weekly-bars');
   var tasksListEl = document.getElementById('op-tasks-list');
+  var modalTasksList = document.getElementById('op-modal-tasks-list');
+  var opBtnOpenTasksModal = document.getElementById('op-btn-open-tasks-modal');
+  var opNavTasksOpen = document.getElementById('op-nav-tasks-open');
   /** @type {{ task: object|null }} */
   var taskModalContext = { task: null };
 
@@ -298,6 +301,12 @@
       .catch(function () {
         tasksListEl.innerHTML = '<p class="op-text-muted" style="margin:0">Could not load tasks.</p>';
       });
+  }
+
+  function openTasksListModal() {
+    if (!modalTasksList) return;
+    openModal(modalTasksList);
+    loadTasks();
   }
 
   // ----- Site Chat (frontend realtime with API + fallback store) -----
@@ -1458,6 +1467,18 @@
       var source = item.getAttribute('data-task-source');
       var id = item.getAttribute('data-task-id');
       if (source && id) openTaskModal(source, id);
+    });
+  }
+
+  if (opBtnOpenTasksModal) {
+    opBtnOpenTasksModal.addEventListener('click', function () {
+      openTasksListModal();
+    });
+  }
+  if (opNavTasksOpen) {
+    opNavTasksOpen.addEventListener('click', function (e) {
+      e.preventDefault();
+      openTasksListModal();
     });
   }
 
@@ -4346,7 +4367,6 @@
       loadClockStatus();
       loadWeekly();
       loadProject();
-      loadTasks();
       loadDocumentsInbox();
       chatStartRealtime();
     })
@@ -4355,7 +4375,6 @@
       loadClockStatus();
       loadWeekly();
       loadProject();
-      loadTasks();
       loadDocumentsInbox();
       chatStartRealtime();
     });
