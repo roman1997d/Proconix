@@ -36,6 +36,12 @@ const {
   archiveMyWorkLog,
   listQaAssignedJobsForOperative,
 } = require('../controllers/operativeDashboardController');
+const {
+  registerPushDevice,
+  unregisterPushDevice,
+  getPushPreferences,
+  updatePushPreferences,
+} = require('../controllers/operativePushController');
 
 const { generateTimesheetPdf, generateWorkReportPdf } = require('../controllers/pdfKitReportsController');
 const {
@@ -66,6 +72,12 @@ router.get('/work-hours/status', requireOperativeAuth, workHoursStatus);
 router.get('/work-hours/weekly', requireOperativeAuth, workHoursWeekly);
 router.get('/project/current', requireOperativeAuth, getCurrentProject);
 router.get('/qa/assigned-jobs', requireOperativeAuth, listQaAssignedJobsForOperative);
+
+/** Push notifications — operatives only (FCM device + preferences). */
+router.post('/push/register', requireOperativeAuth, registerPushDevice);
+router.delete('/push/register', requireOperativeAuth, unregisterPushDevice);
+router.get('/push/preferences', requireOperativeAuth, getPushPreferences);
+router.patch('/push/preferences', requireOperativeAuth, updatePushPreferences);
 router.get('/tasks', requireOperativeAuth, getTasks);
 router.get('/tasks/:taskId', requireOperativeAuth, getTaskDetail);
 router.patch('/tasks/:taskId', requireOperativeAuth, updateTaskStatus);

@@ -223,6 +223,17 @@ async function upsertPlanTasks(req, res) {
     }
 
     await pool.query('COMMIT');
+    const planningPush = { companyId, planId, insertedTaskIds: inserted };
+    setImmediate(() => {
+      try {
+        const { notifyOperativesNewPlanningTasksPush } = require('../lib/operativePushService');
+        notifyOperativesNewPlanningTasksPush(planningPush).catch((e) =>
+          console.error('notifyOperativesNewPlanningTasksPush:', e.message || e)
+        );
+      } catch (e) {
+        console.error('operative push (planning):', e.message || e);
+      }
+    });
     return res.status(200).json({ success: true, inserted_ids: inserted });
   } catch (err) {
     console.error('upsertPlanTasks error:', err);

@@ -861,6 +861,30 @@ async function postMessage(req, res) {
               : text.slice(0, 200),
       });
       await client.query('COMMIT');
+      const chatPushPayload = {
+        companyId: actor.companyId,
+        projectId: project.id,
+        actorKind: actor.kind,
+        actorId: actor.id,
+        title: type === 'material_request' ? 'New Material Request' : 'New Message',
+        body:
+          type === 'material_request'
+            ? String(req.body.request_summary || '').trim()
+            : type === 'file'
+              ? String(fileName || 'File shared')
+              : text.slice(0, 200),
+        messageId: msgId,
+      };
+      setImmediate(() => {
+        try {
+          const { notifyOperativesSiteChatPush } = require('../lib/operativePushService');
+          notifyOperativesSiteChatPush(chatPushPayload).catch((e) =>
+            console.error('notifyOperativesSiteChatPush:', e.message || e)
+          );
+        } catch (e) {
+          console.error('operative push (chat):', e.message || e);
+        }
+      });
       return res.status(201).json({
         success: true,
         message: {
