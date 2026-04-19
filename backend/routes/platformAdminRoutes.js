@@ -17,6 +17,7 @@ const {
   sendClientEmail,
   createDemoRecords,
   sendDemoLoginEmail,
+  purgeSiteChatOlderThan,
 } = require('../controllers/platformAdminController');
 const {
   listPlatformUsers,
@@ -46,5 +47,6 @@ router.get('/companies', requirePlatformAdminAuth, listCompanies);
 router.get('/companies/:id', requirePlatformAdminAuth, getCompany);
 router.patch('/companies/:id', requirePlatformAdminAuth, updateCompany);
 router.delete('/companies/:id', requirePlatformAdminAuth, deleteCompany);
+router.post('/site-chat/purge-older-than', requirePlatformAdminAuth, purgeSiteChatOlderThan);
 
 module.exports = router;

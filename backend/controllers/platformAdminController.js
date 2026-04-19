@@ -1053,6 +1053,57 @@ async function createDemoRecords(req, res) {
   }
 }
 
+/**
+ * POST /api/platform-admin/site-chat/purge-older-than
+ * Body: { hours?: number, minutes?: number } — deletes all site_chat_message rows strictly older than that window (all companies).
+ * At least 1 total minute required.
+ */
+async function purgeSiteChatOlderThan(req, res) {
+  const b = req.body || {};
+  let hours = parseInt(b.hours, 10);
+  let minutes = parseInt(b.minutes, 10);
+  if (Number.isNaN(hours)) hours = 0;
+  if (Number.isNaN(minutes)) minutes = 0;
+  if (hours < 0) hours = 0;
+  if (minutes < 0) minutes = 0;
+  const totalMinutes = hours * 60 + minutes;
+  if (totalMinutes < 1) {
+    return res.status(400).json({
+      success: false,
+      message: 'Set at least 1 minute in total (hours + minutes).',
+    });
+  }
+  const maxMinutes = 365 * 24 * 60;
+  if (totalMinutes > maxMinutes) {
+    return res.status(400).json({
+      success: false,
+      message: 'Retention window too large (maximum 1 year).',
+    });
+  }
+  try {
+    const result = await pool.query(
+      `DELETE FROM site_chat_message
+       WHERE created_at < (NOW() - ($1::bigint * INTERVAL '1 minute'))`,
+      [totalMinutes]
+    );
+    return res.json({
+      success: true,
+      deleted_count: result.rowCount,
+      older_than_minutes: totalMinutes,
+      message: `Removed ${result.rowCount} chat message(s) older than ${totalMinutes} minute(s).`,
+    });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        success: false,
+        message: 'Site chat tables are not installed. Run scripts/create_site_chat_tables.sql',
+      });
+    }
+    console.error('purgeSiteChatOlderThan error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to purge site chat.' });
+  }
+}
+
 module.exports = {
   login,
   me,
@@ -1066,4 +1117,5 @@ module.exports = {
   sendClientEmail,
   createDemoRecords,
   sendDemoLoginEmail,
+  purgeSiteChatOlderThan,
 };

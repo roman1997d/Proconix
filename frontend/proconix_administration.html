@@ -577,8 +577,31 @@
         <div class="d-none" data-px-admin-panel="settings">
           <div class="px-admin-panel-card">
             <h2 class="h5 text-white mb-3">Platform settings</h2>
-            <p class="text-white-50">Global limits, geolocation rules, integrations (email provider, storage).</p>
-            <span class="badge bg-secondary">Coming soon</span>
+            <p class="text-white-50 mb-4">Global limits, geolocation rules, integrations (email provider, storage).</p>
+
+            <div class="border border-secondary rounded p-3 bg-dark bg-opacity-25">
+              <h3 class="h6 text-white mb-2">Site chat — șterge mesajele vechi</h3>
+              <p class="text-white-50 small mb-3">
+                Șterge <strong class="text-white">permanent</strong> din baza de date toate mesajele din chat-urile de șantier (toate companiile / proiectele) care sunt <strong class="text-white">mai vechi</strong> decât intervalul de mai jos.
+                Ex.: ore <code class="text-info">0</code>, minute <code class="text-info">2</code> → dispar toate mesajele cu vechimea &gt; 2 minute.
+              </p>
+              <div class="row g-2 align-items-end flex-wrap">
+                <div class="col-auto">
+                  <label class="form-label text-white-50 small mb-1" for="pxSettingsChatPurgeHours">Ore</label>
+                  <input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxSettingsChatPurgeHours" min="0" max="8760" value="0" inputmode="numeric">
+                </div>
+                <div class="col-auto">
+                  <label class="form-label text-white-50 small mb-1" for="pxSettingsChatPurgeMinutes">Minute</label>
+                  <input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxSettingsChatPurgeMinutes" min="0" value="2" inputmode="numeric">
+                </div>
+                <div class="col-auto">
+                  <button type="button" class="btn btn-outline-danger btn-sm" id="pxSettingsChatPurgeBtn">
+                    <i class="bi bi-trash3 me-1" aria-hidden="true"></i> Șterge mesajele mai vechi
+                  </button>
+                </div>
+              </div>
+              <div id="pxSettingsChatPurgeAlert" class="alert d-none mt-3 mb-0 py-2 small" role="alert"></div>
+            </div>
           </div>
         </div>
       </div>

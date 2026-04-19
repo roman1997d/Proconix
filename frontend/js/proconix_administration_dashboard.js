@@ -1117,6 +1117,84 @@
     });
   }
 
+  var chatPurgeBtn = document.getElementById('pxSettingsChatPurgeBtn');
+  var chatPurgeHours = document.getElementById('pxSettingsChatPurgeHours');
+  var chatPurgeMinutes = document.getElementById('pxSettingsChatPurgeMinutes');
+  var chatPurgeAlert = document.getElementById('pxSettingsChatPurgeAlert');
+
+  function showChatPurgeAlert(text, kind) {
+    if (!chatPurgeAlert) return;
+    chatPurgeAlert.textContent = text || '';
+    chatPurgeAlert.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-warning');
+    if (kind === 'success') {
+      chatPurgeAlert.classList.add('alert-success');
+    } else if (kind === 'error') {
+      chatPurgeAlert.classList.add('alert-danger');
+    } else {
+      chatPurgeAlert.classList.add('alert-warning');
+    }
+  }
+
+  function hideChatPurgeAlert() {
+    if (!chatPurgeAlert) return;
+    chatPurgeAlert.classList.add('d-none');
+    chatPurgeAlert.textContent = '';
+  }
+
+  if (chatPurgeBtn && chatPurgeHours && chatPurgeMinutes) {
+    chatPurgeBtn.addEventListener('click', function () {
+      hideChatPurgeAlert();
+      var h = parseInt(chatPurgeHours.value, 10);
+      var m = parseInt(chatPurgeMinutes.value, 10);
+      if (Number.isNaN(h) || h < 0) h = 0;
+      if (Number.isNaN(m) || m < 0) m = 0;
+      var total = h * 60 + m;
+      if (total < 1) {
+        showChatPurgeAlert('Setează cel puțin 1 minut în total (ore + minute).', 'error');
+        return;
+      }
+      var ok = window.confirm(
+        'Ștergi permanent toate mesajele de chat mai vechi de ' +
+          total +
+          ' minute (' +
+          h +
+          ' h ' +
+          m +
+          ' min)? Această acțiune nu poate fi anulată.'
+      );
+      if (!ok) return;
+      chatPurgeBtn.disabled = true;
+      fetch('/api/platform-admin/site-chat/purge-older-than', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+        credentials: 'same-origin',
+        body: JSON.stringify({ hours: h, minutes: m }),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          chatPurgeBtn.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status === 200 && out.data && out.data.success) {
+            showChatPurgeAlert(out.data.message || 'Gata.', 'success');
+            return;
+          }
+          showChatPurgeAlert((out.data && out.data.message) || 'Eșec.', 'error');
+        })
+        .catch(function () {
+          chatPurgeBtn.disabled = false;
+          showChatPurgeAlert('Eroare de rețea.', 'error');
+        });
+    });
+  }
+
   var demoForm = document.getElementById('pxDemoCreateForm');
   var demoAlert = document.getElementById('pxDemoCreateAlert');
   var demoSuccess = document.getElementById('pxDemoCreateSuccess');
