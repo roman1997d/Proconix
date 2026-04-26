@@ -1047,9 +1047,12 @@
   }
 
   var backupCreateBtn = document.getElementById('pxBackupCreateBtn');
+  var backupRefreshBtn = document.getElementById('pxBackupRefreshBtn');
   var backupStatusText = document.getElementById('pxBackupStatusText');
   var backupDownloadBtn = document.getElementById('pxBackupDownloadBtn');
   var backupAlert = document.getElementById('pxBackupAlert');
+  var backupTableBody = document.getElementById('pxBackupTableBody');
+  var backupTableEmpty = document.getElementById('pxBackupTableEmpty');
   var backupObjectUrl = null;
 
   function resetBackupDownloadUrl() {
@@ -1084,6 +1087,78 @@
     if (!backupAlert) return;
     backupAlert.classList.add('d-none');
     backupAlert.textContent = '';
+  }
+
+  function formatBackupBytes(n) {
+    var x = Number(n || 0);
+    if (!isFinite(x) || x <= 0) return '0 B';
+    var u = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var i = 0;
+    while (x >= 1024 && i < u.length - 1) { x /= 1024; i += 1; }
+    return (i === 0 ? Math.round(x) : x.toFixed(1)).toString().replace(/\.0$/, '') + ' ' + u[i];
+  }
+
+  function renderBackupRows(items) {
+    if (!backupTableBody) return;
+    backupTableBody.innerHTML = '';
+    if (!items || !items.length) {
+      if (backupTableEmpty) backupTableEmpty.classList.remove('d-none');
+      return;
+    }
+    if (backupTableEmpty) backupTableEmpty.classList.add('d-none');
+    items.forEach(function (b) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="font-monospace small">' + escapeHtmlText(b.file_name || '') + '</td>' +
+        '<td class="small">' + escapeHtmlText(formatDateTime(b.created_at || '')) + '</td>' +
+        '<td class="small">' + escapeHtmlText(formatBackupBytes(b.size_bytes)) + '</td>' +
+        '<td class="small">' + escapeHtmlText((b.actor_type || 'admin') + (b.actor_email ? ' · ' + b.actor_email : '')) + '</td>' +
+        '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger px-backup-delete" data-file="' + escapeHtmlText(b.file_name || '') + '">Delete</button></td>';
+      backupTableBody.appendChild(tr);
+    });
+  }
+
+  function fillRestoreServerSelect(items) {
+    var sel = document.getElementById('pxRestoreServerSelect');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Select backup from server —</option>';
+    (items || []).forEach(function (b) {
+      var opt = document.createElement('option');
+      opt.value = b.file_name;
+      opt.textContent = b.file_name + ' · ' + formatDateTime(b.created_at || '');
+      sel.appendChild(opt);
+    });
+  }
+
+  function refreshBackupList() {
+    fetch('/api/platform-admin/backups', {
+      method: 'GET',
+      headers: sessionHeaders(session),
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (out.status === 401) {
+          clearSession();
+          window.location.replace(LOGIN_URL);
+          return;
+        }
+        if (out.status !== 200 || !out.data || !out.data.success) {
+          renderBackupRows([]);
+          fillRestoreServerSelect([]);
+          return;
+        }
+        renderBackupRows(out.data.backups || []);
+        fillRestoreServerSelect(out.data.backups || []);
+      })
+      .catch(function () {
+        renderBackupRows([]);
+        fillRestoreServerSelect([]);
+      });
   }
 
   if (backupCreateBtn) {
@@ -1148,11 +1223,54 @@
           }
           setBackupStatus('Backup ready');
           showBackupAlert('Backup generated successfully. Click Download backup.', 'success');
+          refreshBackupList();
         })
         .catch(function () {
           backupCreateBtn.disabled = false;
           setBackupStatus('Failed');
           showBackupAlert('Network error while creating backup.', 'error');
+        });
+    });
+  }
+  if (backupRefreshBtn) {
+    backupRefreshBtn.addEventListener('click', refreshBackupList);
+  }
+
+  if (backupTableBody) {
+    backupTableBody.addEventListener('click', function (e) {
+      var btn = e.target.closest('.px-backup-delete');
+      if (!btn) return;
+      var fileName = btn.getAttribute('data-file') || '';
+      if (!fileName) return;
+      var pass = window.prompt('Enter admin password to delete backup:');
+      if (!pass) return;
+      btn.disabled = true;
+      fetch('/api/platform-admin/backups/' + encodeURIComponent(fileName), {
+        method: 'DELETE',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+        credentials: 'same-origin',
+        body: JSON.stringify({ password: pass }),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) { return { status: res.status, data: data }; });
+        })
+        .then(function (out) {
+          btn.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status !== 200 || !out.data || !out.data.success) {
+            showBackupAlert((out.data && out.data.message) || 'Delete failed.', 'error');
+            return;
+          }
+          showBackupAlert('Backup deleted.', 'success');
+          refreshBackupList();
+        })
+        .catch(function () {
+          btn.disabled = false;
+          showBackupAlert('Network error while deleting backup.', 'error');
         });
     });
   }
@@ -1162,6 +1280,8 @@
   });
 
   var restoreBtn = document.getElementById('pxRestoreBtn');
+  var restoreServerBtn = document.getElementById('pxRestoreServerBtn');
+  var restoreServerSelect = document.getElementById('pxRestoreServerSelect');
   var restoreFileInput = document.getElementById('pxRestoreFile');
   var restoreStatusText = document.getElementById('pxRestoreStatusText');
   var restoreAlert = document.getElementById('pxRestoreAlert');
@@ -1248,6 +1368,55 @@
         });
     });
   }
+
+  if (restoreServerBtn) {
+    restoreServerBtn.addEventListener('click', function () {
+      hideRestoreAlert();
+      var filename = restoreServerSelect && restoreServerSelect.value ? restoreServerSelect.value : '';
+      if (!filename) {
+        showRestoreAlert('Select a server backup first.', 'warning');
+        return;
+      }
+      var ok = window.confirm('Restore selected server backup and overwrite current data?');
+      if (!ok) return;
+      setRestoreStatus('Restoring selected server backup...');
+      restoreServerBtn.disabled = true;
+      fetch('/api/admin/restore-from-server', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+        credentials: 'same-origin',
+        body: JSON.stringify({ filename: filename }),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) { return { status: res.status, data: data }; });
+        })
+        .then(function (out) {
+          restoreServerBtn.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status !== 200 || !out.data || !out.data.success) {
+            var msg = (out.data && out.data.message) || 'Restore from server failed.';
+            if (out.data && out.data.step) msg += ' [step: ' + out.data.step + ']';
+            if (out.data && out.data.detail) msg += ' ' + out.data.detail;
+            setRestoreStatus('Failed');
+            showRestoreAlert(msg, 'error');
+            return;
+          }
+          setRestoreStatus('Restore completed');
+          showRestoreAlert(out.data.message || 'Restore completed successfully.', 'success');
+        })
+        .catch(function () {
+          restoreServerBtn.disabled = false;
+          setRestoreStatus('Failed');
+          showRestoreAlert('Network error while restoring from server.', 'error');
+        });
+    });
+  }
+
+  refreshBackupList();
 
   function showContentEmailAlert(text, kind) {
     var el = document.getElementById('pxAdminContentEmailAlert');

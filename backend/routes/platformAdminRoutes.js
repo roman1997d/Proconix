@@ -23,6 +23,9 @@ const {
   sendDemoLoginEmail,
   createBackup,
   restoreBackup,
+  listBackups,
+  deleteBackup,
+  restoreBackupFromServer,
   purgeSiteChatOlderThan,
 } = require('../controllers/platformAdminController');
 const {
@@ -50,6 +53,9 @@ router.post('/create-demo-records', requirePlatformAdminAuth, createDemoRecords)
 router.post('/send-demo-login-email', requirePlatformAdminAuth, sendDemoLoginEmail);
 router.post('/backup', requirePlatformAdminAuth, createBackup);
 router.post('/restore', requirePlatformAdminAuth, restoreUpload.single('backup'), restoreBackup);
+router.get('/backups', requirePlatformAdminAuth, listBackups);
+router.delete('/backups/:filename', requirePlatformAdminAuth, deleteBackup);
+router.post('/restore-from-server', requirePlatformAdminAuth, restoreBackupFromServer);
 router.get('/billing-subscriptions', requirePlatformAdminAuth, listBillingSubscriptions);
 router.patch('/billing-subscriptions/:id', requirePlatformAdminAuth, updateBillingSubscription);
 router.get('/platform-users', requirePlatformAdminAuth, listPlatformUsers);

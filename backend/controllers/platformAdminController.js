@@ -27,6 +27,9 @@ const {
 
 const SALT_ROUNDS = 10;
 const BACKUP_AUDIT_LOG_PATH = path.resolve(__dirname, '../logs/platform-admin-backup-audit.log');
+const BACKUP_STORAGE_DIR = path.resolve(__dirname, '../backups/platform');
+const BACKUP_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
+let autoBackupSchedulerStarted = false;
 
 /**
  * SQL ORDER BY fragment: one "primary" manager per company (manager.company_id = company).
@@ -74,7 +77,7 @@ function pad2(n) {
 function formatBackupFileStamp(dateObj) {
   const d = dateObj instanceof Date ? dateObj : new Date();
   const yy = String(d.getFullYear()).slice(-2);
-  return `${pad2(d.getDate())}-${pad2(d.getMonth() + 1)}-${yy}__${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return `${pad2(d.getDate())}-${pad2(d.getMonth() + 1)}-${yy}__${pad2(d.getHours())}-${pad2(d.getMinutes())}`;
 }
 
 async function appendBackupAuditLog(entry) {
@@ -198,6 +201,245 @@ async function findFirstFileByName(rootDir, fileName) {
     }
   }
   return null;
+}
+
+async function ensureBackupStorageDir() {
+  await fsp.mkdir(BACKUP_STORAGE_DIR, { recursive: true });
+}
+
+async function cleanupOldBackups() {
+  await ensureBackupStorageDir();
+  const now = Date.now();
+  const entries = await fsp.readdir(BACKUP_STORAGE_DIR, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.zip')) continue;
+    const fp = path.join(BACKUP_STORAGE_DIR, entry.name);
+    const st = await fsp.stat(fp).catch(() => null);
+    if (!st) continue;
+    if (now - st.mtimeMs > BACKUP_RETENTION_MS) {
+      await fsp.rm(fp, { force: true }).catch(() => {});
+      const meta = path.join(BACKUP_STORAGE_DIR, `${entry.name}.json`);
+      await fsp.rm(meta, { force: true }).catch(() => {});
+    }
+  }
+}
+
+async function generateBackupToServer(options) {
+  const opts = options || {};
+  const actorType = opts.actorType || 'admin';
+  const actorId = opts.actorId != null ? String(opts.actorId) : null;
+  const actorEmail = opts.actorEmail || '';
+  const actorIp = opts.actorIp || '';
+  const startedAt = new Date();
+  const projectRoot = path.resolve(__dirname, '../..');
+  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'proconix-backup-'));
+  const stamp = formatBackupFileStamp(startedAt);
+  const dbDumpPath = path.join(tempRoot, 'db.dump');
+  const filesArchivePath = path.join(tempRoot, 'files.tar.gz');
+  let finalZipName = `proconixBackup_${stamp}.zip`;
+  let finalZipPath = path.join(BACKUP_STORAGE_DIR, finalZipName);
+  let step = 'init';
+
+  try {
+    await ensureBackupStorageDir();
+    if (fs.existsSync(finalZipPath)) {
+      let n = 1;
+      while (fs.existsSync(path.join(BACKUP_STORAGE_DIR, `proconixBackup_${stamp}_${n}.zip`))) n += 1;
+      finalZipName = `proconixBackup_${stamp}_${n}.zip`;
+      finalZipPath = path.join(BACKUP_STORAGE_DIR, finalZipName);
+    }
+    const pgUser = process.env.PGUSER || process.env.DB_USER || 'postgres';
+    const pgDatabase = process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB';
+    const pgHost = process.env.PGHOST || process.env.DB_HOST || undefined;
+    const pgPort = process.env.PGPORT || process.env.DB_PORT || undefined;
+    const cmdEnv = { ...process.env };
+    const pgPassword = process.env.PGPASSWORD || process.env.DB_PASSWORD;
+    if (pgPassword) cmdEnv.PGPASSWORD = pgPassword;
+
+    const pgDumpCmd = resolveExecutable([
+      process.env.PG_DUMP_PATH,
+      '/opt/homebrew/bin/pg_dump',
+      '/usr/local/bin/pg_dump',
+      '/usr/bin/pg_dump',
+      'pg_dump',
+    ]);
+    const dumpArgs = ['-U', pgUser, '-d', pgDatabase, '-F', 'c', '-f', dbDumpPath];
+    if (pgHost) dumpArgs.splice(0, 0, '-h', pgHost);
+    if (pgPort) dumpArgs.splice(0, 0, '-p', String(pgPort));
+    step = 'pg_dump';
+    await runCommand(pgDumpCmd, dumpArgs, { env: cmdEnv, cwd: projectRoot });
+
+    const fileSources = [];
+    ['backend/uploads', 'backend/output', 'output'].forEach((rel) => {
+      const abs = path.join(projectRoot, rel);
+      if (fs.existsSync(abs)) fileSources.push(rel);
+    });
+    const tarCmd = resolveExecutable([
+      process.env.TAR_PATH,
+      '/usr/bin/tar',
+      '/bin/tar',
+      'tar',
+    ]);
+    if (fileSources.length === 0) {
+      await fsp.writeFile(path.join(tempRoot, 'empty-backup-placeholder.txt'), 'No file storage directories found.\n', 'utf8');
+      step = 'tar_placeholder';
+      await runCommand(tarCmd, ['-czf', filesArchivePath, '-C', tempRoot, 'empty-backup-placeholder.txt'], { cwd: projectRoot });
+    } else {
+      step = 'tar_files';
+      await runCommand(tarCmd, ['-czf', filesArchivePath, ...fileSources], { cwd: projectRoot });
+    }
+
+    step = 'zip_final';
+    await createZipWithFallback(finalZipPath, [dbDumpPath, filesArchivePath], tempRoot);
+
+    const st = await fsp.stat(finalZipPath);
+    const meta = {
+      file_name: finalZipName,
+      created_at: startedAt.toISOString(),
+      actor_type: actorType,
+      actor_id: actorId,
+      actor_email: actorEmail,
+      actor_ip: actorIp,
+      size_bytes: st.size,
+    };
+    await fsp.writeFile(path.join(BACKUP_STORAGE_DIR, `${finalZipName}.json`), JSON.stringify(meta, null, 2), 'utf8');
+    await cleanupOldBackups();
+    return {
+      fileName: finalZipName,
+      filePath: finalZipPath,
+      createdAt: meta.created_at,
+      sizeBytes: meta.size_bytes,
+    };
+  } catch (err) {
+    throw Object.assign(new Error(err && err.message ? err.message : String(err)), { step });
+  } finally {
+    await fsp.rm(tempRoot, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+async function listBackupsFromServer() {
+  await ensureBackupStorageDir();
+  const entries = await fsp.readdir(BACKUP_STORAGE_DIR, { withFileTypes: true });
+  const out = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.zip')) continue;
+    const fp = path.join(BACKUP_STORAGE_DIR, entry.name);
+    const st = await fsp.stat(fp).catch(() => null);
+    if (!st) continue;
+    let actorType = '';
+    let actorEmail = '';
+    const metaPath = path.join(BACKUP_STORAGE_DIR, `${entry.name}.json`);
+    const metaRaw = await fsp.readFile(metaPath, 'utf8').catch(() => null);
+    if (metaRaw) {
+      try {
+        const meta = JSON.parse(metaRaw);
+        actorType = meta.actor_type || '';
+        actorEmail = meta.actor_email || '';
+      } catch (_) {}
+    }
+    out.push({
+      file_name: entry.name,
+      created_at: st.mtime.toISOString(),
+      size_bytes: st.size,
+      actor_type: actorType,
+      actor_email: actorEmail,
+    });
+  }
+  out.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  return out;
+}
+
+async function runRestoreFromZip(zipPath, restoreContext) {
+  const ctx = restoreContext || {};
+  const adminId = Number(ctx.adminId || 0);
+  const adminEmail = ctx.adminEmail || '';
+  const backupIp = ctx.backupIp || '';
+  const sourceLabel = ctx.sourceLabel || path.basename(zipPath || 'backup.zip');
+  const projectRoot = path.resolve(__dirname, '../..');
+  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'proconix-restore-'));
+  const unzipDir = path.join(tempRoot, 'unzipped');
+  let step = 'init';
+  try {
+    await fsp.mkdir(unzipDir, { recursive: true });
+    step = 'extract_zip';
+    await extractZipWithFallback(zipPath, unzipDir, tempRoot);
+
+    const dbDumpPath = await findFirstFileByName(unzipDir, 'db.dump');
+    const filesTarPath = await findFirstFileByName(unzipDir, 'files.tar.gz');
+    if (!dbDumpPath || !filesTarPath) {
+      throw new Error('Invalid backup package: db.dump or files.tar.gz missing.');
+    }
+
+    const pgUser = process.env.PGUSER || process.env.DB_USER || 'postgres';
+    const pgDatabase = process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB';
+    const pgHost = process.env.PGHOST || process.env.DB_HOST || undefined;
+    const pgPort = process.env.PGPORT || process.env.DB_PORT || undefined;
+    const cmdEnv = { ...process.env };
+    const pgPassword = process.env.PGPASSWORD || process.env.DB_PASSWORD;
+    if (pgPassword) cmdEnv.PGPASSWORD = pgPassword;
+
+    step = 'terminate_db_connections';
+    try {
+      await pool.query(
+        `SELECT pg_terminate_backend(pid)
+         FROM pg_stat_activity
+         WHERE datname = $1 AND pid <> pg_backend_pid()`,
+        [pgDatabase]
+      );
+    } catch (_) {}
+
+    const pgRestoreCmd = resolveExecutable([
+      process.env.PG_RESTORE_PATH,
+      '/opt/homebrew/bin/pg_restore',
+      '/usr/local/bin/pg_restore',
+      '/usr/bin/pg_restore',
+      'pg_restore',
+    ]);
+    const pgRestoreArgs = ['-U', pgUser, '-d', pgDatabase, '--clean', '--if-exists', '--no-owner', '--no-privileges', dbDumpPath];
+    if (pgHost) pgRestoreArgs.splice(0, 0, '-h', pgHost);
+    if (pgPort) pgRestoreArgs.splice(0, 0, '-p', String(pgPort));
+
+    step = 'pg_restore';
+    await runCommand(pgRestoreCmd, pgRestoreArgs, { env: cmdEnv, cwd: projectRoot });
+
+    step = 'restore_files_prepare';
+    const fileTargets = ['backend/uploads', 'backend/output', 'output'];
+    for (const rel of fileTargets) {
+      const abs = path.join(projectRoot, rel);
+      await fsp.rm(abs, { recursive: true, force: true }).catch(() => {});
+      await fsp.mkdir(abs, { recursive: true }).catch(() => {});
+    }
+    const tarCmd = resolveExecutable([
+      process.env.TAR_PATH,
+      '/usr/bin/tar',
+      '/bin/tar',
+      'tar',
+    ]);
+    step = 'restore_files_tar';
+    await runCommand(tarCmd, ['-xzf', filesTarPath, '-C', projectRoot], { cwd: projectRoot });
+
+    await appendBackupAuditLog({
+      event: 'restore_completed',
+      at: new Date().toISOString(),
+      admin_id: adminId,
+      admin_email: adminEmail,
+      ip: backupIp,
+      source_file: sourceLabel,
+    });
+  } catch (err) {
+    await appendBackupAuditLog({
+      event: 'restore_failed',
+      at: new Date().toISOString(),
+      admin_id: adminId,
+      admin_email: adminEmail,
+      ip: backupIp,
+      step,
+      error: err && err.message ? err.message : String(err),
+    });
+    throw Object.assign(new Error(err && err.message ? err.message : String(err)), { step });
+  } finally {
+    await fsp.rm(tempRoot, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 /**
@@ -1207,62 +1449,14 @@ async function createBackup(req, res) {
     return res.status(401).json({ success: false, message: 'Unauthorized.' });
   }
 
-  const startedAt = new Date();
-  const projectRoot = path.resolve(__dirname, '../..');
-  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'proconix-backup-'));
-  const stamp = formatBackupFileStamp(startedAt);
-  const dbDumpPath = path.join(tempRoot, 'db.dump');
-  const filesArchivePath = path.join(tempRoot, 'files.tar.gz');
-  const finalZipName = `proconixBackup_${stamp}.zip`;
-  const finalZipPath = path.join(tempRoot, finalZipName);
   const backupIp = (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || '';
-
-  let step = 'init';
   try {
-    const pgUser = process.env.PGUSER || process.env.DB_USER || 'postgres';
-    const pgDatabase = process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB';
-    const pgHost = process.env.PGHOST || process.env.DB_HOST || undefined;
-    const pgPort = process.env.PGPORT || process.env.DB_PORT || undefined;
-    const cmdEnv = { ...process.env };
-    const pgPassword = process.env.PGPASSWORD || process.env.DB_PASSWORD;
-    if (pgPassword) cmdEnv.PGPASSWORD = pgPassword;
-
-    const pgDumpCmd = resolveExecutable([
-      process.env.PG_DUMP_PATH,
-      '/opt/homebrew/bin/pg_dump',
-      '/usr/local/bin/pg_dump',
-      '/usr/bin/pg_dump',
-      'pg_dump',
-    ]);
-    const dumpArgs = ['-U', pgUser, '-d', pgDatabase, '-F', 'c', '-f', dbDumpPath];
-    if (pgHost) dumpArgs.splice(0, 0, '-h', pgHost);
-    if (pgPort) dumpArgs.splice(0, 0, '-p', String(pgPort));
-    step = 'pg_dump';
-    await runCommand(pgDumpCmd, dumpArgs, { env: cmdEnv, cwd: projectRoot });
-
-    const fileSources = [];
-    ['backend/uploads', 'backend/output', 'output'].forEach((rel) => {
-      const abs = path.join(projectRoot, rel);
-      if (fs.existsSync(abs)) fileSources.push(rel);
+    const out = await generateBackupToServer({
+      actorType: 'admin',
+      actorId: adminId,
+      actorEmail: adminEmail,
+      actorIp: backupIp,
     });
-    const tarCmd = resolveExecutable([
-      process.env.TAR_PATH,
-      '/usr/bin/tar',
-      '/bin/tar',
-      'tar',
-    ]);
-
-    if (fileSources.length === 0) {
-      await fsp.writeFile(path.join(tempRoot, 'empty-backup-placeholder.txt'), 'No file storage directories found.\n', 'utf8');
-      step = 'tar_placeholder';
-      await runCommand(tarCmd, ['-czf', filesArchivePath, '-C', tempRoot, 'empty-backup-placeholder.txt'], { cwd: projectRoot });
-    } else {
-      step = 'tar_files';
-      await runCommand(tarCmd, ['-czf', filesArchivePath, ...fileSources], { cwd: projectRoot });
-    }
-
-    step = 'zip_final';
-    await createZipWithFallback(finalZipPath, [dbDumpPath, filesArchivePath], tempRoot);
 
     await appendBackupAuditLog({
       event: 'backup_created',
@@ -1270,16 +1464,10 @@ async function createBackup(req, res) {
       admin_id: adminId,
       admin_email: adminEmail,
       ip: backupIp,
-      file_name: finalZipName,
-      temp_dir: tempRoot,
+      file_name: out.fileName,
     });
 
-    return res.download(finalZipPath, finalZipName, async (err) => {
-      try {
-        await fsp.rm(tempRoot, { recursive: true, force: true });
-      } catch (_) {
-        // ignore cleanup failure
-      }
+    return res.download(out.filePath, out.fileName, async (err) => {
       if (err) {
         console.error('createBackup download error:', err);
       }
@@ -1291,19 +1479,14 @@ async function createBackup(req, res) {
       admin_id: adminId,
       admin_email: adminEmail,
       ip: backupIp,
-      step,
+      step: err && err.step ? err.step : 'unknown',
       error: err && err.message ? err.message : String(err),
     });
     console.error('createBackup error:', err);
-    try {
-      await fsp.rm(tempRoot, { recursive: true, force: true });
-    } catch (_) {
-      // ignore cleanup failure
-    }
     return res.status(500).json({
       success: false,
       message: 'Backup generation failed. No partial package was returned.',
-      step,
+      step: err && err.step ? err.step : 'unknown',
       detail: err && err.message ? err.message : String(err),
     });
   }
@@ -1326,88 +1509,21 @@ async function restoreBackup(req, res) {
   }
 
   const backupIp = (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || '';
-  const projectRoot = path.resolve(__dirname, '../..');
-  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'proconix-restore-'));
+  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'proconix-restore-upload-'));
   const uploadedOriginalPath = req.file.path;
   const uploadedZipPath = path.join(tempRoot, req.file.originalname || 'backup.zip');
-  const unzipDir = path.join(tempRoot, 'unzipped');
-  let step = 'init';
 
   try {
-    await fsp.mkdir(unzipDir, { recursive: true });
     await fsp.rename(uploadedOriginalPath, uploadedZipPath).catch(async () => {
       const content = await fsp.readFile(uploadedOriginalPath);
       await fsp.writeFile(uploadedZipPath, content);
       await fsp.unlink(uploadedOriginalPath).catch(() => {});
     });
-
-    step = 'extract_zip';
-    await extractZipWithFallback(uploadedZipPath, unzipDir, tempRoot);
-
-    const dbDumpPath = await findFirstFileByName(unzipDir, 'db.dump');
-    const filesTarPath = await findFirstFileByName(unzipDir, 'files.tar.gz');
-    if (!dbDumpPath || !filesTarPath) {
-      throw new Error('Invalid backup package: db.dump or files.tar.gz missing.');
-    }
-
-    const pgUser = process.env.PGUSER || process.env.DB_USER || 'postgres';
-    const pgDatabase = process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB';
-    const pgHost = process.env.PGHOST || process.env.DB_HOST || undefined;
-    const pgPort = process.env.PGPORT || process.env.DB_PORT || undefined;
-    const cmdEnv = { ...process.env };
-    const pgPassword = process.env.PGPASSWORD || process.env.DB_PASSWORD;
-    if (pgPassword) cmdEnv.PGPASSWORD = pgPassword;
-
-    step = 'terminate_db_connections';
-    try {
-      await pool.query(
-        `SELECT pg_terminate_backend(pid)
-         FROM pg_stat_activity
-         WHERE datname = $1 AND pid <> pg_backend_pid()`,
-        [pgDatabase]
-      );
-    } catch (_) {
-      // Best effort only; pg_restore may still succeed without this.
-    }
-
-    const pgRestoreCmd = resolveExecutable([
-      process.env.PG_RESTORE_PATH,
-      '/opt/homebrew/bin/pg_restore',
-      '/usr/local/bin/pg_restore',
-      '/usr/bin/pg_restore',
-      'pg_restore',
-    ]);
-    const pgRestoreArgs = ['-U', pgUser, '-d', pgDatabase, '--clean', '--if-exists', '--no-owner', '--no-privileges', dbDumpPath];
-    if (pgHost) pgRestoreArgs.splice(0, 0, '-h', pgHost);
-    if (pgPort) pgRestoreArgs.splice(0, 0, '-p', String(pgPort));
-
-    step = 'pg_restore';
-    await runCommand(pgRestoreCmd, pgRestoreArgs, { env: cmdEnv, cwd: projectRoot });
-
-    step = 'restore_files_prepare';
-    const fileTargets = ['backend/uploads', 'backend/output', 'output'];
-    for (const rel of fileTargets) {
-      const abs = path.join(projectRoot, rel);
-      await fsp.rm(abs, { recursive: true, force: true }).catch(() => {});
-      await fsp.mkdir(abs, { recursive: true }).catch(() => {});
-    }
-
-    const tarCmd = resolveExecutable([
-      process.env.TAR_PATH,
-      '/usr/bin/tar',
-      '/bin/tar',
-      'tar',
-    ]);
-    step = 'restore_files_tar';
-    await runCommand(tarCmd, ['-xzf', filesTarPath, '-C', projectRoot], { cwd: projectRoot });
-
-    await appendBackupAuditLog({
-      event: 'restore_completed',
-      at: new Date().toISOString(),
-      admin_id: adminId,
-      admin_email: adminEmail,
-      ip: backupIp,
-      source_file: req.file.originalname || 'backup.zip',
+    await runRestoreFromZip(uploadedZipPath, {
+      adminId,
+      adminEmail,
+      backupIp,
+      sourceLabel: req.file.originalname || 'backup.zip',
     });
 
     return res.json({
@@ -1415,26 +1531,129 @@ async function restoreBackup(req, res) {
       message: 'Restore completed successfully. Database and files were restored from backup package.',
     });
   } catch (err) {
-    await appendBackupAuditLog({
-      event: 'restore_failed',
-      at: new Date().toISOString(),
-      admin_id: adminId,
-      admin_email: adminEmail,
-      ip: backupIp,
-      step,
-      error: err && err.message ? err.message : String(err),
-    });
     console.error('restoreBackup error:', err);
     return res.status(500).json({
       success: false,
       message: 'Restore failed. No partial completion guaranteed.',
-      step,
+      step: err && err.step ? err.step : 'unknown',
       detail: err && err.message ? err.message : String(err),
     });
   } finally {
     await fsp.rm(uploadedOriginalPath, { force: true }).catch(() => {});
     await fsp.rm(tempRoot, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+async function listBackups(req, res) {
+  try {
+    await cleanupOldBackups();
+    const backups = await listBackupsFromServer();
+    return res.json({ success: true, backups });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message || 'Failed to list backups.' });
+  }
+}
+
+async function deleteBackup(req, res) {
+  const admin = req.platformAdmin || {};
+  const adminId = Number(admin.id);
+  const filename = String(req.params.filename || '').trim();
+  const password = String((req.body && req.body.password) || '');
+  if (!filename || filename.includes('/') || filename.includes('\\') || !filename.endsWith('.zip')) {
+    return res.status(400).json({ success: false, message: 'Invalid backup filename.' });
+  }
+  if (!password) {
+    return res.status(400).json({ success: false, message: 'Admin password is required.' });
+  }
+  try {
+    const pw = await pool.query('SELECT password_hash FROM proconix_admin WHERE id = $1', [adminId]);
+    const hash = pw.rows[0] && pw.rows[0].password_hash;
+    const ok = hash ? await bcrypt.compare(password, hash) : false;
+    if (!ok) return res.status(403).json({ success: false, message: 'Invalid admin password.' });
+
+    const fp = path.join(BACKUP_STORAGE_DIR, filename);
+    await fsp.rm(fp, { force: true });
+    await fsp.rm(path.join(BACKUP_STORAGE_DIR, `${filename}.json`), { force: true });
+    await appendBackupAuditLog({
+      event: 'backup_deleted',
+      at: new Date().toISOString(),
+      admin_id: adminId,
+      admin_email: admin.email || '',
+      ip: req.ip || '',
+      file_name: filename,
+    });
+    return res.json({ success: true, message: 'Backup deleted.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message || 'Failed to delete backup.' });
+  }
+}
+
+async function restoreBackupFromServer(req, res) {
+  const admin = req.platformAdmin || {};
+  const adminId = Number(admin.id);
+  const adminEmail = admin.email || '';
+  const filename = String((req.body && req.body.filename) || '').trim();
+  if (!filename || filename.includes('/') || filename.includes('\\') || !filename.endsWith('.zip')) {
+    return res.status(400).json({ success: false, message: 'Valid server backup filename is required.' });
+  }
+  const fp = path.join(BACKUP_STORAGE_DIR, filename);
+  if (!fs.existsSync(fp)) {
+    return res.status(404).json({ success: false, message: 'Backup file not found on server.' });
+  }
+  const backupIp = (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || '';
+  try {
+    await runRestoreFromZip(fp, {
+      adminId,
+      adminEmail,
+      backupIp,
+      sourceLabel: filename,
+    });
+    return res.json({ success: true, message: 'Restore from server backup completed successfully.' });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: 'Restore from server failed.',
+      step: err && err.step ? err.step : 'unknown',
+      detail: err && err.message ? err.message : String(err),
+    });
+  }
+}
+
+function startPlatformAutoBackupScheduler() {
+  if (autoBackupSchedulerStarted) return;
+  autoBackupSchedulerStarted = true;
+  const scheduleNext = () => {
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(23, 59, 0, 0);
+    if (target <= now) target.setDate(target.getDate() + 1);
+    const delay = target.getTime() - now.getTime();
+    setTimeout(async () => {
+      try {
+        const out = await generateBackupToServer({
+          actorType: 'system',
+          actorId: null,
+          actorEmail: 'system@auto-backup',
+          actorIp: '127.0.0.1',
+        });
+        await appendBackupAuditLog({
+          event: 'backup_auto_created',
+          at: new Date().toISOString(),
+          file_name: out.fileName,
+        });
+      } catch (err) {
+        await appendBackupAuditLog({
+          event: 'backup_auto_failed',
+          at: new Date().toISOString(),
+          error: err && err.message ? err.message : String(err),
+          step: err && err.step ? err.step : 'unknown',
+        });
+      } finally {
+        scheduleNext();
+      }
+    }, delay);
+  };
+  scheduleNext();
 }
 
 /**
@@ -1503,5 +1722,9 @@ module.exports = {
   sendDemoLoginEmail,
   createBackup,
   restoreBackup,
+  listBackups,
+  deleteBackup,
+  restoreBackupFromServer,
+  startPlatformAutoBackupScheduler,
   purgeSiteChatOlderThan,
 };

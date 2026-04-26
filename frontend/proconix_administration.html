@@ -138,11 +138,29 @@
               <button type="button" class="btn btn-warning text-dark fw-semibold" id="pxBackupCreateBtn">
                 <i class="bi bi-shield-lock me-1" aria-hidden="true"></i> Create Backup
               </button>
+              <button type="button" class="btn btn-outline-light btn-sm" id="pxBackupRefreshBtn">
+                <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i> Refresh list
+              </button>
               <span class="text-white-50 small" id="pxBackupStatusText">Idle</span>
               <a href="#" class="btn btn-outline-light btn-sm d-none" id="pxBackupDownloadBtn" download>
                 <i class="bi bi-download me-1" aria-hidden="true"></i> Download backup
               </a>
             </div>
+            <div class="table-responsive mt-3">
+              <table class="table table-dark table-sm px-admin-data-table mb-0">
+                <thead>
+                  <tr>
+                    <th>File</th>
+                    <th>Created</th>
+                    <th>Size</th>
+                    <th>By</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="pxBackupTableBody"></tbody>
+              </table>
+            </div>
+            <p id="pxBackupTableEmpty" class="text-white-50 small mt-2 mb-0 d-none">No backups stored on server.</p>
           </div>
 
           <div class="px-admin-panel-card mb-4">
@@ -160,6 +178,19 @@
               <div class="col-md-4">
                 <button type="button" class="btn btn-danger fw-semibold w-100" id="pxRestoreBtn">
                   <i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i> Restore Data
+                </button>
+              </div>
+            </div>
+            <div class="row g-2 align-items-end mt-2">
+              <div class="col-md-8">
+                <label class="form-label text-white-50 small mb-1" for="pxRestoreServerSelect">Select from server</label>
+                <select id="pxRestoreServerSelect" class="form-select form-select-sm bg-dark text-white border-secondary">
+                  <option value="">— Select backup from server —</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <button type="button" class="btn btn-outline-danger w-100" id="pxRestoreServerBtn">
+                  <i class="bi bi-cloud-arrow-down me-1" aria-hidden="true"></i> Restore Selected
                 </button>
               </div>
             </div>

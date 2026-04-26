@@ -28,7 +28,7 @@ const planningRoutes = require('./routes/planningRoutes');
 const crewRoutes = require('./routes/crewRoutes');
 const platformAdminRoutes = require('./routes/platformAdminRoutes');
 const { requirePlatformAdminAuth } = require('./middleware/requirePlatformAdminAuth');
-const { createBackup, restoreBackup } = require('./controllers/platformAdminController');
+const { createBackup, restoreBackup, restoreBackupFromServer, startPlatformAutoBackupScheduler } = require('./controllers/platformAdminController');
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
 const drawingGalleryRoutes = require('./routes/drawingGalleryRoutes');
 const siteChatRoutes = require('./routes/siteChatRoutes');
@@ -132,6 +132,7 @@ const restoreUpload = multer({
   limits: { fileSize: 1024 * 1024 * 1024 * 2 },
 });
 app.post('/api/admin/restore', requirePlatformAdminAuth, restoreUpload.single('backup'), restoreBackup);
+app.post('/api/admin/restore-from-server', requirePlatformAdminAuth, restoreBackupFromServer);
 
 // Site Snags (per-company JSON state; requires site_snags_state table)
 app.use('/api/site-snags', siteSnagsRoutes);
@@ -194,4 +195,5 @@ app.listen(PORT, HOST, async () => {
     runSiteChatAgentReminders().catch(() => {});
   }, agentPollMs);
   runSiteChatAgentReminders().catch(() => {});
+  startPlatformAutoBackupScheduler();
 });
