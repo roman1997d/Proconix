@@ -485,6 +485,100 @@
       padding: 0;
     }
 
+    .doc-form-box {
+      border: 1px solid #dbeafe;
+      border-radius: 12px;
+      padding: 10px;
+      background: #f8fbff;
+      margin-bottom: 10px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .toggle-switch {
+      width: 50px;
+      height: 28px;
+      border: 0;
+      border-radius: 999px;
+      background: #cbd5e1;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .toggle-switch::after {
+      content: "";
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: #fff;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.2s ease;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.24);
+    }
+
+    .toggle-switch.active {
+      background: #2563eb;
+    }
+
+    .toggle-switch.active::after {
+      transform: translateX(22px);
+    }
+
+    .doc-radio-grid {
+      display: grid;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .doc-radio-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.86rem;
+      color: #1f2937;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    .doc-radio-option input[type="radio"] {
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #6b7280;
+      border-radius: 3px;
+      margin: 0;
+      display: inline-block;
+      position: relative;
+      flex: 0 0 auto;
+    }
+
+    .doc-radio-option input[type="radio"]:checked {
+      border-color: #2563eb;
+      background: #2563eb;
+    }
+
+    .doc-radio-option input[type="radio"]:checked::after {
+      content: "";
+      position: absolute;
+      left: 3px;
+      top: 3px;
+      width: 6px;
+      height: 6px;
+      background: #fff;
+      border-radius: 1px;
+    }
+
     .doc-preview {
       margin-top: 10px;
       border: 1px solid #e5e7eb;
@@ -1047,6 +1141,53 @@
       </div>
     </div>
 
+    <div class="modal" id="doc-modal" aria-hidden="true">
+      <div class="modal-backdrop" id="doc-modal-backdrop"></div>
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="doc-modal-title">
+        <div class="modal-head">
+          <h4 id="doc-modal-title">Generate Documentation Snapshot</h4>
+          <button type="button" class="modal-close" id="doc-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form id="doc-form">
+            <div class="doc-form-box">
+              <div class="field">
+                <label for="doc-name">1. Nume document</label>
+                <input id="doc-name" name="doc-name" type="text" maxlength="120" placeholder="Ex: Apartment 202 Progress Report" required>
+              </div>
+              <div class="field">
+                <div class="toggle-row">
+                  <label style="margin:0;" for="doc-create-pdf">2. Vrei sa creeze si un PDF?</label>
+                  <button type="button" class="toggle-switch" id="doc-create-pdf" aria-pressed="false" aria-label="Toggle PDF"></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>3. Continut document</label>
+              <div class="doc-radio-grid">
+                <label class="doc-radio-option">
+                  <input type="radio" name="doc-content-mode" value="photos" required>
+                  <span>Vreau poze</span>
+                </label>
+                <label class="doc-radio-option">
+                  <input type="radio" name="doc-content-mode" value="photos_text" checked>
+                  <span>Vreau poze si text</span>
+                </label>
+                <label class="doc-radio-option">
+                  <input type="radio" name="doc-content-mode" value="text">
+                  <span>Vreau text</span>
+                </label>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" type="submit"><i class="bi bi-file-earmark-arrow-down"></i> Generate</button>
+          </form>
+          <div class="feedback" id="doc-feedback"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal" id="photo-preview-modal" aria-hidden="true">
       <div class="modal-backdrop" id="photo-preview-backdrop"></div>
       <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="photo-preview-title">
@@ -1244,6 +1385,13 @@
     const progressSubmitBtn = document.getElementById("progress-submit-btn");
     const progressLoader = document.getElementById("progress-loader");
     const feedback = document.getElementById("form-feedback");
+    const docModal = document.getElementById("doc-modal");
+    const docModalBackdrop = document.getElementById("doc-modal-backdrop");
+    const docModalClose = document.getElementById("doc-modal-close");
+    const docForm = document.getElementById("doc-form");
+    const docNameInput = document.getElementById("doc-name");
+    const docCreatePdfToggle = document.getElementById("doc-create-pdf");
+    const docFeedback = document.getElementById("doc-feedback");
     const progressModal = document.getElementById("progress-modal");
     const progressModalBackdrop = document.getElementById("progress-modal-backdrop");
     const progressModalClose = document.getElementById("progress-modal-close");
@@ -1283,6 +1431,7 @@
     let previewIndex = 0;
     let selectedPhotoObjectUrls = [];
     let selectedProgressPhotos = [];
+    let shouldCreateDocPdf = false;
     const WIZARD_KEY = "proconix_project_wizard_state_v1";
     const wizardState = {
       step: 1,
@@ -2014,6 +2163,92 @@
       progressLoader.classList.toggle("hidden", !isSubmitting);
     }
 
+    function openDocModal() {
+      docFeedback.style.display = "none";
+      docForm.reset();
+      shouldCreateDocPdf = false;
+      docCreatePdfToggle.classList.remove("active");
+      docCreatePdfToggle.setAttribute("aria-pressed", "false");
+      const defaultMode = docForm.querySelector('input[name="doc-content-mode"][value="photos_text"]');
+      if (defaultMode) defaultMode.checked = true;
+      docModal.classList.add("open");
+      docModal.setAttribute("aria-hidden", "false");
+      setTimeout(() => docNameInput.focus(), 0);
+    }
+
+    function closeDocModal() {
+      docModal.classList.remove("open");
+      docModal.setAttribute("aria-hidden", "true");
+    }
+
+    function buildDocumentOutput(snapshot, mode) {
+      if (mode === "photos") {
+        return {
+          project: snapshot.project,
+          unit: snapshot.unit,
+          generated_at: snapshot.generated_at,
+          photos_grouped_by_stage: snapshot.photos_grouped_by_stage
+        };
+      }
+      if (mode === "text") {
+        return {
+          project: snapshot.project,
+          unit: snapshot.unit,
+          generated_at: snapshot.generated_at,
+          progress_percent: snapshot.progress_percent,
+          contributors: snapshot.contributors,
+          materials_summary: snapshot.materials_summary,
+          timeline: snapshot.timeline.map((entry) => ({
+            stage: entry.stage,
+            status: entry.status,
+            reason: entry.reason,
+            user: entry.user,
+            date: entry.date,
+            comment: entry.comment
+          }))
+        };
+      }
+      return snapshot;
+    }
+
+    function saveSnapshotPdf(documentTitle, output) {
+      if (!window.jspdf || !window.jspdf.jsPDF) return false;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: "mm", format: "a4" });
+      const body = JSON.stringify(output, null, 2).split("\n");
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const margin = 12;
+      let y = 18;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text(documentTitle, margin, y);
+      y += 8;
+      doc.setFont("courier", "normal");
+      doc.setFontSize(9);
+
+      body.forEach((line) => {
+        if (y > pageH - 10) {
+          doc.addPage();
+          y = 14;
+        }
+        const wrapped = doc.splitTextToSize(line, pageW - margin * 2);
+        wrapped.forEach((part) => {
+          if (y > pageH - 10) {
+            doc.addPage();
+            y = 14;
+          }
+          doc.text(part, margin, y);
+          y += 4;
+        });
+      });
+
+      const safeName = String(documentTitle || "documentation-snapshot").replace(/[^\w\-]+/g, "_");
+      doc.save(`${safeName}.pdf`);
+      return true;
+    }
+
     function openTower(towerId) {
       state.currentTower = towerId;
       state.currentFloor = null;
@@ -2282,15 +2517,48 @@
       }
     });
 
-    document.getElementById("generate-doc-btn").addEventListener("click", () => {
+    document.getElementById("generate-doc-btn").addEventListener("click", openDocModal);
+
+    docCreatePdfToggle.addEventListener("click", () => {
+      shouldCreateDocPdf = !shouldCreateDocPdf;
+      docCreatePdfToggle.classList.toggle("active", shouldCreateDocPdf);
+      docCreatePdfToggle.setAttribute("aria-pressed", shouldCreateDocPdf ? "true" : "false");
+    });
+
+    docForm.addEventListener("submit", (event) => {
+      event.preventDefault();
       const unit = getCurrentUnit();
       if (!unit) return;
+
+      const documentTitle = docNameInput.value.trim();
+      if (!documentTitle) {
+        docFeedback.style.display = "block";
+        docFeedback.textContent = "Nume document este obligatoriu.";
+        return;
+      }
+
+      const modeInput = docForm.querySelector('input[name="doc-content-mode"]:checked');
+      const mode = modeInput ? modeInput.value : "photos_text";
       const snapshot = generateDocumentSnapshot(unit);
-      docPreview.textContent = JSON.stringify(snapshot, null, 2);
+      const output = buildDocumentOutput(snapshot, mode);
+      docPreview.style.display = "block";
+      docPreview.textContent = JSON.stringify(output, null, 2);
+
+      let pdfMessage = "";
+      if (shouldCreateDocPdf) {
+        const saved = saveSnapshotPdf(documentTitle, output);
+        pdfMessage = saved ? " PDF generated." : " PDF could not be generated (jsPDF unavailable).";
+      }
+
+      docFeedback.style.display = "block";
+      docFeedback.textContent = `Progress updated. Documentation "${documentTitle}" generated.${pdfMessage}`;
+      closeDocModal();
     });
 
     progressModalBackdrop.addEventListener("click", closeProgressModal);
     progressModalClose.addEventListener("click", closeProgressModal);
+    docModalBackdrop.addEventListener("click", closeDocModal);
+    docModalClose.addEventListener("click", closeDocModal);
     timelineModalBackdrop.addEventListener("click", closeTimelineEventModal);
     timelineModalClose.addEventListener("click", closeTimelineEventModal);
     photoPreviewBackdrop.addEventListener("click", closePhotoPreview);
@@ -2334,6 +2602,9 @@
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && progressModal.classList.contains("open")) {
         closeProgressModal();
+      }
+      if (event.key === "Escape" && docModal.classList.contains("open")) {
+        closeDocModal();
       }
       if (event.key === "Escape" && timelineModal.classList.contains("open")) {
         closeTimelineEventModal();
