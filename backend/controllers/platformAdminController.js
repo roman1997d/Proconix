@@ -30,6 +30,7 @@ const BACKUP_AUDIT_LOG_PATH = path.resolve(__dirname, '../logs/platform-admin-ba
 const BACKUP_STORAGE_DIR = path.resolve(__dirname, '../backups/platform');
 const BACKUP_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
 let autoBackupSchedulerStarted = false;
+const dataSystemOtpChallenges = new Map();
 
 /**
  * SQL ORDER BY fragment: one "primary" manager per company (manager.company_id = company).
@@ -1603,10 +1604,69 @@ async function verifyAdminPassword(req, res) {
     const hash = pw.rows[0] && pw.rows[0].password_hash;
     const ok = hash ? await bcrypt.compare(password, hash) : false;
     if (!ok) return res.status(403).json({ success: false, message: 'Invalid admin password.' });
-    return res.json({ success: true, message: 'Access granted.' });
+
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    dataSystemOtpChallenges.set(adminId, {
+      otp,
+      expiresAt,
+      attempts: 0,
+    });
+
+    await sendPlatformAdminClientEmail({
+      to: 'info@proconix.uk',
+      subject: 'Proconix Data&System OTP',
+      bodyText: [
+        'Data&System access verification code:',
+        '',
+        otp,
+        '',
+        'This code expires in 10 minutes.',
+        `Admin: ${admin.email || 'unknown'}`,
+      ].join('\n'),
+      adminEmail: admin.email || 'noreply@proconix.uk',
+      adminName: admin.full_name || 'Platform Admin',
+    });
+
+    return res.json({
+      success: true,
+      message: 'Password accepted. Temporary code sent to info@proconix.uk',
+      requires_otp: true,
+      otp_expires_in_sec: 600,
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message || 'Password verification failed.' });
   }
+}
+
+async function verifyDataSystemOtp(req, res) {
+  const admin = req.platformAdmin || {};
+  const adminId = Number(admin.id);
+  const otpInput = String((req.body && req.body.otp) || '').trim();
+  if (!Number.isInteger(adminId) || adminId < 1) {
+    return res.status(401).json({ success: false, message: 'Unauthorized.' });
+  }
+  if (!otpInput) {
+    return res.status(400).json({ success: false, message: 'OTP is required.' });
+  }
+  const challenge = dataSystemOtpChallenges.get(adminId);
+  if (!challenge) {
+    return res.status(400).json({ success: false, message: 'No active OTP challenge. Verify password again.' });
+  }
+  if (Date.now() > challenge.expiresAt) {
+    dataSystemOtpChallenges.delete(adminId);
+    return res.status(400).json({ success: false, message: 'OTP expired. Verify password again.' });
+  }
+  challenge.attempts += 1;
+  if (challenge.attempts > 5) {
+    dataSystemOtpChallenges.delete(adminId);
+    return res.status(429).json({ success: false, message: 'Too many OTP attempts. Verify password again.' });
+  }
+  if (otpInput !== challenge.otp) {
+    return res.status(403).json({ success: false, message: 'Invalid OTP code.' });
+  }
+  dataSystemOtpChallenges.delete(adminId);
+  return res.json({ success: true, message: 'Data&System 2-step verification successful.' });
 }
 
 async function restoreBackupFromServer(req, res) {
@@ -1746,6 +1806,7 @@ module.exports = {
   listBackups,
   deleteBackup,
   verifyAdminPassword,
+  verifyDataSystemOtp,
   restoreBackupFromServer,
   startPlatformAutoBackupScheduler,
   purgeSiteChatOlderThan,

@@ -150,9 +150,48 @@
             return;
           }
           if (out.status === 200 && out.data && out.data.success) {
-            dataSystemUnlocked = true;
-            showBottomToast('Data&System access granted.', 'success');
-            resolve(true);
+            var otp = window.prompt('Enter temporary code sent to info@proconix.uk');
+            if (!otp) {
+              showBottomToast('OTP is required for Data&System access.', 'error');
+              resolve(false);
+              return;
+            }
+            showGlobalLoader('Verifying temporary code...');
+            fetch('/api/platform-admin/verify-otp', {
+              method: 'POST',
+              headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+              credentials: 'same-origin',
+              body: JSON.stringify({ otp: otp }),
+            })
+              .then(function (res2) {
+                return res2.json().then(function (data2) {
+                  return { status: res2.status, data: data2 };
+                }).catch(function () {
+                  return { status: res2.status, data: null };
+                });
+              })
+              .then(function (out2) {
+                hideGlobalLoader();
+                if (out2.status === 401) {
+                  clearSession();
+                  window.location.replace(LOGIN_URL);
+                  resolve(false);
+                  return;
+                }
+                if (out2.status === 200 && out2.data && out2.data.success) {
+                  dataSystemUnlocked = true;
+                  showBottomToast('Data&System access granted.', 'success');
+                  resolve(true);
+                  return;
+                }
+                showBottomToast((out2.data && out2.data.message) || 'Invalid OTP code.', 'error');
+                resolve(false);
+              })
+              .catch(function () {
+                hideGlobalLoader();
+                showBottomToast('Network error while verifying OTP.', 'error');
+                resolve(false);
+              });
             return;
           }
           showBottomToast((out.data && out.data.message) || 'Invalid password.', 'error');

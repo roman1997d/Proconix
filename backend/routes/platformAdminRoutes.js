@@ -26,6 +26,7 @@ const {
   listBackups,
   deleteBackup,
   verifyAdminPassword,
+  verifyDataSystemOtp,
   restoreBackupFromServer,
   purgeSiteChatOlderThan,
 } = require('../controllers/platformAdminController');
@@ -57,6 +58,7 @@ router.post('/restore', requirePlatformAdminAuth, restoreUpload.single('backup')
 router.get('/backups', requirePlatformAdminAuth, listBackups);
 router.delete('/backups/:filename', requirePlatformAdminAuth, deleteBackup);
 router.post('/verify-password', requirePlatformAdminAuth, verifyAdminPassword);
+router.post('/verify-otp', requirePlatformAdminAuth, verifyDataSystemOtp);
 router.post('/restore-from-server', requirePlatformAdminAuth, restoreBackupFromServer);
 router.get('/billing-subscriptions', requirePlatformAdminAuth, listBillingSubscriptions);
 router.patch('/billing-subscriptions/:id', requirePlatformAdminAuth, updateBillingSubscription);
