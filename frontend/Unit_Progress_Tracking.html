@@ -1875,20 +1875,42 @@
     }
 
     function applyCopyFromFloor(building, floor, card) {
-      const targetChecks = card.querySelectorAll(".copy-targets input:checked");
-      if (!targetChecks.length || !floor.spaces.length) return;
-      targetChecks.forEach((input) => {
-        const targetNumber = Number(input.value);
-        if (targetNumber === floor.number) return;
-        const targetFloor = building.floors.find((f) => f.number === targetNumber);
+      const targetChecks = Array.from(card.querySelectorAll(".copy-targets input:checked"));
+      const sourceFloorNumber = Number(floor.number);
+      if (!targetChecks.length) {
+        wizardStatus.textContent = "Please select at least one target floor.";
+        return;
+      }
+      if (!floor.spaces.length) {
+        wizardStatus.textContent = "Source floor has no spaces to copy.";
+        return;
+      }
+
+      const selectedTargetNumbers = targetChecks
+        .map((input) => Number(input.value))
+        .filter((n) => Number.isFinite(n) && n > 0 && n !== sourceFloorNumber);
+
+      if (!selectedTargetNumbers.length) {
+        wizardStatus.textContent = "No valid target floor selected.";
+        return;
+      }
+
+      const sourceSpaces = floor.spaces.map((space, idx) => ({
+        type: String(space && space.type ? space.type : "Apartment"),
+        name: String(space && space.name ? space.name : "").trim() || `Space-${idx + 1}`,
+      }));
+
+      selectedTargetNumbers.forEach((targetNumber) => {
+        const targetFloor = building.floors.find((f) => Number(f.number) === targetNumber);
         if (!targetFloor) return;
         targetFloor.spaces = [];
-        floor.spaces.forEach((space) => {
+        sourceSpaces.forEach((space) => {
           const copied = { ...space };
-          copied.name = makeUniqueName(targetFloor, `${space.name || space.type}-${targetFloor.number}`);
+          copied.name = makeUniqueName(targetFloor, copied.name);
           targetFloor.spaces.push(copied);
         });
       });
+
       saveWizardState();
       renderSpacesEditor();
       wizardStatus.textContent = `Copied structure from ${building.name} Floor ${floor.number} to selected floors with safe unique names.`;
