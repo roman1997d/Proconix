@@ -11,6 +11,10 @@
   var submitBtn = document.getElementById('pxAdminSubmitBtn');
   var btnText = submitBtn && submitBtn.querySelector('.btn-text');
   var btnLoading = submitBtn && submitBtn.querySelector('.btn-loading');
+  var modeSignInBtn = document.getElementById('pxModeSignIn');
+  var modeRegisterBtn = document.getElementById('pxModeRegister');
+  var submitText = document.getElementById('pxAdminSubmitText');
+  var isRegisterMode = false;
 
   function showMessage(text, type) {
     if (!msgEl) return;
@@ -49,7 +53,21 @@
     return true;
   }
 
+  function setMode(registerMode) {
+    isRegisterMode = !!registerMode;
+    if (modeSignInBtn) modeSignInBtn.classList.toggle('active', !isRegisterMode);
+    if (modeRegisterBtn) modeRegisterBtn.classList.toggle('active', isRegisterMode);
+    if (submitText) submitText.textContent = isRegisterMode ? 'Register' : 'Sign in';
+  }
+
   if (!form) return;
+
+  if (modeSignInBtn) {
+    modeSignInBtn.addEventListener('click', function () { setMode(false); hideMessage(); });
+  }
+  if (modeRegisterBtn) {
+    modeRegisterBtn.addEventListener('click', function () { setMode(true); hideMessage(); });
+  }
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -71,7 +89,7 @@
 
     setLoading(true);
 
-    fetch('/api/platform-admin/login', {
+    fetch(isRegisterMode ? '/api/platform-admin/register' : '/api/platform-admin/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, password: password }),
@@ -89,7 +107,7 @@
         });
       })
       .then(function (out) {
-        if (out.status === 200 && out.data && out.data.success && out.data.platform_admin) {
+        if ((out.status === 200 || out.status === 201) && out.data && out.data.success && out.data.platform_admin) {
           var pa = out.data.platform_admin;
           var payload = {
             id: pa.id,
@@ -109,7 +127,7 @@
         }
         var msg =
           (out.data && out.data.message) ||
-          (out.status === 503 ? 'Platform admin is not configured on the server.' : 'Sign in failed.');
+          (out.status === 503 ? 'Platform admin is not configured on the server.' : (isRegisterMode ? 'Registration failed.' : 'Sign in failed.'));
         showMessage(msg, 'error');
         setLoading(false);
       })

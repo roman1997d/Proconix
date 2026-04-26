@@ -139,6 +139,75 @@ async function login(req, res) {
 }
 
 /**
+ * POST /api/platform-admin/register
+ * Body: { email, password }
+ * Creates a new active platform admin account.
+ */
+async function register(req, res) {
+  try {
+    const body = req.body || {};
+    const email = typeof body.email === 'string' ? body.email.trim() : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address.',
+      });
+    }
+    if (!password || password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters.',
+      });
+    }
+
+    const existing = await pool.query(
+      'SELECT id FROM proconix_admin WHERE LOWER(TRIM(email)) = LOWER($1)',
+      [email]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'An account with this email already exists.',
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const localPart = email.split('@')[0] || 'Platform Admin';
+    const guessedName = localPart
+      .replace(/[._-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const created = await pool.query(
+      `INSERT INTO proconix_admin (full_name, email, password_hash, enroll_date, admin_rank, access_level, active)
+       VALUES ($1, $2, $3, CURRENT_DATE, 'admin', 'full_acces', TRUE)
+       RETURNING id, full_name, email, admin_rank, access_level, enroll_date, address, active`,
+      [guessedName || 'Platform Admin', email, passwordHash]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: 'Registration successful.',
+      platform_admin: mapAdminRow(created.rows[0]),
+    });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({
+        success: false,
+        message: 'Platform admin database table is missing. Run scripts/create_proconix_admin_table.sql.',
+      });
+    }
+    console.error('platformAdmin register error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Registration failed. Please try again.',
+    });
+  }
+}
+
+/**
  * GET /api/platform-admin/me
  */
 async function me(req, res) {
@@ -1106,6 +1175,7 @@ async function purgeSiteChatOlderThan(req, res) {
 
 module.exports = {
   login,
+  register,
   me,
   listCompanies,
   listCompaniesStorageSummary,
