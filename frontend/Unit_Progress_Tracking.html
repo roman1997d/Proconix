@@ -1204,31 +1204,31 @@
           <form id="doc-form">
             <div class="doc-form-box">
               <div class="field">
-                <label for="doc-name">1. Nume document</label>
+                <label for="doc-name">1. Document name</label>
                 <input id="doc-name" name="doc-name" type="text" maxlength="120" placeholder="Ex: Apartment 202 Progress Report" required>
               </div>
               <div class="field">
                 <div class="toggle-row">
-                  <label style="margin:0;" for="doc-create-pdf">2. Vrei sa creeze si un PDF?</label>
+                  <label style="margin:0;" for="doc-create-pdf">2. Generate a PDF as well?</label>
                   <button type="button" class="toggle-switch" id="doc-create-pdf" aria-pressed="false" aria-label="Toggle PDF"></button>
                 </div>
               </div>
             </div>
 
             <div class="field">
-              <label>3. Continut document</label>
+              <label>3. Document content</label>
               <div class="doc-radio-grid">
                 <label class="doc-radio-option">
                   <input type="radio" name="doc-content-mode" value="photos" required>
-                  <span>Vreau poze</span>
+                  <span>Photos only</span>
                 </label>
                 <label class="doc-radio-option">
                   <input type="radio" name="doc-content-mode" value="photos_text" checked>
-                  <span>Vreau poze si text</span>
+                  <span>Photos and text</span>
                 </label>
                 <label class="doc-radio-option">
                   <input type="radio" name="doc-content-mode" value="text">
-                  <span>Vreau text</span>
+                  <span>Text only</span>
                 </label>
               </div>
             </div>
@@ -1240,7 +1240,7 @@
             <span>Generating package folder...</span>
           </div>
           <button type="button" class="btn btn-dark" id="doc-download-btn" disabled style="margin-top:10px;">
-            <i class="bi bi-download"></i> Descarca info
+            <i class="bi bi-download"></i> Download package
           </button>
           <div class="feedback" id="doc-feedback"></div>
         </div>
@@ -2742,7 +2742,7 @@
       const documentTitle = docNameInput.value.trim();
       if (!documentTitle) {
         docFeedback.style.display = "block";
-        docFeedback.textContent = "Nume document este obligatoriu.";
+        docFeedback.textContent = "Document name is required.";
         return;
       }
 
@@ -2801,10 +2801,10 @@
         docDownloadBtn.disabled = false;
         docDownloadBtn.style.opacity = "1";
         docFeedback.style.display = "block";
-        docFeedback.textContent = "Package generated. Apasa Descarca info.";
+        docFeedback.textContent = "Package generated. Click Download package.";
       } catch (error) {
         docFeedback.style.display = "block";
-        docFeedback.textContent = "Nu am putut genera pachetul. Verifica configurarea PDF/ZIP.";
+        docFeedback.textContent = "Could not generate the package. Check PDF/ZIP support.";
       } finally {
         setDocGenerating(false);
       }
