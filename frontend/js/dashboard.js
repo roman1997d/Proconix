@@ -23,7 +23,7 @@
   var dashboardFooter = document.querySelector('.dashboard-footer');
 
   var moduleTitles = {
-    'project-overview': 'Project Overview',
+    'project-overview': 'Dashboard / Project Overview',
     'projects': 'My Projects',
     'manage-material': 'Material Management',
     'operatives': 'Operatives',

@@ -375,6 +375,18 @@
     padding: 12px 14px;
   }
 
+  .sidebar .sidebar-nav-group-title {
+    max-height: 3.5em;
+    opacity: 1;
+    margin-top: 8px;
+    margin-bottom: 2px;
+    padding-top: 2px;
+  }
+
+  .sidebar .sidebar-nav-group:first-child .sidebar-nav-group-title {
+    margin-top: 0;
+  }
+
   .sidebar .sidebar-footer {
     padding: 12px 14px 20px;
   }
