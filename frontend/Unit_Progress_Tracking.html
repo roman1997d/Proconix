@@ -2264,6 +2264,10 @@
         .replace(/^_+|_+$/g, "") || "documentation";
     }
 
+    function sanitizeFolderName(name) {
+      return sanitizeFileName(name).toLowerCase() || "uncategorized";
+    }
+
     async function dataUrlToBlob(dataUrl) {
       if (!dataUrl) return null;
       const response = await fetch(dataUrl);
@@ -2736,6 +2740,8 @@
           const entry = timeline[i];
           const entryPhotos = Array.isArray(entry.photos) ? entry.photos : [];
           photoRefsByRow[i] = [];
+          const stageFolderName = sanitizeFolderName(entry.stage || "uncategorized");
+          const stageFolder = photosFolder.folder(stageFolderName);
           for (let j = 0; j < entryPhotos.length; j += 1) {
             const normalized = normalizePhoto(entryPhotos[j]);
             const blob = await dataUrlToBlob(normalized.src);
@@ -2743,8 +2749,8 @@
             const extGuess = blob.type && blob.type.includes("png") ? "png" : blob.type && blob.type.includes("jpeg") ? "jpg" : "img";
             const baseName = sanitizeFileName(normalized.name || `photo_${i + 1}_${j + 1}`);
             const filename = `${String(i + 1).padStart(2, "0")}_${baseName}.${extGuess}`;
-            photosFolder.file(filename, blob);
-            photoRefsByRow[i].push(`timeline-photos/${filename}`);
+            stageFolder.file(filename, blob);
+            photoRefsByRow[i].push(`timeline-photos/${stageFolderName}/${filename}`);
           }
         }
 
