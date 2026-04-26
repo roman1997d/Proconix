@@ -1605,14 +1605,16 @@ async function verifyAdminPassword(req, res) {
     const ok = hash ? await bcrypt.compare(password, hash) : false;
     if (!ok) return res.status(403).json({ success: false, message: 'Invalid admin password.' });
 
+    const now = Date.now();
     const existing = dataSystemOtpChallenges.get(adminId);
-    const isExistingValid = !!(existing && existing.expiresAt && existing.expiresAt > Date.now());
-    const otp = isExistingValid ? String(existing.otp) : String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = isExistingValid ? existing.expiresAt : (Date.now() + 10 * 60 * 1000);
+    const existingCodes = Array.isArray(existing && existing.codes) ? existing.codes : [];
+    const validExistingCodes = existingCodes.filter((c) => c && c.expiresAt && c.expiresAt > now);
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = now + 10 * 60 * 1000;
+    const nextCodes = [{ otp, expiresAt }, ...validExistingCodes].slice(0, 3);
     dataSystemOtpChallenges.set(adminId, {
-      otp,
-      expiresAt,
-      attempts: isExistingValid ? (existing.attempts || 0) : 0,
+      codes: nextCodes,
+      attempts: existing && Number.isInteger(existing.attempts) ? existing.attempts : 0,
     });
 
     await sendPlatformAdminClientEmail({
@@ -1657,7 +1659,11 @@ async function verifyDataSystemOtp(req, res) {
   if (!challenge) {
     return res.status(400).json({ success: false, message: 'No active OTP challenge. Verify password again.' });
   }
-  if (Date.now() > challenge.expiresAt) {
+  const now = Date.now();
+  const validCodes = (Array.isArray(challenge.codes) ? challenge.codes : [])
+    .filter((c) => c && c.expiresAt && c.expiresAt > now)
+    .map((c) => String(c.otp || '').replace(/\D/g, ''));
+  if (!validCodes.length) {
     dataSystemOtpChallenges.delete(adminId);
     return res.status(400).json({ success: false, message: 'OTP expired. Verify password again.' });
   }
@@ -1666,8 +1672,7 @@ async function verifyDataSystemOtp(req, res) {
     dataSystemOtpChallenges.delete(adminId);
     return res.status(429).json({ success: false, message: 'Too many OTP attempts. Verify password again.' });
   }
-  const expectedOtp = String(challenge.otp || '').replace(/\D/g, '');
-  if (otpInput !== expectedOtp) {
+  if (!validCodes.includes(otpInput)) {
     return res.status(403).json({ success: false, message: 'Invalid OTP code.' });
   }
   dataSystemOtpChallenges.delete(adminId);
