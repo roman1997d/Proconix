@@ -404,6 +404,32 @@
       display: none;
     }
 
+    .upload-preview {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .upload-preview.hidden {
+      display: none;
+    }
+
+    .upload-preview-item {
+      border: 1px solid #bfdbfe;
+      border-radius: 7px;
+      overflow: hidden;
+      background: #eff6ff;
+      aspect-ratio: 4 / 3;
+    }
+
+    .upload-preview-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
     .doc-preview {
       margin-top: 10px;
       border: 1px solid #e5e7eb;
@@ -912,7 +938,7 @@
           <button type="button" class="modal-close" id="progress-modal-close" aria-label="Close">&times;</button>
         </div>
         <div class="modal-body">
-          <p class="hint">Fast form: stage, status, conditional reason, 1-5 photos, optional comment.</p>
+          <p class="hint">Fast form: stage, status, conditional reason, optional photos (max 5), required comment.</p>
           <form id="progress-form">
             <div class="field">
               <label for="stage">Stage</label>
@@ -945,13 +971,14 @@
             </div>
 
             <div class="field">
-              <label for="photos">Photos (1 to 5)</label>
-              <input id="photos" name="photos" type="file" accept="image/*" multiple required>
+              <label for="photos">Photos (optional, up to 5)</label>
+              <input id="photos" name="photos" type="file" accept="image/*" multiple>
+              <div id="photos-preview" class="upload-preview hidden" aria-live="polite"></div>
             </div>
 
             <div class="field">
-              <label for="comment">Comment (optional)</label>
-              <textarea id="comment" name="comment" maxlength="220" placeholder="Optional short note"></textarea>
+              <label for="comment">Comment *</label>
+              <textarea id="comment" name="comment" maxlength="220" placeholder="Add a short note" required></textarea>
             </div>
 
             <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i> Submit Progress</button>
@@ -1153,6 +1180,8 @@
     const reasonField = document.getElementById("reason-field");
     const reasonInput = document.getElementById("reason");
     const photosInput = document.getElementById("photos");
+    const photosPreview = document.getElementById("photos-preview");
+    const commentInput = document.getElementById("comment");
     const feedback = document.getElementById("form-feedback");
     const progressModal = document.getElementById("progress-modal");
     const progressModalBackdrop = document.getElementById("progress-modal-backdrop");
@@ -1191,6 +1220,7 @@
     const wizardSaveDraftBtn = document.getElementById("wizard-save-draft");
     let previewPhotos = [];
     let previewIndex = 0;
+    let selectedPhotoObjectUrls = [];
     const WIZARD_KEY = "proconix_project_wizard_state_v1";
     const wizardState = {
       step: 1,
@@ -1855,6 +1885,29 @@
       progressModal.setAttribute("aria-hidden", "true");
     }
 
+    function clearSelectedPhotoPreviews() {
+      selectedPhotoObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+      selectedPhotoObjectUrls = [];
+      photosPreview.innerHTML = "";
+      photosPreview.classList.add("hidden");
+    }
+
+    function renderSelectedPhotoPreviews() {
+      clearSelectedPhotoPreviews();
+      const files = Array.from(photosInput.files || []);
+      if (!files.length) return;
+
+      files.forEach((file) => {
+        const imgUrl = URL.createObjectURL(file);
+        selectedPhotoObjectUrls.push(imgUrl);
+        const item = document.createElement("div");
+        item.className = "upload-preview-item";
+        item.innerHTML = `<img src="${imgUrl}" alt="${file.name}">`;
+        photosPreview.appendChild(item);
+      });
+      photosPreview.classList.remove("hidden");
+    }
+
     function openTower(towerId) {
       state.currentTower = towerId;
       state.currentFloor = null;
@@ -2056,6 +2109,7 @@
       reasonInput.required = blocked;
       if (!blocked) reasonInput.value = "";
     });
+    photosInput.addEventListener("change", renderSelectedPhotoPreviews);
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -2063,9 +2117,9 @@
       if (!unit) return;
 
       const files = photosInput.files;
-      if (files.length < 1 || files.length > 5) {
+      if (files.length > 5) {
         feedback.style.display = "block";
-        feedback.textContent = "Upload between 1 and 5 photos.";
+        feedback.textContent = "Upload up to 5 photos.";
         return;
       }
 
@@ -2075,6 +2129,12 @@
       if (status === "Blocked" && !reason) {
         feedback.style.display = "block";
         feedback.textContent = "Reason is required for Blocked status.";
+        return;
+      }
+      const comment = commentInput.value.trim();
+      if (!comment) {
+        feedback.style.display = "block";
+        feedback.textContent = "Comment is required.";
         return;
       }
 
@@ -2088,7 +2148,7 @@
         })),
         user: "Current Supervisor",
         date: new Date().toISOString(),
-        comment: document.getElementById("comment").value.trim()
+        comment
       };
 
       unit.timeline.push(newEntry);
@@ -2101,6 +2161,7 @@
       form.reset();
       reasonField.classList.add("hidden");
       reasonInput.required = false;
+      clearSelectedPhotoPreviews();
       closeProgressModal();
 
       setTimeout(() => { feedback.style.display = "none"; }, 2200);
