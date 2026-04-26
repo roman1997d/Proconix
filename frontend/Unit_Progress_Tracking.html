@@ -1233,13 +1233,15 @@
       return "dot-progress";
     }
 
-    function formatDate(dateValue) {
+    function formatDateTime(dateValue) {
       const date = new Date(dateValue);
       if (Number.isNaN(date.getTime())) return dateValue;
       const dd = String(date.getDate()).padStart(2, "0");
       const mm = String(date.getMonth() + 1).padStart(2, "0");
       const yyyy = date.getFullYear();
-      return `${dd}/${mm}/${yyyy}`;
+      const hh = String(date.getHours()).padStart(2, "0");
+      const min = String(date.getMinutes()).padStart(2, "0");
+      return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
     }
 
     function createPlaceholderDataUri(label) {
@@ -1736,13 +1738,13 @@
             <div class="timeline-dot ${createDotClass(entry.status)}" aria-hidden="true"></div>
           </div>
           <div class="timeline-card">
-            <div class="timeline-bar">${formatDate(entry.date)}</div>
+            <div class="timeline-bar">${formatDateTime(entry.date)}</div>
             <div class="timeline-content">
               <div class="timeline-head">
                 <strong>${entry.stage}</strong>
                 <span class="status ${createStatusClass(entry.status)}">${entry.status}</span>
               </div>
-              <div class="timeline-meta">By: ${entry.user} | Date: ${formatDate(entry.date)}</div>
+              <div class="timeline-meta">By: ${entry.user} | Date: ${formatDateTime(entry.date)}</div>
               ${reasonLine}
               ${commentLine}
               ${photos}
@@ -1764,7 +1766,7 @@
 
     function openTimelineEventModal(unit, entry) {
       document.getElementById("modal-unit-name").textContent = `${unit.name} (ID: ${unit.id})`;
-      document.getElementById("modal-date").textContent = formatDate(entry.date);
+      document.getElementById("modal-date").textContent = formatDateTime(entry.date);
       document.getElementById("modal-stage").textContent = entry.stage || "-";
       document.getElementById("modal-status").textContent = entry.status || "-";
       document.getElementById("modal-user").textContent = entry.user || "-";
@@ -2085,7 +2087,7 @@
           src: URL.createObjectURL(file)
         })),
         user: "Current Supervisor",
-        date: new Date().toISOString().slice(0, 10),
+        date: new Date().toISOString(),
         comment: document.getElementById("comment").value.trim()
       };
 
