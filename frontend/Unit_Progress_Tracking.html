@@ -2730,8 +2730,8 @@
 
     function openUnitQrModal(unit) {
       currentQrUnit = unit;
-      unitQrDescription.textContent = `Scan to open the public timeline for ${unit.name}. No login required.`;
-      const qrUrl = `${window.location.origin}/public_Timeline.html?unit_id=${unit.id}`;
+      unitQrDescription.textContent = `Scan to open ${unit.name}. Access is routed automatically (private or public).`;
+      const qrUrl = `${window.location.origin}/timeline_access_router.html?unit_id=${unit.id}`;
       unitQrLinkPreview.textContent = qrUrl;
       unitQrCodeWrap.innerHTML = "";
       if (typeof QRCode === "function") {

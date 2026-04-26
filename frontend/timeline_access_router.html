@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timeline Access Check</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .box {
+      width: min(520px, 100%);
+      border: 1px solid #334155;
+      border-radius: 14px;
+      background: #111827;
+      padding: 16px;
+    }
+    h1 { margin: 0 0 10px; font-size: 1.05rem; }
+    p { margin: 0; color: #94a3b8; font-size: 0.9rem; }
+    .dots { margin-top: 12px; display: inline-flex; gap: 6px; }
+    .dots span {
+      width: 8px; height: 8px; border-radius: 999px; background: #60a5fa;
+      animation: bounce 1s infinite ease-in-out;
+    }
+    .dots span:nth-child(2) { animation-delay: .12s; }
+    .dots span:nth-child(3) { animation-delay: .24s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: .45; }
+      40% { transform: translateY(-4px); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <main class="box">
+    <h1>Checking timeline access...</h1>
+    <p id="status">Please wait while we verify your session.</p>
+    <div class="dots" aria-hidden="true"><span></span><span></span><span></span></div>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var statusEl = document.getElementById("status");
+      var params = new URLSearchParams(window.location.search);
+      var unitId = Number(params.get("unit_id"));
+
+      function setStatus(msg) {
+        statusEl.textContent = msg;
+      }
+
+      function go(path) {
+        window.location.replace(path + "?unit_id=" + encodeURIComponent(String(unitId)));
+      }
+
+      function getManagerHeaders() {
+        try {
+          var raw = localStorage.getItem("proconix_manager_session") || sessionStorage.getItem("proconix_manager_session");
+          var s = raw ? JSON.parse(raw) : null;
+          if (!s || s.manager_id == null || !s.email) return null;
+          return {
+            "X-Manager-Id": String(s.manager_id),
+            "X-Manager-Email": String(s.email)
+          };
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function getSupervisorHeaders() {
+        try {
+          var token = localStorage.getItem("proconix_operative_token") || sessionStorage.getItem("proconix_operative_token");
+          if (!token) return null;
+          return { "X-Operative-Token": token };
+        } catch (e) {
+          return null;
+        }
+      }
+
+      async function canAccessPrivateAsManager() {
+        var headers = getManagerHeaders();
+        if (!headers) return false;
+        try {
+          var res = await fetch("/api/unit-progress/manager/private-timeline/" + unitId, {
+            headers: headers,
+            credentials: "same-origin"
+          });
+          return res.ok;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      async function canAccessPrivateAsSupervisor() {
+        var headers = getSupervisorHeaders();
+        if (!headers) return false;
+        try {
+          var res = await fetch("/api/unit-progress/supervisor/private-timeline/" + unitId, {
+            headers: headers,
+            credentials: "same-origin"
+          });
+          return res.ok;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      async function route() {
+        if (!Number.isFinite(unitId) || unitId <= 0) {
+          setStatus("Invalid timeline link. Redirecting to public view...");
+          setTimeout(function () { go("/public_Timeline.html"); }, 700);
+          return;
+        }
+
+        setStatus("Checking manager access...");
+        if (await canAccessPrivateAsManager()) {
+          go("/private_timeline.html");
+          return;
+        }
+
+        setStatus("Checking supervisor access...");
+        if (await canAccessPrivateAsSupervisor()) {
+          go("/private_timeline.html");
+          return;
+        }
+
+        setStatus("No private access found. Redirecting to public timeline...");
+        setTimeout(function () { go("/public_Timeline.html"); }, 500);
+      }
+
+      route();
+    })();
+  </script>
+</body>
+</html>
