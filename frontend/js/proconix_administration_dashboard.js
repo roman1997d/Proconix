@@ -7,6 +7,7 @@
   var SESSION_KEY = 'proconix_platform_admin_session';
   var LOGIN_URL = 'proconix_administration_login.html';
   var pendingLoaderOps = 0;
+  var dataSystemUnlocked = false;
 
   function readSessionRaw() {
     try {
@@ -113,6 +114,56 @@
     window.setTimeout(function () {
       if (el && el.parentNode) el.parentNode.removeChild(el);
     }, 4200);
+  }
+
+  function verifyDataSystemAccess() {
+    return new Promise(function (resolve) {
+      if (dataSystemUnlocked) {
+        resolve(true);
+        return;
+      }
+      var pass = window.prompt('Data&System access: enter admin password');
+      if (!pass) {
+        resolve(false);
+        return;
+      }
+      showGlobalLoader('Verifying Data&System access...');
+      fetch('/api/platform-admin/verify-password', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+        credentials: 'same-origin',
+        body: JSON.stringify({ password: pass }),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          }).catch(function () {
+            return { status: res.status, data: null };
+          });
+        })
+        .then(function (out) {
+          hideGlobalLoader();
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            resolve(false);
+            return;
+          }
+          if (out.status === 200 && out.data && out.data.success) {
+            dataSystemUnlocked = true;
+            showBottomToast('Data&System access granted.', 'success');
+            resolve(true);
+            return;
+          }
+          showBottomToast((out.data && out.data.message) || 'Invalid password.', 'error');
+          resolve(false);
+        })
+        .catch(function () {
+          hideGlobalLoader();
+          showBottomToast('Network error while verifying password.', 'error');
+          resolve(false);
+        });
+    });
   }
 
   function loadCompaniesPanel(sess) {
@@ -1816,6 +1867,20 @@
       e.preventDefault();
       var id = link.getAttribute('data-px-admin-section');
       var titleText = link.getAttribute('data-px-admin-title');
+      if (id === 'data-system') {
+        verifyDataSystemAccess().then(function (okAccess) {
+          if (!okAccess) return;
+          clearSysPoll();
+          setActiveSection(id);
+          showPanel('overview', titleText);
+          refreshBackupList();
+          var backupCard = document.getElementById('pxBackupCreateBtn');
+          if (backupCard && typeof backupCard.scrollIntoView === 'function') {
+            backupCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        });
+        return;
+      }
       clearSysPoll();
       setActiveSection(id);
       showPanel(id, titleText);

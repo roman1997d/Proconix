@@ -1588,6 +1588,27 @@ async function deleteBackup(req, res) {
   }
 }
 
+async function verifyAdminPassword(req, res) {
+  const admin = req.platformAdmin || {};
+  const adminId = Number(admin.id);
+  const password = String((req.body && req.body.password) || '');
+  if (!Number.isInteger(adminId) || adminId < 1) {
+    return res.status(401).json({ success: false, message: 'Unauthorized.' });
+  }
+  if (!password) {
+    return res.status(400).json({ success: false, message: 'Password is required.' });
+  }
+  try {
+    const pw = await pool.query('SELECT password_hash FROM proconix_admin WHERE id = $1', [adminId]);
+    const hash = pw.rows[0] && pw.rows[0].password_hash;
+    const ok = hash ? await bcrypt.compare(password, hash) : false;
+    if (!ok) return res.status(403).json({ success: false, message: 'Invalid admin password.' });
+    return res.json({ success: true, message: 'Access granted.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message || 'Password verification failed.' });
+  }
+}
+
 async function restoreBackupFromServer(req, res) {
   const admin = req.platformAdmin || {};
   const adminId = Number(admin.id);
@@ -1724,6 +1745,7 @@ module.exports = {
   restoreBackup,
   listBackups,
   deleteBackup,
+  verifyAdminPassword,
   restoreBackupFromServer,
   startPlatformAutoBackupScheduler,
   purgeSiteChatOlderThan,
