@@ -130,6 +130,30 @@
       cursor: pointer;
       font-size: 0.84rem;
     }
+    .thumb-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .thumb-btn {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f8fafc;
+      padding: 0;
+      cursor: pointer;
+      aspect-ratio: 4 / 3;
+    }
+    .thumb-btn img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .thumb-btn.active {
+      outline: 2px solid #2563eb;
+      outline-offset: 1px;
+    }
   </style>
 </head>
 <body>
@@ -151,6 +175,7 @@
       </div>
       <div class="modal-body">
         <div class="modal-meta" id="timeline-modal-meta">-</div>
+        <div class="thumb-grid" id="photo-thumbs" style="display:none;"></div>
         <div class="photo-preview" id="photo-preview-wrap" style="display:none;">
           <img id="photo-preview-img" alt="Timeline photo">
           <div class="photo-caption" id="photo-preview-caption">-</div>
@@ -174,6 +199,7 @@
       var photoPreviewWrap = document.getElementById("photo-preview-wrap");
       var photoPreviewImg = document.getElementById("photo-preview-img");
       var photoPreviewCaption = document.getElementById("photo-preview-caption");
+      var photoThumbs = document.getElementById("photo-thumbs");
       var photoControls = document.getElementById("photo-controls");
       var photoBackBtn = document.getElementById("photo-back");
       var photoNextBtn = document.getElementById("photo-next");
@@ -250,23 +276,50 @@
 
       function renderModalPhoto() {
         if (!modalPhotos.length) {
+          photoThumbs.style.display = "none";
           photoPreviewWrap.style.display = "none";
           photoControls.style.display = "none";
           return;
         }
         var p = modalPhotos[modalPhotoIdx];
+        photoThumbs.style.display = "grid";
         photoPreviewWrap.style.display = "block";
         photoControls.style.display = "flex";
         photoPreviewImg.src = p.src || "";
         photoPreviewCaption.textContent = (p.name || "photo") + " (" + (modalPhotoIdx + 1) + "/" + modalPhotos.length + ")";
         photoBackBtn.disabled = modalPhotos.length <= 1;
         photoNextBtn.disabled = modalPhotos.length <= 1;
+        photoThumbs.querySelectorAll(".thumb-btn").forEach(function (btn) {
+          var idx = Number(btn.dataset.photoIndex || -1);
+          btn.classList.toggle("active", idx === modalPhotoIdx);
+        });
+      }
+
+      function renderModalThumbs() {
+        photoThumbs.innerHTML = "";
+        if (!modalPhotos.length) {
+          photoThumbs.style.display = "none";
+          return;
+        }
+        modalPhotos.forEach(function (p, idx) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "thumb-btn";
+          btn.dataset.photoIndex = String(idx);
+          btn.innerHTML = '<img src="' + p.src + '" alt="' + (p.name || "photo") + '">';
+          btn.addEventListener("click", function () {
+            modalPhotoIdx = idx;
+            renderModalPhoto();
+          });
+          photoThumbs.appendChild(btn);
+        });
       }
 
       function openTimelineModal(entry) {
         modalMeta.textContent = "Stage: " + (entry.stage || "-") + " | Status: " + (entry.status || "-") + " | Date: " + formatDateTime(entry.date) + " | Updated by: " + (entry.user || "-");
         modalPhotos = Array.isArray(entry.photos) ? entry.photos.map(normalizePhoto).filter(function (p) { return p.src; }) : [];
         modalPhotoIdx = 0;
+        renderModalThumbs();
         renderModalPhoto();
         modal.classList.add("open");
         modal.setAttribute("aria-hidden", "false");
