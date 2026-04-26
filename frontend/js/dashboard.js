@@ -31,6 +31,7 @@
     'task-planning': 'Task & Planning',
     'drawing-gallery': 'Drawing Gallery',
     'site-snags': 'Site Snags',
+    'unit-progress-tracking': 'Unit Progress Tracking',
     'profile-settings': 'Profile Settings',
     'my-company-settings': 'My Company Settings'
   };
@@ -247,6 +248,20 @@
           }, 150);
         });
       }
+      if (pushState !== false) history.pushState({ module: module }, '', '#');
+      return;
+    }
+
+    if (module === 'unit-progress-tracking') {
+      contentEl.classList.add('dashboard-content-fade-out');
+      setActiveItem(module);
+      updateHeaderTitle(module);
+      contentEl.innerHTML =
+        '<iframe src="' +
+        iframeModuleSrc('Unit_Progress_Tracking.html') +
+        '" class="dashboard-qa-iframe" title="Unit Progress Tracking"></iframe>';
+      contentEl.classList.remove('dashboard-content-fade-out');
+      contentEl.classList.add('dashboard-content-fade-in');
       if (pushState !== false) history.pushState({ module: module }, '', '#');
       return;
     }

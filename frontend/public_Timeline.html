@@ -351,6 +351,11 @@
         var params = new URLSearchParams(window.location.search);
         var unitId = (params.get("unit_id") || "").trim();
         if (!unitId) {
+          try {
+            unitId = (localStorage.getItem("proconix_timeline_unit_id") || sessionStorage.getItem("proconix_timeline_unit_id") || "").trim();
+          } catch (e) {}
+        }
+        if (!unitId) {
           showError("Invalid public timeline link.");
           return;
         }

@@ -175,6 +175,11 @@
       var params = new URLSearchParams(window.location.search);
       unitId = (params.get("unit_id") || "").trim();
       if (!unitId) {
+        try {
+          unitId = (localStorage.getItem("proconix_timeline_unit_id") || sessionStorage.getItem("proconix_timeline_unit_id") || "").trim();
+        } catch (e) {}
+      }
+      if (!unitId) {
         accessErrorEl.textContent = "Invalid private timeline link.";
         accessErrorEl.classList.remove("hidden");
       } else {

@@ -57,6 +57,10 @@
       }
 
       function go(path) {
+        try {
+          localStorage.setItem("proconix_timeline_unit_id", unitId);
+          sessionStorage.setItem("proconix_timeline_unit_id", unitId);
+        } catch (e) {}
         window.location.replace(path + "?unit_id=" + encodeURIComponent(unitId));
       }
 
