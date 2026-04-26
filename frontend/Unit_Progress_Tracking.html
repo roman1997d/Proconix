@@ -2254,12 +2254,42 @@
             <p class="item-title">${unit.name}</p>
             <div class="pill-wrap">
               <span class="pill">${computeProgress(unit)}%</span>
-              <button type="button" class="btn-qr" data-unit-id="${unit.id}">Show QR Code</button>
+              <button type="button" class="btn-qr btn-edit-unit" data-unit-id="${unit.id}">Edit</button>
+              <button type="button" class="btn-qr btn-show-qr" data-unit-id="${unit.id}">Show QR Code</button>
             </div>
           </div>
           <div class="meta">Open unit timeline and actions</div>
         `;
-        const qrBtn = btn.querySelector(".btn-qr");
+        const editBtn = btn.querySelector(".btn-edit-unit");
+        const qrBtn = btn.querySelector(".btn-show-qr");
+        editBtn.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          const currentName = String(unit.name || "").trim();
+          const updatedName = prompt("Edit unit name", currentName);
+          if (updatedName == null) return;
+          const safeName = String(updatedName).trim();
+          if (!safeName) {
+            wizardStatus.textContent = "Unit name cannot be empty.";
+            return;
+          }
+          if (safeName === currentName) return;
+          const duplicate = DATA.units.some((candidate) => (
+            Number(candidate.id) !== Number(unit.id)
+            && String(candidate.tower) === String(unit.tower)
+            && Number(candidate.floor) === Number(unit.floor)
+            && String(candidate.name || "").trim().toLowerCase() === safeName.toLowerCase()
+          ));
+          if (duplicate) {
+            wizardStatus.textContent = "A unit with this name already exists on the same floor.";
+            return;
+          }
+          unit.name = safeName;
+          const saved = await persistWorkspace("unit_rename");
+          wizardStatus.textContent = saved
+            ? "Unit name updated."
+            : "Unit renamed locally, but backend sync failed.";
+          loadUnits(floorId);
+        });
         qrBtn.addEventListener("click", (event) => {
           event.stopPropagation();
           openUnitQrModal(unit);
