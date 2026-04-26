@@ -119,6 +119,42 @@ function resolveExecutable(candidates) {
   return candidates && candidates.length ? candidates[0] : null;
 }
 
+async function createZipWithFallback(zipPath, inputFiles, cwd) {
+  const zipCmd = resolveExecutable([
+    process.env.ZIP_PATH,
+    '/usr/bin/zip',
+    '/bin/zip',
+    'zip',
+  ]);
+  try {
+    await runCommand(zipCmd, ['-j', zipPath, ...inputFiles], { cwd });
+    return;
+  } catch (err) {
+    const msg = err && err.message ? String(err.message) : '';
+    if (!/ENOENT/i.test(msg)) throw err;
+  }
+
+  const pyCmd = resolveExecutable([
+    process.env.PYTHON_PATH,
+    '/usr/bin/python3',
+    '/usr/local/bin/python3',
+    '/bin/python3',
+    'python3',
+    'python',
+  ]);
+  const pyScript = [
+    'import sys, zipfile, os',
+    'zip_path = sys.argv[1]',
+    'files = sys.argv[2:]',
+    'if not files:',
+    "    raise SystemExit('No files provided for zip archive')",
+    "with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:",
+    '    for fp in files:',
+    '        zf.write(fp, arcname=os.path.basename(fp))',
+  ].join('; ');
+  await runCommand(pyCmd, ['-c', pyScript, zipPath, ...inputFiles], { cwd });
+}
+
 /**
  * POST /api/platform-admin/login
  * Body: { email, password }
@@ -1191,12 +1227,6 @@ async function createBackup(req, res) {
       '/bin/tar',
       'tar',
     ]);
-    const zipCmd = resolveExecutable([
-      process.env.ZIP_PATH,
-      '/usr/bin/zip',
-      '/bin/zip',
-      'zip',
-    ]);
 
     if (fileSources.length === 0) {
       await fsp.writeFile(path.join(tempRoot, 'empty-backup-placeholder.txt'), 'No file storage directories found.\n', 'utf8');
@@ -1208,7 +1238,7 @@ async function createBackup(req, res) {
     }
 
     step = 'zip_final';
-    await runCommand(zipCmd, ['-j', finalZipPath, dbDumpPath, filesArchivePath], { cwd: tempRoot });
+    await createZipWithFallback(finalZipPath, [dbDumpPath, filesArchivePath], tempRoot);
 
     await appendBackupAuditLog({
       event: 'backup_created',
