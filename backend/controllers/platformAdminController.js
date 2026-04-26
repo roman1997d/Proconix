@@ -1605,12 +1605,14 @@ async function verifyAdminPassword(req, res) {
     const ok = hash ? await bcrypt.compare(password, hash) : false;
     if (!ok) return res.status(403).json({ success: false, message: 'Invalid admin password.' });
 
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = Date.now() + 10 * 60 * 1000;
+    const existing = dataSystemOtpChallenges.get(adminId);
+    const isExistingValid = !!(existing && existing.expiresAt && existing.expiresAt > Date.now());
+    const otp = isExistingValid ? String(existing.otp) : String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = isExistingValid ? existing.expiresAt : (Date.now() + 10 * 60 * 1000);
     dataSystemOtpChallenges.set(adminId, {
       otp,
       expiresAt,
-      attempts: 0,
+      attempts: isExistingValid ? (existing.attempts || 0) : 0,
     });
 
     await sendPlatformAdminClientEmail({
@@ -1642,7 +1644,9 @@ async function verifyAdminPassword(req, res) {
 async function verifyDataSystemOtp(req, res) {
   const admin = req.platformAdmin || {};
   const adminId = Number(admin.id);
-  const otpInput = String((req.body && req.body.otp) || '').trim();
+  const otpRaw = String((req.body && req.body.otp) || '').trim();
+  const sixDigitsMatch = otpRaw.match(/\d{6}/);
+  const otpInput = sixDigitsMatch ? sixDigitsMatch[0] : otpRaw.replace(/\D/g, '');
   if (!Number.isInteger(adminId) || adminId < 1) {
     return res.status(401).json({ success: false, message: 'Unauthorized.' });
   }
@@ -1662,7 +1666,8 @@ async function verifyDataSystemOtp(req, res) {
     dataSystemOtpChallenges.delete(adminId);
     return res.status(429).json({ success: false, message: 'Too many OTP attempts. Verify password again.' });
   }
-  if (otpInput !== challenge.otp) {
+  const expectedOtp = String(challenge.otp || '').replace(/\D/g, '');
+  if (otpInput !== expectedOtp) {
     return res.status(403).json({ success: false, message: 'Invalid OTP code.' });
   }
   dataSystemOtpChallenges.delete(adminId);
