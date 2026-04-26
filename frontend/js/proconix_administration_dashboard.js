@@ -1161,6 +1161,94 @@
     resetBackupDownloadUrl();
   });
 
+  var restoreBtn = document.getElementById('pxRestoreBtn');
+  var restoreFileInput = document.getElementById('pxRestoreFile');
+  var restoreStatusText = document.getElementById('pxRestoreStatusText');
+  var restoreAlert = document.getElementById('pxRestoreAlert');
+
+  function setRestoreStatus(text) {
+    if (restoreStatusText) restoreStatusText.textContent = text || 'Idle';
+  }
+
+  function hideRestoreAlert() {
+    if (!restoreAlert) return;
+    restoreAlert.classList.add('d-none');
+    restoreAlert.textContent = '';
+  }
+
+  function showRestoreAlert(text, kind) {
+    if (!restoreAlert) return;
+    restoreAlert.textContent = text || '';
+    restoreAlert.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-warning', 'alert-info');
+    if (kind === 'success') restoreAlert.classList.add('alert-success');
+    else if (kind === 'warning') restoreAlert.classList.add('alert-warning');
+    else if (kind === 'info') restoreAlert.classList.add('alert-info');
+    else restoreAlert.classList.add('alert-danger');
+  }
+
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', function () {
+      hideRestoreAlert();
+      var f = restoreFileInput && restoreFileInput.files && restoreFileInput.files[0];
+      if (!f) {
+        showRestoreAlert('Select a .zip backup package first.', 'warning');
+        return;
+      }
+      var ok = window.confirm(
+        'Restore will overwrite current database and files. Continue?'
+      );
+      if (!ok) return;
+
+      setRestoreStatus('Restoring... please wait');
+      restoreBtn.disabled = true;
+      var form = new FormData();
+      form.append('backup', f);
+
+      fetch('/api/admin/restore', {
+        method: 'POST',
+        headers: sessionHeaders(session),
+        credentials: 'same-origin',
+        body: form,
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          }).catch(function () {
+            return { status: res.status, data: null };
+          });
+        })
+        .then(function (out) {
+          restoreBtn.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status === 429) {
+            setRestoreStatus('Rate limited');
+            showRestoreAlert((out.data && out.data.message) || 'Restore rate limit active. Try again later.', 'warning');
+            return;
+          }
+          if (out.status !== 200 || !out.data || !out.data.success) {
+            var errMsg = (out.data && out.data.message) || 'Restore failed.';
+            if (out.data && out.data.step) errMsg += ' [step: ' + out.data.step + ']';
+            if (out.data && out.data.detail) errMsg += ' ' + out.data.detail;
+            setRestoreStatus('Failed');
+            showRestoreAlert(errMsg, 'error');
+            return;
+          }
+          setRestoreStatus('Restore completed');
+          showRestoreAlert(out.data.message || 'Restore completed successfully.', 'success');
+          if (restoreFileInput) restoreFileInput.value = '';
+        })
+        .catch(function () {
+          restoreBtn.disabled = false;
+          setRestoreStatus('Failed');
+          showRestoreAlert('Network error while restoring backup.', 'error');
+        });
+    });
+  }
+
   function showContentEmailAlert(text, kind) {
     var el = document.getElementById('pxAdminContentEmailAlert');
     if (!el) return;

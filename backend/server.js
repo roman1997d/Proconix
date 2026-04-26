@@ -8,6 +8,9 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') }
 require('./lib/serverProcessLogBuffer').install();
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const multer = require('multer');
 const { testConnection } = require('./db/pool');
 const companyRoutes = require('./routes/companyRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
@@ -25,7 +28,7 @@ const planningRoutes = require('./routes/planningRoutes');
 const crewRoutes = require('./routes/crewRoutes');
 const platformAdminRoutes = require('./routes/platformAdminRoutes');
 const { requirePlatformAdminAuth } = require('./middleware/requirePlatformAdminAuth');
-const { createBackup } = require('./controllers/platformAdminController');
+const { createBackup, restoreBackup } = require('./controllers/platformAdminController');
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
 const drawingGalleryRoutes = require('./routes/drawingGalleryRoutes');
 const siteChatRoutes = require('./routes/siteChatRoutes');
@@ -122,6 +125,13 @@ app.use('/api/planning', planningRoutes);
 app.use('/api/platform-admin', platformAdminRoutes);
 // Backup alias route requested by spec.
 app.post('/api/admin/backup', requirePlatformAdminAuth, createBackup);
+const restoreUploadDir = path.join(os.tmpdir(), 'proconix-restore-upload');
+fs.mkdirSync(restoreUploadDir, { recursive: true });
+const restoreUpload = multer({
+  dest: restoreUploadDir,
+  limits: { fileSize: 1024 * 1024 * 1024 * 2 },
+});
+app.post('/api/admin/restore', requirePlatformAdminAuth, restoreUpload.single('backup'), restoreBackup);
 
 // Site Snags (per-company JSON state; requires site_snags_state table)
 app.use('/api/site-snags', siteSnagsRoutes);

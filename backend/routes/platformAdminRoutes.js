@@ -3,6 +3,10 @@
  */
 
 const express = require('express');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const multer = require('multer');
 const router = express.Router();
 const {
   login,
@@ -18,6 +22,7 @@ const {
   createDemoRecords,
   sendDemoLoginEmail,
   createBackup,
+  restoreBackup,
   purgeSiteChatOlderThan,
 } = require('../controllers/platformAdminController');
 const {
@@ -28,6 +33,12 @@ const {
 } = require('../controllers/platformUsersAdminController');
 const { getSystemHealth, getServerLogStream, postLogTest } = require('../controllers/systemHealthAdminController');
 const { requirePlatformAdminAuth } = require('../middleware/requirePlatformAdminAuth');
+const restoreUploadDir = path.join(os.tmpdir(), 'proconix-restore-upload');
+fs.mkdirSync(restoreUploadDir, { recursive: true });
+const restoreUpload = multer({
+  dest: restoreUploadDir,
+  limits: { fileSize: 1024 * 1024 * 1024 * 2 },
+});
 
 router.post('/login', login);
 router.get('/me', requirePlatformAdminAuth, me);
@@ -38,6 +49,7 @@ router.post('/send-client-email', requirePlatformAdminAuth, sendClientEmail);
 router.post('/create-demo-records', requirePlatformAdminAuth, createDemoRecords);
 router.post('/send-demo-login-email', requirePlatformAdminAuth, sendDemoLoginEmail);
 router.post('/backup', requirePlatformAdminAuth, createBackup);
+router.post('/restore', requirePlatformAdminAuth, restoreUpload.single('backup'), restoreBackup);
 router.get('/billing-subscriptions', requirePlatformAdminAuth, listBillingSubscriptions);
 router.patch('/billing-subscriptions/:id', requirePlatformAdminAuth, updateBillingSubscription);
 router.get('/platform-users', requirePlatformAdminAuth, listPlatformUsers);
