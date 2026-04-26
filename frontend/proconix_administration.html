@@ -130,6 +130,48 @@
             <p class="text-white-50 mb-0">Tool panels on the left host admin workflows. Use <strong class="text-white-50">Create Demo Records</strong> below to provision a full demo tenant for a prospect.</p>
           </div>
 
+          <div class="px-admin-panel-card">
+            <h2 class="h5 text-white mb-3">Create Demo Records</h2>
+            <p class="text-white-50 small mb-3">
+              Creates a new company with a head manager account, two projects, work logs, operatives, planning, materials, QA jobs, Unit Progress Tracking workspace data (towers/floors/units/timeline), and sample issues/work hours (where tables exist). The client can sign in to the manager dashboard and operative app with the credentials you set.
+            </p>
+            <div id="pxDemoCreateAlert" class="alert alert-danger d-none mb-3" role="alert"></div>
+            <div id="pxDemoCreateSuccess" class="alert alert-success d-none mb-3 px-admin-preline" role="status"></div>
+            <div id="pxDemoSendEmailWrap" class="d-none mb-3">
+              <button type="button" class="btn btn-outline-light btn-sm" id="pxDemoSendEmailBtn">
+                <i class="bi bi-envelope-paper" aria-hidden="true"></i> Send login details to client?
+              </button>
+              <span class="text-white-50 small ms-2" id="pxDemoSendEmailHint">Sends a branded email to the head manager address with dashboard and operative links.</span>
+              <div id="pxDemoSendEmailAlert" class="alert alert-danger d-none mt-2 mb-0 small py-2" role="alert"></div>
+              <div id="pxDemoSendEmailOk" class="alert alert-success d-none mt-2 mb-0 small py-2" role="status"></div>
+            </div>
+            <form id="pxDemoCreateForm" class="row g-3" autocomplete="off">
+              <div class="col-md-6">
+                <label class="form-label text-white-50 small mb-1" for="pxDemoCompanyName">Company name</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxDemoCompanyName" name="company_name" required maxlength="255" placeholder="e.g. Acme Drylining Ltd">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-white-50 small mb-1" for="pxDemoHeadManagerName">Head manager name</label>
+                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxDemoHeadManagerName" name="head_manager_name" required maxlength="500" placeholder="Full name">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-white-50 small mb-1" for="pxDemoHeadEmail">Email</label>
+                <input type="email" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxDemoHeadEmail" name="email" required maxlength="255" placeholder="manager@client.com" autocomplete="off">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label text-white-50 small mb-1" for="pxDemoHeadPassword">Password</label>
+                <input type="password" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxDemoHeadPassword" name="password" required minlength="8" placeholder="Min. 8 characters" autocomplete="new-password">
+              </div>
+              <div class="col-12">
+                <button type="submit" class="btn btn-info text-dark fw-semibold" id="pxDemoCreateBtn">
+                  <i class="bi bi-database-add" aria-hidden="true"></i> Create demo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="d-none" data-px-admin-panel="data-system">
           <div class="px-admin-panel-card mb-4">
             <h2 class="h5 text-white mb-3">Platform backup</h2>
             <p class="text-white-50 small mb-3">
@@ -198,46 +240,6 @@
               </div>
             </div>
             <div class="mt-2 text-white-50 small" id="pxRestoreStatusText">Idle</div>
-          </div>
-
-          <div class="px-admin-panel-card">
-            <h2 class="h5 text-white mb-3">Create Demo Records</h2>
-            <p class="text-white-50 small mb-3">
-              Creates a new company with a head manager account, two projects, work logs, operatives, planning, materials, QA jobs, Unit Progress Tracking workspace data (towers/floors/units/timeline), and sample issues/work hours (where tables exist). The client can sign in to the manager dashboard and operative app with the credentials you set.
-            </p>
-            <div id="pxDemoCreateAlert" class="alert alert-danger d-none mb-3" role="alert"></div>
-            <div id="pxDemoCreateSuccess" class="alert alert-success d-none mb-3 px-admin-preline" role="status"></div>
-            <div id="pxDemoSendEmailWrap" class="d-none mb-3">
-              <button type="button" class="btn btn-outline-light btn-sm" id="pxDemoSendEmailBtn">
-                <i class="bi bi-envelope-paper" aria-hidden="true"></i> Send login details to client?
-              </button>
-              <span class="text-white-50 small ms-2" id="pxDemoSendEmailHint">Sends a branded email to the head manager address with dashboard and operative links.</span>
-              <div id="pxDemoSendEmailAlert" class="alert alert-danger d-none mt-2 mb-0 small py-2" role="alert"></div>
-              <div id="pxDemoSendEmailOk" class="alert alert-success d-none mt-2 mb-0 small py-2" role="status"></div>
-            </div>
-            <form id="pxDemoCreateForm" class="row g-3" autocomplete="off">
-              <div class="col-md-6">
-                <label class="form-label text-white-50 small mb-1" for="pxDemoCompanyName">Company name</label>
-                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxDemoCompanyName" name="company_name" required maxlength="255" placeholder="e.g. Acme Drylining Ltd">
-              </div>
-              <div class="col-md-6">
-                <label class="form-label text-white-50 small mb-1" for="pxDemoHeadManagerName">Head manager name</label>
-                <input type="text" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxDemoHeadManagerName" name="head_manager_name" required maxlength="500" placeholder="Full name">
-              </div>
-              <div class="col-md-6">
-                <label class="form-label text-white-50 small mb-1" for="pxDemoHeadEmail">Email</label>
-                <input type="email" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxDemoHeadEmail" name="email" required maxlength="255" placeholder="manager@client.com" autocomplete="off">
-              </div>
-              <div class="col-md-6">
-                <label class="form-label text-white-50 small mb-1" for="pxDemoHeadPassword">Password</label>
-                <input type="password" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxDemoHeadPassword" name="password" required minlength="8" placeholder="Min. 8 characters" autocomplete="new-password">
-              </div>
-              <div class="col-12">
-                <button type="submit" class="btn btn-info text-dark fw-semibold" id="pxDemoCreateBtn">
-                  <i class="bi bi-database-add" aria-hidden="true"></i> Create demo
-                </button>
-              </div>
-            </form>
           </div>
         </div>
 

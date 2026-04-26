@@ -1911,11 +1911,11 @@
           if (!okAccess) return;
           clearSysPoll();
           setActiveSection(id);
-          showPanel('overview', titleText);
+          showPanel('data-system', titleText);
           refreshBackupList();
-          var backupCard = document.getElementById('pxBackupCreateBtn');
-          if (backupCard && typeof backupCard.scrollIntoView === 'function') {
-            backupCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (offcanvasEl && window.bootstrap) {
+            var inst0 = window.bootstrap.Offcanvas.getInstance(offcanvasEl);
+            if (inst0) inst0.hide();
           }
         });
         return;
