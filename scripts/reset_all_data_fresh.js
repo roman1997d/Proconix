@@ -3,7 +3,8 @@
  * DANGEROUS: Irreversibly wipes application data.
  *
  * What it does:
- * 1) Truncates ALL public schema tables with RESTART IDENTITY CASCADE.
+ * 1) Truncates public schema tables with RESTART IDENTITY CASCADE,
+ *    while preserving platform administration tables.
  * 2) Deletes all files from runtime storage folders (uploads/output).
  *
  * Usage:
@@ -15,6 +16,10 @@ const path = require('path');
 const { pool } = require('../backend/db/pool');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
+const PROTECTED_TABLES = new Set([
+  // Keep platform admin login/accounts used by proconix_administration.html.
+  'proconix_admin',
+]);
 const STORAGE_DIRS = [
   path.join(ROOT_DIR, 'backend', 'uploads'),
   path.join(ROOT_DIR, 'output'),
@@ -38,13 +43,17 @@ async function wipeDatabase() {
        WHERE schemaname = 'public'
        ORDER BY tablename ASC`
     );
-    const tables = (tablesResult.rows || []).map((row) => row.tablename).filter(Boolean);
+    const allTables = (tablesResult.rows || []).map((row) => row.tablename).filter(Boolean);
+    const tables = allTables.filter((t) => !PROTECTED_TABLES.has(String(t)));
     if (tables.length) {
       const tableList = tables.map((t) => quoteIdent(t)).join(', ');
       await client.query(`TRUNCATE TABLE ${tableList} RESTART IDENTITY CASCADE`);
     }
     await client.query('COMMIT');
-    return tables.length;
+    return {
+      truncatedCount: tables.length,
+      keptTables: allTables.filter((t) => PROTECTED_TABLES.has(String(t))),
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -88,11 +97,14 @@ async function main() {
   }
 
   console.log('Starting full reset...');
-  const tableCount = await wipeDatabase();
+  const dbReset = await wipeDatabase();
   const storageResults = await wipeStorage();
   await pool.end();
 
-  console.log(`Database reset complete. Truncated tables: ${tableCount}.`);
+  console.log(`Database reset complete. Truncated tables: ${dbReset.truncatedCount}.`);
+  if (dbReset.keptTables.length) {
+    console.log(`Protected tables kept intact: ${dbReset.keptTables.join(', ')}`);
+  }
   storageResults.forEach((r) => {
     console.log(`${r.existed ? 'Cleared' : 'Skipped (missing)'}: ${r.dirPath}`);
   });
