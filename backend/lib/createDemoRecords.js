@@ -73,6 +73,130 @@ function splitManagerName(full) {
   return { firstName: parts[0], surname: parts.slice(1).join(' ') };
 }
 
+function buildDemoUnitProgressWorkspace(projectId1, projectId2, managerDisplayName) {
+  const now = Date.now();
+  const iso = (daysAgo) => new Date(now - daysAgo * 24 * 60 * 60 * 1000).toISOString();
+  const actor = managerDisplayName || 'Demo Manager';
+  return {
+    towers: [
+      { id: 'A', name: 'Tower A' },
+      { id: 'B', name: 'Tower B' },
+    ],
+    floors: [
+      { id: 'A-1', tower: 'A', number: 1, name: 'Floor 1' },
+      { id: 'A-2', tower: 'A', number: 2, name: 'Floor 2' },
+      { id: 'B-1', tower: 'B', number: 1, name: 'Floor 1' },
+      { id: 'B-2', tower: 'B', number: 2, name: 'Floor 2' },
+    ],
+    units: [
+      {
+        id: 101,
+        name: 'Apartment 101',
+        tower: 'A',
+        floor: 1,
+        project_id: projectId1,
+        timeline: [
+          {
+            stage: 'First fix',
+            status: 'In progress',
+            reason: '',
+            comment: 'Stud framing is complete in kitchen and hallway.',
+            user: actor,
+            date: iso(12),
+            photos: [],
+          },
+          {
+            stage: 'Insulation',
+            status: 'Done',
+            reason: '',
+            comment: 'Acoustic insulation installed and verified.',
+            user: actor,
+            date: iso(8),
+            photos: [],
+          },
+        ],
+      },
+      {
+        id: 102,
+        name: 'Apartment 102',
+        tower: 'A',
+        floor: 1,
+        project_id: projectId1,
+        timeline: [
+          {
+            stage: 'First fix',
+            status: 'Blocked',
+            reason: 'Awaiting MEP clearance',
+            comment: 'Drylining paused until cable containment reroute is closed.',
+            user: actor,
+            date: iso(6),
+            photos: [],
+          },
+        ],
+      },
+      {
+        id: 201,
+        name: 'Apartment 201',
+        tower: 'A',
+        floor: 2,
+        project_id: projectId1,
+        timeline: [],
+      },
+      {
+        id: 202,
+        name: 'Apartment 202',
+        tower: 'A',
+        floor: 2,
+        project_id: projectId1,
+        timeline: [
+          {
+            stage: 'Second fix',
+            status: 'In progress',
+            reason: '',
+            comment: 'Jointing first coat completed; waiting for dry check.',
+            user: actor,
+            date: iso(2),
+            photos: [],
+          },
+        ],
+      },
+      {
+        id: 301,
+        name: 'Unit 301',
+        tower: 'B',
+        floor: 1,
+        project_id: projectId2,
+        timeline: [],
+      },
+      {
+        id: 302,
+        name: 'Unit 302',
+        tower: 'B',
+        floor: 1,
+        project_id: projectId2,
+        timeline: [],
+      },
+      {
+        id: 401,
+        name: 'Unit 401',
+        tower: 'B',
+        floor: 2,
+        project_id: projectId2,
+        timeline: [],
+      },
+      {
+        id: 402,
+        name: 'Unit 402',
+        tower: 'B',
+        floor: 2,
+        project_id: projectId2,
+        timeline: [],
+      },
+    ],
+    updated_at: new Date().toISOString(),
+  };
+}
+
 let savepointSeq = 0;
 /** Run optional inserts; missing tables/columns (42P01/42703) only skip that block. */
 async function tryOptional(client, fn) {
@@ -178,6 +302,8 @@ async function wipeDemoCompany(client, companyId) {
     `DELETE FROM project_assignments WHERE project_id IN (SELECT id FROM projects WHERE company_id = $1)`,
     c
   );
+
+  await sd(`DELETE FROM unit_progress_state WHERE company_id = $1`, c);
 
   await sd(`DELETE FROM projects WHERE company_id = $1`, c);
   await sd(`DELETE FROM users WHERE company_id = $1`, c);
@@ -919,6 +1045,15 @@ async function runCreateDemoRecords(client, options) {
       );
     });
 
+    await tryOptional(client, async () => {
+      const unitWorkspace = buildDemoUnitProgressWorkspace(projectId1, projectId2, createdByLabel);
+      await client.query(
+        `INSERT INTO unit_progress_state (company_id, workspace, updated_by_kind, updated_by_id, updated_at)
+         VALUES ($1, $2::jsonb, 'manager', $3, NOW())`,
+        [companyId, JSON.stringify(unitWorkspace), managerId]
+      );
+    });
+
     return {
       company_id: companyId,
       company_name: companyName,
@@ -930,7 +1065,7 @@ async function runCreateDemoRecords(client, options) {
       primary_operative_name: PRIMARY_OPERATIVE_NAME,
       extra_operatives: extraOperativeLogins,
       message:
-        'Demo tenant created: 2 projects, 7 work logs, 10 operative tasks, 10 planning tasks, materials, QA, issues, work hours (where tables exist).',
+        'Demo tenant created: 2 projects, 7 work logs, 10 operative tasks, 10 planning tasks, materials, QA, issues, work hours, and Unit Progress workspace (where tables exist).',
     };
 }
 

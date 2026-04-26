@@ -616,6 +616,8 @@ async function deleteCompany(req, res) {
       cid
     );
 
+    await runDel('DELETE FROM unit_progress_state WHERE company_id = $1', cid);
+
     /**
      * QA jobs reference qa_floors via floor_id (qa_jobs_floor_id_fkey). Deleting qa_floors first
      * fails with 23503. Remove jobs for this company's projects first (CASCADE cleans job children).
