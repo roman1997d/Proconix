@@ -151,7 +151,7 @@ async function createZipWithFallback(zipPath, inputFiles, cwd) {
     "with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:",
     '    for fp in files:',
     '        zf.write(fp, arcname=os.path.basename(fp))',
-  ].join('; ');
+  ].join('\n');
   await runCommand(pyCmd, ['-c', pyScript, zipPath, ...inputFiles], { cwd });
 }
 
