@@ -103,6 +103,35 @@
       max-width: 520px;
     }
 
+    .tp-mobile-config-trigger {
+      display: none;
+      border: 1px solid var(--tp-border);
+      border-radius: 10px;
+      background: #020617;
+      color: var(--tp-text);
+      padding: 0.45rem 0.75rem;
+      font-size: 0.84rem;
+      cursor: pointer;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .tp-mobile-config-close {
+      display: none;
+      border: 1px solid var(--tp-border);
+      border-radius: 8px;
+      background: #020617;
+      color: var(--tp-text);
+      padding: 0.25rem 0.5rem;
+      font-size: 0.78rem;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    .tp-mobile-config-backdrop {
+      display: none;
+    }
+
     .tp-layout {
       flex: 1;
       min-height: 0;
@@ -179,6 +208,39 @@
       .tp-planning-panel {
         min-height: min(58vh, 640px);
         min-height: min(58dvh, 640px);
+      }
+
+      .tp-mobile-config-trigger {
+        display: inline-flex;
+      }
+
+      .tp-mobile-config-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(2, 6, 23, 0.72);
+        z-index: 1400;
+      }
+
+      .tp-mobile-config-close {
+        display: inline-flex;
+        align-items: center;
+      }
+
+      body.tp-config-open .tp-mobile-config-backdrop {
+        display: block;
+      }
+
+      #tp-config-panel {
+        display: none;
+      }
+
+      body.tp-config-open #tp-config-panel {
+        display: block;
+        position: fixed;
+        inset: 12px;
+        z-index: 1410;
+        overflow: auto;
+        margin: 0;
       }
     }
 
@@ -1256,15 +1318,20 @@
           <span><i class="bi bi-calendar3-event"></i> Planning</span>
         </div>
       </div>
+      <button type="button" class="tp-mobile-config-trigger" id="tp-open-config-mobile">
+        <i class="bi bi-plus-lg"></i> Add Task &amp; Plan
+      </button>
       <div class="tp-small d-none"></div>
     </header>
+    <div class="tp-mobile-config-backdrop" id="tp-config-backdrop-mobile" aria-hidden="true"></div>
 
     <main class="tp-layout">
       <!-- LEFT: Task configuration -->
-      <section class="tp-card">
+      <section class="tp-card" id="tp-config-panel">
         <h2 class="tp-section-title">
           Plan configuration
           <span class="tp-chip">Simple fields · no modes</span>
+          <button type="button" class="tp-mobile-config-close" id="tp-close-config-mobile">Close</button>
         </h2>
 
         <form id="tp-task-form" autocomplete="off">
@@ -1905,6 +1972,9 @@
       var btnAddTask = el('tp-btn-add-task');
       var btnSavePlan = el('tp-btn-save-plan');
       var btnClearPlan = el('tp-btn-clear-tasks');
+      var btnOpenConfigMobile = el('tp-open-config-mobile');
+      var btnCloseConfigMobile = el('tp-close-config-mobile');
+      var configBackdropMobile = el('tp-config-backdrop-mobile');
       var currentPlanLabel = el('tp-current-plan-label');
       var calendarTabs = el('tp-calendar-tabs');
       var calendarBody = el('tp-calendar-body');
@@ -1927,6 +1997,32 @@
       var taskDeleteBtn = el('tp-task-delete');
 
       var currentTaskId = null;
+
+      function isMobileConfigMode() {
+        return window.matchMedia('(max-width: 992px)').matches;
+      }
+
+      function openMobileConfig() {
+        if (!isMobileConfigMode()) return;
+        document.body.classList.add('tp-config-open');
+      }
+
+      function closeMobileConfig() {
+        document.body.classList.remove('tp-config-open');
+      }
+
+      if (btnOpenConfigMobile) {
+        btnOpenConfigMobile.addEventListener('click', openMobileConfig);
+      }
+      if (btnCloseConfigMobile) {
+        btnCloseConfigMobile.addEventListener('click', closeMobileConfig);
+      }
+      if (configBackdropMobile) {
+        configBackdropMobile.addEventListener('click', closeMobileConfig);
+      }
+      window.addEventListener('resize', function () {
+        if (!isMobileConfigMode()) closeMobileConfig();
+      });
 
       // Flatpickr – same date/time picker in all modern/older browsers
       if (window.flatpickr) {
