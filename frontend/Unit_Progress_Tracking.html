@@ -1,0 +1,2287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unit Progress Tracking - Proconix</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --line: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --primary: #1d4ed8;
+      --primary-soft: #dbeafe;
+      --danger: #b91c1c;
+      --warn: #92400e;
+      --ok: #166534;
+      --shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 1.2rem;
+    }
+
+    .sub {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .role-badge {
+      border: 1px solid #bfdbfe;
+      background: var(--primary-soft);
+      color: var(--primary);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.82rem;
+    }
+
+    .section-title {
+      margin: 0 0 8px;
+      font-size: 1rem;
+    }
+
+    .hint {
+      margin: 0 0 14px;
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
+    .list-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .list-item {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 12px;
+      padding: 12px;
+      cursor: pointer;
+    }
+
+    .list-item:hover {
+      border-color: #93c5fd;
+      background: #f8fbff;
+    }
+
+    .item-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .item-title {
+      margin: 0;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .pill {
+      border-radius: 999px;
+      border: 1px solid #bfdbfe;
+      background: #eff6ff;
+      color: var(--primary);
+      padding: 3px 9px;
+      font-weight: 700;
+      font-size: 0.78rem;
+    }
+
+    .pill-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn-qr {
+      border: 1px solid #bfdbfe;
+      background: #eff6ff;
+      color: #1d4ed8;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .meta {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .view-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-soft { background: #f3f4f6; color: #111827; border: 1px solid #e5e7eb; }
+    .btn-dark { background: #111827; color: #fff; }
+
+    .hidden { display: none; }
+
+    .breadcrumb {
+      margin: 0 0 10px;
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
+    .unit-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .unit-title {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+
+    .unit-sub {
+      margin: 3px 0 0;
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 14px;
+    }
+
+    .timeline {
+      position: relative;
+      display: grid;
+      gap: 14px;
+      max-height: 520px;
+      overflow: auto;
+      padding: 4px 4px 4px 0;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      width: 6px;
+      border-radius: 6px;
+      background: #1d4ed8;
+      transform: translateX(-50%);
+      opacity: 0.92;
+    }
+
+    .timeline-entry {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 56px 1fr;
+      align-items: start;
+      min-height: 84px;
+    }
+
+    .timeline-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      overflow: hidden;
+      box-shadow: 0 6px 16px rgba(2, 6, 23, 0.06);
+      cursor: pointer;
+    }
+
+    .timeline-entry.left .timeline-card {
+      grid-column: 1 / 2;
+      margin-right: 6px;
+    }
+
+    .timeline-entry.right .timeline-card {
+      grid-column: 3 / 4;
+      margin-left: 6px;
+    }
+
+    .timeline-bar {
+      background: #166534;
+      color: #fff;
+      padding: 8px 12px;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .timeline-content {
+      padding: 10px;
+    }
+
+    .timeline-center {
+      grid-column: 2 / 3;
+      display: flex;
+      justify-content: center;
+      padding-top: 8px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .timeline-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      border: 3px solid #fff;
+      background: #1d4ed8;
+      box-shadow: 0 0 0 3px #dbeafe;
+    }
+
+    .timeline-empty {
+      border: 1px dashed #cbd5e1;
+      border-radius: 12px;
+      background: #fff;
+      padding: 12px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .timeline-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .status {
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      border: 1px solid transparent;
+    }
+
+    .done { color: var(--ok); background: #dcfce7; border-color: #bbf7d0; }
+    .progress { color: #075985; background: #e0f2fe; border-color: #bae6fd; }
+    .blocked { color: var(--danger); background: #fee2e2; border-color: #fecaca; }
+    .dot-done { background: var(--ok); }
+    .dot-progress { background: #0284c7; }
+    .dot-blocked { background: var(--danger); }
+
+    .timeline-meta {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .photo-row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .photo {
+      border: 1px solid #bfdbfe;
+      border-radius: 7px;
+      background: #eff6ff;
+      padding: 0;
+      overflow: hidden;
+      cursor: pointer;
+      position: relative;
+      aspect-ratio: 4 / 3;
+    }
+
+    .photo img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .photo span {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.62);
+      color: #fff;
+      font-size: 0.66rem;
+      padding: 2px 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .field {
+      margin-bottom: 10px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.82rem;
+      color: #374151;
+      font-weight: 600;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      padding: 10px;
+      font: inherit;
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 72px;
+      resize: vertical;
+    }
+
+    .reason-field.hidden { display: none; }
+
+    .feedback {
+      margin-top: 10px;
+      border: 1px solid #bbf7d0;
+      background: #f0fdf4;
+      color: #166534;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 0.84rem;
+      display: none;
+    }
+
+    .doc-preview {
+      margin-top: 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      background: #fafafa;
+      padding: 10px;
+      font-size: 0.82rem;
+      color: #374151;
+      max-height: 180px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+
+    .qr-panel {
+      border: 1px dashed #9ca3af;
+      border-radius: 10px;
+      padding: 10px;
+      margin-top: 8px;
+      background: #fafafa;
+      font-size: 0.84rem;
+      color: #374151;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1200;
+      padding: 18px;
+    }
+
+    .modal.open {
+      display: flex;
+    }
+
+    .modal:target {
+      display: flex;
+    }
+
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.52);
+    }
+
+    .modal-dialog {
+      position: relative;
+      width: min(740px, 96vw);
+      max-height: 88vh;
+      overflow: auto;
+      border-radius: 14px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 20px 50px rgba(2, 6, 23, 0.28);
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid #e5e7eb;
+      background: #f8fafc;
+    }
+
+    .modal-head h4 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .modal-close {
+      border: 1px solid #d1d5db;
+      background: #fff;
+      color: #111827;
+      border-radius: 8px;
+      width: 34px;
+      height: 34px;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    .modal-body {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .modal-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .modal-field {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+      font-size: 0.86rem;
+    }
+
+    .modal-field strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #374151;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .modal-text {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+      font-size: 0.86rem;
+      color: #111827;
+    }
+
+    .modal-photos {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .modal-photo {
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      background: #eff6ff;
+      text-align: center;
+      padding: 0;
+      font-size: 0.76rem;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 4 / 3;
+    }
+
+    .modal-photo img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .modal-photo span {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.62);
+      color: #fff;
+      padding: 2px 4px;
+      font-size: 0.66rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .photo-preview-img {
+      width: 100%;
+      max-height: 72vh;
+      object-fit: contain;
+      border-radius: 10px;
+      border: 1px solid #d1d5db;
+      background: #0f172a;
+    }
+
+    .preview-controls {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .preview-caption {
+      text-align: center;
+      margin-top: 8px;
+      color: #4b5563;
+      font-size: 0.84rem;
+    }
+
+    .wizard-launch {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .wizard-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 1400;
+      display: none;
+      background: rgba(2, 6, 23, 0.62);
+      padding: 12px;
+    }
+
+    .wizard-modal.open {
+      display: block;
+    }
+
+    .wizard-modal:target {
+      display: block;
+    }
+
+    .wizard-shell {
+      max-width: 900px;
+      height: calc(100vh - 24px);
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 16px;
+      border: 1px solid #e5e7eb;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      overflow: hidden;
+    }
+
+    .wizard-head {
+      padding: 14px;
+      border-bottom: 1px solid #e5e7eb;
+      background: #f8fafc;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .wizard-progress {
+      font-size: 0.85rem;
+      color: #475569;
+      font-weight: 700;
+    }
+
+    .wizard-body {
+      padding: 16px;
+      overflow: auto;
+      display: grid;
+      align-content: start;
+      gap: 12px;
+      background: #fff;
+    }
+
+    .wizard-step {
+      display: none;
+      gap: 12px;
+    }
+
+    .wizard-step.active {
+      display: grid;
+    }
+
+    .wizard-question {
+      margin: 0;
+      font-size: 1.25rem;
+      line-height: 1.35;
+    }
+
+    .assistant-tone {
+      margin: 0;
+      color: #475569;
+      font-size: 0.9rem;
+    }
+
+    .counter-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .counter-btn {
+      width: 40px;
+      height: 40px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      background: #fff;
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+
+    .counter-value {
+      min-width: 60px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+
+    .wizard-cards {
+      display: grid;
+      gap: 10px;
+    }
+
+    .wizard-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 10px;
+      background: #fff;
+      display: grid;
+      gap: 8px;
+    }
+
+    .wizard-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .wizard-card-title {
+      margin: 0;
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .small-btn {
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #fff;
+      color: #111827;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+
+    .space-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .wizard-foot {
+      border-top: 1px solid #e5e7eb;
+      background: #f8fafc;
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .wizard-status {
+      font-size: 0.82rem;
+      color: #64748b;
+    }
+
+    .duplication-list {
+      display: grid;
+      gap: 8px;
+      max-height: 220px;
+      overflow: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 10px;
+    }
+
+    .review-box {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 10px;
+      background: #fafafa;
+      font-size: 0.84rem;
+      white-space: pre-wrap;
+    }
+
+    .copy-panel {
+      border: 1px solid #dbeafe;
+      border-radius: 10px;
+      background: #f8fbff;
+      padding: 8px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .copy-panel.hidden {
+      display: none;
+    }
+
+    .field-error {
+      color: #b91c1c;
+      font-size: 0.76rem;
+      margin-top: 4px;
+    }
+
+    @media (max-width: 980px) {
+      .split { grid-template-columns: 1fr; }
+      .photo-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .timeline::before {
+        left: 16px;
+        width: 4px;
+        transform: none;
+      }
+      .timeline-entry {
+        grid-template-columns: 32px 1fr;
+        min-height: auto;
+      }
+      .timeline-center {
+        grid-column: 1 / 2;
+        justify-content: flex-start;
+        padding-top: 10px;
+      }
+      .timeline-entry.left .timeline-card,
+      .timeline-entry.right .timeline-card {
+        grid-column: 2 / 3;
+        margin: 0;
+      }
+      .timeline-dot {
+        width: 18px;
+        height: 18px;
+      }
+      .modal-grid { grid-template-columns: 1fr; }
+      .modal-photos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .space-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="card topbar">
+      <div>
+        <h1 class="title">PROCONIX - Unit Progress Tracking</h1>
+        <p class="sub">Hierarchical flow: Tower -> Floor -> Unit (timeline + actions)</p>
+      </div>
+      <div class="role-badge">Managers & Supervisors only</div>
+    </header>
+
+    <section class="card wizard-launch">
+      <div>
+        <h2 class="section-title" style="margin:0;">Project Structure Wizard</h2>
+        <p class="hint" style="margin:4px 0 0;">Assistant-like guided flow: Buildings -> Floors -> Spaces.</p>
+      </div>
+      <a href="#project-wizard-modal" class="btn btn-primary" id="open-project-wizard" onclick="return window.forceOpenProjectWizard(event);" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+        <i class="bi bi-magic"></i> Start Guided Setup
+      </a>
+    </section>
+
+    <section id="towerView" class="card">
+      <h2 class="section-title">View 1 - Tower View</h2>
+      <p class="hint">Select a tower to continue. No unit timeline shown at this level.</p>
+      <div id="tower-list" class="list-grid"></div>
+    </section>
+
+    <section id="floorView" class="card hidden">
+      <div class="view-actions">
+        <button type="button" class="btn btn-soft" id="back-to-towers"><i class="bi bi-arrow-left"></i> Back to Towers</button>
+      </div>
+      <h2 class="section-title">View 2 - Floor View</h2>
+      <p class="hint">Select a floor from the active tower.</p>
+      <p class="breadcrumb" id="floor-breadcrumb">Tower: -</p>
+      <div id="floor-list" class="list-grid"></div>
+    </section>
+
+    <section id="unitView" class="card hidden">
+      <div class="view-actions">
+        <button type="button" class="btn btn-soft" id="back-to-floors"><i class="bi bi-arrow-left"></i> Back to Floors</button>
+        <button type="button" class="btn btn-dark" id="scan-qr-btn"><i class="bi bi-qr-code-scan"></i> Scan QR</button>
+      </div>
+      <p class="breadcrumb" id="unit-breadcrumb">Tower - Floor - Unit</p>
+
+      <div class="unit-header">
+        <div>
+          <h2 class="unit-title" id="unit-title">Unit</h2>
+          <p class="unit-sub" id="unit-progress">Progress: 0%</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="generate-doc-btn"><i class="bi bi-file-earmark-text"></i> Generate Documentation Snapshot</button>
+      </div>
+
+      <div class="qr-panel" id="qr-panel">
+        QR flow: QR contains only <strong>unit_id</strong>. Frontend resolves state via <code>openUnit(unit_id)</code>.
+      </div>
+
+      <div class="split" style="margin-top: 12px;">
+        <div>
+          <h3 class="section-title">Timeline (append-only history)</h3>
+          <p class="hint">No edit. No delete. Only add new progress entries.</p>
+          <div class="timeline" id="timeline-list"></div>
+        </div>
+
+        <div>
+          <h3 class="section-title">Add Progress (current unit only)</h3>
+          <p class="hint">Fast form: stage, status, conditional reason, 1-5 photos, optional comment.</p>
+          <form id="progress-form">
+            <div class="field">
+              <label for="stage">Stage</label>
+              <select id="stage" name="stage" required>
+                <option value="">Select stage</option>
+                <option>Demolition</option>
+                <option>First Fix</option>
+                <option>Electrical</option>
+                <option>Insulation</option>
+                <option>Plasterboard</option>
+                <option>Second Fix</option>
+                <option>Decoration</option>
+                <option>Final Check</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="status">Status</label>
+              <select id="status" name="status" required>
+                <option value="">Select status</option>
+                <option>Done</option>
+                <option>In progress</option>
+                <option>Blocked</option>
+              </select>
+            </div>
+
+            <div class="field reason-field hidden" id="reason-field">
+              <label for="reason">Reason (required for Blocked)</label>
+              <input id="reason" name="reason" type="text" maxlength="150" placeholder="Short reason">
+            </div>
+
+            <div class="field">
+              <label for="photos">Photos (1 to 5)</label>
+              <input id="photos" name="photos" type="file" accept="image/*" multiple required>
+            </div>
+
+            <div class="field">
+              <label for="comment">Comment (optional)</label>
+              <textarea id="comment" name="comment" maxlength="220" placeholder="Optional short note"></textarea>
+            </div>
+
+            <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i> Submit Progress</button>
+          </form>
+          <div class="feedback" id="form-feedback"></div>
+
+          <h3 class="section-title" style="margin-top: 14px;">Documentation Snapshot Preview</h3>
+          <div class="doc-preview" id="doc-preview">No snapshot generated yet.</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="modal" id="timeline-modal" aria-hidden="true">
+      <div class="modal-backdrop" id="timeline-modal-backdrop"></div>
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="timeline-modal-title">
+        <div class="modal-head">
+          <h4 id="timeline-modal-title">Timeline Event Details</h4>
+          <button type="button" class="modal-close" id="timeline-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-grid">
+            <div class="modal-field"><strong>Unit</strong><span id="modal-unit-name">-</span></div>
+            <div class="modal-field"><strong>Date</strong><span id="modal-date">-</span></div>
+            <div class="modal-field"><strong>Stage</strong><span id="modal-stage">-</span></div>
+            <div class="modal-field"><strong>Status</strong><span id="modal-status">-</span></div>
+            <div class="modal-field"><strong>Updated By</strong><span id="modal-user">-</span></div>
+            <div class="modal-field"><strong>Reason</strong><span id="modal-reason">-</span></div>
+          </div>
+          <div class="modal-text">
+            <strong style="display:block; margin-bottom:4px; font-size:0.78rem; text-transform:uppercase; color:#374151;">Comment</strong>
+            <span id="modal-comment">-</span>
+          </div>
+          <div>
+            <strong style="display:block; margin-bottom:6px; font-size:0.78rem; text-transform:uppercase; color:#374151;">Photos</strong>
+            <div id="modal-photos" class="modal-photos"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="photo-preview-modal" aria-hidden="true">
+      <div class="modal-backdrop" id="photo-preview-backdrop"></div>
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="photo-preview-title">
+        <div class="modal-head">
+          <h4 id="photo-preview-title">Photo Preview</h4>
+          <button type="button" class="modal-close" id="photo-preview-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <img id="photo-preview-image" class="photo-preview-img" alt="Timeline photo preview">
+          <div id="photo-preview-caption" class="preview-caption">-</div>
+          <div class="preview-controls">
+            <button type="button" class="btn btn-soft" id="photo-preview-back"><i class="bi bi-chevron-left"></i> Back</button>
+            <button type="button" class="btn btn-primary" id="photo-preview-next">Next <i class="bi bi-chevron-right"></i></button>
+            <button type="button" class="btn btn-dark" id="photo-preview-close-2">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="unit-qr-modal" aria-hidden="true">
+      <div class="modal-backdrop" id="unit-qr-backdrop"></div>
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="unit-qr-title">
+        <div class="modal-head">
+          <h4 id="unit-qr-title">Unit QR Code</h4>
+          <button type="button" class="modal-close" id="unit-qr-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p id="unit-qr-description" class="assistant-tone" style="margin:0;"></p>
+          <div id="unit-qr-code" style="display:flex;justify-content:center; padding:10px 0;"></div>
+          <div class="review-box" id="unit-qr-link-preview" style="font-size:0.75rem;"></div>
+          <div class="preview-controls">
+            <button type="button" class="btn btn-soft" id="unit-qr-save">Save PDF</button>
+            <button type="button" class="btn btn-primary" id="unit-qr-print">Print PDF</button>
+            <button type="button" class="btn btn-dark" id="unit-qr-share">Share PDF</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wizard-modal" id="project-wizard-modal" aria-hidden="true">
+      <div class="wizard-shell">
+        <div class="wizard-head">
+          <div>
+            <div class="wizard-progress" id="wizard-progress">Step 1 / 6</div>
+            <div class="assistant-tone" id="wizard-tone">Let's start with your project.</div>
+          </div>
+          <a href="#" class="modal-close" id="close-project-wizard" onclick="return window.forceCloseProjectWizard(event);" aria-label="Close" style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;">&times;</a>
+        </div>
+
+        <div class="wizard-body" id="wizard-swipe-area">
+          <section class="wizard-step active" data-step="1">
+            <h3 class="wizard-question">Which project are you setting up?</h3>
+            <select id="wizard-project-name" name="wizard-project-name">
+              <option value="">Select project</option>
+              <option value="Proconix Riverside Tower">Proconix Riverside Tower</option>
+              <option value="Proconix North Gate">Proconix North Gate</option>
+              <option value="Proconix Business Center">Proconix Business Center</option>
+              <option value="Proconix Residential Block">Proconix Residential Block</option>
+            </select>
+          </section>
+
+          <section class="wizard-step" data-step="2">
+            <h3 class="wizard-question">How many buildings are in this project?</h3>
+            <div class="counter-row">
+              <button type="button" class="counter-btn" id="building-minus">-</button>
+              <div class="counter-value" id="building-count-value">1</div>
+              <button type="button" class="counter-btn" id="building-plus">+</button>
+            </div>
+            <p class="assistant-tone">Great. Now name each building.</p>
+            <div class="wizard-cards" id="wizard-buildings-list"></div>
+          </section>
+
+          <section class="wizard-step" data-step="3">
+            <h3 class="wizard-question">How many floors does each building have?</h3>
+            <p class="assistant-tone">Perfect. Let's define floor counts for each building.</p>
+            <div class="wizard-cards" id="wizard-floors-list"></div>
+          </section>
+
+          <section class="wizard-step" data-step="4">
+            <h3 class="wizard-question">Define spaces on each floor</h3>
+            <p class="assistant-tone">Add spaces freely. Names must be unique per floor.</p>
+            <div class="wizard-cards" id="wizard-spaces-list"></div>
+          </section>
+
+          <section class="wizard-step" data-step="5">
+            <h3 class="wizard-question">Save progress and continue later</h3>
+            <p class="assistant-tone">Large project? Save draft now and resume from the exact same step later.</p>
+            <button type="button" class="btn btn-primary" id="wizard-save-draft">Save Draft</button>
+          </section>
+
+          <section class="wizard-step" data-step="6">
+            <h3 class="wizard-question">Final review</h3>
+            <p class="assistant-tone">Simple tree view with arrows so anyone can understand the setup quickly.</p>
+            <div class="review-box" id="wizard-review-box"></div>
+            <button type="button" class="btn btn-primary" id="wizard-create-project">Create Project</button>
+          </section>
+        </div>
+
+        <div class="wizard-foot">
+          <div class="wizard-status" id="wizard-status">One question per screen. Fast and clear.</div>
+          <div class="counter-row">
+            <button type="button" class="btn btn-soft" id="wizard-back">Back</button>
+            <button type="button" class="btn btn-primary" id="wizard-next">Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const DATA = {
+      towers: [
+        { id: "A", name: "Tower A" },
+        { id: "B", name: "Tower B" }
+      ],
+      floors: [
+        { id: "A-1", tower: "A", number: 1 },
+        { id: "A-2", tower: "A", number: 2 },
+        { id: "B-1", tower: "B", number: 1 }
+      ],
+      units: [
+        {
+          id: 101,
+          name: "Apartment 101",
+          tower: "A",
+          floor: 1,
+          timeline: [
+            {
+              stage: "Insulation",
+              status: "Done",
+              reason: "",
+              photos: ["ins_1.jpg", "ins_2.jpg"],
+              user: "Ana Ionescu",
+              date: "2026-04-24",
+              comment: "Insulation completed."
+            }
+          ]
+        },
+        {
+          id: 202,
+          name: "Apartment 202",
+          tower: "A",
+          floor: 2,
+          timeline: [
+            {
+              stage: "Electrical",
+              status: "Blocked",
+              reason: "No cables on site",
+              photos: ["el_1.jpg"],
+              user: "John",
+              date: "2026-04-25",
+              comment: ""
+            }
+          ]
+        },
+        {
+          id: 301,
+          name: "Office 301",
+          tower: "B",
+          floor: 1,
+          timeline: []
+        }
+      ]
+    };
+
+    const state = {
+      currentTower: null,
+      currentFloor: null,
+      currentUnitId: null
+    };
+
+    const towerView = document.getElementById("towerView");
+    const floorView = document.getElementById("floorView");
+    const unitView = document.getElementById("unitView");
+
+    const towerList = document.getElementById("tower-list");
+    const floorList = document.getElementById("floor-list");
+    const timelineList = document.getElementById("timeline-list");
+
+    const floorBreadcrumb = document.getElementById("floor-breadcrumb");
+    const unitBreadcrumb = document.getElementById("unit-breadcrumb");
+    const unitTitle = document.getElementById("unit-title");
+    const unitProgress = document.getElementById("unit-progress");
+    const docPreview = document.getElementById("doc-preview");
+    const qrPanel = document.getElementById("qr-panel");
+
+    const form = document.getElementById("progress-form");
+    const statusInput = document.getElementById("status");
+    const reasonField = document.getElementById("reason-field");
+    const reasonInput = document.getElementById("reason");
+    const photosInput = document.getElementById("photos");
+    const feedback = document.getElementById("form-feedback");
+    const timelineModal = document.getElementById("timeline-modal");
+    const timelineModalBackdrop = document.getElementById("timeline-modal-backdrop");
+    const timelineModalClose = document.getElementById("timeline-modal-close");
+    const photoPreviewModal = document.getElementById("photo-preview-modal");
+    const photoPreviewBackdrop = document.getElementById("photo-preview-backdrop");
+    const photoPreviewClose = document.getElementById("photo-preview-close");
+    const photoPreviewClose2 = document.getElementById("photo-preview-close-2");
+    const photoPreviewBack = document.getElementById("photo-preview-back");
+    const photoPreviewNext = document.getElementById("photo-preview-next");
+    const photoPreviewImage = document.getElementById("photo-preview-image");
+    const photoPreviewCaption = document.getElementById("photo-preview-caption");
+    const unitQrModal = document.getElementById("unit-qr-modal");
+    const unitQrBackdrop = document.getElementById("unit-qr-backdrop");
+    const unitQrClose = document.getElementById("unit-qr-close");
+    const unitQrDescription = document.getElementById("unit-qr-description");
+    const unitQrCodeWrap = document.getElementById("unit-qr-code");
+    const unitQrLinkPreview = document.getElementById("unit-qr-link-preview");
+    const unitQrSaveBtn = document.getElementById("unit-qr-save");
+    const unitQrPrintBtn = document.getElementById("unit-qr-print");
+    const unitQrShareBtn = document.getElementById("unit-qr-share");
+    let currentQrUnit = null;
+    const wizardModal = document.getElementById("project-wizard-modal");
+    const openWizardBtn = document.getElementById("open-project-wizard");
+    const closeWizardBtn = document.getElementById("close-project-wizard");
+    const wizardSteps = Array.from(document.querySelectorAll(".wizard-step"));
+    const wizardProgress = document.getElementById("wizard-progress");
+    const wizardTone = document.getElementById("wizard-tone");
+    const wizardStatus = document.getElementById("wizard-status");
+    const wizardBackBtn = document.getElementById("wizard-back");
+    const wizardNextBtn = document.getElementById("wizard-next");
+    const wizardSwipeArea = document.getElementById("wizard-swipe-area");
+    const wizardSaveDraftBtn = document.getElementById("wizard-save-draft");
+    let previewPhotos = [];
+    let previewIndex = 0;
+    const WIZARD_KEY = "proconix_project_wizard_state_v1";
+    const wizardState = {
+      step: 1,
+      projectName: "",
+      buildings: [{ id: "b-1", name: "Tower A", floorsCount: 1, floors: [{ number: 1, spaces: [] }] }]
+    };
+
+    function resetWizardState() {
+      wizardState.step = 1;
+      wizardState.projectName = "";
+      wizardState.buildings = [{ id: "b-1", name: "Tower A", floorsCount: 1, floors: [{ number: 1, spaces: [] }] }];
+    }
+
+    function show(viewId) {
+      towerView.classList.add("hidden");
+      floorView.classList.add("hidden");
+      unitView.classList.add("hidden");
+      document.getElementById(viewId).classList.remove("hidden");
+    }
+
+    function getCurrentUnit() {
+      return DATA.units.find((u) => u.id === state.currentUnitId) || null;
+    }
+
+    function computeProgress(unit) {
+      const doneCount = unit.timeline.filter((t) => t.status === "Done").length;
+      const totalSlots = 8;
+      return Math.min(100, Math.round((doneCount / totalSlots) * 100));
+    }
+
+    function createStatusClass(status) {
+      if (status === "Done") return "done";
+      if (status === "Blocked") return "blocked";
+      return "progress";
+    }
+
+    function createDotClass(status) {
+      if (status === "Done") return "dot-done";
+      if (status === "Blocked") return "dot-blocked";
+      return "dot-progress";
+    }
+
+    function formatDate(dateValue) {
+      const date = new Date(dateValue);
+      if (Number.isNaN(date.getTime())) return dateValue;
+      const dd = String(date.getDate()).padStart(2, "0");
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const yyyy = date.getFullYear();
+      return `${dd}/${mm}/${yyyy}`;
+    }
+
+    function createPlaceholderDataUri(label) {
+      const safeLabel = String(label || "photo").replace(/[<>&"]/g, "");
+      const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='400'><rect width='100%' height='100%' fill='#dbeafe'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='34' font-family='Arial, sans-serif' fill='#1e3a8a'>${safeLabel}</text></svg>`;
+      return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+    }
+
+    function normalizePhoto(photo) {
+      if (typeof photo === "string") {
+        return { name: photo, src: createPlaceholderDataUri(photo) };
+      }
+      if (photo && typeof photo === "object") {
+        return {
+          name: photo.name || "photo",
+          src: photo.src || createPlaceholderDataUri(photo.name || "photo")
+        };
+      }
+      return { name: "photo", src: createPlaceholderDataUri("photo") };
+    }
+
+    function saveWizardState() {
+      try {
+        localStorage.setItem(WIZARD_KEY, JSON.stringify(wizardState));
+      } catch (error) {
+        // Continue without persistence when storage is unavailable.
+      }
+    }
+
+    function loadWizardState() {
+      try {
+        const raw = localStorage.getItem(WIZARD_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return;
+        if (parsed.step) wizardState.step = Math.min(6, Math.max(1, Number(parsed.step) || 1));
+        if (typeof parsed.projectName === "string") wizardState.projectName = parsed.projectName;
+        if (Array.isArray(parsed.buildings) && parsed.buildings.length) {
+          const safeBuildings = parsed.buildings
+            .filter((building) => building && typeof building === "object")
+            .map((building, index) => ({
+              id: typeof building.id === "string" ? building.id : `b-restored-${index + 1}`,
+              name: typeof building.name === "string" ? building.name : `Tower ${index + 1}`,
+              floorsCount: Math.max(1, Number(building.floorsCount || 1)),
+              floors: Array.isArray(building.floors) ? building.floors.map((floor, floorIndex) => ({
+                number: Math.max(1, Number(floor?.number || floorIndex + 1)),
+                spaces: Array.isArray(floor?.spaces) ? floor.spaces.filter((space) => space && typeof space === "object").map((space) => ({
+                  type: typeof space.type === "string" ? space.type : "Apartment",
+                  name: typeof space.name === "string" ? space.name : ""
+                })) : []
+              })) : [{ number: 1, spaces: [] }]
+            }));
+          if (safeBuildings.length) wizardState.buildings = safeBuildings;
+        }
+      } catch (error) {
+        // Ignore invalid cache or restricted storage access.
+      }
+    }
+
+    function toneForStep(step) {
+      if (step === 1) return "Let's start with your project.";
+      if (step === 2) return "Great. How many buildings are included?";
+      if (step === 3) return "Nice. Let's define floors for each building.";
+      if (step === 4) return "Now define spaces floor by floor.";
+      if (step === 5) return "Save your draft at any time.";
+      return "Everything is ready for final review.";
+    }
+
+    function ensureFloors(building) {
+      if (!Array.isArray(building.floors)) building.floors = [];
+      const desired = Math.max(1, Number(building.floorsCount || 1));
+      while (building.floors.length < desired) {
+        building.floors.push({ number: building.floors.length + 1, spaces: [] });
+      }
+      while (building.floors.length > desired) building.floors.pop();
+      building.floors.forEach((floor, index) => {
+        floor.number = index + 1;
+        if (!Array.isArray(floor.spaces)) floor.spaces = [];
+      });
+    }
+
+    function setBuildingCount(count) {
+      const safeCount = Math.max(1, Math.min(20, count));
+      while (wizardState.buildings.length < safeCount) {
+        const idx = wizardState.buildings.length + 1;
+        wizardState.buildings.push({
+          id: `b-${Date.now()}-${idx}`,
+          name: `Tower ${String.fromCharCode(64 + idx)}`,
+          floorsCount: 1,
+          floors: [{ number: 1, spaces: [] }]
+        });
+      }
+      while (wizardState.buildings.length > safeCount) wizardState.buildings.pop();
+      wizardState.buildings.forEach(ensureFloors);
+      renderWizardStep();
+      saveWizardState();
+    }
+
+    function renderBuildingInputs() {
+      document.getElementById("building-count-value").textContent = String(wizardState.buildings.length);
+      const wrap = document.getElementById("wizard-buildings-list");
+      wrap.innerHTML = "";
+      wizardState.buildings.forEach((building, index) => {
+        const card = document.createElement("div");
+        card.className = "wizard-card";
+        card.innerHTML = `
+          <div class="wizard-card-head"><p class="wizard-card-title">Building ${index + 1}</p></div>
+          <input type="text" name="building-name-${index + 1}" value="${building.name || ""}" placeholder="Ex: Tower A">
+        `;
+        const input = card.querySelector("input");
+        input.addEventListener("input", () => {
+          building.name = input.value;
+          saveWizardState();
+        });
+        wrap.appendChild(card);
+      });
+    }
+
+    function renderFloorsInputs() {
+      const wrap = document.getElementById("wizard-floors-list");
+      wrap.innerHTML = "";
+      wizardState.buildings.forEach((building, index) => {
+        const card = document.createElement("div");
+        card.className = "wizard-card";
+        const floorsInputId = `floors-count-${building.id || index + 1}`;
+        card.innerHTML = `
+          <div class="wizard-card-head"><p class="wizard-card-title">${building.name || "Building"}</p></div>
+          <label for="${floorsInputId}">How many floors?</label>
+          <input id="${floorsInputId}" type="number" name="building-floors-${building.id || index + 1}" min="1" max="80" value="${building.floorsCount || 1}">
+        `;
+        const input = card.querySelector("input");
+        input.addEventListener("input", () => {
+          building.floorsCount = Math.max(1, Number(input.value || 1));
+          ensureFloors(building);
+          saveWizardState();
+        });
+        wrap.appendChild(card);
+      });
+    }
+
+    function hasDuplicateSpaceNames(floor) {
+      const names = floor.spaces
+        .map((space) => String(space.name || "").trim().toLowerCase())
+        .filter(Boolean);
+      return new Set(names).size !== names.length;
+    }
+
+    function makeUniqueName(targetFloor, baseName) {
+      const used = new Set(targetFloor.spaces.map((space) => String(space.name || "").trim().toLowerCase()));
+      let candidate = baseName;
+      let suffix = 2;
+      while (used.has(candidate.trim().toLowerCase())) {
+        candidate = `${baseName}-${suffix}`;
+        suffix += 1;
+      }
+      return candidate;
+    }
+
+    function applyCopyFromFloor(building, floor, card) {
+      const targetChecks = card.querySelectorAll(".copy-targets input:checked");
+      if (!targetChecks.length || !floor.spaces.length) return;
+      targetChecks.forEach((input) => {
+        const targetNumber = Number(input.value);
+        if (targetNumber === floor.number) return;
+        const targetFloor = building.floors.find((f) => f.number === targetNumber);
+        if (!targetFloor) return;
+        targetFloor.spaces = [];
+        floor.spaces.forEach((space) => {
+          const copied = { ...space };
+          copied.name = makeUniqueName(targetFloor, `${space.name || space.type}-${targetFloor.number}`);
+          targetFloor.spaces.push(copied);
+        });
+      });
+      saveWizardState();
+      renderSpacesEditor();
+      wizardStatus.textContent = `Copied structure from ${building.name} Floor ${floor.number} to selected floors with safe unique names.`;
+    }
+
+    function renderSpacesEditor() {
+      const wrap = document.getElementById("wizard-spaces-list");
+      wrap.innerHTML = "";
+      wizardState.buildings.forEach((building) => {
+        ensureFloors(building);
+        const buildingTitle = document.createElement("div");
+        buildingTitle.className = "wizard-card";
+        buildingTitle.innerHTML = `<div class="wizard-card-head"><p class="wizard-card-title">${building.name || "Building"} - setup sequence</p></div><p class="assistant-tone">Finish this building floor by floor, then continue to the next one.</p>`;
+        wrap.appendChild(buildingTitle);
+        building.floors.forEach((floor) => {
+          const card = document.createElement("div");
+          card.className = "wizard-card";
+          card.innerHTML = `
+            <div class="wizard-card-head">
+              <p class="wizard-card-title">${building.name || "Building"} - Floor ${floor.number}</p>
+              <button type="button" class="small-btn add-space-btn">+ Add Space</button>
+            </div>
+            <div class="wizard-cards floor-spaces"></div>
+            <div class="copy-panel">
+              <label style="margin:0;">Copy this floor structure to other floors?</label>
+              <div class="copy-targets" style="display:grid;gap:6px;">
+                ${building.floors
+                  .filter((targetFloor) => targetFloor.number !== floor.number)
+                  .map((targetFloor) => `<label style="display:flex;gap:8px;align-items:center;"><input type="checkbox" value="${targetFloor.number}"><span>Floor ${targetFloor.number}</span></label>`)
+                  .join("") || "<span class='assistant-tone'>No other floors available.</span>"}
+              </div>
+              <button type="button" class="small-btn apply-copy-btn">Copy To Selected Floors</button>
+            </div>
+          `;
+          const list = card.querySelector(".floor-spaces");
+          const addBtn = card.querySelector(".add-space-btn");
+          const copyBtn = card.querySelector(".apply-copy-btn");
+
+          function renderSpaces() {
+            list.innerHTML = "";
+            if (!floor.spaces.length) {
+              list.innerHTML = "<div class='timeline-empty'>No spaces yet. Add first space.</div>";
+              return;
+            }
+            floor.spaces.forEach((space, idx) => {
+              const row = document.createElement("div");
+              row.className = "wizard-card";
+              const spaceTypeId = `space-type-${building.id || "b"}-${floor.number}-${idx}`;
+              const spaceNameId = `space-name-${building.id || "b"}-${floor.number}-${idx}`;
+              row.innerHTML = `
+                <div class="space-grid">
+                  <div>
+                    <label for="${spaceTypeId}">Type</label>
+                    <select id="${spaceTypeId}" name="space-type-${building.id || "b"}-${floor.number}-${idx}">
+                      <option ${space.type === "Apartment" ? "selected" : ""}>Apartment</option>
+                      <option ${space.type === "Corridor" ? "selected" : ""}>Corridor</option>
+                      <option ${space.type === "Riser" ? "selected" : ""}>Riser</option>
+                      <option ${space.type === "Utility Room" ? "selected" : ""}>Utility Room</option>
+                      <option ${space.type === "Staircase" ? "selected" : ""}>Staircase</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="${spaceNameId}">Name</label>
+                    <input id="${spaceNameId}" type="text" name="space-name-${building.id || "b"}-${floor.number}-${idx}" value="${space.name || ""}" placeholder="Ex: 101">
+                    <div class="field-error name-error"></div>
+                  </div>
+                  <button type="button" class="small-btn remove-space-btn">Delete</button>
+                </div>
+              `;
+              const typeSelect = row.querySelector("select");
+              const nameInput = row.querySelector("input");
+              const removeBtn = row.querySelector(".remove-space-btn");
+              typeSelect.addEventListener("change", () => {
+                space.type = typeSelect.value;
+                saveWizardState();
+              });
+              nameInput.addEventListener("input", () => {
+                space.name = nameInput.value;
+                const names = floor.spaces.map((entry) => String(entry.name || "").trim().toLowerCase()).filter(Boolean);
+                const duplicates = names.filter((name, i) => names.indexOf(name) !== i);
+                const errorEl = row.querySelector(".name-error");
+                if (duplicates.includes(String(space.name || "").trim().toLowerCase())) {
+                  errorEl.textContent = "Name already exists on this floor.";
+                } else {
+                  errorEl.textContent = "";
+                }
+                saveWizardState();
+              });
+              removeBtn.addEventListener("click", () => {
+                floor.spaces.splice(idx, 1);
+                renderSpaces();
+                saveWizardState();
+              });
+              list.appendChild(row);
+            });
+          }
+
+          addBtn.addEventListener("click", () => {
+            const autoName = makeUniqueName(floor, `${floor.number}${String(floor.spaces.length + 1).padStart(2, "0")}`);
+            floor.spaces.push({ type: "Apartment", name: autoName });
+            renderSpaces();
+            saveWizardState();
+          });
+          copyBtn.addEventListener("click", () => applyCopyFromFloor(building, floor, card));
+
+          renderSpaces();
+          wrap.appendChild(card);
+        });
+      });
+    }
+
+    function reviewSummary() {
+      const lines = [];
+      lines.push(`Project -> ${wizardState.projectName}`);
+      wizardState.buildings.forEach((building) => {
+        lines.push(`  -> Building: ${building.name}`);
+        building.floors.forEach((floor) => {
+          lines.push(`      -> Floor ${floor.number}`);
+          if (!floor.spaces.length) {
+            lines.push("          -> (No spaces)");
+          } else {
+            floor.spaces.forEach((space) => {
+              lines.push(`          -> ${space.type}: ${space.name}`);
+            });
+          }
+        });
+      });
+      return lines.join("\n");
+    }
+
+    function renderWizardStep() {
+      wizardSteps.forEach((stepEl) => {
+        const index = Number(stepEl.dataset.step);
+        stepEl.classList.toggle("active", index === wizardState.step);
+      });
+      wizardProgress.textContent = `Step ${wizardState.step} / 6`;
+      wizardTone.textContent = toneForStep(wizardState.step);
+      wizardBackBtn.disabled = wizardState.step === 1;
+      wizardNextBtn.style.display = wizardState.step === 6 ? "none" : "inline-block";
+      document.getElementById("wizard-project-name").value = wizardState.projectName;
+      renderBuildingInputs();
+      renderFloorsInputs();
+      renderSpacesEditor();
+      if (wizardState.step === 6) {
+        document.getElementById("wizard-review-box").textContent = reviewSummary();
+      }
+      saveWizardState();
+    }
+
+    function validateStep(step) {
+      if (step === 1) {
+        if (!wizardState.projectName.trim()) return "Please select a project.";
+      }
+      if (step === 2) {
+        if (!wizardState.buildings.length) return "Add at least one building.";
+        if (wizardState.buildings.some((b) => !String(b.name || "").trim())) return "Each building needs a name.";
+      }
+      if (step === 3) {
+        if (wizardState.buildings.some((b) => Number(b.floorsCount || 0) < 1)) return "Each building needs at least one floor.";
+      }
+      if (step === 4) {
+        const hasAnySpace = wizardState.buildings.some((b) => b.floors.some((f) => f.spaces.length > 0));
+        if (!hasAnySpace) return "Add at least one space in the project.";
+        const missingNames = wizardState.buildings.some((b) => b.floors.some((f) => f.spaces.some((space) => !String(space.name || "").trim())));
+        if (missingNames) return "Each space must have a name.";
+        const duplicateNameFloor = wizardState.buildings.some((b) => b.floors.some((f) => hasDuplicateSpaceNames(f)));
+        if (duplicateNameFloor) return "Space names must be unique inside each floor.";
+      }
+      return "";
+    }
+
+    function wizardNext() {
+      const issue = validateStep(wizardState.step);
+      if (issue) {
+        wizardStatus.textContent = issue;
+        return;
+      }
+      if (wizardState.step < 6) {
+        wizardState.step += 1;
+        wizardStatus.textContent = "Great, moving to the next step.";
+        renderWizardStep();
+      }
+    }
+
+    function wizardBack() {
+      if (wizardState.step > 1) {
+        wizardState.step -= 1;
+        wizardStatus.textContent = "Moved back to the previous step.";
+        renderWizardStep();
+      }
+    }
+
+    function openWizard() {
+      try {
+        loadWizardState();
+        renderWizardStep();
+      } catch (error) {
+        resetWizardState();
+        renderWizardStep();
+      }
+      wizardModal.classList.add("open");
+      wizardModal.setAttribute("aria-hidden", "false");
+    }
+
+    function closeWizard() {
+      wizardModal.classList.remove("open");
+      wizardModal.setAttribute("aria-hidden", "true");
+      saveWizardState();
+    }
+
+    function createProjectFromWizard() {
+      const issue = validateStep(6);
+      if (issue) {
+        wizardStatus.textContent = issue;
+        return;
+      }
+      const snapshot = reviewSummary();
+      docPreview.textContent = snapshot;
+      wizardStatus.textContent = "Project structure created. Ready for QR, progress tracking, dashboard and reports.";
+      closeWizard();
+    }
+
+
+    function renderTowers() {
+      towerList.innerHTML = "";
+      DATA.towers.forEach((tower) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "list-item";
+        btn.innerHTML = `
+          <div class="item-head">
+            <p class="item-title">${tower.name}</p>
+            <span class="pill">Tower</span>
+          </div>
+          <div class="meta">Tap to open floors</div>
+        `;
+        btn.addEventListener("click", () => openTower(tower.id));
+        towerList.appendChild(btn);
+      });
+    }
+
+    function loadFloors(towerId) {
+      floorList.innerHTML = "";
+      const floors = DATA.floors.filter((f) => f.tower === towerId);
+      floors.forEach((floor) => {
+        const unitsCount = DATA.units.filter((u) => u.tower === towerId && u.floor === floor.number).length;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "list-item";
+        btn.innerHTML = `
+          <div class="item-head">
+            <p class="item-title">Floor ${floor.number}</p>
+            <span class="pill">${unitsCount} units</span>
+          </div>
+          <div class="meta">Tap to open units from this floor</div>
+        `;
+        btn.addEventListener("click", () => openFloor(floor.id));
+        floorList.appendChild(btn);
+      });
+    }
+
+    function loadUnits(floorId) {
+      const floor = DATA.floors.find((f) => f.id === floorId);
+      if (!floor) return;
+
+      const units = DATA.units.filter((u) => u.tower === floor.tower && u.floor === floor.number);
+      floorList.innerHTML = "";
+
+      units.forEach((unit) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "list-item";
+        btn.innerHTML = `
+          <div class="item-head">
+            <p class="item-title">${unit.name}</p>
+            <div class="pill-wrap">
+              <span class="pill">${computeProgress(unit)}%</span>
+              <button type="button" class="btn-qr" data-unit-id="${unit.id}">Show QR Code</button>
+            </div>
+          </div>
+          <div class="meta">Open unit timeline and actions</div>
+        `;
+        const qrBtn = btn.querySelector(".btn-qr");
+        qrBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          openUnitQrModal(unit);
+        });
+        btn.addEventListener("click", () => openUnit(unit.id));
+        floorList.appendChild(btn);
+      });
+
+      floorBreadcrumb.textContent = `Tower: ${floor.tower} | Floor: ${floor.number}`;
+    }
+
+    function renderTimeline(unit) {
+      timelineList.innerHTML = "";
+      if (!unit.timeline.length) {
+        timelineList.innerHTML = "<div class='timeline-empty'>No updates yet. Add the first progress update.</div>";
+        return;
+      }
+
+      const sorted = [...unit.timeline].sort((a, b) => new Date(b.date) - new Date(a.date));
+      sorted.forEach((entry, index) => {
+        const item = document.createElement("div");
+        const sideClass = index % 2 === 0 ? "left" : "right";
+        item.className = `timeline-entry ${sideClass}`;
+        const reasonLine = entry.status === "Blocked" && entry.reason
+          ? `<div class="timeline-meta"><strong>Reason:</strong> ${entry.reason}</div>`
+          : "";
+        const commentLine = entry.comment
+          ? `<div class="timeline-meta"><strong>Comment:</strong> ${entry.comment}</div>`
+          : "";
+        const photos = entry.photos.length
+          ? `<div class="photo-row">${entry.photos.map((p, photoIndex) => {
+              const photo = normalizePhoto(p);
+              return `<button type="button" class="photo" data-photo-index="${photoIndex}"><img src="${photo.src}" alt="${photo.name}"><span>${photo.name}</span></button>`;
+            }).join("")}</div>`
+          : "";
+        item.innerHTML = `
+          <div class="timeline-center">
+            <div class="timeline-dot ${createDotClass(entry.status)}" aria-hidden="true"></div>
+          </div>
+          <div class="timeline-card">
+            <div class="timeline-bar">${formatDate(entry.date)}</div>
+            <div class="timeline-content">
+              <div class="timeline-head">
+                <strong>${entry.stage}</strong>
+                <span class="status ${createStatusClass(entry.status)}">${entry.status}</span>
+              </div>
+              <div class="timeline-meta">By: ${entry.user} | Date: ${formatDate(entry.date)}</div>
+              ${reasonLine}
+              ${commentLine}
+              ${photos}
+            </div>
+          </div>
+        `;
+        item.querySelectorAll(".photo").forEach((photoBtn) => {
+          photoBtn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            const indexPhoto = Number(photoBtn.dataset.photoIndex || 0);
+            const photosList = entry.photos.map(normalizePhoto);
+            openPhotoPreview(photosList, indexPhoto);
+          });
+        });
+        item.addEventListener("click", () => openTimelineEventModal(unit, entry));
+        timelineList.appendChild(item);
+      });
+    }
+
+    function openTimelineEventModal(unit, entry) {
+      document.getElementById("modal-unit-name").textContent = `${unit.name} (ID: ${unit.id})`;
+      document.getElementById("modal-date").textContent = formatDate(entry.date);
+      document.getElementById("modal-stage").textContent = entry.stage || "-";
+      document.getElementById("modal-status").textContent = entry.status || "-";
+      document.getElementById("modal-user").textContent = entry.user || "-";
+      document.getElementById("modal-reason").textContent = entry.status === "Blocked"
+        ? (entry.reason || "Not provided")
+        : "Not required";
+      document.getElementById("modal-comment").textContent = entry.comment || "No comment";
+
+      const photosWrap = document.getElementById("modal-photos");
+      photosWrap.innerHTML = "";
+      if (entry.photos && entry.photos.length) {
+        const photosList = entry.photos.map(normalizePhoto);
+        photosList.forEach((photoData, index) => {
+          const photo = document.createElement("button");
+          photo.type = "button";
+          photo.className = "modal-photo";
+          photo.innerHTML = `<img src="${photoData.src}" alt="${photoData.name}"><span>${photoData.name}</span>`;
+          photo.addEventListener("click", () => openPhotoPreview(photosList, index));
+          photosWrap.appendChild(photo);
+        });
+      } else {
+        photosWrap.innerHTML = "<div class='modal-photo'>No photos</div>";
+      }
+
+      timelineModal.classList.add("open");
+      timelineModal.setAttribute("aria-hidden", "false");
+    }
+
+    function closeTimelineEventModal() {
+      timelineModal.classList.remove("open");
+      timelineModal.setAttribute("aria-hidden", "true");
+    }
+
+    function renderPhotoPreview() {
+      if (!previewPhotos.length) return;
+      const photo = previewPhotos[previewIndex];
+      photoPreviewImage.src = photo.src;
+      photoPreviewImage.alt = photo.name;
+      photoPreviewCaption.textContent = `${photo.name} (${previewIndex + 1}/${previewPhotos.length})`;
+      photoPreviewBack.disabled = previewPhotos.length <= 1;
+      photoPreviewNext.disabled = previewPhotos.length <= 1;
+    }
+
+    function openPhotoPreview(photos, startIndex) {
+      previewPhotos = photos.map(normalizePhoto);
+      previewIndex = Math.max(0, Math.min(startIndex, previewPhotos.length - 1));
+      renderPhotoPreview();
+      photoPreviewModal.classList.add("open");
+      photoPreviewModal.setAttribute("aria-hidden", "false");
+    }
+
+    function closePhotoPreview() {
+      photoPreviewModal.classList.remove("open");
+      photoPreviewModal.setAttribute("aria-hidden", "true");
+    }
+
+
+    function previewNextPhoto() {
+      if (!previewPhotos.length) return;
+      previewIndex = (previewIndex + 1) % previewPhotos.length;
+      renderPhotoPreview();
+    }
+
+    function previewPreviousPhoto() {
+      if (!previewPhotos.length) return;
+      previewIndex = (previewIndex - 1 + previewPhotos.length) % previewPhotos.length;
+      renderPhotoPreview();
+    }
+
+    function loadUnitTimeline(unitId) {
+      const unit = DATA.units.find((u) => u.id === unitId);
+      if (!unit) return;
+      unitTitle.textContent = `${unit.name} (Unit ID: ${unit.id})`;
+      unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
+      unitBreadcrumb.textContent = `Tower ${unit.tower} -> Floor ${unit.floor} -> ${unit.name}`;
+      qrPanel.innerHTML = `QR contains only <strong>unit_id=${unit.id}</strong>. Frontend action: <code>openUnit(${unit.id})</code>.`;
+      renderTimeline(unit);
+    }
+
+    function openTower(towerId) {
+      state.currentTower = towerId;
+      state.currentFloor = null;
+      state.currentUnitId = null;
+      show("floorView");
+      loadFloors(towerId);
+      floorBreadcrumb.textContent = `Tower: ${towerId}`;
+    }
+
+    function openFloor(floorId) {
+      state.currentFloor = floorId;
+      show("floorView");
+      loadUnits(floorId);
+    }
+
+    function openUnit(unitId) {
+      state.currentUnitId = unitId;
+      show("unitView");
+      loadUnitTimeline(unitId);
+    }
+
+    function openUnitQrModal(unit) {
+      currentQrUnit = unit;
+      unitQrDescription.textContent = `Scan to open ${unit.name} directly in Timeline + Add Progress view.`;
+      const qrUrl = `${window.location.origin}${window.location.pathname}?unit_id=${unit.id}`;
+      unitQrLinkPreview.textContent = qrUrl;
+      unitQrCodeWrap.innerHTML = "";
+      if (typeof QRCode === "function") {
+        // eslint-disable-next-line no-new
+        new QRCode(unitQrCodeWrap, {
+          text: qrUrl,
+          width: 220,
+          height: 220
+        });
+      } else {
+        unitQrCodeWrap.innerHTML = "<p>QR generator failed to load.</p>";
+      }
+      unitQrModal.classList.add("open");
+      unitQrModal.setAttribute("aria-hidden", "false");
+    }
+
+    function closeUnitQrModal() {
+      unitQrModal.classList.remove("open");
+      unitQrModal.setAttribute("aria-hidden", "true");
+      unitQrCodeWrap.innerHTML = "";
+      currentQrUnit = null;
+    }
+
+    function getQrImageDataUrl() {
+      const canvas = unitQrCodeWrap.querySelector("canvas");
+      if (canvas) return canvas.toDataURL("image/png");
+      const img = unitQrCodeWrap.querySelector("img");
+      if (img) return img.src;
+      return "";
+    }
+
+    function buildUnitQrPdf() {
+      if (!currentQrUnit || !window.jspdf || !window.jspdf.jsPDF) return null;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: "mm", format: "a4" });
+      const pageW = doc.internal.pageSize.getWidth();
+      const centerX = pageW / 2;
+      const qrDataUrl = getQrImageDataUrl();
+      const unitNumber = (currentQrUnit.name.match(/\d+/g) || [String(currentQrUnit.id)])[0];
+      const companyName = "Proconix Construction Ltd";
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.text("Unit QR Information Sheet", centerX, 22, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(13);
+      doc.text(`Floor: ${currentQrUnit.floor}`, centerX, 36, { align: "center" });
+      doc.text(`Apartment / Object Number: ${unitNumber}`, centerX, 44, { align: "center" });
+
+      if (qrDataUrl) {
+        doc.addImage(qrDataUrl, "PNG", centerX - 32, 52, 64, 64);
+      }
+
+      doc.setFontSize(12);
+      doc.text("Scan for information", centerX, 124, { align: "center" });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text(companyName, centerX, 140, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.text("by Proconix.uk", centerX, 150, { align: "center" });
+
+      return doc;
+    }
+
+    async function saveUnitQrPdf() {
+      const doc = buildUnitQrPdf();
+      if (!doc || !currentQrUnit) return;
+      doc.save(`unit-${currentQrUnit.id}-qr.pdf`);
+    }
+
+    async function printUnitQrPdf() {
+      const doc = buildUnitQrPdf();
+      if (!doc || !currentQrUnit) return;
+      const blob = doc.output("blob");
+      const url = URL.createObjectURL(blob);
+      const printWindow = window.open(url, "_blank");
+      if (printWindow) {
+        printWindow.addEventListener("load", () => {
+          printWindow.print();
+        });
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+    }
+
+    async function shareUnitQrPdf() {
+      const doc = buildUnitQrPdf();
+      if (!doc || !currentQrUnit) return;
+      const blob = doc.output("blob");
+      const file = new File([blob], `unit-${currentQrUnit.id}-qr.pdf`, { type: "application/pdf" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: `Unit ${currentQrUnit.id} QR`,
+            text: "Unit QR information sheet",
+            files: [file]
+          });
+          return;
+        } catch (error) {
+          // user cancelled share, fallback to download
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `unit-${currentQrUnit.id}-qr.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+    }
+
+    function getContributors(timeline) {
+      return [...new Set(timeline.map((entry) => entry.user))];
+    }
+
+    function getMaterialsSummary(timeline) {
+      const grouped = {};
+      timeline.forEach((entry) => {
+        grouped[entry.stage] = (grouped[entry.stage] || 0) + 1;
+      });
+      return grouped;
+    }
+
+    function generateDocumentSnapshot(unit) {
+      const contributors = getContributors(unit.timeline);
+      const materialsSummary = getMaterialsSummary(unit.timeline);
+      const photosByStage = {};
+      unit.timeline.forEach((entry) => {
+        photosByStage[entry.stage] = photosByStage[entry.stage] || [];
+        photosByStage[entry.stage].push(...entry.photos.map((photo) => normalizePhoto(photo).name));
+      });
+
+      return {
+        unit: {
+          id: unit.id,
+          name: unit.name,
+          tower: unit.tower,
+          floor: unit.floor,
+          progress: computeProgress(unit)
+        },
+        timeline: unit.timeline,
+        contributors,
+        materials_summary: materialsSummary,
+        photos_grouped_by_stage: photosByStage
+      };
+    }
+
+    document.getElementById("back-to-towers").addEventListener("click", () => {
+      show("towerView");
+      state.currentTower = null;
+      state.currentFloor = null;
+      state.currentUnitId = null;
+      renderTowers();
+    });
+
+    document.getElementById("back-to-floors").addEventListener("click", () => {
+      if (!state.currentFloor) {
+        show("towerView");
+        return;
+      }
+      show("floorView");
+      loadUnits(state.currentFloor);
+    });
+
+    document.getElementById("scan-qr-btn").addEventListener("click", () => {
+      const scannedUnitId = 202;
+      openUnit(scannedUnitId);
+      feedback.style.display = "block";
+      feedback.textContent = `QR valid (unit_id=${scannedUnitId}). Opened unit directly.`;
+      setTimeout(() => { feedback.style.display = "none"; }, 2200);
+    });
+
+    statusInput.addEventListener("change", () => {
+      const blocked = statusInput.value === "Blocked";
+      reasonField.classList.toggle("hidden", !blocked);
+      reasonInput.required = blocked;
+      if (!blocked) reasonInput.value = "";
+    });
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const unit = getCurrentUnit();
+      if (!unit) return;
+
+      const files = photosInput.files;
+      if (files.length < 1 || files.length > 5) {
+        feedback.style.display = "block";
+        feedback.textContent = "Upload between 1 and 5 photos.";
+        return;
+      }
+
+      const status = document.getElementById("status").value;
+      const stage = document.getElementById("stage").value;
+      const reason = reasonInput.value.trim();
+      if (status === "Blocked" && !reason) {
+        feedback.style.display = "block";
+        feedback.textContent = "Reason is required for Blocked status.";
+        return;
+      }
+
+      const newEntry = {
+        stage,
+        status,
+        reason: status === "Blocked" ? reason : "",
+        photos: Array.from(files).map((file) => ({
+          name: file.name,
+          src: URL.createObjectURL(file)
+        })),
+        user: "Current Supervisor",
+        date: new Date().toISOString().slice(0, 10),
+        comment: document.getElementById("comment").value.trim()
+      };
+
+      unit.timeline.push(newEntry);
+      renderTimeline(unit);
+      unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
+
+      feedback.style.display = "block";
+      feedback.textContent = "Progress appended successfully (timeline is append-only).";
+
+      form.reset();
+      reasonField.classList.add("hidden");
+      reasonInput.required = false;
+
+      setTimeout(() => { feedback.style.display = "none"; }, 2200);
+    });
+
+    document.getElementById("generate-doc-btn").addEventListener("click", () => {
+      const unit = getCurrentUnit();
+      if (!unit) return;
+      const snapshot = generateDocumentSnapshot(unit);
+      docPreview.textContent = JSON.stringify(snapshot, null, 2);
+    });
+
+    timelineModalBackdrop.addEventListener("click", closeTimelineEventModal);
+    timelineModalClose.addEventListener("click", closeTimelineEventModal);
+    photoPreviewBackdrop.addEventListener("click", closePhotoPreview);
+    photoPreviewClose.addEventListener("click", closePhotoPreview);
+    photoPreviewClose2.addEventListener("click", closePhotoPreview);
+    photoPreviewNext.addEventListener("click", previewNextPhoto);
+    photoPreviewBack.addEventListener("click", previewPreviousPhoto);
+    unitQrBackdrop.addEventListener("click", closeUnitQrModal);
+    unitQrClose.addEventListener("click", closeUnitQrModal);
+    unitQrSaveBtn.addEventListener("click", saveUnitQrPdf);
+    unitQrPrintBtn.addEventListener("click", printUnitQrPdf);
+    unitQrShareBtn.addEventListener("click", shareUnitQrPdf);
+    openWizardBtn.addEventListener("click", openWizard);
+    closeWizardBtn.addEventListener("click", closeWizard);
+    wizardBackBtn.addEventListener("click", wizardBack);
+    wizardNextBtn.addEventListener("click", wizardNext);
+    wizardSaveDraftBtn.addEventListener("click", () => {
+      saveWizardState();
+      wizardStatus.textContent = "Draft saved. You can close now and continue later.";
+    });
+    document.getElementById("wizard-project-name").addEventListener("change", (event) => {
+      wizardState.projectName = event.target.value;
+      saveWizardState();
+    });
+    document.getElementById("building-plus").addEventListener("click", () => setBuildingCount(wizardState.buildings.length + 1));
+    document.getElementById("building-minus").addEventListener("click", () => setBuildingCount(wizardState.buildings.length - 1));
+    document.getElementById("wizard-create-project").addEventListener("click", createProjectFromWizard);
+
+    let touchStartX = 0;
+    wizardSwipeArea.addEventListener("touchstart", (event) => {
+      touchStartX = event.changedTouches[0].clientX;
+    }, { passive: true });
+    wizardSwipeArea.addEventListener("touchend", (event) => {
+      const delta = event.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(delta) < 40) return;
+      if (delta < 0) wizardNext();
+      else wizardBack();
+    }, { passive: true });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && timelineModal.classList.contains("open")) {
+        closeTimelineEventModal();
+      }
+      if (event.key === "Escape" && photoPreviewModal.classList.contains("open")) {
+        closePhotoPreview();
+      }
+      if (event.key === "ArrowRight" && photoPreviewModal.classList.contains("open")) {
+        previewNextPhoto();
+      }
+      if (event.key === "ArrowLeft" && photoPreviewModal.classList.contains("open")) {
+        previewPreviousPhoto();
+      }
+      if (event.key === "Escape" && wizardModal.classList.contains("open")) {
+        closeWizard();
+      }
+      if (event.key === "Escape" && unitQrModal.classList.contains("open")) {
+        closeUnitQrModal();
+      }
+      if (wizardModal.classList.contains("open") && event.key === "Enter") {
+        const tag = (event.target && event.target.tagName ? event.target.tagName.toLowerCase() : "");
+        const isTextarea = tag === "textarea";
+        const isButton = tag === "button" || tag === "a";
+        if (!isTextarea && !isButton && wizardState.step < 6) {
+          event.preventDefault();
+          wizardNext();
+        }
+      }
+    });
+
+    loadWizardState();
+    renderTowers();
+    show("towerView");
+
+    const params = new URLSearchParams(window.location.search);
+    const qrUnitId = Number(params.get("unit_id"));
+    if (qrUnitId && DATA.units.some((unit) => unit.id === qrUnitId)) {
+      openUnit(qrUnitId);
+    }
+  </script>
+  <script>
+    window.forceOpenProjectWizard = function (event) {
+      if (event) event.preventDefault();
+      const modal = document.getElementById("project-wizard-modal");
+      if (!modal) return false;
+      if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+      }
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden", "false");
+      modal.style.setProperty("display", "flex", "important");
+      modal.style.setProperty("position", "fixed", "important");
+      modal.style.setProperty("inset", "0", "important");
+      modal.style.setProperty("z-index", "2147483647", "important");
+      modal.style.setProperty("background", "rgba(2, 6, 23, 0.72)", "important");
+      modal.style.setProperty("align-items", "center", "important");
+      modal.style.setProperty("justify-content", "center", "important");
+      const shell = modal.querySelector(".wizard-shell");
+      if (shell) {
+        shell.style.setProperty("display", "grid", "important");
+        shell.style.setProperty("position", "relative", "important");
+        shell.style.setProperty("top", "auto", "important");
+        shell.style.setProperty("left", "auto", "important");
+        shell.style.setProperty("transform", "none", "important");
+        shell.style.setProperty("width", "min(900px, calc(100vw - 24px))", "important");
+        shell.style.setProperty("height", "calc(100vh - 24px)", "important");
+        shell.style.setProperty("margin", "0 auto", "important");
+        shell.style.setProperty("opacity", "1", "important");
+        shell.style.setProperty("visibility", "visible", "important");
+        shell.style.setProperty("background", "#ffffff", "important");
+        shell.style.setProperty("border", "1px solid #e5e7eb", "important");
+        shell.style.setProperty("border-radius", "16px", "important");
+        shell.style.setProperty("z-index", "2147483647", "important");
+      }
+      document.body.style.setProperty("overflow", "hidden");
+      return false;
+    };
+
+    window.forceCloseProjectWizard = function (event) {
+      if (event) event.preventDefault();
+      const modal = document.getElementById("project-wizard-modal");
+      if (!modal) return false;
+      const opener = document.getElementById("open-project-wizard");
+      if (modal.contains(document.activeElement)) {
+        document.activeElement.blur();
+      }
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+      modal.style.setProperty("display", "none", "important");
+      document.body.style.removeProperty("overflow");
+      if (opener) opener.focus();
+      if (window.location.hash === "#project-wizard-modal") {
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+      return false;
+    };
+  </script>
+  <script>
+    // Fallback: keep Start Guided Setup clickable even if main script fails.
+    (function () {
+      function forceOpenWizardModal() {
+        if (typeof window.forceOpenProjectWizard === "function") {
+          window.forceOpenProjectWizard();
+        }
+      }
+
+      document.addEventListener("click", function (event) {
+        const launchBtn = event.target.closest("#open-project-wizard");
+        if (launchBtn) {
+          if (typeof window.openWizard === "function") {
+            try {
+              window.openWizard();
+              return;
+            } catch (error) {
+              forceOpenWizardModal();
+              return;
+            }
+          }
+          forceOpenWizardModal();
+          return;
+        }
+
+        const closeBtn = event.target.closest("#close-project-wizard");
+        const backdrop = event.target.closest("#project-wizard-modal");
+        if (closeBtn) {
+          if (typeof window.forceCloseProjectWizard === "function") window.forceCloseProjectWizard();
+        } else if (backdrop && event.target.id === "project-wizard-modal") {
+          if (typeof window.forceCloseProjectWizard === "function") window.forceCloseProjectWizard();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
