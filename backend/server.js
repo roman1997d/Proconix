@@ -27,6 +27,7 @@ const platformAdminRoutes = require('./routes/platformAdminRoutes');
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
 const drawingGalleryRoutes = require('./routes/drawingGalleryRoutes');
 const siteChatRoutes = require('./routes/siteChatRoutes');
+const unitProgressRoutes = require('./routes/unitProgressRoutes');
 const { runSiteChatAgentReminders } = require('./controllers/siteChatController');
 const digitalDocumentsRoutes = require('./routes/digitalDocumentsRoutes');
 const { metricsMiddleware } = require('./middleware/metricsMiddleware');
@@ -126,6 +127,9 @@ app.use('/api/drawing-gallery', drawingGalleryRoutes);
 
 // Site chat (project room, material requests, notifications)
 app.use('/api/site-chat', siteChatRoutes);
+
+// Unit Progress Tracking (tower/floor/unit timeline workspace)
+app.use('/api/unit-progress', unitProgressRoutes);
 
 // API 404 – ensure all unmatched /api/* return JSON (no HTML)
 app.use('/api', (req, res) => {

@@ -1300,11 +1300,7 @@
           <section class="wizard-step active" data-step="1">
             <h3 class="wizard-question">Which project are you setting up?</h3>
             <select id="wizard-project-name" name="wizard-project-name">
-              <option value="">Select project</option>
-              <option value="Proconix Riverside Tower">Proconix Riverside Tower</option>
-              <option value="Proconix North Gate">Proconix North Gate</option>
-              <option value="Proconix Business Center">Proconix Business Center</option>
-              <option value="Proconix Residential Block">Proconix Residential Block</option>
+              <option value="">Loading projects...</option>
             </select>
           </section>
 
@@ -1358,59 +1354,10 @@
   </div>
 
   <script>
-    const DATA = {
-      towers: [
-        { id: "A", name: "Tower A" },
-        { id: "B", name: "Tower B" }
-      ],
-      floors: [
-        { id: "A-1", tower: "A", number: 1 },
-        { id: "A-2", tower: "A", number: 2 },
-        { id: "B-1", tower: "B", number: 1 }
-      ],
-      units: [
-        {
-          id: 101,
-          name: "Apartment 101",
-          tower: "A",
-          floor: 1,
-          timeline: [
-            {
-              stage: "Insulation",
-              status: "Done",
-              reason: "",
-              photos: ["ins_1.jpg", "ins_2.jpg"],
-              user: "Ana Ionescu",
-              date: "2026-04-24",
-              comment: "Insulation completed."
-            }
-          ]
-        },
-        {
-          id: 202,
-          name: "Apartment 202",
-          tower: "A",
-          floor: 2,
-          timeline: [
-            {
-              stage: "Electrical",
-              status: "Blocked",
-              reason: "No cables on site",
-              photos: ["el_1.jpg"],
-              user: "John",
-              date: "2026-04-25",
-              comment: ""
-            }
-          ]
-        },
-        {
-          id: 301,
-          name: "Office 301",
-          tower: "B",
-          floor: 1,
-          timeline: []
-        }
-      ]
+    let DATA = {
+      towers: [],
+      floors: [],
+      units: []
     };
 
     const state = {
@@ -1485,6 +1432,7 @@
     const wizardProgress = document.getElementById("wizard-progress");
     const wizardTone = document.getElementById("wizard-tone");
     const wizardStatus = document.getElementById("wizard-status");
+    const wizardProjectNameSelect = document.getElementById("wizard-project-name");
     const wizardBackBtn = document.getElementById("wizard-back");
     const wizardNextBtn = document.getElementById("wizard-next");
     const wizardSwipeArea = document.getElementById("wizard-swipe-area");
@@ -1496,6 +1444,12 @@
     let shouldCreateDocPdf = false;
     let generatedDocPackageBlob = null;
     let generatedDocPackageName = "";
+    const runtimeContext = {
+      actorKind: null,
+      actorName: "",
+      companyName: "",
+      managerName: ""
+    };
     const WIZARD_KEY = "proconix_project_wizard_state_v1";
     const wizardState = {
       step: 1,
@@ -1507,6 +1461,191 @@
       wizardState.step = 1;
       wizardState.projectName = "";
       wizardState.buildings = [{ id: "b-1", name: "Tower A", floorsCount: 1, floors: [{ number: 1, spaces: [] }] }];
+    }
+
+    function getManagerSession() {
+      try {
+        const raw = localStorage.getItem("proconix_manager_session") || sessionStorage.getItem("proconix_manager_session");
+        return raw ? JSON.parse(raw) : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function getManagerHeaders() {
+      const session = getManagerSession();
+      if (!session || session.manager_id == null || !session.email) return null;
+      return {
+        "X-Manager-Id": String(session.manager_id),
+        "X-Manager-Email": String(session.email)
+      };
+    }
+
+    function getOperativeToken() {
+      try {
+        return localStorage.getItem("proconix_operative_token") || sessionStorage.getItem("proconix_operative_token");
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function getSupervisorHeaders() {
+      const token = getOperativeToken();
+      if (!token) return null;
+      return { "X-Operative-Token": token };
+    }
+
+    function getWorkspaceApiConfig() {
+      const managerHeaders = getManagerHeaders();
+      if (managerHeaders) {
+        return {
+          kind: "manager",
+          headers: managerHeaders,
+          getUrl: "/api/unit-progress/workspace",
+          putUrl: "/api/unit-progress/workspace"
+        };
+      }
+      const supervisorHeaders = getSupervisorHeaders();
+      if (supervisorHeaders) {
+        return {
+          kind: "supervisor",
+          headers: supervisorHeaders,
+          getUrl: "/api/unit-progress/supervisor/workspace",
+          putUrl: "/api/unit-progress/supervisor/workspace"
+        };
+      }
+      return null;
+    }
+
+    function mapWorkspaceData(workspace) {
+      const safe = workspace && typeof workspace === "object" ? workspace : {};
+      return {
+        towers: Array.isArray(safe.towers) ? safe.towers : [],
+        floors: Array.isArray(safe.floors) ? safe.floors : [],
+        units: Array.isArray(safe.units) ? safe.units : []
+      };
+    }
+
+    async function fetchActorContext() {
+      const managerHeaders = getManagerHeaders();
+      if (managerHeaders) {
+        try {
+          const response = await fetch("/api/auth/validate", { headers: managerHeaders });
+          const payload = await response.json();
+          if (response.ok && payload && payload.success) {
+            runtimeContext.actorKind = "manager";
+            runtimeContext.companyName = payload.company_name || "";
+            runtimeContext.managerName = payload.manager && payload.manager.name
+              ? `${payload.manager.name}${payload.manager.surname ? ` ${payload.manager.surname}` : ""}`.trim()
+              : "";
+            runtimeContext.actorName = runtimeContext.managerName || "";
+          }
+        } catch (error) {
+          // Keep fallback values from storage.
+        }
+        return;
+      }
+
+      const supervisorHeaders = getSupervisorHeaders();
+      if (supervisorHeaders) {
+        try {
+          const response = await fetch("/api/operatives/me", { headers: supervisorHeaders, credentials: "same-origin" });
+          const payload = await response.json();
+          if (response.ok && payload && payload.success && payload.user) {
+            runtimeContext.actorKind = "supervisor";
+            runtimeContext.actorName = payload.user.name || payload.user.email || "";
+          }
+        } catch (error) {
+          // Keep fallback values from storage.
+        }
+      }
+    }
+
+    async function loadWizardProjects() {
+      wizardProjectNameSelect.innerHTML = '<option value="">Loading projects...</option>';
+      const managerHeaders = getManagerHeaders();
+      if (managerHeaders) {
+        try {
+          const response = await fetch("/api/projects/list", { headers: managerHeaders });
+          const payload = await response.json();
+          if (response.ok && payload && payload.success && Array.isArray(payload.projects)) {
+            const names = payload.projects
+              .map((p) => (p && (p.project_name || p.name) ? String(p.project_name || p.name).trim() : ""))
+              .filter(Boolean);
+            const uniqueNames = [...new Set(names)];
+            if (uniqueNames.length) {
+              wizardProjectNameSelect.innerHTML = '<option value="">Select project</option>';
+              uniqueNames.forEach((name) => {
+                const option = document.createElement("option");
+                option.value = name;
+                option.textContent = name;
+                wizardProjectNameSelect.appendChild(option);
+              });
+              if (wizardState.projectName && uniqueNames.includes(wizardState.projectName)) {
+                wizardProjectNameSelect.value = wizardState.projectName;
+              }
+              return;
+            }
+          }
+        } catch (error) {
+          // fallback below
+        }
+      }
+
+      const supervisorHeaders = getSupervisorHeaders();
+      if (supervisorHeaders) {
+        try {
+          const response = await fetch("/api/operatives/project/current", { headers: supervisorHeaders, credentials: "same-origin" });
+          const payload = await response.json();
+          const projectName = payload && payload.success && payload.project && payload.project.name
+            ? String(payload.project.name).trim()
+            : "";
+          if (projectName) {
+            wizardProjectNameSelect.innerHTML = '<option value="">Select project</option>';
+            const option = document.createElement("option");
+            option.value = projectName;
+            option.textContent = projectName;
+            wizardProjectNameSelect.appendChild(option);
+            if (!wizardState.projectName) wizardState.projectName = projectName;
+            wizardProjectNameSelect.value = wizardState.projectName || projectName;
+            return;
+          }
+        } catch (error) {
+          // fallback below
+        }
+      }
+
+      wizardProjectNameSelect.innerHTML = '<option value="">No projects available</option>';
+    }
+
+    async function loadWorkspaceFromBackend() {
+      const cfg = getWorkspaceApiConfig();
+      if (!cfg) return;
+      try {
+        const response = await fetch(cfg.getUrl, { headers: cfg.headers, credentials: "same-origin" });
+        const payload = await response.json();
+        if (!response.ok || !payload || !payload.success) return;
+        DATA = mapWorkspaceData(payload.workspace);
+      } catch (error) {
+        // Keep in-memory default workspace.
+      }
+    }
+
+    async function persistWorkspace(reason) {
+      const cfg = getWorkspaceApiConfig();
+      if (!cfg) return false;
+      try {
+        const response = await fetch(cfg.putUrl, {
+          method: "PUT",
+          headers: { ...cfg.headers, "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ workspace: DATA, reason: reason || "update" })
+        });
+        const payload = await response.json();
+        return Boolean(response.ok && payload && payload.success);
+      } catch (error) {
+        return false;
+      }
     }
 
     function show(viewId) {
@@ -1930,15 +2069,78 @@
       saveWizardState();
     }
 
-    function createProjectFromWizard() {
+    function buildWorkspaceFromWizardState() {
+      const existingTimelineByKey = new Map();
+      DATA.units.forEach((unit) => {
+        const key = `${unit.tower}|${unit.floor}|${unit.name}`;
+        existingTimelineByKey.set(key, Array.isArray(unit.timeline) ? unit.timeline : []);
+      });
+
+      const towers = [];
+      const floors = [];
+      const units = [];
+      const usedUnitIds = new Set();
+      let nextGeneratedUnitId = 1;
+
+      const reserveUnitId = (candidate) => {
+        let id = Number(candidate);
+        if (!Number.isFinite(id) || id <= 0 || usedUnitIds.has(id)) {
+          while (usedUnitIds.has(nextGeneratedUnitId)) nextGeneratedUnitId += 1;
+          id = nextGeneratedUnitId;
+          nextGeneratedUnitId += 1;
+        }
+        usedUnitIds.add(id);
+        return id;
+      };
+
+      wizardState.buildings.forEach((building, buildingIndex) => {
+        const towerId = building.id || `T-${buildingIndex + 1}`;
+        const towerName = String(building.name || `Tower ${buildingIndex + 1}`).trim();
+        towers.push({ id: towerId, name: towerName });
+
+        building.floors.forEach((floor) => {
+          const floorNumber = Number(floor.number || 1);
+          const floorId = `${towerId}-${floorNumber}`;
+          floors.push({ id: floorId, tower: towerId, number: floorNumber });
+
+          floor.spaces.forEach((space, spaceIndex) => {
+            const baseName = String(space.name || "").trim() || `${floorNumber}${String(spaceIndex + 1).padStart(2, "0")}`;
+            const type = String(space.type || "Apartment").trim();
+            const unitName = type.toLowerCase() === "apartment" ? `Apartment ${baseName}` : `${type} ${baseName}`;
+            const key = `${towerId}|${floorNumber}|${unitName}`;
+            const parsedId = Number(String(baseName).replace(/[^\d]/g, ""));
+            units.push({
+              id: reserveUnitId(parsedId),
+              name: unitName,
+              tower: towerId,
+              floor: floorNumber,
+              timeline: existingTimelineByKey.get(key) || []
+            });
+          });
+        });
+      });
+
+      return { towers, floors, units };
+    }
+
+    async function createProjectFromWizard() {
       const issue = validateStep(6);
       if (issue) {
         wizardStatus.textContent = issue;
         return;
       }
-      const snapshot = reviewSummary();
-      docPreview.textContent = snapshot;
-      wizardStatus.textContent = "Project structure created. Ready for QR, progress tracking, dashboard and reports.";
+
+      DATA = buildWorkspaceFromWizardState();
+      renderTowers();
+      show("towerView");
+      state.currentTower = null;
+      state.currentFloor = null;
+      state.currentUnitId = null;
+
+      const saved = await persistWorkspace("wizard_create_project");
+      wizardStatus.textContent = saved
+        ? "Project structure created and synced with backend."
+        : "Project structure created locally. Backend sync failed.";
       closeWizard();
     }
 
@@ -2269,6 +2471,7 @@
     }
 
     function resolveCompanyName() {
+      if (runtimeContext.companyName) return runtimeContext.companyName;
       const fromStorage = localStorage.getItem("company_name")
         || localStorage.getItem("manager_company_name")
         || sessionStorage.getItem("company_name");
@@ -2276,6 +2479,8 @@
     }
 
     function resolveGeneratedByName(timeline) {
+      if (runtimeContext.managerName) return runtimeContext.managerName;
+      if (runtimeContext.actorName) return runtimeContext.actorName;
       const fromStorage = localStorage.getItem("manager_name")
         || localStorage.getItem("user_name")
         || sessionStorage.getItem("manager_name")
@@ -2291,6 +2496,15 @@
       if (!dataUrl) return null;
       const response = await fetch(dataUrl);
       return response.blob();
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+      });
     }
 
     function buildTimelineMarkdown(unit, timeline, mode, photoRefsByRow) {
@@ -2620,6 +2834,11 @@
       });
 
       return {
+        project: wizardState.projectName || "",
+        company_name: resolveCompanyName(),
+        generated_by: resolveGeneratedByName(unit.timeline),
+        generated_at: new Date().toISOString(),
+        progress_percent: computeProgress(unit),
         unit: {
           id: unit.id,
           name: unit.name,
@@ -2694,15 +2913,19 @@
         const simulatedUploadMs = Math.min(3000, 700 + files.length * 350);
         await new Promise((resolve) => setTimeout(resolve, simulatedUploadMs));
 
+        const photoPayload = await Promise.all(
+          Array.from(files).map(async (file) => ({
+            name: file.name,
+            src: await fileToDataUrl(file)
+          }))
+        );
+
         const newEntry = {
           stage,
           status,
           reason: status === "Blocked" ? reason : "",
-          photos: Array.from(files).map((file) => ({
-            name: file.name,
-            src: URL.createObjectURL(file)
-          })),
-          user: "Current Supervisor",
+          photos: photoPayload,
+          user: resolveGeneratedByName(unit.timeline),
           date: new Date().toISOString(),
           comment
         };
@@ -2710,6 +2933,7 @@
         unit.timeline.push(newEntry);
         renderTimeline(unit);
         unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
+        await persistWorkspace("timeline_add_progress");
 
         feedback.style.display = "block";
         feedback.textContent = "Progress updated";
@@ -2906,15 +3130,26 @@
       }
     });
 
-    loadWizardState();
-    renderTowers();
-    show("towerView");
+    async function bootstrapUnitProgressModule() {
+      loadWizardState();
+      await fetchActorContext();
+      await Promise.all([
+        loadWorkspaceFromBackend(),
+        loadWizardProjects()
+      ]);
 
-    const params = new URLSearchParams(window.location.search);
-    const qrUnitId = Number(params.get("unit_id"));
-    if (qrUnitId && DATA.units.some((unit) => unit.id === qrUnitId)) {
-      openUnit(qrUnitId);
+      renderTowers();
+      show("towerView");
+      renderWizardStep();
+
+      const params = new URLSearchParams(window.location.search);
+      const qrUnitId = Number(params.get("unit_id"));
+      if (qrUnitId && DATA.units.some((unit) => Number(unit.id) === qrUnitId)) {
+        openUnit(qrUnitId);
+      }
     }
+
+    bootstrapUnitProgressModule();
   </script>
   <script>
     window.forceOpenProjectWizard = function (event) {
