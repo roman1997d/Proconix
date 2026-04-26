@@ -1655,8 +1655,19 @@
       document.getElementById(viewId).classList.remove("hidden");
     }
 
+    function toUnitId(value) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function findUnitById(unitId) {
+      const target = toUnitId(unitId);
+      if (target == null) return null;
+      return DATA.units.find((u) => toUnitId(u.id) === target) || null;
+    }
+
     function getCurrentUnit() {
-      return DATA.units.find((u) => u.id === state.currentUnitId) || null;
+      return findUnitById(state.currentUnitId);
     }
 
     function computeProgress(unit) {
@@ -2344,9 +2355,9 @@
     }
 
     function loadUnitTimeline(unitId) {
-      const unit = DATA.units.find((u) => u.id === unitId);
+      const unit = findUnitById(unitId);
       if (!unit) return;
-      unitTitle.textContent = `${unit.name} (Unit ID: ${unit.id})`;
+      unitTitle.textContent = `${unit.name} (Unit ID: ${toUnitId(unit.id) ?? unit.id})`;
       unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
       unitBreadcrumb.textContent = `Tower ${unit.tower} -> Floor ${unit.floor} -> ${unit.name}`;
       renderTimeline(unit);
@@ -2688,9 +2699,11 @@
     }
 
     function openUnit(unitId) {
-      state.currentUnitId = unitId;
+      const normalizedId = toUnitId(unitId);
+      if (normalizedId == null) return;
+      state.currentUnitId = normalizedId;
       show("unitView");
-      loadUnitTimeline(unitId);
+      loadUnitTimeline(normalizedId);
     }
 
     function openUnitQrModal(unit) {
@@ -3144,7 +3157,7 @@
 
       const params = new URLSearchParams(window.location.search);
       const qrUnitId = Number(params.get("unit_id"));
-      if (qrUnitId && DATA.units.some((unit) => Number(unit.id) === qrUnitId)) {
+      if (qrUnitId && findUnitById(qrUnitId)) {
         openUnit(qrUnitId);
       }
     }
