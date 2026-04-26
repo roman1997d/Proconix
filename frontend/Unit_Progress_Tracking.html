@@ -856,7 +856,6 @@
     <section id="unitView" class="card hidden">
       <div class="view-actions">
         <button type="button" class="btn btn-soft" id="back-to-floors"><i class="bi bi-arrow-left"></i> Back to Floors</button>
-        <button type="button" class="btn btn-dark" id="scan-qr-btn"><i class="bi bi-qr-code-scan"></i> Scan QR</button>
       </div>
       <p class="breadcrumb" id="unit-breadcrumb">Tower - Floor - Unit</p>
 
@@ -865,22 +864,54 @@
           <h2 class="unit-title" id="unit-title">Unit</h2>
           <p class="unit-sub" id="unit-progress">Progress: 0%</p>
         </div>
-        <button type="button" class="btn btn-primary" id="generate-doc-btn"><i class="bi bi-file-earmark-text"></i> Generate Documentation Snapshot</button>
-      </div>
-
-      <div class="qr-panel" id="qr-panel">
-        QR flow: QR contains only <strong>unit_id</strong>. Frontend resolves state via <code>openUnit(unit_id)</code>.
-      </div>
-
-      <div class="split" style="margin-top: 12px;">
-        <div>
-          <h3 class="section-title">Timeline (append-only history)</h3>
-          <p class="hint">No edit. No delete. Only add new progress entries.</p>
-          <div class="timeline" id="timeline-list"></div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+          <button type="button" class="btn btn-dark" id="open-progress-modal-btn"><i class="bi bi-plus-circle"></i> Add Progress</button>
+          <button type="button" class="btn btn-primary" id="generate-doc-btn"><i class="bi bi-file-earmark-text"></i> Generate Documentation Snapshot</button>
         </div>
+      </div>
 
-        <div>
-          <h3 class="section-title">Add Progress (current unit only)</h3>
+      <h3 class="section-title">Timeline (append-only history)</h3>
+      <p class="hint">No edit. No delete. Only add new progress entries.</p>
+      <div class="timeline" id="timeline-list"></div>
+      <div class="doc-preview" id="doc-preview" style="display:none;">No snapshot generated yet.</div>
+    </section>
+
+    <div class="modal" id="timeline-modal" aria-hidden="true">
+      <div class="modal-backdrop" id="timeline-modal-backdrop"></div>
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="timeline-modal-title">
+        <div class="modal-head">
+          <h4 id="timeline-modal-title">Timeline Event Details</h4>
+          <button type="button" class="modal-close" id="timeline-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-grid">
+            <div class="modal-field"><strong>Unit</strong><span id="modal-unit-name">-</span></div>
+            <div class="modal-field"><strong>Date</strong><span id="modal-date">-</span></div>
+            <div class="modal-field"><strong>Stage</strong><span id="modal-stage">-</span></div>
+            <div class="modal-field"><strong>Status</strong><span id="modal-status">-</span></div>
+            <div class="modal-field"><strong>Updated By</strong><span id="modal-user">-</span></div>
+            <div class="modal-field"><strong>Reason</strong><span id="modal-reason">-</span></div>
+          </div>
+          <div class="modal-text">
+            <strong style="display:block; margin-bottom:4px; font-size:0.78rem; text-transform:uppercase; color:#374151;">Comment</strong>
+            <span id="modal-comment">-</span>
+          </div>
+          <div>
+            <strong style="display:block; margin-bottom:6px; font-size:0.78rem; text-transform:uppercase; color:#374151;">Photos</strong>
+            <div id="modal-photos" class="modal-photos"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="progress-modal" aria-hidden="true">
+      <div class="modal-backdrop" id="progress-modal-backdrop"></div>
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="progress-modal-title">
+        <div class="modal-head">
+          <h4 id="progress-modal-title">Add Progress (current unit only)</h4>
+          <button type="button" class="modal-close" id="progress-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
           <p class="hint">Fast form: stage, status, conditional reason, 1-5 photos, optional comment.</p>
           <form id="progress-form">
             <div class="field">
@@ -926,37 +957,6 @@
             <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i> Submit Progress</button>
           </form>
           <div class="feedback" id="form-feedback"></div>
-
-          <h3 class="section-title" style="margin-top: 14px;">Documentation Snapshot Preview</h3>
-          <div class="doc-preview" id="doc-preview">No snapshot generated yet.</div>
-        </div>
-      </div>
-    </section>
-
-    <div class="modal" id="timeline-modal" aria-hidden="true">
-      <div class="modal-backdrop" id="timeline-modal-backdrop"></div>
-      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="timeline-modal-title">
-        <div class="modal-head">
-          <h4 id="timeline-modal-title">Timeline Event Details</h4>
-          <button type="button" class="modal-close" id="timeline-modal-close" aria-label="Close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="modal-grid">
-            <div class="modal-field"><strong>Unit</strong><span id="modal-unit-name">-</span></div>
-            <div class="modal-field"><strong>Date</strong><span id="modal-date">-</span></div>
-            <div class="modal-field"><strong>Stage</strong><span id="modal-stage">-</span></div>
-            <div class="modal-field"><strong>Status</strong><span id="modal-status">-</span></div>
-            <div class="modal-field"><strong>Updated By</strong><span id="modal-user">-</span></div>
-            <div class="modal-field"><strong>Reason</strong><span id="modal-reason">-</span></div>
-          </div>
-          <div class="modal-text">
-            <strong style="display:block; margin-bottom:4px; font-size:0.78rem; text-transform:uppercase; color:#374151;">Comment</strong>
-            <span id="modal-comment">-</span>
-          </div>
-          <div>
-            <strong style="display:block; margin-bottom:6px; font-size:0.78rem; text-transform:uppercase; color:#374151;">Photos</strong>
-            <div id="modal-photos" class="modal-photos"></div>
-          </div>
         </div>
       </div>
     </div>
@@ -1146,7 +1146,7 @@
     const unitTitle = document.getElementById("unit-title");
     const unitProgress = document.getElementById("unit-progress");
     const docPreview = document.getElementById("doc-preview");
-    const qrPanel = document.getElementById("qr-panel");
+    const openProgressModalBtn = document.getElementById("open-progress-modal-btn");
 
     const form = document.getElementById("progress-form");
     const statusInput = document.getElementById("status");
@@ -1154,6 +1154,9 @@
     const reasonInput = document.getElementById("reason");
     const photosInput = document.getElementById("photos");
     const feedback = document.getElementById("form-feedback");
+    const progressModal = document.getElementById("progress-modal");
+    const progressModalBackdrop = document.getElementById("progress-modal-backdrop");
+    const progressModalClose = document.getElementById("progress-modal-close");
     const timelineModal = document.getElementById("timeline-modal");
     const timelineModalBackdrop = document.getElementById("timeline-modal-backdrop");
     const timelineModalClose = document.getElementById("timeline-modal-close");
@@ -1837,8 +1840,17 @@
       unitTitle.textContent = `${unit.name} (Unit ID: ${unit.id})`;
       unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
       unitBreadcrumb.textContent = `Tower ${unit.tower} -> Floor ${unit.floor} -> ${unit.name}`;
-      qrPanel.innerHTML = `QR contains only <strong>unit_id=${unit.id}</strong>. Frontend action: <code>openUnit(${unit.id})</code>.`;
       renderTimeline(unit);
+    }
+
+    function openProgressModal() {
+      progressModal.classList.add("open");
+      progressModal.setAttribute("aria-hidden", "false");
+    }
+
+    function closeProgressModal() {
+      progressModal.classList.remove("open");
+      progressModal.setAttribute("aria-hidden", "true");
     }
 
     function openTower(towerId) {
@@ -2034,13 +2046,7 @@
       loadUnits(state.currentFloor);
     });
 
-    document.getElementById("scan-qr-btn").addEventListener("click", () => {
-      const scannedUnitId = 202;
-      openUnit(scannedUnitId);
-      feedback.style.display = "block";
-      feedback.textContent = `QR valid (unit_id=${scannedUnitId}). Opened unit directly.`;
-      setTimeout(() => { feedback.style.display = "none"; }, 2200);
-    });
+    openProgressModalBtn.addEventListener("click", openProgressModal);
 
     statusInput.addEventListener("change", () => {
       const blocked = statusInput.value === "Blocked";
@@ -2093,6 +2099,7 @@
       form.reset();
       reasonField.classList.add("hidden");
       reasonInput.required = false;
+      closeProgressModal();
 
       setTimeout(() => { feedback.style.display = "none"; }, 2200);
     });
@@ -2104,6 +2111,8 @@
       docPreview.textContent = JSON.stringify(snapshot, null, 2);
     });
 
+    progressModalBackdrop.addEventListener("click", closeProgressModal);
+    progressModalClose.addEventListener("click", closeProgressModal);
     timelineModalBackdrop.addEventListener("click", closeTimelineEventModal);
     timelineModalClose.addEventListener("click", closeTimelineEventModal);
     photoPreviewBackdrop.addEventListener("click", closePhotoPreview);
@@ -2145,6 +2154,9 @@
       else wizardBack();
     }, { passive: true });
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && progressModal.classList.contains("open")) {
+        closeProgressModal();
+      }
       if (event.key === "Escape" && timelineModal.classList.contains("open")) {
         closeTimelineEventModal();
       }
