@@ -107,6 +107,18 @@ function runCommand(command, args, options) {
   });
 }
 
+function resolveExecutable(candidates) {
+  for (const cmd of candidates) {
+    if (!cmd) continue;
+    if (cmd.includes('/')) {
+      if (fs.existsSync(cmd)) return cmd;
+      continue;
+    }
+    return cmd;
+  }
+  return candidates && candidates.length ? candidates[0] : null;
+}
+
 /**
  * POST /api/platform-admin/login
  * Body: { email, password }
@@ -1145,6 +1157,7 @@ async function createBackup(req, res) {
   const finalZipPath = path.join(tempRoot, finalZipName);
   const backupIp = (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || '';
 
+  let step = 'init';
   try {
     const pgUser = process.env.PGUSER || process.env.DB_USER || 'postgres';
     const pgDatabase = process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB';
@@ -1154,10 +1167,18 @@ async function createBackup(req, res) {
     const pgPassword = process.env.PGPASSWORD || process.env.DB_PASSWORD;
     if (pgPassword) cmdEnv.PGPASSWORD = pgPassword;
 
+    const pgDumpCmd = resolveExecutable([
+      process.env.PG_DUMP_PATH,
+      '/opt/homebrew/bin/pg_dump',
+      '/usr/local/bin/pg_dump',
+      '/usr/bin/pg_dump',
+      'pg_dump',
+    ]);
     const dumpArgs = ['-U', pgUser, '-d', pgDatabase, '-F', 'c', '-f', dbDumpPath];
     if (pgHost) dumpArgs.splice(0, 0, '-h', pgHost);
     if (pgPort) dumpArgs.splice(0, 0, '-p', String(pgPort));
-    await runCommand('pg_dump', dumpArgs, { env: cmdEnv, cwd: projectRoot });
+    step = 'pg_dump';
+    await runCommand(pgDumpCmd, dumpArgs, { env: cmdEnv, cwd: projectRoot });
 
     const fileSources = [];
     ['backend/uploads', 'backend/output', 'output'].forEach((rel) => {
@@ -1166,12 +1187,15 @@ async function createBackup(req, res) {
     });
     if (fileSources.length === 0) {
       await fsp.writeFile(path.join(tempRoot, 'empty-backup-placeholder.txt'), 'No file storage directories found.\n', 'utf8');
-      await runCommand('tar', ['-czf', filesArchivePath, '-C', tempRoot, 'empty-backup-placeholder.txt'], { cwd: projectRoot });
+      step = 'tar_placeholder';
+      await runCommand('/usr/bin/tar', ['-czf', filesArchivePath, '-C', tempRoot, 'empty-backup-placeholder.txt'], { cwd: projectRoot });
     } else {
-      await runCommand('tar', ['-czf', filesArchivePath, ...fileSources], { cwd: projectRoot });
+      step = 'tar_files';
+      await runCommand('/usr/bin/tar', ['-czf', filesArchivePath, ...fileSources], { cwd: projectRoot });
     }
 
-    await runCommand('zip', ['-j', finalZipPath, dbDumpPath, filesArchivePath], { cwd: tempRoot });
+    step = 'zip_final';
+    await runCommand('/usr/bin/zip', ['-j', finalZipPath, dbDumpPath, filesArchivePath], { cwd: tempRoot });
 
     await appendBackupAuditLog({
       event: 'backup_created',
@@ -1201,6 +1225,7 @@ async function createBackup(req, res) {
       admin_id: adminId,
       admin_email: adminEmail,
       ip: backupIp,
+      step,
       error: err && err.message ? err.message : String(err),
     });
     console.error('createBackup error:', err);
@@ -1212,6 +1237,8 @@ async function createBackup(req, res) {
     return res.status(500).json({
       success: false,
       message: 'Backup generation failed. No partial package was returned.',
+      step,
+      detail: err && err.message ? err.message : String(err),
     });
   }
 }
