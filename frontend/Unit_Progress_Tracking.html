@@ -421,6 +421,7 @@
       overflow: hidden;
       background: #eff6ff;
       aspect-ratio: 4 / 3;
+      position: relative;
     }
 
     .upload-preview-item img {
@@ -428,6 +429,25 @@
       height: 100%;
       object-fit: cover;
       display: block;
+    }
+
+    .upload-preview-remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 20px;
+      height: 20px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.85);
+      color: #fff;
+      font-size: 0.75rem;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
     }
 
     .doc-preview {
@@ -1906,13 +1926,22 @@
       const files = selectedProgressPhotos;
       if (!files.length) return;
 
-      files.forEach((file) => {
+      files.forEach((file, index) => {
         const imgUrl = URL.createObjectURL(file);
         selectedPhotoObjectUrls.push(imgUrl);
         const item = document.createElement("div");
         item.className = "upload-preview-item";
-        item.innerHTML = `<img src="${imgUrl}" alt="${file.name}">`;
+        item.innerHTML = `<img src="${imgUrl}" alt="${file.name}">
+          <button type="button" class="upload-preview-remove" data-photo-index="${index}" aria-label="Remove photo">x</button>`;
         photosPreview.appendChild(item);
+      });
+      photosPreview.querySelectorAll(".upload-preview-remove").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const idx = Number(btn.dataset.photoIndex);
+          if (Number.isNaN(idx) || idx < 0 || idx >= selectedProgressPhotos.length) return;
+          selectedProgressPhotos.splice(idx, 1);
+          renderSelectedPhotoPreviews();
+        });
       });
       photosPreview.classList.remove("hidden");
     }
