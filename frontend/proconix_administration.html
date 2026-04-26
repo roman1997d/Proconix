@@ -127,6 +127,24 @@
             <p class="text-white-50 mb-0">Tool panels on the left host admin workflows. Use <strong class="text-white-50">Create Demo Records</strong> below to provision a full demo tenant for a prospect.</p>
           </div>
 
+          <div class="px-admin-panel-card mb-4">
+            <h2 class="h5 text-white mb-3">Platform backup</h2>
+            <p class="text-white-50 small mb-3">
+              Generates a full snapshot package with PostgreSQL dump and system files (uploads/output).
+              Access is restricted to authenticated platform admin sessions.
+            </p>
+            <div id="pxBackupAlert" class="alert d-none mb-3 py-2" role="status"></div>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <button type="button" class="btn btn-warning text-dark fw-semibold" id="pxBackupCreateBtn">
+                <i class="bi bi-shield-lock me-1" aria-hidden="true"></i> Create Backup
+              </button>
+              <span class="text-white-50 small" id="pxBackupStatusText">Idle</span>
+              <a href="#" class="btn btn-outline-light btn-sm d-none" id="pxBackupDownloadBtn" download>
+                <i class="bi bi-download me-1" aria-hidden="true"></i> Download backup
+              </a>
+            </div>
+          </div>
+
           <div class="px-admin-panel-card">
             <h2 class="h5 text-white mb-3">Create Demo Records</h2>
             <p class="text-white-50 small mb-3">

@@ -17,6 +17,7 @@ const {
   sendClientEmail,
   createDemoRecords,
   sendDemoLoginEmail,
+  createBackup,
   purgeSiteChatOlderThan,
 } = require('../controllers/platformAdminController');
 const {
@@ -36,6 +37,7 @@ router.post('/log-test', requirePlatformAdminAuth, postLogTest);
 router.post('/send-client-email', requirePlatformAdminAuth, sendClientEmail);
 router.post('/create-demo-records', requirePlatformAdminAuth, createDemoRecords);
 router.post('/send-demo-login-email', requirePlatformAdminAuth, sendDemoLoginEmail);
+router.post('/backup', requirePlatformAdminAuth, createBackup);
 router.get('/billing-subscriptions', requirePlatformAdminAuth, listBillingSubscriptions);
 router.patch('/billing-subscriptions/:id', requirePlatformAdminAuth, updateBillingSubscription);
 router.get('/platform-users', requirePlatformAdminAuth, listPlatformUsers);

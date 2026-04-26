@@ -1046,6 +1046,118 @@
     });
   }
 
+  var backupCreateBtn = document.getElementById('pxBackupCreateBtn');
+  var backupStatusText = document.getElementById('pxBackupStatusText');
+  var backupDownloadBtn = document.getElementById('pxBackupDownloadBtn');
+  var backupAlert = document.getElementById('pxBackupAlert');
+  var backupObjectUrl = null;
+
+  function resetBackupDownloadUrl() {
+    if (backupObjectUrl) {
+      try {
+        URL.revokeObjectURL(backupObjectUrl);
+      } catch (e) {}
+      backupObjectUrl = null;
+    }
+    if (backupDownloadBtn) {
+      backupDownloadBtn.classList.add('d-none');
+      backupDownloadBtn.removeAttribute('href');
+      backupDownloadBtn.removeAttribute('download');
+    }
+  }
+
+  function setBackupStatus(text) {
+    if (backupStatusText) backupStatusText.textContent = text || 'Idle';
+  }
+
+  function showBackupAlert(text, kind) {
+    if (!backupAlert) return;
+    backupAlert.textContent = text || '';
+    backupAlert.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-warning', 'alert-info');
+    if (kind === 'success') backupAlert.classList.add('alert-success');
+    else if (kind === 'warning') backupAlert.classList.add('alert-warning');
+    else if (kind === 'info') backupAlert.classList.add('alert-info');
+    else backupAlert.classList.add('alert-danger');
+  }
+
+  function hideBackupAlert() {
+    if (!backupAlert) return;
+    backupAlert.classList.add('d-none');
+    backupAlert.textContent = '';
+  }
+
+  if (backupCreateBtn) {
+    backupCreateBtn.addEventListener('click', function () {
+      hideBackupAlert();
+      resetBackupDownloadUrl();
+      setBackupStatus('Generating backup… please wait');
+      backupCreateBtn.disabled = true;
+
+      fetch('/api/admin/backup', {
+        method: 'POST',
+        headers: sessionHeaders(session),
+        credentials: 'same-origin',
+      })
+        .then(function (res) {
+          var ctype = (res.headers.get('content-type') || '').toLowerCase();
+          if (!res.ok) {
+            if (ctype.indexOf('application/json') !== -1) {
+              return res.json().then(function (data) {
+                return { status: res.status, error: (data && data.message) || 'Backup failed.' };
+              });
+            }
+            return { status: res.status, error: 'Backup failed.' };
+          }
+          return res.blob().then(function (blob) {
+            var dispo = res.headers.get('content-disposition') || '';
+            var match = dispo.match(/filename="?([^";]+)"?/i);
+            var fileName = (match && match[1]) || 'proconix_backup.zip';
+            return { status: res.status, blob: blob, fileName: fileName };
+          });
+        })
+        .then(function (out) {
+          backupCreateBtn.disabled = false;
+          if (!out || out.status == null) {
+            setBackupStatus('Failed');
+            showBackupAlert('Unexpected response while creating backup.', 'error');
+            return;
+          }
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status === 429) {
+            setBackupStatus('Rate limited');
+            showBackupAlert(out.error || 'Backup rate limit active. Try again later.', 'warning');
+            return;
+          }
+          if (out.status < 200 || out.status >= 300 || !out.blob) {
+            setBackupStatus('Failed');
+            showBackupAlert(out.error || 'Backup generation failed.', 'error');
+            return;
+          }
+          backupObjectUrl = URL.createObjectURL(out.blob);
+          if (backupDownloadBtn) {
+            backupDownloadBtn.href = backupObjectUrl;
+            backupDownloadBtn.download = out.fileName || 'proconix_backup.zip';
+            backupDownloadBtn.classList.remove('d-none');
+          }
+          setBackupStatus('Backup ready');
+          showBackupAlert('Backup generated successfully. Click Download backup.', 'success');
+        })
+        .catch(function () {
+          backupCreateBtn.disabled = false;
+          setBackupStatus('Failed');
+          showBackupAlert('Network error while creating backup.', 'error');
+        });
+    });
+  }
+
+  window.addEventListener('beforeunload', function () {
+    resetBackupDownloadUrl();
+  });
+
   function showContentEmailAlert(text, kind) {
     var el = document.getElementById('pxAdminContentEmailAlert');
     if (!el) return;

@@ -24,6 +24,8 @@ const materialsRoutes = require('./routes/materialsRoutes');
 const planningRoutes = require('./routes/planningRoutes');
 const crewRoutes = require('./routes/crewRoutes');
 const platformAdminRoutes = require('./routes/platformAdminRoutes');
+const { requirePlatformAdminAuth } = require('./middleware/requirePlatformAdminAuth');
+const { createBackup } = require('./controllers/platformAdminController');
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
 const drawingGalleryRoutes = require('./routes/drawingGalleryRoutes');
 const siteChatRoutes = require('./routes/siteChatRoutes');
@@ -118,6 +120,8 @@ app.use('/api/planning', planningRoutes);
 
 // Platform administrators (Proconix operator console)
 app.use('/api/platform-admin', platformAdminRoutes);
+// Backup alias route requested by spec.
+app.post('/api/admin/backup', requirePlatformAdminAuth, createBackup);
 
 // Site Snags (per-company JSON state; requires site_snags_state table)
 app.use('/api/site-snags', siteSnagsRoutes);

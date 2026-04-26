@@ -4,6 +4,11 @@
  */
 
 const bcrypt = require('bcrypt');
+const fs = require('fs');
+const fsp = require('fs/promises');
+const os = require('os');
+const path = require('path');
+const { spawn } = require('child_process');
 const { pool } = require('../db/pool');
 const {
   sendManagerAccountActivatedEmail,
@@ -21,6 +26,9 @@ const {
 } = require('../lib/companyTenantFileCleanup');
 
 const SALT_ROUNDS = 10;
+const BACKUP_RATE_LIMIT_MS = 10 * 60 * 1000;
+const backupRateGateByAdminId = new Map();
+const BACKUP_AUDIT_LOG_PATH = path.resolve(__dirname, '../logs/platform-admin-backup-audit.log');
 
 /**
  * SQL ORDER BY fragment: one "primary" manager per company (manager.company_id = company).
@@ -59,6 +67,44 @@ function mapHeadManagerRow(row) {
     created_at: row.created_at,
     project_onboard_name: row.project_onboard_name,
   };
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+function formatBackupFileStamp(dateObj) {
+  const d = dateObj instanceof Date ? dateObj : new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}_${pad2(d.getHours())}-${pad2(d.getMinutes())}`;
+}
+
+async function appendBackupAuditLog(entry) {
+  try {
+    await fsp.mkdir(path.dirname(BACKUP_AUDIT_LOG_PATH), { recursive: true });
+    await fsp.appendFile(BACKUP_AUDIT_LOG_PATH, `${JSON.stringify(entry)}\n`, 'utf8');
+  } catch (err) {
+    console.error('backup audit log write failed:', err);
+  }
+}
+
+function runCommand(command, args, options) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...options,
+    });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk || '');
+    });
+    child.on('error', (err) => {
+      reject(err);
+    });
+    child.on('close', (code) => {
+      if (code === 0) return resolve();
+      reject(new Error(`${command} failed with code ${code}. ${stderr.trim()}`.trim()));
+    });
+  });
 }
 
 /**
@@ -1056,6 +1102,121 @@ async function createDemoRecords(req, res) {
 }
 
 /**
+ * POST /api/platform-admin/backup
+ * Alias route: POST /api/admin/backup
+ * Generates a complete platform snapshot (DB + files) and returns zip download.
+ */
+async function createBackup(req, res) {
+  const admin = req.platformAdmin || {};
+  const adminId = Number(admin.id);
+  const adminEmail = admin.email || '';
+  if (!Number.isInteger(adminId) || adminId < 1) {
+    return res.status(401).json({ success: false, message: 'Unauthorized.' });
+  }
+
+  const now = Date.now();
+  const lastTs = backupRateGateByAdminId.get(adminId) || 0;
+  const waitMs = BACKUP_RATE_LIMIT_MS - (now - lastTs);
+  if (waitMs > 0) {
+    const waitMinutes = Math.ceil(waitMs / 60000);
+    await appendBackupAuditLog({
+      event: 'backup_denied_rate_limit',
+      at: new Date().toISOString(),
+      admin_id: adminId,
+      admin_email: adminEmail,
+      ip: req.ip || '',
+      wait_ms: waitMs,
+    });
+    return res.status(429).json({
+      success: false,
+      message: `Backup rate limit active. Try again in about ${waitMinutes} minute(s).`,
+      retry_after_ms: waitMs,
+    });
+  }
+  backupRateGateByAdminId.set(adminId, now);
+
+  const startedAt = new Date();
+  const projectRoot = path.resolve(__dirname, '../..');
+  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'proconix-backup-'));
+  const stamp = formatBackupFileStamp(startedAt);
+  const dbDumpPath = path.join(tempRoot, 'db.dump');
+  const filesArchivePath = path.join(tempRoot, 'files.tar.gz');
+  const finalZipName = `proconix_backup_${stamp}.zip`;
+  const finalZipPath = path.join(tempRoot, finalZipName);
+  const backupIp = (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || '';
+
+  try {
+    const pgUser = process.env.PGUSER || process.env.DB_USER || 'postgres';
+    const pgDatabase = process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB';
+    const pgHost = process.env.PGHOST || process.env.DB_HOST || undefined;
+    const pgPort = process.env.PGPORT || process.env.DB_PORT || undefined;
+    const cmdEnv = { ...process.env };
+    const pgPassword = process.env.PGPASSWORD || process.env.DB_PASSWORD;
+    if (pgPassword) cmdEnv.PGPASSWORD = pgPassword;
+
+    const dumpArgs = ['-U', pgUser, '-d', pgDatabase, '-F', 'c', '-f', dbDumpPath];
+    if (pgHost) dumpArgs.splice(0, 0, '-h', pgHost);
+    if (pgPort) dumpArgs.splice(0, 0, '-p', String(pgPort));
+    await runCommand('pg_dump', dumpArgs, { env: cmdEnv, cwd: projectRoot });
+
+    const fileSources = [];
+    ['backend/uploads', 'backend/output', 'output'].forEach((rel) => {
+      const abs = path.join(projectRoot, rel);
+      if (fs.existsSync(abs)) fileSources.push(rel);
+    });
+    if (fileSources.length === 0) {
+      await fsp.writeFile(path.join(tempRoot, 'empty-backup-placeholder.txt'), 'No file storage directories found.\n', 'utf8');
+      await runCommand('tar', ['-czf', filesArchivePath, '-C', tempRoot, 'empty-backup-placeholder.txt'], { cwd: projectRoot });
+    } else {
+      await runCommand('tar', ['-czf', filesArchivePath, ...fileSources], { cwd: projectRoot });
+    }
+
+    await runCommand('zip', ['-j', finalZipPath, dbDumpPath, filesArchivePath], { cwd: tempRoot });
+
+    await appendBackupAuditLog({
+      event: 'backup_created',
+      at: new Date().toISOString(),
+      admin_id: adminId,
+      admin_email: adminEmail,
+      ip: backupIp,
+      file_name: finalZipName,
+      temp_dir: tempRoot,
+    });
+
+    return res.download(finalZipPath, finalZipName, async (err) => {
+      try {
+        await fsp.rm(tempRoot, { recursive: true, force: true });
+      } catch (_) {
+        // ignore cleanup failure
+      }
+      if (err) {
+        console.error('createBackup download error:', err);
+      }
+    });
+  } catch (err) {
+    backupRateGateByAdminId.delete(adminId);
+    await appendBackupAuditLog({
+      event: 'backup_failed',
+      at: new Date().toISOString(),
+      admin_id: adminId,
+      admin_email: adminEmail,
+      ip: backupIp,
+      error: err && err.message ? err.message : String(err),
+    });
+    console.error('createBackup error:', err);
+    try {
+      await fsp.rm(tempRoot, { recursive: true, force: true });
+    } catch (_) {
+      // ignore cleanup failure
+    }
+    return res.status(500).json({
+      success: false,
+      message: 'Backup generation failed. No partial package was returned.',
+    });
+  }
+}
+
+/**
  * POST /api/platform-admin/site-chat/purge-older-than
  * Body: { hours?: number, minutes?: number } — deletes all site_chat_message rows strictly older than that window (all companies).
  * At least 1 total minute required.
@@ -1119,5 +1280,6 @@ module.exports = {
   sendClientEmail,
   createDemoRecords,
   sendDemoLoginEmail,
+  createBackup,
   purgeSiteChatOlderThan,
 };
