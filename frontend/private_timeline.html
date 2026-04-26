@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Private Timeline - Proconix</title>
+  <style>
+    body { margin: 0; font-family: Inter, Arial, sans-serif; background: #f1f5f9; padding: 18px; }
+    .wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 14px; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; }
+    .title { margin: 0; font-size: 1.2rem; }
+    .sub { color: #64748b; margin: 6px 0 0; font-size: 0.9rem; }
+    .timeline { display: grid; gap: 10px; }
+    .entry { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+    .entry-head { background: #eff6ff; color: #1d4ed8; padding: 7px 10px; font-size: 0.8rem; font-weight: 700; }
+    .entry-body { padding: 10px; font-size: 0.9rem; }
+    .meta { color: #64748b; font-size: 0.82rem; margin-top: 6px; }
+    .photos { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+    .photos img { width: 100%; height: 90px; object-fit: cover; border-radius: 8px; border: 1px solid #cbd5e1; }
+    .grid { display: grid; gap: 10px; }
+    label { display: block; font-size: 0.84rem; margin-bottom: 5px; color: #334155; font-weight: 600; }
+    input, select, textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 9px; font: inherit; background: #fff; }
+    textarea { min-height: 70px; resize: vertical; }
+    .btn { border: 1px solid #2563eb; background: #2563eb; color: #fff; border-radius: 8px; padding: 9px 12px; cursor: pointer; }
+    .feedback { margin-top: 10px; display: none; border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; border-radius: 8px; padding: 8px; font-size: 0.83rem; }
+    .error { margin-top: 8px; color: #b91c1c; font-size: 0.85rem; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1 class="title" id="unit-title">Private Timeline</h1>
+      <p class="sub">Authorized managers and supervisors only</p>
+      <p class="error hidden" id="access-error"></p>
+    </section>
+    <section class="card">
+      <div class="timeline" id="timeline"></div>
+    </section>
+    <section class="card">
+      <h2 class="title" style="font-size:1.05rem;">Add Progress</h2>
+      <form id="progress-form" class="grid">
+        <div><label for="stage">Stage</label><input id="stage" required></div>
+        <div><label for="status">Status</label><select id="status" required><option value="">Select</option><option>Done</option><option>In progress</option><option>Blocked</option></select></div>
+        <div><label for="reason">Reason (required for Blocked)</label><input id="reason"></div>
+        <div><label for="comment">Comment *</label><textarea id="comment" required></textarea></div>
+        <div><label for="photos">Photos (optional, up to 5)</label><input id="photos" type="file" accept="image/*" multiple></div>
+        <button class="btn" type="submit">Add Progress</button>
+      </form>
+      <div class="feedback" id="feedback"></div>
+    </section>
+  </div>
+  <script>
+    (function () {
+      "use strict";
+      var TOKEN_KEY = "proconix_operative_token";
+      var MANAGER_KEY = "proconix_manager_session";
+      var timelineEl = document.getElementById("timeline");
+      var feedbackEl = document.getElementById("feedback");
+      var accessErrorEl = document.getElementById("access-error");
+      var unitTitleEl = document.getElementById("unit-title");
+      var form = document.getElementById("progress-form");
+      var mode = null;
+      var unitId = null;
+
+      function formatDateTime(v) {
+        var d = new Date(v);
+        if (Number.isNaN(d.getTime())) return String(v || "-");
+        return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + d.getFullYear() + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+      }
+
+      function getManagerHeaders() {
+        try {
+          var raw = localStorage.getItem(MANAGER_KEY) || sessionStorage.getItem(MANAGER_KEY);
+          var s = raw ? JSON.parse(raw) : null;
+          if (!s || s.manager_id == null || !s.email) return null;
+          return { "X-Manager-Id": String(s.manager_id), "X-Manager-Email": String(s.email) };
+        } catch (e) { return null; }
+      }
+
+      function getSupervisorHeaders() {
+        var token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+        return token ? { "X-Operative-Token": token } : null;
+      }
+
+      function getApiConfig() {
+        var mh = getManagerHeaders();
+        if (mh) return { getUrl: "/api/unit-progress/manager/private-timeline/" + unitId, postUrl: "/api/unit-progress/manager/private-timeline/" + unitId + "/progress", headers: mh };
+        var sh = getSupervisorHeaders();
+        if (sh) return { getUrl: "/api/unit-progress/supervisor/private-timeline/" + unitId, postUrl: "/api/unit-progress/supervisor/private-timeline/" + unitId + "/progress", headers: sh };
+        return null;
+      }
+
+      function renderTimeline(timeline) {
+        timelineEl.innerHTML = "";
+        if (!Array.isArray(timeline) || !timeline.length) {
+          timelineEl.innerHTML = '<div class="meta">No updates yet.</div>';
+          return;
+        }
+        timeline.slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); }).forEach(function (entry) {
+          var photosHtml = "";
+          if (Array.isArray(entry.photos) && entry.photos.length) {
+            photosHtml = '<div class="photos">' + entry.photos.map(function (p) {
+              var src = p && p.src ? p.src : "";
+              return src ? '<img src="' + src + '" alt="' + (p.name || "photo") + '">' : "";
+            }).join("") + "</div>";
+          }
+          var card = document.createElement("article");
+          card.className = "entry";
+          card.innerHTML = '<div class="entry-head">' + formatDateTime(entry.date) + '</div><div class="entry-body"><strong>' + (entry.stage || "-") + "</strong> - " + (entry.status || "-") + '<div class="meta">Updated by: ' + (entry.user || "-") + "</div>" + (entry.reason ? '<div class="meta"><strong>Reason:</strong> ' + entry.reason + "</div>" : "") + (entry.comment ? '<div class="meta"><strong>Comment:</strong> ' + entry.comment + "</div>" : "") + photosHtml + "</div>";
+          timelineEl.appendChild(card);
+        });
+      }
+
+      async function load() {
+        var cfg = getApiConfig();
+        if (!cfg) {
+          accessErrorEl.textContent = "Login required.";
+          accessErrorEl.classList.remove("hidden");
+          return;
+        }
+        var res = await fetch(cfg.getUrl, { headers: cfg.headers, credentials: "same-origin" });
+        var payload = await res.json();
+        if (!res.ok || !payload || !payload.success) {
+          accessErrorEl.textContent = (payload && payload.message) || "Access denied.";
+          accessErrorEl.classList.remove("hidden");
+          return;
+        }
+        unitTitleEl.textContent = (payload.unit && payload.unit.name ? payload.unit.name : "Unit") + " - Private Timeline";
+        renderTimeline(payload.timeline || []);
+      }
+
+      async function fileToDataUrl(file) {
+        return new Promise(function (resolve, reject) {
+          var r = new FileReader();
+          r.onload = function () { resolve(r.result); };
+          r.onerror = function () { reject(new Error("file")); };
+          r.readAsDataURL(file);
+        });
+      }
+
+      form.addEventListener("submit", async function (event) {
+        event.preventDefault();
+        var cfg = getApiConfig();
+        if (!cfg) return;
+        var status = document.getElementById("status").value;
+        var reason = document.getElementById("reason").value.trim();
+        var files = Array.from(document.getElementById("photos").files || []).slice(0, 5);
+        var photos = await Promise.all(files.map(async function (f) { return { name: f.name, src: await fileToDataUrl(f) }; }));
+        var body = {
+          stage: document.getElementById("stage").value.trim(),
+          status: status,
+          reason: status === "Blocked" ? reason : "",
+          comment: document.getElementById("comment").value.trim(),
+          photos: photos
+        };
+        var res = await fetch(cfg.postUrl, {
+          method: "POST",
+          headers: Object.assign({}, cfg.headers, { "Content-Type": "application/json" }),
+          credentials: "same-origin",
+          body: JSON.stringify(body)
+        });
+        var payload = await res.json();
+        if (!res.ok || !payload || !payload.success) {
+          feedbackEl.style.display = "block";
+          feedbackEl.textContent = (payload && payload.message) || "Failed to add progress.";
+          return;
+        }
+        feedbackEl.style.display = "block";
+        feedbackEl.textContent = "Progress updated.";
+        form.reset();
+        renderTimeline(payload.timeline || []);
+      });
+
+      var params = new URLSearchParams(window.location.search);
+      unitId = Number(params.get("unit_id"));
+      if (!Number.isFinite(unitId) || unitId <= 0) {
+        accessErrorEl.textContent = "Invalid private timeline link.";
+        accessErrorEl.classList.remove("hidden");
+      } else {
+        load();
+      }
+    })();
+  </script>
+</body>
+</html>

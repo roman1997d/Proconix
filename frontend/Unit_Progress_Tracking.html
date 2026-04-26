@@ -1453,6 +1453,7 @@
     const WIZARD_KEY = "proconix_project_wizard_state_v1";
     const wizardState = {
       step: 1,
+      projectId: null,
       projectName: "",
       buildings: [{ id: "b-1", name: "Tower A", floorsCount: 1, floors: [{ number: 1, spaces: [] }] }]
     };
@@ -1460,6 +1461,7 @@
 
     function resetWizardState() {
       wizardState.step = 1;
+      wizardState.projectId = null;
       wizardState.projectName = "";
       wizardState.buildings = [{ id: "b-1", name: "Tower A", floorsCount: 1, floors: [{ number: 1, spaces: [] }] }];
     }
@@ -1576,14 +1578,19 @@
             const uniqueNames = [...new Set(names)];
             if (uniqueNames.length) {
               wizardProjectNameSelect.innerHTML = '<option value="">Select project</option>';
-              uniqueNames.forEach((name) => {
+              payload.projects.forEach((project) => {
+                const name = project && (project.project_name || project.name) ? String(project.project_name || project.name).trim() : "";
+                if (!name) return;
                 const option = document.createElement("option");
-                option.value = name;
+                option.value = String(project.id);
                 option.textContent = name;
                 wizardProjectNameSelect.appendChild(option);
               });
-              if (wizardState.projectName && uniqueNames.includes(wizardState.projectName)) {
-                wizardProjectNameSelect.value = wizardState.projectName;
+              if (wizardState.projectId != null) {
+                wizardProjectNameSelect.value = String(wizardState.projectId);
+              } else if (wizardState.projectName) {
+                const matchOption = Array.from(wizardProjectNameSelect.options).find((o) => o.textContent === wizardState.projectName);
+                if (matchOption) wizardProjectNameSelect.value = matchOption.value;
               }
               return;
             }
@@ -1604,11 +1611,12 @@
           if (projectName) {
             wizardProjectNameSelect.innerHTML = '<option value="">Select project</option>';
             const option = document.createElement("option");
-            option.value = projectName;
+            option.value = "0";
             option.textContent = projectName;
             wizardProjectNameSelect.appendChild(option);
+            wizardState.projectId = null;
             if (!wizardState.projectName) wizardState.projectName = projectName;
-            wizardProjectNameSelect.value = wizardState.projectName || projectName;
+            wizardProjectNameSelect.value = "0";
             return;
           }
         } catch (error) {
@@ -1742,6 +1750,9 @@
         if (!parsed || typeof parsed !== "object") return;
         if (parsed.step) wizardState.step = Math.min(6, Math.max(1, Number(parsed.step) || 1));
         if (typeof parsed.projectName === "string") wizardState.projectName = parsed.projectName;
+        if (parsed.projectId != null && Number.isFinite(Number(parsed.projectId))) {
+          wizardState.projectId = Number(parsed.projectId);
+        }
         if (Array.isArray(parsed.buildings) && parsed.buildings.length) {
           const safeBuildings = parsed.buildings
             .filter((building) => building && typeof building === "object")
@@ -2017,7 +2028,9 @@
       wizardTone.textContent = toneForStep(wizardState.step);
       wizardBackBtn.disabled = wizardState.step === 1;
       wizardNextBtn.style.display = wizardState.step === 6 ? "none" : "inline-block";
-      document.getElementById("wizard-project-name").value = wizardState.projectName;
+      document.getElementById("wizard-project-name").value = wizardState.projectId != null
+        ? String(wizardState.projectId)
+        : wizardState.projectName;
       renderBuildingInputs();
       renderFloorsInputs();
       renderSpacesEditor();
@@ -2133,6 +2146,7 @@
               name: unitName,
               tower: towerId,
               floor: floorNumber,
+              project_id: wizardState.projectId != null ? Number(wizardState.projectId) : null,
               timeline: existingTimelineByKey.get(key) || []
             });
           });
@@ -3098,7 +3112,10 @@
       wizardStatus.textContent = "Draft saved. You can close now and continue later.";
     });
     document.getElementById("wizard-project-name").addEventListener("change", (event) => {
-      wizardState.projectName = event.target.value;
+      const selected = event.target.options[event.target.selectedIndex];
+      wizardState.projectName = selected ? String(selected.textContent || "").trim() : "";
+      const parsedId = Number(event.target.value);
+      wizardState.projectId = Number.isFinite(parsedId) && parsedId > 0 ? parsedId : null;
       saveWizardState();
     });
     document.getElementById("building-plus").addEventListener("click", () => setBuildingCount(wizardState.buildings.length + 1));

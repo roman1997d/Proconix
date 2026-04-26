@@ -226,10 +226,181 @@ async function getPublicTimeline(req, res) {
   }
 }
 
+function getUnitFromWorkspace(workspace, unitId) {
+  if (!workspace || typeof workspace !== 'object' || Array.isArray(workspace)) return null;
+  const units = Array.isArray(workspace.units) ? workspace.units : [];
+  return units.find((u) => Number(u && u.id) === Number(unitId)) || null;
+}
+
+function sanitizeIncomingProgress(body) {
+  const payload = body && typeof body === 'object' ? body : {};
+  const stage = String(payload.stage || '').trim();
+  const status = String(payload.status || '').trim();
+  const reason = String(payload.reason || '').trim();
+  const comment = String(payload.comment || '').trim();
+  const photosRaw = Array.isArray(payload.photos) ? payload.photos : [];
+  const photos = photosRaw
+    .map((photo) => {
+      if (!photo || typeof photo !== 'object') return null;
+      const name = String(photo.name || '').trim() || 'photo';
+      const src = String(photo.src || '').trim();
+      if (!src) return null;
+      return { name, src };
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+
+  if (!stage) throw new Error('Stage is required.');
+  if (!status) throw new Error('Status is required.');
+  if (!comment) throw new Error('Comment is required.');
+  if (status === 'Blocked' && !reason) throw new Error('Reason is required for blocked status.');
+
+  return {
+    stage,
+    status,
+    reason: status === 'Blocked' ? reason : '',
+    comment,
+    photos,
+  };
+}
+
+async function getPrivateTimelineManager(req, res) {
+  const companyId = getManagerCompanyId(req);
+  const unitId = Number(req.params.unitId);
+  if (companyId == null || !Number.isFinite(unitId) || unitId <= 0) {
+    return res.status(400).json({ success: false, message: 'Invalid request.' });
+  }
+  try {
+    const workspace = await getWorkspaceByCompanyId(companyId);
+    const unit = getUnitFromWorkspace(workspace, unitId);
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
+    return res.json({
+      success: true,
+      unit: { id: Number(unit.id), name: unit.name || `Unit ${unit.id}` },
+      timeline: Array.isArray(unit.timeline) ? unit.timeline : [],
+    });
+  } catch (error) {
+    console.error('unitProgress getPrivateTimelineManager:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load private timeline.' });
+  }
+}
+
+async function getPrivateTimelineSupervisor(req, res) {
+  const companyId = getSupervisorCompanyId(req);
+  const unitId = Number(req.params.unitId);
+  if (companyId == null || !Number.isFinite(unitId) || unitId <= 0) {
+    return res.status(400).json({ success: false, message: 'Invalid request.' });
+  }
+  try {
+    const workspace = await getWorkspaceByCompanyId(companyId);
+    const unit = getUnitFromWorkspace(workspace, unitId);
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
+    const supervisorProjectId = req.supervisor && req.supervisor.project_id != null
+      ? Number(req.supervisor.project_id)
+      : null;
+    const unitProjectId = unit && unit.project_id != null ? Number(unit.project_id) : null;
+    if (supervisorProjectId == null || unitProjectId == null || supervisorProjectId !== unitProjectId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Supervisor does not have access to this project timeline.',
+      });
+    }
+    return res.json({
+      success: true,
+      unit: { id: Number(unit.id), name: unit.name || `Unit ${unit.id}` },
+      timeline: Array.isArray(unit.timeline) ? unit.timeline : [],
+    });
+  } catch (error) {
+    console.error('unitProgress getPrivateTimelineSupervisor:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load private timeline.' });
+  }
+}
+
+async function appendPrivateProgressManager(req, res) {
+  const companyId = getManagerCompanyId(req);
+  const unitId = Number(req.params.unitId);
+  if (companyId == null || !Number.isFinite(unitId) || unitId <= 0) {
+    return res.status(400).json({ success: false, message: 'Invalid request.' });
+  }
+  try {
+    const progress = sanitizeIncomingProgress(req.body);
+    const workspace = await getWorkspaceByCompanyId(companyId);
+    const unit = getUnitFromWorkspace(workspace, unitId);
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
+    if (!Array.isArray(unit.timeline)) unit.timeline = [];
+    const userName = [req.manager && req.manager.name, req.manager && req.manager.surname].filter(Boolean).join(' ').trim()
+      || (req.manager && req.manager.email)
+      || 'Manager';
+    unit.timeline.push({
+      ...progress,
+      user: userName,
+      date: new Date().toISOString(),
+    });
+    workspace.updated_at = new Date().toISOString();
+    await upsertWorkspace(companyId, workspace, 'manager', req.manager && req.manager.id ? req.manager.id : null);
+    return res.json({ success: true, timeline: unit.timeline });
+  } catch (error) {
+    if (error.message && error.message.endsWith('required.')) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    console.error('unitProgress appendPrivateProgressManager:', error);
+    return res.status(500).json({ success: false, message: 'Failed to append progress.' });
+  }
+}
+
+async function appendPrivateProgressSupervisor(req, res) {
+  const companyId = getSupervisorCompanyId(req);
+  const unitId = Number(req.params.unitId);
+  if (companyId == null || !Number.isFinite(unitId) || unitId <= 0) {
+    return res.status(400).json({ success: false, message: 'Invalid request.' });
+  }
+  try {
+    const progress = sanitizeIncomingProgress(req.body);
+    const workspace = await getWorkspaceByCompanyId(companyId);
+    const unit = getUnitFromWorkspace(workspace, unitId);
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
+    const supervisorProjectId = req.supervisor && req.supervisor.project_id != null
+      ? Number(req.supervisor.project_id)
+      : null;
+    const unitProjectId = unit && unit.project_id != null ? Number(unit.project_id) : null;
+    if (supervisorProjectId == null || unitProjectId == null || supervisorProjectId !== unitProjectId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Supervisor does not have access to this project timeline.',
+      });
+    }
+    if (!Array.isArray(unit.timeline)) unit.timeline = [];
+    const userName = (req.supervisor && req.supervisor.name) || (req.supervisor && req.supervisor.email) || 'Supervisor';
+    unit.timeline.push({
+      ...progress,
+      user: userName,
+      date: new Date().toISOString(),
+    });
+    workspace.updated_at = new Date().toISOString();
+    await upsertWorkspace(
+      companyId,
+      workspace,
+      'supervisor',
+      req.supervisor && req.supervisor.id ? req.supervisor.id : null
+    );
+    return res.json({ success: true, timeline: unit.timeline });
+  } catch (error) {
+    if (error.message && error.message.endsWith('required.')) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    console.error('unitProgress appendPrivateProgressSupervisor:', error);
+    return res.status(500).json({ success: false, message: 'Failed to append progress.' });
+  }
+}
+
 module.exports = {
   getWorkspace,
   putWorkspace,
   getWorkspaceSupervisor,
   putWorkspaceSupervisor,
   getPublicTimeline,
+  getPrivateTimelineManager,
+  getPrivateTimelineSupervisor,
+  appendPrivateProgressManager,
+  appendPrivateProgressSupervisor,
 };
