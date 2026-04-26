@@ -198,7 +198,7 @@ async function getPublicTimeline(req, res) {
       const workspace = row.workspace;
       if (!workspace || typeof workspace !== 'object' || Array.isArray(workspace)) continue;
       const units = Array.isArray(workspace.units) ? workspace.units : [];
-      const unit = units.find((u) => Number(u && u.id) === unitId);
+      const unit = units.find((u) => normalizeUnitId(u && u.id) === unitId);
       if (!unit) continue;
       const timeline = Array.isArray(unit.timeline)
         ? unit.timeline.map(sanitizePublicTimelineEntry).filter(Boolean)

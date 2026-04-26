@@ -32,6 +32,7 @@ Comunicarea este **request/response**: browser-ul face request-uri HTTP la API; 
 │  /api/health  /api/companies  /api/auth  /api/projects  /api/worklogs    │
 │  /api/operatives  /api/materials  /api/templates  /api/jobs  /api/dashboard/:module   │
 │  /api/dashboard/overview-stats  /overview-lists  /operative-activity-today (JSON)      │
+│  /api/unit-progress/*  /api/platform-admin/*                               │
 │         │                │                   │                   │       │
 │  requireManagerAuth / requireOperativeAuth / onboarding token            │
 └─────────┼────────────────┼───────────────────┼───────────────────┼─────┘
@@ -41,7 +42,7 @@ Comunicarea este **request/response**: browser-ul face request-uri HTTP la API; 
 │                         POSTGRESQL (DB)                                  │
 │  companies | manager | users | projects | project_assignments          │
 │  work_logs | material_categories | material_suppliers | materials | material_consumption │
-│  qa_templates | qa_jobs | qa_* lookup tables                              │
+│  qa_templates | qa_jobs | qa_* lookup tables | unit_progress_state        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -77,7 +78,7 @@ Alt exemplu: **Operativ trimite un work log**.
 | **register_company.html**   | Vizitator      | POST /api/companies/create           | companies                      |
 | **register_manager.html**   | Vizitator      | GET /api/onboarding/company, POST /api/managers/create | manager, companies   |
 | **login_manager.html**      | Manager        | POST /api/managers/login             | manager                        |
-| **dashboard_manager.html** | Manager        | GET /api/auth/validate; GET /api/dashboard/:module (HTML partials); **Project Overview**: GET /api/dashboard/overview-stats, overview-lists, operative-activity-today; iframes: Task_Planning, Quality_Assurance, manage_material, **Site_Snags**, **Profile_Settings**, **my_company_settings**; UI: sidebar stânga (rail + hover / mobil off-canvas); footer ascuns pe ecrane mici; /api/projects/*, /api/operatives/*, /api/worklogs/*; profil: /api/managers/me, phone, change-password; companie: /api/companies/me; invite: POST /api/managers/invite | manager, companies, projects, users, work_logs, work_hours, planning_*, qa_jobs, qa_cost_types |
+| **dashboard_manager.html** | Manager        | GET /api/auth/validate; GET /api/dashboard/:module (HTML partials); **Project Overview**: GET /api/dashboard/overview-stats, overview-lists, operative-activity-today; iframes: Task_Planning, Quality_Assurance, manage_material, **Site_Snags**, **Profile_Settings**, **my_company_settings**, **Unit_Progress_Tracking**; UI: sidebar stânga (rail + hover / mobil off-canvas); footer ascuns pe ecrane mici; /api/projects/*, /api/operatives/*, /api/worklogs/*; profil: /api/managers/me, phone, change-password; companie: /api/companies/me; invite: POST /api/managers/invite | manager, companies, projects, users, work_logs, work_hours, planning_*, qa_jobs, qa_cost_types, unit_progress_state |
 | **Modul Projects**          | Manager        | GET/POST/PUT /api/projects/list, create, :id/update, :id/assignments, assign | projects, project_assignments, users |
 | **Modul Operatives**       | Manager        | GET/POST/PATCH/DELETE /api/operatives | users                          |
 | **Modul Work Logs**        | Manager        | GET/POST/PATCH /api/worklogs, approve, reject, archive, **DELETE** (ștergere definitivă + fișiere `/uploads/`) | work_logs                    |
@@ -85,6 +86,10 @@ Alt exemplu: **Operativ trimite un work log**.
 | **Material Management** (manage_material.html) | Manager | GET/POST /api/materials/projects, /categories, /suppliers; GET/POST/PUT/DELETE /api/materials; GET /api/materials/forecast | material_categories, material_suppliers, materials, material_consumption, projects |
 | **Task_Planning.html** (iframe în dashboard) | Manager | GET/POST/PATCH/DELETE `/api/planning/*`; GET `/api/planning/plan-tasks/:id/confirmation-photos` (poze operativ, task planning completat) | planning_plans, planning_plan_tasks; citește `operative_task_photos` (task_source=planning) |
 | **operative_dashboard.html**| Operativ       | POST login; me; work-hours/* (GPS); tasks + photos; **work-log** (list/create/upload/**/:id/archive**); **timesheet/generate**, **work-report/generate** (PDF PDFKit); issues; uploads | users, work_logs, work_hours, projects, tasks, planning_plan_tasks, operative_task_photos, issues |
+| **Unit_Progress_Tracking.html** | Manager / Supervisor | `GET/PUT /api/unit-progress/workspace`, `GET/PUT /api/unit-progress/supervisor/workspace`; flow QR către private/public timeline | unit_progress_state |
+| **timeline_access_router.html** | Public + autentificat | verifică sesiune manager/supervisor și redirect la `private_timeline.html` sau `public_Timeline.html` | — |
+| **private_timeline.html** | Manager / Supervisor autorizat | `GET /api/unit-progress/private-timeline/manager/:unitId` sau `/supervisor/:unitId`, `POST /api/unit-progress/private-timeline/.../:unitId/progress` | unit_progress_state |
+| **public_Timeline.html** | Public | `GET /api/unit-progress/public-timeline/:unitId` | unit_progress_state (read-only) |
 | **see_plans.html**         | Vizitator      | eventual /api/subscriptions          | —                              |
 
 Legătura fiecărei pagini cu backend și DB: toate acțiunile persistente (CRUD, login, submit) trec prin API; API-ul folosește controller-e care citesc/scriu în PostgreSQL.
@@ -149,4 +154,4 @@ Operativ         Frontend (Operative Dashboard)    Backend              DB
 
 *Documentația trebuie actualizată la fiecare schimbare majoră de structură sau flux.*
 
-**Actualizat:** 27/03/2026
+**Actualizat:** 26/04/2026

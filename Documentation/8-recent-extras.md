@@ -2,7 +2,7 @@
 
 Document complementar la rezumatul din [README.md](README.md). Conține modificări adăugate în afara fluxurilor deja descrise acolo (overview dashboard, work logs PDF, planning photos etc.).
 
-**Ultima actualizare:** 27 martie 2026
+**Ultima actualizare:** 26 aprilie 2026
 
 ---
 
@@ -56,6 +56,33 @@ Module afectate tipic: Task & Planning, Site Snags, QA, Material Management, Pro
 ## 4. Documentație marketing (rădăcina repo)
 
 - Folder **`Doc_Marketing_Suite/`** cu **`Proconix_Marketing_Suite.md`**: ce este Proconix, problemă, valoare, multi-company, legături proiect–operatives–manageri, capabilități, securitate (orientativ), design, argumente „de ce Proconix” — în **română**, pentru pitch și site.
+
+---
+
+## 5. Unit Progress Tracking + timeline routing (aprilie 2026)
+
+- Modulul `Unit_Progress_Tracking.html` a fost mutat în flux intern de dashboard manager (încărcat ca modul iframe, nu pagină externă separată).
+- View-uri ajustate:
+  - `View 1` include wizard-ul (`Start Guided Setup`) și search de unități.
+  - `View 3` rămâne focus pe timeline + `Generate Documentation Snapshot` + `Add Progress` (modal).
+- `Add Progress`:
+  - pozele sunt opționale (max 5), selecție cumulativă,
+  - preview miniaturi + buton remove (X),
+  - comentariul este obligatoriu,
+  - loader vizual la submit (`Floating Dots Loader`).
+- `Generate Documentation Snapshot`:
+  - modal cu nume document, toggle PDF, mod conținut (photos/text/both),
+  - generează pachet ZIP cu fișier principal (PDF sau MD) + folder `timeline-photos` grupat pe stage,
+  - loader dedicat (`Magnetic Field Loader`) și apoi download package.
+- QR flow nou:
+  - `timeline_access_router.html` verifică sesiunea și accesul la proiect,
+  - redirect către `private_timeline.html` (manager/supervisor autorizat) sau `public_Timeline.html` (public read-only).
+- Backend dedicat:
+  - endpoint-uri `/api/unit-progress/*`,
+  - persistență workspace JSONB în `unit_progress_state`,
+  - suport timeline public/private + append progress manager/supervisor.
+- Admin demo provisioning:
+  - `Create Demo Records` seed-uiește acum și `unit_progress_state`, astfel încât modulul Unit Progress să fie gata imediat în tenant-ul demo.
 
 ---
 

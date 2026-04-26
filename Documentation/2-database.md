@@ -10,6 +10,7 @@ erDiagram
   companies ||--o{ users : "has"
   companies ||--o{ projects : "has"
   companies ||--o{ work_logs : "has"
+  companies ||--|| unit_progress_state : "has workspace"
 
   manager }o--|| companies : "company_id"
   users }o--|| companies : "company_id"
@@ -76,6 +77,13 @@ erDiagram
     int id PK
     string email UK
   }
+
+  unit_progress_state {
+    int company_id PK
+    jsonb workspace
+    string updated_by_kind
+    int updated_by_id
+  }
 ```
 
 ### Relații sumar
@@ -85,6 +93,7 @@ erDiagram
 | companies → manager | 1:N | O companie are mai mulți manageri |
 | companies → users | 1:N | Operativi/supervizori per companie |
 | companies → projects | 1:N | Proiecte per companie |
+| companies → unit_progress_state | 1:1 | Workspace Unit Progress per companie (JSONB) |
 | projects ↔ users (project_assignments) | N:M | Utilizatori asignați la proiecte |
 | projects → qa_jobs | 1:N | Joburi QA per proiect |
 | qa_templates ↔ qa_jobs (qa_job_templates) | N:M | Template-uri aplicate la joburi |
@@ -268,6 +277,24 @@ erDiagram
 - **uploads**: id, user_id, project_id, file_url, description, created_at.
 
 ---
+## Tabel: unit_progress_state (Unit Progress Tracking)
+
+Workspace-ul complet pentru modulul Unit Progress este stocat pe companie, în JSONB.
+
+| Câmp | Tip | Restricții | Default |
+|------|-----|------------|---------|
+| company_id | INT | PRIMARY KEY | — |
+| workspace | JSONB | NOT NULL | `'{}'::jsonb` |
+| updated_by_kind | VARCHAR(20) | | |
+| updated_by_id | INT | | |
+| updated_at | TIMESTAMPTZ | NOT NULL | NOW() |
+| created_at | TIMESTAMPTZ | NOT NULL | NOW() |
+
+Structura JSON `workspace` include de regulă `towers[]`, `floors[]`, `units[]`, `updated_at`. În `units[]`, fiecare unitate poate avea `project_id` și `timeline[]`.
+
+Script: `scripts/create_unit_progress_tables.sql`.
+
+---
 ## Tabele Planning (Task & Planning)
 
 Modulul `Task & Planning` centralizează planurile și task-urile managerului.
@@ -364,6 +391,7 @@ Administratori **platformă** Proconix (nu manageri de companie). Autentificare 
 9. **Operativ – task confirmări**: `operative_task_photos_and_declined.sql` – tabel `operative_task_photos` (poze confirmare per user/task, max 10 în API); extinde status planning cu `declined` (refuz operativ)
 10. **Alte tabele**: `create_issues_table.sql`, `create_uploads_table.sql`, `create_tasks_table.sql`, `alter_projects_add_location.sql` (dacă nu a fost rulat deja) conform nevoilor
 11. **Admin platformă Proconix**: `scripts/create_proconix_admin_table.sql` (`proconix_admin` + seed)
+12. **Unit Progress Tracking**: `scripts/create_unit_progress_tables.sql`
 
 ### Comenzi exemplu
 
@@ -380,6 +408,7 @@ psql -U postgres -d ProconixDB -f scripts/alter_planning_add_qa_job_id.sql
 psql -U postgres -d ProconixDB -f scripts/create_material_tables.sql
 psql -U postgres -d ProconixDB -f scripts/create_material_consumption_table.sql
 psql -U postgres -d ProconixDB -f scripts/create_proconix_admin_table.sql
+psql -U postgres -d ProconixDB -f scripts/create_unit_progress_tables.sql
 psql -U postgres -d ProconixDB -f scripts/create_work_hours_table.sql
 psql -U postgres -d ProconixDB -f scripts/alter_work_hours_add_geolocation.sql
 psql -U postgres -d ProconixDB -f scripts/alter_projects_add_location.sql
@@ -394,4 +423,4 @@ psql -U postgres -d ProconixDB -f scripts/alter_projects_add_location.sql
 
 *Păstrează documentația actualizată la fiecare schimbare de schemă sau script nou.*
 
-**Actualizat:** 16/03/2026
+**Actualizat:** 26/04/2026

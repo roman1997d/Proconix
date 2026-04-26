@@ -15,6 +15,10 @@ frontend/
 ├── my_company_settings.html  # Setări companie + invite manager – iframe din dashboard
 ├── ContactUs.html            # Pagină contact (public)
 ├── operative_dashboard.html   # Dashboard operativ (login, ore, task-uri, work logs, issues)
+├── Unit_Progress_Tracking.html # Modul Unit Progress Tracking (tower/floor/unit, timeline, add progress, documentation snapshot)
+├── timeline_access_router.html # Router QR: decide private/public timeline după sesiune și acces
+├── private_timeline.html      # Timeline privat (manager/supervisor autorizat)
+├── public_Timeline.html       # Timeline public read-only (fără login)
 ├── Quality_Assurance.html     # Modul QA (templates, jobs) – manager
 ├── manage_material.html       # Material Management – manager (stoc per proiect, categorii, furnizori, forecast)
 ├── material.html              # Pagină landing / informațională materiale (SEO)
@@ -56,7 +60,7 @@ frontend/
 | login_manager.html + login_manager.js | Login manager | Formular → POST /api/managers/login; salvare sesiune în localStorage; redirect dashboard |
 | proconix_administration_login.html + proconix_administration_login.js | Sign-in admin platformă | `POST /api/platform-admin/login`; salvează `proconix_platform_admin_session` (`id`, `email`, …); redirect consolă |
 | proconix_administration.html + proconix_administration_dashboard.js | Consolă admin | `GET /api/platform-admin/me` cu header-e `X-Platform-Admin-Id` / `Email`; secțiuni: companies, billing, **System & health** (operațiuni sistem), **Audit & logs** (jurnale); **Proconix project on disk**: utilizare pe tipuri (imagini, documente, altele). |
-| dashboard_manager.html + dashboard.js + dashboard_manager.js | Dashboard manager | GET /api/auth/validate; module HTML via GET /api/dashboard/:module; **Project Overview**: GET /api/dashboard/overview-stats, overview-lists, operative-activity-today; iframes: Task_Planning, Quality_Assurance, manage_material, Site_Snags, Profile_Settings, my_company_settings; Projects, Operatives, Work Logs. **UI**: sidebar fix **stânga** (rail icon-only, extindere hover/focus); mobil off-canvas stânga; **footer ascuns** pe ecrane ≤991px; `dashboard_manager.css` + `dashboard.css` |
+| dashboard_manager.html + dashboard.js + dashboard_manager.js | Dashboard manager | GET /api/auth/validate; module HTML via GET /api/dashboard/:module; **Project Overview**: GET /api/dashboard/overview-stats, overview-lists, operative-activity-today; iframes: Task_Planning, Quality_Assurance, manage_material, Site_Snags, Profile_Settings, my_company_settings, **Unit_Progress_Tracking**; Projects, Operatives, Work Logs. **UI**: sidebar fix **stânga** (rail icon-only, extindere hover/focus); mobil off-canvas stânga; **footer ascuns** pe ecrane ≤991px; `dashboard_manager.css` + `dashboard.css` |
 | Profile_Settings.html | Profil manager | GET /api/managers/me; PATCH /api/managers/phone; POST /api/managers/change-password (headers manager) |
 | my_company_settings.html | Companie + invite | GET /api/companies/me; POST /api/managers/invite; GET /api/projects/list pentru dropdown site manager |
 | projects.js | Projects | /api/projects/list, create, :id/update, :id/deactivate, :id/assignments, assign, delete assignment; formular Edit Project include și `latitude`/`longitude` + buton „Use current location” (HTML5 geolocation) |
@@ -67,6 +71,10 @@ frontend/
 | material.html | Landing materiale | Pagină informațională (hero, features, CTA); fără logică de gestiune |
 | Task_Planning.html | Task & Planning | UI manager: formular task + `Gantt chart overview` (Day/Week/Month) + Kanban + `Task details` modal; validează `Start date (pickup)` și `Deadline`; `Assigned to` este opțional (UI salvează în DB ca `Unassigned`); sincronizare cu DB prin `/api/planning/*`; listează operativi pentru autocomplete prin `/api/operatives`. Pentru task **completed**, modalul încarcă pozele de confirmare ale operativului: `GET /api/planning/plan-tasks/:id/confirmation-photos`. **Layout**: în iframe ocupă **înălțimea și lățimea** disponibile (fără max-width centrat); panel Planning (`tp-planning-panel`) întinde zona Gantt. |
 | Site_Snags.html | Site Snags | Desen/proiect, pin-uri, măsurători; în dashboard prin iframe; sesiune trimisă prin `postMessage`. **Touch**: pan cu un deget, pinch-zoom pe viewport (Pointer Events). |
+| Unit_Progress_Tracking.html | Unit Progress (manager/supervisor) | Wizard tower/floor/unit, view ierarhică, timeline append-only cu dată+oră, Add Progress modal (max 5 poze, preview + remove), Generate Documentation Snapshot (ZIP + opțional PDF/Markdown + timeline-photos), QR unit, search unit în view 1; sync backend workspace și timeline private/public |
+| timeline_access_router.html | Router acces QR | Citește `unit_id`, verifică sesiune manager/supervisor și acces proiect; redirect automat la `private_timeline.html` sau `public_Timeline.html` |
+| private_timeline.html | Timeline privat | Fetch timeline privat manager/supervisor + add progress doar pentru utilizatori autorizați |
+| public_Timeline.html | Timeline public | Vizualizare read-only timeline; miniaturi poze + preview modal (back/next/close) |
 
 ---
 
@@ -78,7 +86,7 @@ frontend/
 |-----------------|------------------------|
 | login_manager.js | POST /api/managers/login |
 | proconix_administration_login.js | POST /api/platform-admin/login |
-| proconix_administration_dashboard.js | GET /api/platform-admin/me; GET /api/platform-admin/companies (modul Companies & tenants) |
+| proconix_administration_dashboard.js | GET /api/platform-admin/me; GET /api/platform-admin/companies (modul Companies & tenants); POST /api/platform-admin/create-demo-records; POST /api/platform-admin/send-demo-login-email |
 | register_manager.js | GET /api/onboarding/company?token=; POST /api/managers/create |
 | dashboard.js | GET /api/auth/validate; GET /api/dashboard/:module; **Project Overview**: GET /api/dashboard/overview-stats; GET /api/dashboard/overview-lists; GET /api/dashboard/operative-activity-today; GET /api/operatives (număr card Operatives) |
 | Profile_Settings.html | GET /api/managers/me; PATCH /api/managers/phone; POST /api/managers/change-password |
@@ -90,6 +98,9 @@ frontend/
 | Quality_Assurance.html (inline) | GET /api/projects/list (dropdown proiect); GET/POST/PUT/DELETE /api/templates; GET/POST/PUT/DELETE /api/jobs; GET /api/jobs/next-number (logic poate fi în frontend pe baza listei de jobs) |
 | manage_material.html (inline) | GET /api/materials/projects; GET/POST /api/materials/categories; GET/POST /api/materials/suppliers; GET /api/materials?projectId=; POST /api/materials; PUT /api/materials/:id; DELETE /api/materials/:id; GET /api/materials/forecast?projectId=. Headers: X-Manager-Id, X-Manager-Email (proconix_manager_session). Opțional: MATERIAL_USE_MOCK=true pentru date mock |
 | Task_Planning.html | GET /api/operatives; GET /api/planning/list; POST /api/planning/plans; POST /api/planning/plan-tasks; PATCH /api/planning/plan-tasks/:id; DELETE /api/planning/plan-tasks/:id; GET /api/planning/plan-tasks/:id/confirmation-photos (task completat – poze operativ). Headers: X-Manager-Id, X-Manager-Email (din `proconix_manager_session`). |
+| Unit_Progress_Tracking.html | GET/PUT `/api/unit-progress/workspace` (manager) sau `/api/unit-progress/supervisor/workspace`; GET `/api/projects/list` (wizard project select); GET `/api/auth/validate` / `/api/operatives/me` (context actor) |
+| private_timeline.html | GET `/api/unit-progress/private-timeline/manager/:unitId` sau `/supervisor/:unitId`; POST `/api/unit-progress/private-timeline/.../:unitId/progress` |
+| public_Timeline.html | GET `/api/unit-progress/public-timeline/:unitId` |
 
 ### Cum se încarcă datele din DB în pagină
 
@@ -115,6 +126,7 @@ frontend/
 8. **Material Management**: din dashboard → Material Management (sau „Open in new window”). Selectează proiectul; poate crea categorii și furnizori; adaugă materiale (nume, categorie, furnizor, unitate, cantitate inițială, prag low-stock). Tabel: filtre (căutare, categorie, status, furnizor), sortare, Stock check (actualizare quantity remaining), Edit full / Edit only qty, ștergere. Carduri: Total stock, Stock by categories, Critical materials, Alerts. Forecast: Usage last week / Forecast this week (din snapshot-uri zilnice); alertă dacă forecast > stoc. Export Excel.
 9. **Task & Planning**: deschide `Task_Planning.html` din dashboard. Completează `Task name`, `Start date (pickup)` (obligatoriu), `Deadline (pickup date & time)` (obligatoriu), `Assigned to` (opțional), `Priority` (implicit Medium), `Task description`, `Notes` (opțional). Apasă **Save Task** pentru a crea/sincroniza task-ul în DB. Gantt-ul (Day/Week/Month) și Kanban-ul se actualizează din DB; filtre după persoană/prioritate/status; click pe task deschide modal pentru schimbare status (in progress/paused/completed), delivery (send/remove), assigned, start/deadline și delete (actualizează în DB). Dacă task-ul este **completed** și operativul a încărcat poze, în același modal apare secțiunea **Confirmation photos** cu miniaturi (deschidere în tab nou).
 10. **Quality Assurance**: deschide Quality_Assurance.html (din dashboard sau direct). Selectează proiectul; poate crea/edita șabloane (templates) cu pași și prețuri; poate crea/edita joburi (număr, etaj, locație, template-uri și workers asociați, status, cost). Toate acțiunile de creare/editare sunt persistate în DB când ești logat ca manager.
+11. **Unit Progress Tracking**: deschide modulul din dashboard. În `View 1` poate porni wizard-ul și căuta unități după nume; în `View 3` vede timeline + acțiunile `Generate Documentation Snapshot` și `Add Progress` (modal). QR-ul unității folosește `timeline_access_router.html` și trimite utilizatorul către timeline privat/public după drepturi.
 
 ### Cum folosește operativul aplicația
 
@@ -145,4 +157,4 @@ frontend/
 
 *Actualizează documentația la adăugarea de pagini sau fluxuri noi.*
 
-**Actualizat:** 27/03/2026
+**Actualizat:** 26/04/2026

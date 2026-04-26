@@ -1,0 +1,381 @@
+openapi: 3.0.3
+info:
+  title: Proconix Platform API
+  version: 2.0.0
+  description: |
+    High-level OpenAPI specification for the full Proconix platform.
+    Covers manager, operative, unit progress, planning, QA, materials,
+    dashboard summary, and platform administration core routes.
+    This contract is intentionally concise and should be extended endpoint-by-endpoint
+    as implementation contracts stabilize.
+servers:
+  - url: /api
+tags:
+  - name: Auth
+  - name: Managers
+  - name: Projects
+  - name: Operatives
+  - name: WorkLogs
+  - name: Planning
+  - name: QA
+  - name: Materials
+  - name: Dashboard
+  - name: UnitProgress
+  - name: PlatformAdmin
+paths:
+  /health:
+    get:
+      tags: [Auth]
+      summary: Health check
+      responses:
+        "200":
+          description: API/DB status payload
+
+  /managers/login:
+    post:
+      tags: [Managers]
+      summary: Manager login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200": { description: Login success }
+        "401": { description: Invalid credentials }
+
+  /auth/validate:
+    get:
+      tags: [Auth]
+      summary: Validate manager session headers
+      security:
+        - managerAuth: []
+      responses:
+        "200": { description: Session valid }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /projects/list:
+    get:
+      tags: [Projects]
+      summary: List manager projects
+      security:
+        - managerAuth: []
+      responses:
+        "200": { description: Projects list }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /projects/create:
+    post:
+      tags: [Projects]
+      summary: Create project
+      security:
+        - managerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201": { description: Project created }
+
+  /operatives:
+    get:
+      tags: [Operatives]
+      summary: List operatives for manager company
+      security:
+        - managerAuth: []
+      responses:
+        "200": { description: Operatives list }
+
+  /operatives/login:
+    post:
+      tags: [Operatives]
+      summary: Operative login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200": { description: Operative session/token issued }
+
+  /operatives/work-log:
+    get:
+      tags: [WorkLogs]
+      summary: List operative work logs
+      security:
+        - operativeToken: []
+      responses:
+        "200": { description: Work logs list }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [WorkLogs]
+      summary: Create operative work log
+      security:
+        - operativeToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkLogCreateInput"
+      responses:
+        "201": { description: Work log created }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /worklogs:
+    get:
+      tags: [WorkLogs]
+      summary: Manager work logs list
+      security:
+        - managerAuth: []
+      responses:
+        "200": { description: Work logs queue/list }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /planning/list:
+    get:
+      tags: [Planning]
+      summary: List planning plans/tasks for manager company
+      security:
+        - managerAuth: []
+      responses:
+        "200": { description: Planning list payload }
+
+  /planning/plan-tasks:
+    post:
+      tags: [Planning]
+      summary: Create planning tasks
+      security:
+        - managerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200": { description: Tasks persisted }
+
+  /templates:
+    get:
+      tags: [QA]
+      summary: List QA templates
+      security:
+        - managerAuth: []
+      responses:
+        "200": { description: Templates list }
+
+  /jobs:
+    get:
+      tags: [QA]
+      summary: List QA jobs
+      security:
+        - managerAuth: []
+      responses:
+        "200": { description: Jobs list }
+
+  /materials:
+    get:
+      tags: [Materials]
+      summary: List materials by project
+      security:
+        - managerAuth: []
+      parameters:
+        - in: query
+          name: projectId
+          schema: { type: integer }
+      responses:
+        "200": { description: Materials list }
+    post:
+      tags: [Materials]
+      summary: Create material
+      security:
+        - managerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "201": { description: Material created }
+
+  /dashboard/overview-stats:
+    get:
+      tags: [Dashboard]
+      summary: Project overview statistics
+      security:
+        - managerAuth: []
+      responses:
+        "200": { description: Stats payload }
+
+  /unit-progress/workspace:
+    get:
+      tags: [UnitProgress]
+      summary: Get manager unit progress workspace
+      security:
+        - managerAuth: []
+      responses:
+        "200": { description: Workspace loaded }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [UnitProgress]
+      summary: Save manager unit progress workspace
+      security:
+        - managerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceEnvelope"
+      responses:
+        "200": { description: Workspace saved }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /unit-progress/public-timeline/{unitId}:
+    get:
+      tags: [UnitProgress]
+      summary: Public timeline read-only
+      parameters:
+        - in: path
+          name: unitId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Public timeline }
+        "404": { description: Unit not found }
+
+  /platform-admin/login:
+    post:
+      tags: [PlatformAdmin]
+      summary: Platform admin login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "200": { description: Admin session created }
+        "401": { description: Invalid credentials }
+
+  /platform-admin/create-demo-records:
+    post:
+      tags: [PlatformAdmin]
+      summary: Create full demo tenant
+      security:
+        - platformAdminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [company_name, head_manager_name, email, password]
+              properties:
+                company_name: { type: string }
+                head_manager_name: { type: string }
+                email: { type: string }
+                password: { type: string }
+      responses:
+        "201": { description: Demo tenant created }
+        "409": { description: Duplicate company/email conflict }
+
+components:
+  responses:
+    BadRequest:
+      description: Invalid request payload or validation failed
+    Unauthorized:
+      description: Missing/invalid authentication context
+    Forbidden:
+      description: Authenticated but not authorized for requested scope
+    NotFound:
+      description: Resource not found in caller scope
+    Conflict:
+      description: Uniqueness/state conflict
+  securitySchemes:
+    managerAuth:
+      type: apiKey
+      in: header
+      name: X-Manager-Id / X-Manager-Email
+    operativeToken:
+      type: apiKey
+      in: header
+      name: X-Operative-Token
+    platformAdminAuth:
+      type: apiKey
+      in: header
+      name: X-Platform-Admin-Id / X-Platform-Admin-Email
+  schemas:
+    ProjectInput:
+      type: object
+      required: [project_name]
+      properties:
+        project_name: { type: string }
+        address: { type: string }
+        start_date: { type: string }
+        planned_end_date: { type: string }
+        number_of_floors: { type: integer }
+    WorkspaceEnvelope:
+      type: object
+      properties:
+        workspace:
+          $ref: "#/components/schemas/Workspace"
+    Workspace:
+      type: object
+      properties:
+        towers:
+          type: array
+          items: { type: object }
+        floors:
+          type: array
+          items: { type: object }
+        units:
+          type: array
+          items: { type: object }
+    WorkLogCreateInput:
+      type: object
+      properties:
+        project_id: { type: integer }
+        worker_name: { type: string }
+        work_type: { type: string }
+        quantity: { type: number }
+        unit_price: { type: number }
+        total: { type: number }
+        timesheetJobs:
+          type: array
+          items: { type: object }
+    WorkLogStatus:
+      type: string
+      enum: [pending, edited, waiting_worker, approved, rejected]
+    PlanningTaskStatus:
+      type: string
+      enum: [not_started, in_progress, paused, declined, completed]
+    UnitTimelineEventStatus:
+      type: string
+      description: Canonical storage/API status for unit timeline events
+      enum: [in_progress, blocked, done]

@@ -254,8 +254,28 @@ Endpoint dedicat pentru modulul `Task_Planning.html` (Gantt chart overview + Kan
 | GET | /api/platform-admin/companies/:id | Același header-e | path `id` | `{ success, company: (rând complet `companies`), head_manager: (fără parolă) \| null }` |
 | PATCH | /api/platform-admin/companies/:id | Același header-e | body: `company` (…), `head_manager` (name, surname, email, **active**, new_password opțional). La `head_manager.active`: `true` → și `manager.is_head_manager = 'Yes'`; `false` → `'No'`. | `{ success, company, head_manager }` |
 | DELETE | /api/platform-admin/companies/:id | Același header-e | path `id` | Ștergere în cascadă (best-effort: planning, tasks, materials, projects, QA legate de companie, users, manager, work_logs, apoi `companies`). `{ success, deleted_id }` sau 409 la FK rămas |
+| POST | /api/platform-admin/create-demo-records | Același header-e | body: `company_name`, `head_manager_name`, `email`, `password` | Creează tenant demo complet (companie + manager + proiecte + operativi + planning + QA + materials + work logs + **unit_progress_state** demo dacă tabela există) |
+| POST | /api/platform-admin/send-demo-login-email | Același header-e | body: `to`, `company_name`, `head_manager_name?`, `head_manager_email`, `primary_operative_email`, `password` | Trimite clientului email cu datele de login demo |
 
 Sesiunea în frontend: după login, `localStorage` / `sessionStorage` (`proconix_platform_admin_session`) stochează `id` + `email` (+ date afișate); request-urile protejate trimit aceleași header-e ca la manager.
+
+---
+
+### Unit Progress Tracking (Manager / Supervisor / Public)
+
+| Method | Route | Auth | Parametri / Body | Returnat |
+|--------|--------|------|------------------|----------|
+| GET | /api/unit-progress/workspace | requireManagerAuth | — | `{ success, workspace }` (workspace complet pe compania managerului) |
+| PUT | /api/unit-progress/workspace | requireManagerAuth | body: `workspace` (sau obiect direct) | `{ success, workspace }` (upsert în `unit_progress_state`) |
+| GET | /api/unit-progress/supervisor/workspace | requireSupervisorAuth | — | `{ success, workspace }` pe compania supervisorului |
+| PUT | /api/unit-progress/supervisor/workspace | requireSupervisorAuth | body: `workspace` (sau obiect direct) | `{ success, workspace }` |
+| GET | /api/unit-progress/public-timeline/:unitId | public | path `unitId` | `{ success, unit, timeline }` read-only (fără auth) |
+| GET | /api/unit-progress/private-timeline/manager/:unitId | requireManagerAuth | path `unitId` | timeline privat pentru manager (din workspace companie) |
+| GET | /api/unit-progress/private-timeline/supervisor/:unitId | requireSupervisorAuth | path `unitId` | timeline privat pentru supervisor (cu verificare acces proiect) |
+| POST | /api/unit-progress/private-timeline/manager/:unitId/progress | requireManagerAuth | body: `stage`, `status`, `comment`, opțional `reason`, `photos[]` (max 5) | adaugă intrare append-only în `unit.timeline` |
+| POST | /api/unit-progress/private-timeline/supervisor/:unitId/progress | requireSupervisorAuth | body ca mai sus | adaugă progres dacă supervisorul are acces la proiectul unității |
+
+Notă: dacă tabela lipsește, endpoint-urile răspund cu cod/mesaj ce indică rularea scriptului `scripts/create_unit_progress_tables.sql`.
 
 ---
 
@@ -273,6 +293,7 @@ Sesiunea în frontend: după login, `localStorage` / `sessionStorage` (`proconix
 | requireManagerAuth | requireManagerAuth.js | Header-e `X-Manager-Id`, `X-Manager-Email`; verifică în DB că managerul există și e active. Pune `req.manager`. |
 | requirePlatformAdminAuth | requirePlatformAdminAuth.js | Header-e `X-Platform-Admin-Id`, `X-Platform-Admin-Email`; verifică `proconix_admin` activ. Pune `req.platformAdmin`. |
 | requireOperativeAuth | requireOperativeAuth.js | Verifică sesiunea operativului (cookie sau token). Pune `req.user` (sau echivalent). |
+| requireSupervisorAuth | requireSupervisorAuth.js | Verifică sesiunea operativului pentru rol supervisor (`X-Operative-Token`). Pune `req.supervisor`. |
 | requireManagerOrOperativeAuth | requireManagerOrOperativeAuth.js | Acceptă fie manager (headers), fie operativ (session); folosit la GET project by id. |
 | — | express.json(), express.urlencoded | Parsare body JSON/form. |
 | uploadIssueFile, uploadDocumentFile, uploadWorklogFile | uploadMiddleware.js | Multer pentru upload fișiere; injectFileUrl injectează URL-ul fișierului în req.body. |
@@ -286,6 +307,7 @@ Sesiunea în frontend: după login, `localStorage` / `sessionStorage` (`proconix
 | companyController | POST /api/companies/create; GET /api/companies/me (profil companie pentru manager logat). |
 | managerController | Creare manager (după onboarding), login manager (email + parolă, bcrypt); getManagerMe, updateManagerPhone, changeManagerPassword, inviteManager. |
 | platformAdminController | Login platform admin (`proconix_admin`, bcrypt); `me` pentru validare sesiune. |
+| unitProgressController | Workspace Unit Progress: get/put manager-supervisor, timeline public/private, append progress pe unitate. |
 | authRoutes (inline) | GET /api/auth/validate – returnează company_name și manager dacă header-ele sunt valide. |
 | projectsController | CRUD proiecte (company_id din req.manager), list, getOne, create, update, deactivate, getAssignments, assign, removeAssignment. |
 | operativeController | CRUD operativi (list, add, update, delete), login operative, set-password. |
@@ -324,8 +346,9 @@ Logica de business este în controller-e: validare input, interogări DB, format
 
 ## Middleware de protecție a rutei
 
-- **requireManagerAuth**: obligatoriu pentru /api/auth/validate, /api/companies/me, /api/managers/me, /api/managers/phone, /api/managers/change-password, /api/managers/invite, /api/projects/* (exceptând eventual getOne dacă e partajat), /api/operatives (CRUD), /api/worklogs/*, /api/materials/*, /api/templates, /api/jobs, /api/dashboard/* (partials + overview-stats, overview-lists, operative-activity-today).
+- **requireManagerAuth**: obligatoriu pentru /api/auth/validate, /api/companies/me, /api/managers/me, /api/managers/phone, /api/managers/change-password, /api/managers/invite, /api/projects/* (exceptând eventual getOne dacă e partajat), /api/operatives (CRUD), /api/worklogs/*, /api/materials/*, /api/templates, /api/jobs, /api/dashboard/* (partials + overview-stats, overview-lists, operative-activity-today), `/api/unit-progress/workspace`, `/api/unit-progress/private-timeline/manager/*`.
 - **requireOperativeAuth**: pentru /api/operatives/me, work-hours/*, project/current, tasks, tasks/:id/photos, issues, uploads, work-log (GET, POST, upload, **/:id/archive**), **timesheet/generate**, **work-report/generate**.
+- **requireSupervisorAuth**: pentru `/api/unit-progress/supervisor/*` și `/api/unit-progress/private-timeline/supervisor/*`.
 - **requireManagerOrOperativeAuth**: pentru GET /api/projects/:id (manager vede orice proiect al companiei; operativ doar proiectul la care e asignat).
 - **Fără auth**: /api/health, /api/companies/create, /api/onboarding/company, /api/managers/create, /api/managers/login, /api/operatives/login, login-temp, set-password.
 
@@ -333,4 +356,4 @@ Logica de business este în controller-e: validare input, interogări DB, format
 
 *Actualizează documentația la adăugarea de endpoint-uri sau middleware.*
 
-**Actualizat:** 26/03/2026
+**Actualizat:** 26/04/2026

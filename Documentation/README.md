@@ -15,7 +15,7 @@ Acest folder conține documentația de arhitectură, bază de date, backend, fro
 | 5 | [5-installation-setup.md](5-installation-setup.md) | Setup local/VPS, Node.js, PostgreSQL, npm, variabile .env, PM2, Nginx, SSL, backup/restore DB, deployment |
 | 6 | [6-qa-testing.md](6-qa-testing.md) | Test cases (login, CRUD proiecte, operatives, work logs, QA, dashboard operativ), loguri și debugging (PM2, Nginx, Node, frontend) |
 | 7 | [7-business-product.md](7-business-product.md) | Scop și obiective, utilizatori țintă, roadmap/MVP vs viitor, plan monetizare (Free/Silver/Gold), strategie lansare |
-| 8 | [8-recent-extras.md](8-recent-extras.md) | Extra recent: landing (typewriter, carusel hero, flux „How it works”, testimoniale, FAQ), dashboard iframe + touch, Site Snags double-tap, folder `Doc_Marketing_Suite` |
+| 8 | [8-recent-extras.md](8-recent-extras.md) | Extra recent: landing (typewriter, carusel hero, flux „How it works”, testimoniale, FAQ), dashboard iframe + touch, Site Snags double-tap, folder `Doc_Marketing_Suite`, Unit Progress Tracking + timeline routing |
 | 9 | [9-documents-digital-signatures-frontend-plan.md](9-documents-digital-signatures-frontend-plan.md) | Plan front-end modul Documente & semnături digitale: pagini, componente, state, API, validări, UX, checklist livrabile (vanilla vs React) |
 | 10 | [10-price-work-booking-qa-photos.md](10-price-work-booking-qa-photos.md) | Price work booking (operativ): cantități QA pe pași, `stepPhotoUrls` în `timesheet_jobs`, poze în Work Logs / QA / factură email-PDF, remedieri UI și încărcare fișiere |
 
@@ -97,6 +97,15 @@ Pentru diagrame Mermaid poți folosi: [Mermaid Live Editor](https://mermaid.live
 ### Administrare platformă Proconix (operator app)
 - **Login:** `frontend/proconix_administration_login.html` → `POST /api/platform-admin/login` (tabel `proconix_admin`, bcrypt); sesiune în `localStorage` / `sessionStorage` (`proconix_platform_admin_session`: `id`, `email`, …).
 - **Consolă:** `frontend/proconix_administration.html` → `GET /api/platform-admin/me` cu header-e `X-Platform-Admin-Id`, `X-Platform-Admin-Email`; meniu placeholder; **Sign out** șterge sesiunea.
+- **Create Demo Records:** `POST /api/platform-admin/create-demo-records` creează tenant demo end-to-end (companie, manager, proiecte, operativi, planning, QA, materials, work logs etc.) și, în schema nouă, seed-uiește și `unit_progress_state` (workspace cu towers/floors/units/timeline). `DELETE /api/platform-admin/companies/:id` curăță și datele de Unit Progress pentru tenantul șters.
+
+### Unit Progress Tracking (aprilie 2026)
+- **Frontend principal:** `frontend/Unit_Progress_Tracking.html` (integrat în manager dashboard ca modul intern).
+- **Acces timeline QR:** `frontend/timeline_access_router.html` decide redirecționarea către:
+  - `frontend/private_timeline.html` (manager/supervisor autorizați),
+  - `frontend/public_Timeline.html` (vizualizare publică read-only).
+- **Backend/API:** `/api/unit-progress/*` + tabel `unit_progress_state`.
+- **DB script:** `scripts/create_unit_progress_tables.sql`.
 
 ### Scripturi & deploy (referință)
 - Audit VPS: `scripts/audit/*`, `scripts/deploy-to-vps.sh`, `scripts/DEPLOY-VPS.md`, `ecosystem.config.cjs` (PM2).
@@ -131,4 +140,4 @@ Pentru diagrame Mermaid poți folosi: [Mermaid Live Editor](https://mermaid.live
 #### Curățare cod vechi
 - Eliminate șabloanele HTML Puppeteer din `backend/templates/pdf/` și fluxul `pdfReportsController` / `renderPdf`; dependența **puppeteer** scoasă din `package.json` unde nu mai e folosită.
 
-**Actualizat:** 27/03/2026 (inclusiv `8-recent-extras.md`)
+**Actualizat:** 26/04/2026 (inclusiv `8-recent-extras.md`)
