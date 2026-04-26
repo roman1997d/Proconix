@@ -404,6 +404,41 @@
       display: none;
     }
 
+    .progress-loader {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #1d4ed8;
+      font-size: 0.84rem;
+    }
+
+    .progress-loader.hidden {
+      display: none;
+    }
+
+    .floating-dots {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .floating-dots span {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #2563eb;
+      animation: floatingDot 1s infinite ease-in-out;
+    }
+
+    .floating-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .floating-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+    @keyframes floatingDot {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
+      40% { transform: translateY(-4px); opacity: 1; }
+    }
+
     .upload-preview {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1001,8 +1036,12 @@
               <textarea id="comment" name="comment" maxlength="220" placeholder="Add a short note" required></textarea>
             </div>
 
-            <button class="btn btn-primary" type="submit"><i class="bi bi-check2-circle"></i> Submit Progress</button>
+            <button class="btn btn-primary" type="submit" id="progress-submit-btn"><i class="bi bi-check2-circle"></i> Submit Progress</button>
           </form>
+          <div class="progress-loader hidden" id="progress-loader" role="status" aria-live="polite">
+            <span class="floating-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span>Uploading photos and updating progress...</span>
+          </div>
           <div class="feedback" id="form-feedback"></div>
         </div>
       </div>
@@ -1202,6 +1241,8 @@
     const photosInput = document.getElementById("photos");
     const photosPreview = document.getElementById("photos-preview");
     const commentInput = document.getElementById("comment");
+    const progressSubmitBtn = document.getElementById("progress-submit-btn");
+    const progressLoader = document.getElementById("progress-loader");
     const feedback = document.getElementById("form-feedback");
     const progressModal = document.getElementById("progress-modal");
     const progressModalBackdrop = document.getElementById("progress-modal-backdrop");
@@ -1966,6 +2007,13 @@
       renderSelectedPhotoPreviews();
     }
 
+    function setProgressSubmitting(isSubmitting) {
+      progressSubmitBtn.disabled = isSubmitting;
+      progressSubmitBtn.style.opacity = isSubmitting ? "0.7" : "1";
+      progressSubmitBtn.style.cursor = isSubmitting ? "not-allowed" : "pointer";
+      progressLoader.classList.toggle("hidden", !isSubmitting);
+    }
+
     function openTower(towerId) {
       state.currentTower = towerId;
       state.currentFloor = null;
@@ -2169,7 +2217,7 @@
     });
     photosInput.addEventListener("change", appendSelectedPhotos);
 
-    form.addEventListener("submit", (event) => {
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const unit = getCurrentUnit();
       if (!unit) return;
@@ -2196,33 +2244,42 @@
         return;
       }
 
-      const newEntry = {
-        stage,
-        status,
-        reason: status === "Blocked" ? reason : "",
-        photos: Array.from(files).map((file) => ({
-          name: file.name,
-          src: URL.createObjectURL(file)
-        })),
-        user: "Current Supervisor",
-        date: new Date().toISOString(),
-        comment
-      };
+      setProgressSubmitting(true);
+      feedback.style.display = "none";
+      try {
+        const simulatedUploadMs = Math.min(3000, 700 + files.length * 350);
+        await new Promise((resolve) => setTimeout(resolve, simulatedUploadMs));
 
-      unit.timeline.push(newEntry);
-      renderTimeline(unit);
-      unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
+        const newEntry = {
+          stage,
+          status,
+          reason: status === "Blocked" ? reason : "",
+          photos: Array.from(files).map((file) => ({
+            name: file.name,
+            src: URL.createObjectURL(file)
+          })),
+          user: "Current Supervisor",
+          date: new Date().toISOString(),
+          comment
+        };
 
-      feedback.style.display = "block";
-      feedback.textContent = "Progress appended successfully (timeline is append-only).";
+        unit.timeline.push(newEntry);
+        renderTimeline(unit);
+        unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
 
-      form.reset();
-      reasonField.classList.add("hidden");
-      reasonInput.required = false;
-      clearSelectedPhotoPreviews();
-      closeProgressModal();
+        feedback.style.display = "block";
+        feedback.textContent = "Progress updated";
 
-      setTimeout(() => { feedback.style.display = "none"; }, 2200);
+        form.reset();
+        reasonField.classList.add("hidden");
+        reasonInput.required = false;
+        clearSelectedPhotoPreviews();
+        closeProgressModal();
+
+        setTimeout(() => { feedback.style.display = "none"; }, 2200);
+      } finally {
+        setProgressSubmitting(false);
+      }
     });
 
     document.getElementById("generate-doc-btn").addEventListener("click", () => {
