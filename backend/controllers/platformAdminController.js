@@ -75,7 +75,8 @@ function pad2(n) {
 
 function formatBackupFileStamp(dateObj) {
   const d = dateObj instanceof Date ? dateObj : new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}_${pad2(d.getHours())}-${pad2(d.getMinutes())}`;
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${pad2(d.getDate())}-${pad2(d.getMonth() + 1)}-${yy}__${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
 async function appendBackupAuditLog(entry) {
@@ -1189,7 +1190,7 @@ async function createBackup(req, res) {
   const stamp = formatBackupFileStamp(startedAt);
   const dbDumpPath = path.join(tempRoot, 'db.dump');
   const filesArchivePath = path.join(tempRoot, 'files.tar.gz');
-  const finalZipName = `proconix_backup_${stamp}.zip`;
+  const finalZipName = `proconixBackup_${stamp}.zip`;
   const finalZipPath = path.join(tempRoot, finalZipName);
   const backupIp = (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || '';
 
