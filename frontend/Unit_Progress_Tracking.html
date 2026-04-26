@@ -1221,6 +1221,7 @@
     let previewPhotos = [];
     let previewIndex = 0;
     let selectedPhotoObjectUrls = [];
+    let selectedProgressPhotos = [];
     const WIZARD_KEY = "proconix_project_wizard_state_v1";
     const wizardState = {
       step: 1,
@@ -1888,13 +1889,21 @@
     function clearSelectedPhotoPreviews() {
       selectedPhotoObjectUrls.forEach((url) => URL.revokeObjectURL(url));
       selectedPhotoObjectUrls = [];
+      selectedProgressPhotos = [];
       photosPreview.innerHTML = "";
       photosPreview.classList.add("hidden");
+      photosInput.value = "";
+    }
+
+    function fileSignature(file) {
+      return `${file.name}::${file.size}::${file.lastModified}`;
     }
 
     function renderSelectedPhotoPreviews() {
-      clearSelectedPhotoPreviews();
-      const files = Array.from(photosInput.files || []);
+      selectedPhotoObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+      selectedPhotoObjectUrls = [];
+      photosPreview.innerHTML = "";
+      const files = selectedProgressPhotos;
       if (!files.length) return;
 
       files.forEach((file) => {
@@ -1906,6 +1915,26 @@
         photosPreview.appendChild(item);
       });
       photosPreview.classList.remove("hidden");
+    }
+
+    function appendSelectedPhotos() {
+      const incoming = Array.from(photosInput.files || []);
+      if (!incoming.length) return;
+      const known = new Set(selectedProgressPhotos.map(fileSignature));
+      incoming.forEach((file) => {
+        const key = fileSignature(file);
+        if (!known.has(key)) {
+          selectedProgressPhotos.push(file);
+          known.add(key);
+        }
+      });
+      if (selectedProgressPhotos.length > 5) {
+        selectedProgressPhotos = selectedProgressPhotos.slice(0, 5);
+        feedback.style.display = "block";
+        feedback.textContent = "Maximum 5 photos. Extra files were ignored.";
+      }
+      photosInput.value = "";
+      renderSelectedPhotoPreviews();
     }
 
     function openTower(towerId) {
@@ -2109,14 +2138,14 @@
       reasonInput.required = blocked;
       if (!blocked) reasonInput.value = "";
     });
-    photosInput.addEventListener("change", renderSelectedPhotoPreviews);
+    photosInput.addEventListener("change", appendSelectedPhotos);
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const unit = getCurrentUnit();
       if (!unit) return;
 
-      const files = photosInput.files;
+      const files = selectedProgressPhotos;
       if (files.length > 5) {
         feedback.style.display = "block";
         feedback.textContent = "Upload up to 5 photos.";
