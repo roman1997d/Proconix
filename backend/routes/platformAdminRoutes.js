@@ -6,7 +6,6 @@ const express = require('express');
 const router = express.Router();
 const {
   login,
-  register,
   me,
   listCompanies,
   listCompaniesStorageSummary,
@@ -30,7 +29,6 @@ const { getSystemHealth, getServerLogStream, postLogTest } = require('../control
 const { requirePlatformAdminAuth } = require('../middleware/requirePlatformAdminAuth');
 
 router.post('/login', login);
-router.post('/register', register);
 router.get('/me', requirePlatformAdminAuth, me);
 router.get('/system-health', requirePlatformAdminAuth, getSystemHealth);
 router.get('/server-log-stream', requirePlatformAdminAuth, getServerLogStream);
