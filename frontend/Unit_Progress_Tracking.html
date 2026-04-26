@@ -2763,33 +2763,37 @@
         const root = zip.folder(safeFolderName);
         const timeline = (snapshot.timeline || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
         const photoRefsByRow = [];
+        const includePhotos = mode === "photos" || mode === "photos_text";
+        const includeText = mode === "text" || mode === "photos_text";
 
-        if (shouldCreateDocPdf) {
+        if (includeText && shouldCreateDocPdf) {
           const pdfBlob = buildTimelinePdfBlob(documentTitle, timeline);
           if (!pdfBlob) throw new Error("PDF engine unavailable");
           root.file(`${safeFolderName}.pdf`, pdfBlob);
         }
 
-        const photosFolder = root.folder("timeline-photos");
-        for (let i = 0; i < timeline.length; i += 1) {
-          const entry = timeline[i];
-          const entryPhotos = Array.isArray(entry.photos) ? entry.photos : [];
-          photoRefsByRow[i] = [];
-          const stageFolderName = sanitizeFolderName(entry.stage || "uncategorized");
-          const stageFolder = photosFolder.folder(stageFolderName);
-          for (let j = 0; j < entryPhotos.length; j += 1) {
-            const normalized = normalizePhoto(entryPhotos[j]);
-            const blob = await dataUrlToBlob(normalized.src);
-            if (!blob) continue;
-            const extGuess = blob.type && blob.type.includes("png") ? "png" : blob.type && blob.type.includes("jpeg") ? "jpg" : "img";
-            const baseName = sanitizeFileName(normalized.name || `photo_${i + 1}_${j + 1}`);
-            const filename = `${String(i + 1).padStart(2, "0")}_${baseName}.${extGuess}`;
-            stageFolder.file(filename, blob);
-            photoRefsByRow[i].push(`timeline-photos/${stageFolderName}/${filename}`);
+        if (includePhotos) {
+          const photosFolder = root.folder("timeline-photos");
+          for (let i = 0; i < timeline.length; i += 1) {
+            const entry = timeline[i];
+            const entryPhotos = Array.isArray(entry.photos) ? entry.photos : [];
+            photoRefsByRow[i] = [];
+            const stageFolderName = sanitizeFolderName(entry.stage || "uncategorized");
+            const stageFolder = photosFolder.folder(stageFolderName);
+            for (let j = 0; j < entryPhotos.length; j += 1) {
+              const normalized = normalizePhoto(entryPhotos[j]);
+              const blob = await dataUrlToBlob(normalized.src);
+              if (!blob) continue;
+              const extGuess = blob.type && blob.type.includes("png") ? "png" : blob.type && blob.type.includes("jpeg") ? "jpg" : "img";
+              const baseName = sanitizeFileName(normalized.name || `photo_${i + 1}_${j + 1}`);
+              const filename = `${String(i + 1).padStart(2, "0")}_${baseName}.${extGuess}`;
+              stageFolder.file(filename, blob);
+              photoRefsByRow[i].push(`timeline-photos/${stageFolderName}/${filename}`);
+            }
           }
         }
 
-        if (!shouldCreateDocPdf) {
+        if (includeText && !shouldCreateDocPdf) {
           const markdown = buildTimelineMarkdown(unit, timeline, mode, photoRefsByRow);
           root.file(`${safeFolderName}.md`, markdown);
         }
