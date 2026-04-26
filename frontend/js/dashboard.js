@@ -19,6 +19,8 @@
   var companyNameEl = document.getElementById('dashboard-company-name');
   var userNameEl = document.getElementById('dashboard-user-name');
   var logoutBtn = document.getElementById('dashboard-logout-btn');
+  var myCompanyWrap = document.querySelector('.dashboard-my-company');
+  var dashboardFooter = document.querySelector('.dashboard-footer');
 
   var moduleTitles = {
     'project-overview': 'Project Overview',
@@ -132,6 +134,13 @@
     }
   }
 
+  function updateHeaderTopControls(module) {
+    var showTopControls = module === 'project-overview';
+    if (myCompanyWrap) myCompanyWrap.classList.toggle('d-none', !showTopControls);
+    if (logoutBtn) logoutBtn.classList.toggle('d-none', !showTopControls);
+    if (dashboardFooter) dashboardFooter.classList.toggle('d-none', !showTopControls);
+  }
+
   /** Resolve iframe module HTML path against current page (works with subpaths; avoids bad relative resolution). */
   function iframeModuleSrc(filename) {
     try {
@@ -158,6 +167,7 @@
 
   function loadModule(module, pushState) {
     if (!contentEl) return;
+    updateHeaderTopControls(module);
 
     if (module === 'task-planning') {
       contentEl.classList.add('dashboard-content-fade-out');
