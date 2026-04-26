@@ -13,7 +13,8 @@
     "lint:fix": "eslint backend/ index.js server.js db.js --fix",
     "audit:deps": "npm outdated && npm audit",
     "audit:all": "bash scripts/audit/run-all-audit.sh",
-    "purge:site-chat": "node scripts/purge_site_chat_older_than_3_days.js"
+    "purge:site-chat": "node scripts/purge_site_chat_older_than_3_days.js",
+    "reset:all-data": "node scripts/reset_all_data_fresh.js --confirm-reset"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
