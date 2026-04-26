@@ -267,9 +267,24 @@
       setActiveItem(module);
       updateHeaderTitle(module);
       contentEl.innerHTML =
-        '<iframe src="' +
+        '<div class="dashboard-iframe-loader-wrap" id="unit-progress-loader-wrap">' +
+        '<div class="dashboard-iframe-loader" id="unit-progress-loader">' +
+        '<div class="dashboard-loading-spinner" aria-hidden="true"></div>' +
+        '<p>Loading data, please wait...</p>' +
+        '</div>' +
+        '<iframe id="iframe-unit-progress" src="' +
         iframeModuleSrc('Unit_Progress_Tracking.html') +
-        '" class="dashboard-qa-iframe" title="Unit Progress Tracking"></iframe>';
+        '" class="dashboard-qa-iframe d-none" title="Unit Progress Tracking"></iframe>' +
+        '</div>';
+      var upIframe = document.getElementById('iframe-unit-progress');
+      var upLoader = document.getElementById('unit-progress-loader');
+      if (upIframe) {
+        upIframe.addEventListener('load', function onUnitProgressFrameLoad() {
+          upIframe.removeEventListener('load', onUnitProgressFrameLoad);
+          if (upLoader) upLoader.classList.add('d-none');
+          upIframe.classList.remove('d-none');
+        });
+      }
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
       if (pushState !== false) history.pushState({ module: module }, '', '#');

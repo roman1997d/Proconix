@@ -188,6 +188,30 @@
   display: block;
 }
 
+.dashboard-iframe-loader-wrap {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-iframe-loader {
+  flex: 1;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-muted);
+}
+
+.dashboard-iframe-loader p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
 /*
  * Tablet / phone: Safari often under-sizes flex iframes — give a floor so Task & Planning
  * (and similar) get a real height for their internal 100% / grid 1fr layout.
