@@ -72,6 +72,64 @@
       border: 2px solid #fff;
       box-shadow: 0 0 0 2px #dbeafe;
     }
+    .clickable { cursor: pointer; }
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1400;
+      padding: 14px;
+    }
+    .modal.open { display: flex; }
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.62);
+    }
+    .modal-dialog {
+      position: relative;
+      width: min(860px, 100%);
+      max-height: calc(100vh - 28px);
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      overflow: auto;
+    }
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 10px 12px;
+    }
+    .modal-close {
+      border: 0;
+      background: transparent;
+      font-size: 1.4rem;
+      cursor: pointer;
+      color: #334155;
+    }
+    .modal-body { padding: 12px; display: grid; gap: 10px; }
+    .modal-meta { font-size: 0.86rem; color: #475569; }
+    .photo-preview {
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #f8fafc;
+    }
+    .photo-preview img { width: 100%; max-height: 420px; object-fit: contain; display: block; background: #f1f5f9; }
+    .photo-caption { padding: 8px 10px; font-size: 0.82rem; color: #334155; border-top: 1px solid #e2e8f0; }
+    .modal-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 7px 10px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 0.84rem;
+    }
   </style>
 </head>
 <body>
@@ -84,10 +142,44 @@
       <div class="timeline" id="timeline"></div>
     </section>
   </div>
+  <div class="modal" id="timeline-modal" aria-hidden="true">
+    <div class="modal-backdrop" id="timeline-modal-backdrop"></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="timeline-modal-title">
+      <div class="modal-head">
+        <strong id="timeline-modal-title">Timeline details</strong>
+        <button type="button" class="modal-close" id="timeline-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-meta" id="timeline-modal-meta">-</div>
+        <div class="photo-preview" id="photo-preview-wrap" style="display:none;">
+          <img id="photo-preview-img" alt="Timeline photo">
+          <div class="photo-caption" id="photo-preview-caption">-</div>
+        </div>
+        <div class="modal-controls" id="photo-controls" style="display:none;">
+          <button type="button" class="btn" id="photo-back"><i class="bi bi-chevron-left"></i> Back</button>
+          <button type="button" class="btn" id="photo-next">Next <i class="bi bi-chevron-right"></i></button>
+          <button type="button" class="btn" id="photo-close">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script>
     (function () {
       "use strict";
+      var modal = document.getElementById("timeline-modal");
+      var modalBackdrop = document.getElementById("timeline-modal-backdrop");
+      var modalClose = document.getElementById("timeline-modal-close");
+      var modalMeta = document.getElementById("timeline-modal-meta");
+      var photoPreviewWrap = document.getElementById("photo-preview-wrap");
+      var photoPreviewImg = document.getElementById("photo-preview-img");
+      var photoPreviewCaption = document.getElementById("photo-preview-caption");
+      var photoControls = document.getElementById("photo-controls");
+      var photoBackBtn = document.getElementById("photo-back");
+      var photoNextBtn = document.getElementById("photo-next");
+      var photoCloseBtn = document.getElementById("photo-close");
+      var modalPhotos = [];
+      var modalPhotoIdx = 0;
 
       function formatDateTime(v) {
         var d = new Date(v);
@@ -120,7 +212,7 @@
           .sort(function (a, b) { return new Date(b.date) - new Date(a.date); })
           .forEach(function (entry) {
             var card = document.createElement("article");
-            card.className = "item";
+            card.className = "item clickable";
             var photosHtml = "";
             if (Array.isArray(entry.photos) && entry.photos.length) {
               photosHtml = '<div class="photos">' + entry.photos.map(function (p) {
@@ -145,12 +237,56 @@
                 commentLine +
                 photosHtml +
               "</div>";
+            card.addEventListener("click", function () {
+              openTimelineModal(entry);
+            });
 
             var dot = document.createElement("span");
             dot.className = "dot";
             wrap.appendChild(dot);
             wrap.appendChild(card);
           });
+      }
+
+      function renderModalPhoto() {
+        if (!modalPhotos.length) {
+          photoPreviewWrap.style.display = "none";
+          photoControls.style.display = "none";
+          return;
+        }
+        var p = modalPhotos[modalPhotoIdx];
+        photoPreviewWrap.style.display = "block";
+        photoControls.style.display = "flex";
+        photoPreviewImg.src = p.src || "";
+        photoPreviewCaption.textContent = (p.name || "photo") + " (" + (modalPhotoIdx + 1) + "/" + modalPhotos.length + ")";
+        photoBackBtn.disabled = modalPhotos.length <= 1;
+        photoNextBtn.disabled = modalPhotos.length <= 1;
+      }
+
+      function openTimelineModal(entry) {
+        modalMeta.textContent = "Stage: " + (entry.stage || "-") + " | Status: " + (entry.status || "-") + " | Date: " + formatDateTime(entry.date) + " | Updated by: " + (entry.user || "-");
+        modalPhotos = Array.isArray(entry.photos) ? entry.photos.map(normalizePhoto).filter(function (p) { return p.src; }) : [];
+        modalPhotoIdx = 0;
+        renderModalPhoto();
+        modal.classList.add("open");
+        modal.setAttribute("aria-hidden", "false");
+      }
+
+      function closeTimelineModal() {
+        modal.classList.remove("open");
+        modal.setAttribute("aria-hidden", "true");
+      }
+
+      function nextPhoto() {
+        if (!modalPhotos.length) return;
+        modalPhotoIdx = (modalPhotoIdx + 1) % modalPhotos.length;
+        renderModalPhoto();
+      }
+
+      function prevPhoto() {
+        if (!modalPhotos.length) return;
+        modalPhotoIdx = (modalPhotoIdx - 1 + modalPhotos.length) % modalPhotos.length;
+        renderModalPhoto();
       }
 
       function showError(msg) {
@@ -183,6 +319,18 @@
           showError("Failed to load public timeline.");
         }
       }
+
+      modalBackdrop.addEventListener("click", closeTimelineModal);
+      modalClose.addEventListener("click", closeTimelineModal);
+      photoCloseBtn.addEventListener("click", closeTimelineModal);
+      photoNextBtn.addEventListener("click", nextPhoto);
+      photoBackBtn.addEventListener("click", prevPhoto);
+      document.addEventListener("keydown", function (event) {
+        if (!modal.classList.contains("open")) return;
+        if (event.key === "Escape") closeTimelineModal();
+        if (event.key === "ArrowRight") nextPhoto();
+        if (event.key === "ArrowLeft") prevPhoto();
+      });
 
       boot();
     })();
