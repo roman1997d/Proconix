@@ -6,6 +6,7 @@
 
   var SESSION_KEY = 'proconix_platform_admin_session';
   var LOGIN_URL = 'proconix_administration_login.html';
+  var pendingLoaderOps = 0;
 
   function readSessionRaw() {
     try {
@@ -82,6 +83,36 @@
     }
     var num = i === 0 ? String(Math.round(x)) : x >= 10 || i === 1 ? x.toFixed(1) : x.toFixed(2);
     return num.replace(/\.0$/, '') + ' ' + units[i];
+  }
+
+  function showGlobalLoader(text) {
+    var overlay = document.getElementById('pxAdminOverlayLoader');
+    var txt = document.getElementById('pxAdminOverlayLoaderText');
+    pendingLoaderOps += 1;
+    if (txt) txt.textContent = text || 'Processing...';
+    if (overlay) overlay.classList.remove('d-none');
+  }
+
+  function hideGlobalLoader() {
+    pendingLoaderOps = Math.max(0, pendingLoaderOps - 1);
+    if (pendingLoaderOps > 0) return;
+    var overlay = document.getElementById('pxAdminOverlayLoader');
+    if (overlay) overlay.classList.add('d-none');
+  }
+
+  function showBottomToast(message, kind) {
+    var host = document.getElementById('pxAdminToastHost');
+    if (!host || !message) return;
+    var el = document.createElement('div');
+    var cls = 'px-admin-toast px-admin-toast--info';
+    if (kind === 'success') cls = 'px-admin-toast px-admin-toast--success';
+    if (kind === 'error') cls = 'px-admin-toast px-admin-toast--error';
+    el.className = cls;
+    el.textContent = String(message);
+    host.appendChild(el);
+    window.setTimeout(function () {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    }, 4200);
   }
 
   function loadCompaniesPanel(sess) {
@@ -1167,6 +1198,7 @@
       resetBackupDownloadUrl();
       setBackupStatus('Generating backup… please wait');
       backupCreateBtn.disabled = true;
+      showGlobalLoader('Generating backup package...');
 
       fetch('/api/admin/backup', {
         method: 'POST',
@@ -1195,9 +1227,11 @@
         })
         .then(function (out) {
           backupCreateBtn.disabled = false;
+          hideGlobalLoader();
           if (!out || out.status == null) {
             setBackupStatus('Failed');
             showBackupAlert('Unexpected response while creating backup.', 'error');
+            showBottomToast('Backup failed: unexpected response.', 'error');
             return;
           }
           if (out.status === 401) {
@@ -1208,11 +1242,13 @@
           if (out.status === 429) {
             setBackupStatus('Rate limited');
             showBackupAlert(out.error || 'Backup rate limit active. Try again later.', 'warning');
+            showBottomToast(out.error || 'Backup is rate limited.', 'error');
             return;
           }
           if (out.status < 200 || out.status >= 300 || !out.blob) {
             setBackupStatus('Failed');
             showBackupAlert(out.error || 'Backup generation failed.', 'error');
+            showBottomToast(out.error || 'Backup generation failed.', 'error');
             return;
           }
           backupObjectUrl = URL.createObjectURL(out.blob);
@@ -1223,12 +1259,15 @@
           }
           setBackupStatus('Backup ready');
           showBackupAlert('Backup generated successfully. Click Download backup.', 'success');
+          showBottomToast('Backup generated successfully.', 'success');
           refreshBackupList();
         })
         .catch(function () {
           backupCreateBtn.disabled = false;
+          hideGlobalLoader();
           setBackupStatus('Failed');
           showBackupAlert('Network error while creating backup.', 'error');
+          showBottomToast('Network error while creating backup.', 'error');
         });
     });
   }
@@ -1263,14 +1302,17 @@
           }
           if (out.status !== 200 || !out.data || !out.data.success) {
             showBackupAlert((out.data && out.data.message) || 'Delete failed.', 'error');
+            showBottomToast((out.data && out.data.message) || 'Delete failed.', 'error');
             return;
           }
           showBackupAlert('Backup deleted.', 'success');
+          showBottomToast('Backup deleted from server.', 'success');
           refreshBackupList();
         })
         .catch(function () {
           btn.disabled = false;
           showBackupAlert('Network error while deleting backup.', 'error');
+          showBottomToast('Network error while deleting backup.', 'error');
         });
     });
   }
@@ -1321,6 +1363,7 @@
 
       setRestoreStatus('Restoring... please wait');
       restoreBtn.disabled = true;
+      showGlobalLoader('Restoring uploaded backup...');
       var form = new FormData();
       form.append('backup', f);
 
@@ -1339,6 +1382,7 @@
         })
         .then(function (out) {
           restoreBtn.disabled = false;
+          hideGlobalLoader();
           if (out.status === 401) {
             clearSession();
             window.location.replace(LOGIN_URL);
@@ -1347,6 +1391,7 @@
           if (out.status === 429) {
             setRestoreStatus('Rate limited');
             showRestoreAlert((out.data && out.data.message) || 'Restore rate limit active. Try again later.', 'warning');
+            showBottomToast((out.data && out.data.message) || 'Restore is rate limited.', 'error');
             return;
           }
           if (out.status !== 200 || !out.data || !out.data.success) {
@@ -1355,16 +1400,20 @@
             if (out.data && out.data.detail) errMsg += ' ' + out.data.detail;
             setRestoreStatus('Failed');
             showRestoreAlert(errMsg, 'error');
+            showBottomToast(errMsg, 'error');
             return;
           }
           setRestoreStatus('Restore completed');
           showRestoreAlert(out.data.message || 'Restore completed successfully.', 'success');
+          showBottomToast(out.data.message || 'Restore completed successfully.', 'success');
           if (restoreFileInput) restoreFileInput.value = '';
         })
         .catch(function () {
           restoreBtn.disabled = false;
+          hideGlobalLoader();
           setRestoreStatus('Failed');
           showRestoreAlert('Network error while restoring backup.', 'error');
+          showBottomToast('Network error while restoring backup.', 'error');
         });
     });
   }
@@ -1381,6 +1430,7 @@
       if (!ok) return;
       setRestoreStatus('Restoring selected server backup...');
       restoreServerBtn.disabled = true;
+      showGlobalLoader('Restoring selected server backup...');
       fetch('/api/admin/restore-from-server', {
         method: 'POST',
         headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
@@ -1392,6 +1442,7 @@
         })
         .then(function (out) {
           restoreServerBtn.disabled = false;
+          hideGlobalLoader();
           if (out.status === 401) {
             clearSession();
             window.location.replace(LOGIN_URL);
@@ -1403,15 +1454,19 @@
             if (out.data && out.data.detail) msg += ' ' + out.data.detail;
             setRestoreStatus('Failed');
             showRestoreAlert(msg, 'error');
+            showBottomToast(msg, 'error');
             return;
           }
           setRestoreStatus('Restore completed');
           showRestoreAlert(out.data.message || 'Restore completed successfully.', 'success');
+          showBottomToast(out.data.message || 'Restore completed successfully.', 'success');
         })
         .catch(function () {
           restoreServerBtn.disabled = false;
+          hideGlobalLoader();
           setRestoreStatus('Failed');
           showRestoreAlert('Network error while restoring from server.', 'error');
+          showBottomToast('Network error while restoring from server.', 'error');
         });
     });
   }
