@@ -37,8 +37,16 @@
 
   function getSession() {
     try {
-      var raw = localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
-      return raw ? JSON.parse(raw) : null;
+      var rawLocal = localStorage.getItem(SESSION_KEY);
+      var rawSession = sessionStorage.getItem(SESSION_KEY);
+      var raw = rawLocal || rawSession;
+      var parsed = raw ? JSON.parse(raw) : null;
+      // Backfill localStorage when older sessions exist only in sessionStorage,
+      // so access-router pages opened in a new tab can detect manager session.
+      if (!rawLocal && rawSession && parsed) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(parsed));
+      }
+      return parsed;
     } catch (_) {
       return null;
     }

@@ -42,12 +42,13 @@
       active: manager.active === true,
     };
     var json = JSON.stringify(session);
+    // Keep a localStorage copy as well so QR/access-router pages opened in a new tab
+    // can still validate manager access and route to private timeline.
+    localStorage.setItem(SESSION_KEY, json);
     if (keepLoggedIn) {
-      localStorage.setItem(SESSION_KEY, json);
       sessionStorage.removeItem(SESSION_KEY);
     } else {
       sessionStorage.setItem(SESSION_KEY, json);
-      localStorage.removeItem(SESSION_KEY);
     }
   }
 
