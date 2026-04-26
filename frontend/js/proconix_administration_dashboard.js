@@ -1103,7 +1103,10 @@
           if (!res.ok) {
             if (ctype.indexOf('application/json') !== -1) {
               return res.json().then(function (data) {
-                return { status: res.status, error: (data && data.message) || 'Backup failed.' };
+                var msg = (data && data.message) || 'Backup failed.';
+                if (data && data.step) msg += ' [step: ' + data.step + ']';
+                if (data && data.detail) msg += ' ' + data.detail;
+                return { status: res.status, error: msg };
               });
             }
             return { status: res.status, error: 'Backup failed.' };

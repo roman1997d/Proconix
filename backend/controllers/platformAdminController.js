@@ -1185,17 +1185,30 @@ async function createBackup(req, res) {
       const abs = path.join(projectRoot, rel);
       if (fs.existsSync(abs)) fileSources.push(rel);
     });
+    const tarCmd = resolveExecutable([
+      process.env.TAR_PATH,
+      '/usr/bin/tar',
+      '/bin/tar',
+      'tar',
+    ]);
+    const zipCmd = resolveExecutable([
+      process.env.ZIP_PATH,
+      '/usr/bin/zip',
+      '/bin/zip',
+      'zip',
+    ]);
+
     if (fileSources.length === 0) {
       await fsp.writeFile(path.join(tempRoot, 'empty-backup-placeholder.txt'), 'No file storage directories found.\n', 'utf8');
       step = 'tar_placeholder';
-      await runCommand('/usr/bin/tar', ['-czf', filesArchivePath, '-C', tempRoot, 'empty-backup-placeholder.txt'], { cwd: projectRoot });
+      await runCommand(tarCmd, ['-czf', filesArchivePath, '-C', tempRoot, 'empty-backup-placeholder.txt'], { cwd: projectRoot });
     } else {
       step = 'tar_files';
-      await runCommand('/usr/bin/tar', ['-czf', filesArchivePath, ...fileSources], { cwd: projectRoot });
+      await runCommand(tarCmd, ['-czf', filesArchivePath, ...fileSources], { cwd: projectRoot });
     }
 
     step = 'zip_final';
-    await runCommand('/usr/bin/zip', ['-j', finalZipPath, dbDumpPath, filesArchivePath], { cwd: tempRoot });
+    await runCommand(zipCmd, ['-j', finalZipPath, dbDumpPath, filesArchivePath], { cwd: tempRoot });
 
     await appendBackupAuditLog({
       event: 'backup_created',
