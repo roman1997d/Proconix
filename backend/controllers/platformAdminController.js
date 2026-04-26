@@ -26,9 +26,6 @@ const {
 } = require('../lib/companyTenantFileCleanup');
 
 const SALT_ROUNDS = 10;
-const BACKUP_RATE_LIMIT_MS = 10 * 60 * 1000;
-const backupRateGateByAdminId = new Map();
-const restoreRateGateByAdminId = new Map();
 const BACKUP_AUDIT_LOG_PATH = path.resolve(__dirname, '../logs/platform-admin-backup-audit.log');
 
 /**
@@ -1210,27 +1207,6 @@ async function createBackup(req, res) {
     return res.status(401).json({ success: false, message: 'Unauthorized.' });
   }
 
-  const now = Date.now();
-  const lastTs = backupRateGateByAdminId.get(adminId) || 0;
-  const waitMs = BACKUP_RATE_LIMIT_MS - (now - lastTs);
-  if (waitMs > 0) {
-    const waitMinutes = Math.ceil(waitMs / 60000);
-    await appendBackupAuditLog({
-      event: 'backup_denied_rate_limit',
-      at: new Date().toISOString(),
-      admin_id: adminId,
-      admin_email: adminEmail,
-      ip: req.ip || '',
-      wait_ms: waitMs,
-    });
-    return res.status(429).json({
-      success: false,
-      message: `Backup rate limit active. Try again in about ${waitMinutes} minute(s).`,
-      retry_after_ms: waitMs,
-    });
-  }
-  backupRateGateByAdminId.set(adminId, now);
-
   const startedAt = new Date();
   const projectRoot = path.resolve(__dirname, '../..');
   const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'proconix-backup-'));
@@ -1309,7 +1285,6 @@ async function createBackup(req, res) {
       }
     });
   } catch (err) {
-    backupRateGateByAdminId.delete(adminId);
     await appendBackupAuditLog({
       event: 'backup_failed',
       at: new Date().toISOString(),
@@ -1349,26 +1324,6 @@ async function restoreBackup(req, res) {
   if (!req.file || !req.file.path) {
     return res.status(400).json({ success: false, message: 'Backup .zip file is required (field: backup).' });
   }
-
-  const now = Date.now();
-  const lastTs = restoreRateGateByAdminId.get(adminId) || 0;
-  const waitMs = BACKUP_RATE_LIMIT_MS - (now - lastTs);
-  if (waitMs > 0) {
-    await appendBackupAuditLog({
-      event: 'restore_denied_rate_limit',
-      at: new Date().toISOString(),
-      admin_id: adminId,
-      admin_email: adminEmail,
-      ip: req.ip || '',
-      wait_ms: waitMs,
-    });
-    return res.status(429).json({
-      success: false,
-      message: `Restore rate limit active. Try again in about ${Math.ceil(waitMs / 60000)} minute(s).`,
-      retry_after_ms: waitMs,
-    });
-  }
-  restoreRateGateByAdminId.set(adminId, now);
 
   const backupIp = (req.headers['x-forwarded-for'] || '').toString().split(',')[0].trim() || req.ip || '';
   const projectRoot = path.resolve(__dirname, '../..');
@@ -1460,7 +1415,6 @@ async function restoreBackup(req, res) {
       message: 'Restore completed successfully. Database and files were restored from backup package.',
     });
   } catch (err) {
-    restoreRateGateByAdminId.delete(adminId);
     await appendBackupAuditLog({
       event: 'restore_failed',
       at: new Date().toISOString(),
