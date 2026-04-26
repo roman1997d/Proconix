@@ -1456,6 +1456,7 @@
       projectName: "",
       buildings: [{ id: "b-1", name: "Tower A", floorsCount: 1, floors: [{ number: 1, spaces: [] }] }]
     };
+    let pendingQrUnitId = null;
 
     function resetWizardState() {
       wizardState.step = 1;
@@ -1664,6 +1665,13 @@
       const target = toUnitId(unitId);
       if (target == null) return null;
       return DATA.units.find((u) => toUnitId(u.id) === target) || null;
+    }
+
+    function openUnitFromQr(unitId) {
+      const unit = findUnitById(unitId);
+      if (!unit) return false;
+      openUnit(unit.id);
+      return true;
     }
 
     function getCurrentUnit() {
@@ -3156,9 +3164,16 @@
       renderWizardStep();
 
       const params = new URLSearchParams(window.location.search);
-      const qrUnitId = Number(params.get("unit_id"));
-      if (qrUnitId && findUnitById(qrUnitId)) {
-        openUnit(qrUnitId);
+      const qrUnitId = toUnitId(params.get("unit_id"));
+      pendingQrUnitId = qrUnitId;
+      if (pendingQrUnitId != null) {
+        const opened = openUnitFromQr(pendingQrUnitId);
+        if (!opened) {
+          // Retry once shortly after render/network settles.
+          setTimeout(() => {
+            if (pendingQrUnitId != null) openUnitFromQr(pendingQrUnitId);
+          }, 500);
+        }
       }
     }
 
