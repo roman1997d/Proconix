@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Public Timeline - Proconix</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #dbeafe;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 18px;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 14px; }
+    .card {
+      background: var(--card);
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .title { margin: 0; font-size: 1.2rem; }
+    .sub { margin: 6px 0 0; color: var(--muted); font-size: 0.9rem; }
+    .timeline { position: relative; display: grid; gap: 10px; }
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 14px;
+      top: 4px;
+      bottom: 4px;
+      width: 3px;
+      background: var(--line);
+      border-radius: 999px;
+    }
+    .item {
+      margin-left: 34px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .item-head {
+      background: #eff6ff;
+      padding: 8px 10px;
+      font-size: 0.8rem;
+      color: #1d4ed8;
+      font-weight: 700;
+    }
+    .item-body { padding: 10px; font-size: 0.9rem; }
+    .meta { color: var(--muted); font-size: 0.82rem; margin-top: 6px; }
+    .empty { color: var(--muted); font-size: 0.9rem; }
+    .photos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+    .photo { border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: #f8fafc; }
+    .photo img { width: 100%; height: 94px; object-fit: cover; display: block; }
+    .photo span { display: block; padding: 4px 6px; font-size: 0.74rem; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dot {
+      position: absolute;
+      left: 7px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #2563eb;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 2px #dbeafe;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1 class="title" id="unit-title">Public Timeline</h1>
+      <p class="sub">Read-only timeline view</p>
+    </section>
+    <section class="card">
+      <div class="timeline" id="timeline"></div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      function formatDateTime(v) {
+        var d = new Date(v);
+        if (Number.isNaN(d.getTime())) return String(v || "-");
+        var dd = String(d.getDate()).padStart(2, "0");
+        var mm = String(d.getMonth() + 1).padStart(2, "0");
+        var yyyy = d.getFullYear();
+        var hh = String(d.getHours()).padStart(2, "0");
+        var min = String(d.getMinutes()).padStart(2, "0");
+        return dd + "/" + mm + "/" + yyyy + " " + hh + ":" + min;
+      }
+
+      function normalizePhoto(photo) {
+        if (typeof photo === "string") return { name: photo, src: "" };
+        return {
+          name: photo && photo.name ? photo.name : "photo",
+          src: photo && photo.src ? photo.src : ""
+        };
+      }
+
+      function renderTimeline(list) {
+        var wrap = document.getElementById("timeline");
+        wrap.innerHTML = "";
+        if (!Array.isArray(list) || !list.length) {
+          wrap.innerHTML = '<div class="empty">No timeline entries yet.</div>';
+          return;
+        }
+        list
+          .slice()
+          .sort(function (a, b) { return new Date(b.date) - new Date(a.date); })
+          .forEach(function (entry) {
+            var card = document.createElement("article");
+            card.className = "item";
+            var photosHtml = "";
+            if (Array.isArray(entry.photos) && entry.photos.length) {
+              photosHtml = '<div class="photos">' + entry.photos.map(function (p) {
+                var ph = normalizePhoto(p);
+                var img = ph.src ? '<img src="' + ph.src + '" alt="' + ph.name + '">' : "";
+                return '<div class="photo">' + img + '<span>' + ph.name + '</span></div>';
+              }).join("") + '</div>';
+            }
+            var reasonLine = entry.status === "Blocked" && entry.reason
+              ? '<div class="meta"><strong>Reason:</strong> ' + entry.reason + "</div>"
+              : "";
+            var commentLine = entry.comment
+              ? '<div class="meta"><strong>Comment:</strong> ' + entry.comment + "</div>"
+              : "";
+
+            card.innerHTML =
+              '<div class="item-head">' + formatDateTime(entry.date) + "</div>" +
+              '<div class="item-body">' +
+                "<strong>" + (entry.stage || "-") + "</strong> - " + (entry.status || "-") +
+                '<div class="meta">Updated by: ' + (entry.user || "-") + "</div>" +
+                reasonLine +
+                commentLine +
+                photosHtml +
+              "</div>";
+
+            var dot = document.createElement("span");
+            dot.className = "dot";
+            wrap.appendChild(dot);
+            wrap.appendChild(card);
+          });
+      }
+
+      function showError(msg) {
+        var wrap = document.getElementById("timeline");
+        wrap.innerHTML = '<div class="empty">' + msg + "</div>";
+      }
+
+      async function boot() {
+        var params = new URLSearchParams(window.location.search);
+        var unitId = Number(params.get("unit_id"));
+        if (!Number.isFinite(unitId) || unitId <= 0) {
+          showError("Invalid public timeline link.");
+          return;
+        }
+
+        try {
+          var res = await fetch("/api/unit-progress/public-timeline/" + unitId, {
+            credentials: "same-origin"
+          });
+          var payload = await res.json();
+          if (!res.ok || !payload || !payload.success) {
+            showError("Timeline not found or unavailable.");
+            return;
+          }
+          document.getElementById("unit-title").textContent = payload.unit && payload.unit.name
+            ? payload.unit.name + " - Public Timeline"
+            : "Public Timeline";
+          renderTimeline(payload.timeline || []);
+        } catch (e) {
+          showError("Failed to load public timeline.");
+        }
+      }
+
+      boot();
+    })();
+  </script>
+</body>
+</html>

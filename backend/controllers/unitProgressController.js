@@ -162,9 +162,74 @@ async function putWorkspaceSupervisor(req, res) {
   }
 }
 
+function sanitizePublicTimelineEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  return {
+    stage: entry.stage || '',
+    status: entry.status || '',
+    reason: entry.reason || '',
+    comment: entry.comment || '',
+    user: entry.user || '',
+    date: entry.date || '',
+    photos: Array.isArray(entry.photos)
+      ? entry.photos.map((photo) => {
+          if (typeof photo === 'string') return { name: photo, src: '' };
+          if (photo && typeof photo === 'object') {
+            return {
+              name: photo.name || 'photo',
+              src: photo.src || '',
+            };
+          }
+          return { name: 'photo', src: '' };
+        })
+      : [],
+  };
+}
+
+async function getPublicTimeline(req, res) {
+  const unitId = Number(req.params.unitId);
+  if (!Number.isFinite(unitId) || unitId <= 0) {
+    return res.status(400).json({ success: false, message: 'Invalid unit id.' });
+  }
+
+  try {
+    const result = await pool.query('SELECT workspace FROM unit_progress_state');
+    for (const row of result.rows) {
+      const workspace = row.workspace;
+      if (!workspace || typeof workspace !== 'object' || Array.isArray(workspace)) continue;
+      const units = Array.isArray(workspace.units) ? workspace.units : [];
+      const unit = units.find((u) => Number(u && u.id) === unitId);
+      if (!unit) continue;
+      const timeline = Array.isArray(unit.timeline)
+        ? unit.timeline.map(sanitizePublicTimelineEntry).filter(Boolean)
+        : [];
+      return res.json({
+        success: true,
+        unit: {
+          id: Number(unit.id),
+          name: unit.name || `Unit ${unit.id}`,
+        },
+        timeline,
+      });
+    }
+    return res.status(404).json({ success: false, message: 'Unit not found.' });
+  } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(503).json({
+        success: false,
+        code: 'unit_progress_tables_missing',
+        message: 'Unit Progress table missing. Run scripts/create_unit_progress_tables.sql',
+      });
+    }
+    console.error('unitProgress getPublicTimeline:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load public timeline.' });
+  }
+}
+
 module.exports = {
   getWorkspace,
   putWorkspace,
   getWorkspaceSupervisor,
   putWorkspaceSupervisor,
+  getPublicTimeline,
 };

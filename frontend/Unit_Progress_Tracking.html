@@ -2716,8 +2716,8 @@
 
     function openUnitQrModal(unit) {
       currentQrUnit = unit;
-      unitQrDescription.textContent = `Scan to open ${unit.name} directly in Timeline + Add Progress view.`;
-      const qrUrl = `${window.location.origin}${window.location.pathname}?unit_id=${unit.id}`;
+      unitQrDescription.textContent = `Scan to open the public timeline for ${unit.name}. No login required.`;
+      const qrUrl = `${window.location.origin}/public_Timeline.html?unit_id=${unit.id}`;
       unitQrLinkPreview.textContent = qrUrl;
       unitQrCodeWrap.innerHTML = "";
       if (typeof QRCode === "function") {

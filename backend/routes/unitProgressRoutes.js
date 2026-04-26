@@ -11,7 +11,10 @@ const {
   putWorkspace,
   getWorkspaceSupervisor,
   putWorkspaceSupervisor,
+  getPublicTimeline,
 } = require('../controllers/unitProgressController');
+
+router.get('/public-timeline/:unitId', getPublicTimeline);
 
 router.get('/workspace', requireManagerAuth, getWorkspace);
 router.put('/workspace', requireManagerAuth, putWorkspace);
