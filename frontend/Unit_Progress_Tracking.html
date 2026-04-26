@@ -6,6 +6,7 @@
   <title>Unit Progress Tracking - Proconix</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
   <style>
     :root {
@@ -577,6 +578,57 @@
       height: 6px;
       background: #fff;
       border-radius: 1px;
+    }
+
+    .magnetic-loader-wrap {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #1d4ed8;
+      font-size: 0.84rem;
+    }
+
+    .magnetic-loader-wrap.hidden {
+      display: none;
+    }
+
+    .magnetic-loader {
+      position: relative;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid rgba(37, 99, 235, 0.35);
+      animation: spinLoader 1.2s linear infinite;
+    }
+
+    .magnetic-loader::before,
+    .magnetic-loader::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      background: #2563eb;
+    }
+
+    .magnetic-loader::before {
+      width: 8px;
+      height: 8px;
+      top: -3px;
+      left: 14px;
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.6);
+    }
+
+    .magnetic-loader::after {
+      width: 6px;
+      height: 6px;
+      bottom: -2px;
+      right: 8px;
+      background: #60a5fa;
+      box-shadow: 0 0 8px rgba(96, 165, 250, 0.6);
+    }
+
+    @keyframes spinLoader {
+      to { transform: rotate(360deg); }
     }
 
     .doc-preview {
@@ -1181,8 +1233,15 @@
               </div>
             </div>
 
-            <button class="btn btn-primary" type="submit"><i class="bi bi-file-earmark-arrow-down"></i> Generate</button>
+            <button class="btn btn-primary" type="submit" id="doc-generate-btn"><i class="bi bi-file-earmark-arrow-down"></i> Generate</button>
           </form>
+          <div class="magnetic-loader-wrap hidden" id="doc-loader" role="status" aria-live="polite">
+            <div class="magnetic-loader" aria-hidden="true"></div>
+            <span>Generating package folder...</span>
+          </div>
+          <button type="button" class="btn btn-dark" id="doc-download-btn" disabled style="margin-top:10px;">
+            <i class="bi bi-download"></i> Descarca info
+          </button>
           <div class="feedback" id="doc-feedback"></div>
         </div>
       </div>
@@ -1391,6 +1450,9 @@
     const docForm = document.getElementById("doc-form");
     const docNameInput = document.getElementById("doc-name");
     const docCreatePdfToggle = document.getElementById("doc-create-pdf");
+    const docGenerateBtn = document.getElementById("doc-generate-btn");
+    const docLoader = document.getElementById("doc-loader");
+    const docDownloadBtn = document.getElementById("doc-download-btn");
     const docFeedback = document.getElementById("doc-feedback");
     const progressModal = document.getElementById("progress-modal");
     const progressModalBackdrop = document.getElementById("progress-modal-backdrop");
@@ -1432,6 +1494,8 @@
     let selectedPhotoObjectUrls = [];
     let selectedProgressPhotos = [];
     let shouldCreateDocPdf = false;
+    let generatedDocPackageBlob = null;
+    let generatedDocPackageName = "";
     const WIZARD_KEY = "proconix_project_wizard_state_v1";
     const wizardState = {
       step: 1,
@@ -2167,6 +2231,11 @@
       docFeedback.style.display = "none";
       docForm.reset();
       shouldCreateDocPdf = false;
+      generatedDocPackageBlob = null;
+      generatedDocPackageName = "";
+      docDownloadBtn.disabled = true;
+      docDownloadBtn.style.opacity = "0.6";
+      docLoader.classList.add("hidden");
       docCreatePdfToggle.classList.remove("active");
       docCreatePdfToggle.setAttribute("aria-pressed", "false");
       const defaultMode = docForm.querySelector('input[name="doc-content-mode"][value="photos_text"]');
@@ -2179,6 +2248,107 @@
     function closeDocModal() {
       docModal.classList.remove("open");
       docModal.setAttribute("aria-hidden", "true");
+    }
+
+    function setDocGenerating(isGenerating) {
+      docGenerateBtn.disabled = isGenerating;
+      docGenerateBtn.style.opacity = isGenerating ? "0.7" : "1";
+      docLoader.classList.toggle("hidden", !isGenerating);
+    }
+
+    function sanitizeFileName(name) {
+      return String(name || "documentation")
+        .trim()
+        .replace(/[^\w\-\s]+/g, "")
+        .replace(/\s+/g, "_")
+        .replace(/^_+|_+$/g, "") || "documentation";
+    }
+
+    async function dataUrlToBlob(dataUrl) {
+      if (!dataUrl) return null;
+      const response = await fetch(dataUrl);
+      return response.blob();
+    }
+
+    function buildTimelineMarkdown(unit, timeline, mode, photoRefsByRow) {
+      const lines = [];
+      lines.push(`# ${unit.name} - Timeline Report`);
+      lines.push("");
+      lines.push(`Generated: ${new Date().toISOString()}`);
+      lines.push("");
+      lines.push("| Date | Stage | Status | Comment |");
+      lines.push("| --- | --- | --- | --- |");
+      timeline.forEach((entry, idx) => {
+        const dateText = formatDateTime(entry.date);
+        const stage = (entry.stage || "").replace(/\|/g, "\\|");
+        const status = (entry.status || "").replace(/\|/g, "\\|");
+        const comment = (entry.comment || "").replace(/\|/g, "\\|");
+        lines.push(`| ${dateText} | ${stage} | ${status} | ${comment} |`);
+        if ((mode === "photos" || mode === "photos_text") && photoRefsByRow[idx] && photoRefsByRow[idx].length) {
+          lines.push("");
+          lines.push(`Photos row ${idx + 1}:`);
+          photoRefsByRow[idx].forEach((photoPath) => {
+            lines.push(`- ${photoPath}`);
+          });
+        }
+      });
+      return lines.join("\n");
+    }
+
+    function buildTimelinePdfBlob(documentTitle, timeline) {
+      if (!window.jspdf || !window.jspdf.jsPDF) return null;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: "mm", format: "a4" });
+      const margin = 12;
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const colX = [margin, 52, 90, 122];
+      let y = 18;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text(documentTitle, margin, y);
+      y += 8;
+
+      const drawHeader = () => {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.text("Date", colX[0], y);
+        doc.text("Stage", colX[1], y);
+        doc.text("Status", colX[2], y);
+        doc.text("Comment", colX[3], y);
+        y += 5;
+        doc.setDrawColor(203, 213, 225);
+        doc.line(margin, y - 2, pageW - margin, y - 2);
+      };
+
+      drawHeader();
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.2);
+
+      timeline.forEach((entry) => {
+        const row = [
+          formatDateTime(entry.date),
+          entry.stage || "-",
+          entry.status || "-",
+          entry.comment || "-"
+        ];
+        const wrapped = row.map((txt, idx) => doc.splitTextToSize(String(txt), (idx === 0 ? 36 : idx === 1 ? 34 : idx === 2 ? 28 : pageW - colX[3] - margin)));
+        const rowHeight = Math.max(...wrapped.map((chunk) => chunk.length)) * 4 + 2;
+        if (y + rowHeight > pageH - 10) {
+          doc.addPage();
+          y = 14;
+          drawHeader();
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8.2);
+        }
+        wrapped.forEach((chunk, idx) => {
+          doc.text(chunk, colX[idx], y);
+        });
+        y += rowHeight;
+      });
+
+      return doc.output("blob");
     }
 
     function buildDocumentOutput(snapshot, mode) {
@@ -2525,7 +2695,7 @@
       docCreatePdfToggle.setAttribute("aria-pressed", shouldCreateDocPdf ? "true" : "false");
     });
 
-    docForm.addEventListener("submit", (event) => {
+    docForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const unit = getCurrentUnit();
       if (!unit) return;
@@ -2540,19 +2710,75 @@
       const modeInput = docForm.querySelector('input[name="doc-content-mode"]:checked');
       const mode = modeInput ? modeInput.value : "photos_text";
       const snapshot = generateDocumentSnapshot(unit);
-      const output = buildDocumentOutput(snapshot, mode);
-      docPreview.style.display = "block";
-      docPreview.textContent = JSON.stringify(output, null, 2);
+      docFeedback.style.display = "none";
+      setDocGenerating(true);
+      generatedDocPackageBlob = null;
+      generatedDocPackageName = "";
+      docDownloadBtn.disabled = true;
+      docDownloadBtn.style.opacity = "0.6";
 
-      let pdfMessage = "";
-      if (shouldCreateDocPdf) {
-        const saved = saveSnapshotPdf(documentTitle, output);
-        pdfMessage = saved ? " PDF generated." : " PDF could not be generated (jsPDF unavailable).";
+      try {
+        if (!window.JSZip) throw new Error("JSZip missing");
+        const zip = new window.JSZip();
+        const safeFolderName = sanitizeFileName(documentTitle);
+        const root = zip.folder(safeFolderName);
+        const timeline = (snapshot.timeline || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+        const photoRefsByRow = [];
+
+        if (shouldCreateDocPdf) {
+          const pdfBlob = buildTimelinePdfBlob(documentTitle, timeline);
+          if (!pdfBlob) throw new Error("PDF engine unavailable");
+          root.file(`${safeFolderName}.pdf`, pdfBlob);
+        }
+
+        const photosFolder = root.folder("timeline-photos");
+        for (let i = 0; i < timeline.length; i += 1) {
+          const entry = timeline[i];
+          const entryPhotos = Array.isArray(entry.photos) ? entry.photos : [];
+          photoRefsByRow[i] = [];
+          for (let j = 0; j < entryPhotos.length; j += 1) {
+            const normalized = normalizePhoto(entryPhotos[j]);
+            const blob = await dataUrlToBlob(normalized.src);
+            if (!blob) continue;
+            const extGuess = blob.type && blob.type.includes("png") ? "png" : blob.type && blob.type.includes("jpeg") ? "jpg" : "img";
+            const baseName = sanitizeFileName(normalized.name || `photo_${i + 1}_${j + 1}`);
+            const filename = `${String(i + 1).padStart(2, "0")}_${baseName}.${extGuess}`;
+            photosFolder.file(filename, blob);
+            photoRefsByRow[i].push(`timeline-photos/${filename}`);
+          }
+        }
+
+        if (!shouldCreateDocPdf) {
+          const markdown = buildTimelineMarkdown(unit, timeline, mode, photoRefsByRow);
+          root.file(`${safeFolderName}.md`, markdown);
+        }
+
+        // brief artificial delay for visible loader feedback
+        await new Promise((resolve) => setTimeout(resolve, 900));
+        generatedDocPackageBlob = await zip.generateAsync({ type: "blob" });
+        generatedDocPackageName = `${safeFolderName}.zip`;
+        docDownloadBtn.disabled = false;
+        docDownloadBtn.style.opacity = "1";
+        docFeedback.style.display = "block";
+        docFeedback.textContent = "Package generated. Apasa Descarca info.";
+      } catch (error) {
+        docFeedback.style.display = "block";
+        docFeedback.textContent = "Nu am putut genera pachetul. Verifica configurarea PDF/ZIP.";
+      } finally {
+        setDocGenerating(false);
       }
+    });
 
-      docFeedback.style.display = "block";
-      docFeedback.textContent = `Progress updated. Documentation "${documentTitle}" generated.${pdfMessage}`;
-      closeDocModal();
+    docDownloadBtn.addEventListener("click", () => {
+      if (!generatedDocPackageBlob) return;
+      const url = URL.createObjectURL(generatedDocPackageBlob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = generatedDocPackageName || "documentation-package.zip";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
     });
 
     progressModalBackdrop.addEventListener("click", closeProgressModal);
