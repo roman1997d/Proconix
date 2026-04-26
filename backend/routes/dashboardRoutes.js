@@ -28,6 +28,19 @@ const modules = {
 
 function getProjectOverviewHtml() {
   return `
+    <section class="dashboard-grid dashboard-grid-one-col">
+      <div class="dashboard-card table-card">
+        <div class="projects-header">
+          <div>
+            <h2 class="card-title">Project Structure Wizard</h2>
+            <p class="text-muted small mb-0">Assistant-like guided flow: Buildings -> Floors -> Spaces.</p>
+          </div>
+          <a href="/Unit_Progress_Tracking.html#project-wizard-modal" class="btn-projects-add" style="text-decoration:none;">
+            <i class="bi bi-magic"></i> Start Guided Setup
+          </a>
+        </div>
+      </div>
+    </section>
     <section class="stat-cards">
       <div class="stat-card stat-card-patients">
         <div class="stat-card-content">

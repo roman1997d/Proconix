@@ -828,24 +828,6 @@
 </head>
 <body>
   <div class="wrap">
-    <header class="card topbar">
-      <div>
-        <h1 class="title">PROCONIX - Unit Progress Tracking</h1>
-        <p class="sub">Hierarchical flow: Tower -> Floor -> Unit (timeline + actions)</p>
-      </div>
-      <div class="role-badge">Managers & Supervisors only</div>
-    </header>
-
-    <section class="card wizard-launch">
-      <div>
-        <h2 class="section-title" style="margin:0;">Project Structure Wizard</h2>
-        <p class="hint" style="margin:4px 0 0;">Assistant-like guided flow: Buildings -> Floors -> Spaces.</p>
-      </div>
-      <a href="#project-wizard-modal" class="btn btn-primary" id="open-project-wizard" onclick="return window.forceOpenProjectWizard(event);" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
-        <i class="bi bi-magic"></i> Start Guided Setup
-      </a>
-    </section>
-
     <section id="towerView" class="card">
       <h2 class="section-title">View 1 - Tower View</h2>
       <p class="hint">Select a tower to continue. No unit timeline shown at this level.</p>
@@ -2125,7 +2107,9 @@
     unitQrSaveBtn.addEventListener("click", saveUnitQrPdf);
     unitQrPrintBtn.addEventListener("click", printUnitQrPdf);
     unitQrShareBtn.addEventListener("click", shareUnitQrPdf);
-    openWizardBtn.addEventListener("click", openWizard);
+    if (openWizardBtn) {
+      openWizardBtn.addEventListener("click", openWizard);
+    }
     closeWizardBtn.addEventListener("click", closeWizard);
     wizardBackBtn.addEventListener("click", wizardBack);
     wizardNextBtn.addEventListener("click", wizardNext);
