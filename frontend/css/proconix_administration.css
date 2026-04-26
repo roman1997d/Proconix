@@ -66,6 +66,32 @@
   color: #64748b;
 }
 
+.px-admin-mode-switch {
+  display: inline-flex;
+  gap: 0.4rem;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 0.25rem;
+  background: #f8fafc;
+}
+
+.px-admin-mode-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  background: transparent;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.px-admin-mode-btn.active {
+  background: linear-gradient(135deg, #5b21b6, #7c3aed);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.28);
+}
+
 .px-admin-card .form-label {
   color: var(--dark-blue, #0a1628);
   font-weight: 500;
