@@ -50,14 +50,14 @@
 
       var statusEl = document.getElementById("status");
       var params = new URLSearchParams(window.location.search);
-      var unitId = Number(params.get("unit_id"));
+      var unitId = (params.get("unit_id") || "").trim();
 
       function setStatus(msg) {
         statusEl.textContent = msg;
       }
 
       function go(path) {
-        window.location.replace(path + "?unit_id=" + encodeURIComponent(String(unitId)));
+        window.location.replace(path + "?unit_id=" + encodeURIComponent(unitId));
       }
 
       function getManagerHeaders() {
@@ -113,7 +113,7 @@
       }
 
       async function route() {
-        if (!Number.isFinite(unitId) || unitId <= 0) {
+        if (!unitId) {
           setStatus("Invalid timeline link. Redirecting to public view...");
           setTimeout(function () { go("/public_Timeline.html"); }, 700);
           return;

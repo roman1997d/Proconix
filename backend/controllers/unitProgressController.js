@@ -187,8 +187,8 @@ function sanitizePublicTimelineEntry(entry) {
 }
 
 async function getPublicTimeline(req, res) {
-  const unitId = Number(req.params.unitId);
-  if (!Number.isFinite(unitId) || unitId <= 0) {
+  const unitId = normalizeUnitId(req.params.unitId);
+  if (!unitId) {
     return res.status(400).json({ success: false, message: 'Invalid unit id.' });
   }
 
@@ -206,7 +206,7 @@ async function getPublicTimeline(req, res) {
       return res.json({
         success: true,
         unit: {
-          id: Number(unit.id),
+          id: normalizeUnitId(unit.id),
           name: unit.name || `Unit ${unit.id}`,
         },
         timeline,
@@ -226,10 +226,17 @@ async function getPublicTimeline(req, res) {
   }
 }
 
+function normalizeUnitId(value) {
+  if (value == null) return '';
+  return String(value).trim();
+}
+
 function getUnitFromWorkspace(workspace, unitId) {
   if (!workspace || typeof workspace !== 'object' || Array.isArray(workspace)) return null;
   const units = Array.isArray(workspace.units) ? workspace.units : [];
-  return units.find((u) => Number(u && u.id) === Number(unitId)) || null;
+  const target = normalizeUnitId(unitId);
+  if (!target) return null;
+  return units.find((u) => normalizeUnitId(u && u.id) === target) || null;
 }
 
 function sanitizeIncomingProgress(body) {
@@ -266,8 +273,8 @@ function sanitizeIncomingProgress(body) {
 
 async function getPrivateTimelineManager(req, res) {
   const companyId = getManagerCompanyId(req);
-  const unitId = Number(req.params.unitId);
-  if (companyId == null || !Number.isFinite(unitId) || unitId <= 0) {
+  const unitId = normalizeUnitId(req.params.unitId);
+  if (companyId == null || !unitId) {
     return res.status(400).json({ success: false, message: 'Invalid request.' });
   }
   try {
@@ -287,8 +294,8 @@ async function getPrivateTimelineManager(req, res) {
 
 async function getPrivateTimelineSupervisor(req, res) {
   const companyId = getSupervisorCompanyId(req);
-  const unitId = Number(req.params.unitId);
-  if (companyId == null || !Number.isFinite(unitId) || unitId <= 0) {
+  const unitId = normalizeUnitId(req.params.unitId);
+  if (companyId == null || !unitId) {
     return res.status(400).json({ success: false, message: 'Invalid request.' });
   }
   try {
@@ -318,8 +325,8 @@ async function getPrivateTimelineSupervisor(req, res) {
 
 async function appendPrivateProgressManager(req, res) {
   const companyId = getManagerCompanyId(req);
-  const unitId = Number(req.params.unitId);
-  if (companyId == null || !Number.isFinite(unitId) || unitId <= 0) {
+  const unitId = normalizeUnitId(req.params.unitId);
+  if (companyId == null || !unitId) {
     return res.status(400).json({ success: false, message: 'Invalid request.' });
   }
   try {
@@ -350,8 +357,8 @@ async function appendPrivateProgressManager(req, res) {
 
 async function appendPrivateProgressSupervisor(req, res) {
   const companyId = getSupervisorCompanyId(req);
-  const unitId = Number(req.params.unitId);
-  if (companyId == null || !Number.isFinite(unitId) || unitId <= 0) {
+  const unitId = normalizeUnitId(req.params.unitId);
+  if (companyId == null || !unitId) {
     return res.status(400).json({ success: false, message: 'Invalid request.' });
   }
   try {

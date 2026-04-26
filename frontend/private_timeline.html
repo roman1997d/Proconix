@@ -173,8 +173,8 @@
       });
 
       var params = new URLSearchParams(window.location.search);
-      unitId = Number(params.get("unit_id"));
-      if (!Number.isFinite(unitId) || unitId <= 0) {
+      unitId = (params.get("unit_id") || "").trim();
+      if (!unitId) {
         accessErrorEl.textContent = "Invalid private timeline link.";
         accessErrorEl.classList.remove("hidden");
       } else {
