@@ -36,6 +36,17 @@ function writeCloudIndexForReq(req, items) {
   fs.writeFileSync(p, JSON.stringify(Array.isArray(items) ? items : [], null, 2), 'utf8');
 }
 
+function managerDisplayNameForCloud(req) {
+  if (!req || !req.manager) return '';
+  const parts = [req.manager.name, req.manager.surname]
+    .filter(Boolean)
+    .map((s) => String(s).trim())
+    .filter(Boolean);
+  if (parts.length) return parts.join(' ');
+  if (req.manager.email) return String(req.manager.email).trim();
+  return '';
+}
+
 function syncDrawingUploadToCloud(req, file, managerId, meta) {
   try {
     if (!req || !file || !req.digitalDocsCompanyDir) return { ok: false };
@@ -46,6 +57,7 @@ function syncDrawingUploadToCloud(req, file, managerId, meta) {
     const cloudAbs = path.join(cloudDir, cloudName);
     fs.copyFileSync(file.path, cloudAbs);
     const idx = readCloudIndexForReq(req);
+    const actor = managerDisplayNameForCloud(req);
     idx.push({
       id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       folder: 'drawing',
@@ -56,6 +68,7 @@ function syncDrawingUploadToCloud(req, file, managerId, meta) {
       uploaded_at: new Date().toISOString(),
       uploaded_by_manager_id: managerId,
       source_module: 'drawing_gallery',
+      source_actor: actor || null,
       drawing_version_id: meta && Number.isInteger(meta.versionId) ? meta.versionId : null,
       drawing_series_id: meta && Number.isInteger(meta.seriesId) ? meta.seriesId : null,
     });

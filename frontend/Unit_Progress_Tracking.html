@@ -2713,6 +2713,27 @@
       }
     }
 
+    function getUnitProgressCloudActorName() {
+      if (runtimeContext.managerName && String(runtimeContext.managerName).trim()) {
+        return String(runtimeContext.managerName).trim();
+      }
+      if (runtimeContext.actorName && String(runtimeContext.actorName).trim()) {
+        return String(runtimeContext.actorName).trim();
+      }
+      try {
+        const raw = localStorage.getItem("proconix_manager_session") || sessionStorage.getItem("proconix_manager_session");
+        if (raw) {
+          const s = JSON.parse(raw);
+          const parts = [s.name, s.surname].filter(Boolean).map((x) => String(x).trim());
+          if (parts.length) return parts.join(" ");
+          if (s.email) return String(s.email).trim();
+        }
+      } catch (_) {
+        /* ignore */
+      }
+      return "";
+    }
+
     async function saveGeneratedPackageToCloud() {
       if (!generatedDocPackageBlob) {
         setDocFeedbackMessage("Generate package first.", "error");
@@ -2733,6 +2754,9 @@
       const fd = new FormData();
       fd.append("file", uploadFile, fileName);
       fd.append("folder", String(docCloudFolder.value));
+      fd.append("source_module", "unit_progress");
+      const upActor = getUnitProgressCloudActorName();
+      if (upActor) fd.append("source_actor", upActor);
 
       docSaveCloudBtn.disabled = true;
       docSaveCloudBtn.style.opacity = "0.7";
