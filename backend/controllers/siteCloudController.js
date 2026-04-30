@@ -128,6 +128,55 @@ function writeFolderIndex(req, names) {
   fs.writeFileSync(p, JSON.stringify(unique, null, 2), 'utf8');
 }
 
+async function removeDrawingGalleryVersionForCloudItem(req, item) {
+  try {
+    if (!item || String(item.source_module || '') !== 'drawing_gallery') return;
+    const versionId = parseInt(item.drawing_version_id, 10);
+    if (!Number.isInteger(versionId) || versionId < 1) return;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const vr = await client.query(
+        `SELECT v.id, v.series_id, v.relative_path, s.company_id
+         FROM drawing_version v
+         JOIN drawing_series s ON s.id = v.series_id
+         WHERE v.id = $1`,
+        [versionId]
+      );
+      if (!vr.rows.length) {
+        await client.query('ROLLBACK');
+        return;
+      }
+      const v = vr.rows[0];
+      if (parseInt(v.company_id, 10) !== parseInt(req.digitalDocsCompanyId, 10)) {
+        await client.query('ROLLBACK');
+        return;
+      }
+      await client.query('DELETE FROM drawing_version WHERE id = $1', [versionId]);
+      const remain = await client.query('SELECT id, version_number FROM drawing_version WHERE series_id = $1 ORDER BY version_number DESC', [v.series_id]);
+      if (!remain.rows.length) {
+        await client.query('DELETE FROM drawing_series WHERE id = $1', [v.series_id]);
+      } else {
+        await client.query(`UPDATE drawing_version SET status = 'archived' WHERE series_id = $1`, [v.series_id]);
+        await client.query(`UPDATE drawing_version SET status = 'active' WHERE id = $1`, [remain.rows[0].id]);
+      }
+      await client.query('COMMIT');
+      if (v.relative_path) {
+        const abs = path.join(UPLOADS_ROOT, String(v.relative_path).split('/').join(path.sep));
+        try {
+          if (fs.existsSync(abs)) fs.unlinkSync(abs);
+        } catch (_) {}
+      }
+    } catch (_) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
+    } finally {
+      client.release();
+    }
+  } catch (_) {}
+}
+
 function resolveFolder(req, value) {
   const raw = String(value || '').trim().toLowerCase();
   if (ALLOWED_FOLDERS.has(raw)) return raw;
@@ -508,6 +557,7 @@ function removeFile(req, res) {
       )
   );
   writeGlobalShareIndex(shares);
+  removeDrawingGalleryVersionForCloudItem(req, found);
   return res.status(200).json({ success: true, message: 'File moved to Deleted.' });
 }
 
@@ -677,6 +727,7 @@ function deleteExtraFolder(req, res) {
         folder: it.folder || folderName,
         deleted_at: new Date().toISOString(),
       });
+      removeDrawingGalleryVersionForCloudItem(req, it);
     } catch (_) {}
   }
 

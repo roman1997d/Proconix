@@ -36,7 +36,7 @@ function writeCloudIndexForReq(req, items) {
   fs.writeFileSync(p, JSON.stringify(Array.isArray(items) ? items : [], null, 2), 'utf8');
 }
 
-function syncDrawingUploadToCloud(req, file, managerId) {
+function syncDrawingUploadToCloud(req, file, managerId, meta) {
   try {
     if (!req || !file || !req.digitalDocsCompanyDir) return { ok: false };
     const cloudDir = path.join(req.digitalDocsCompanyDir, 'cloud');
@@ -55,6 +55,9 @@ function syncDrawingUploadToCloud(req, file, managerId) {
       size_bytes: Number(file.size) || 0,
       uploaded_at: new Date().toISOString(),
       uploaded_by_manager_id: managerId,
+      source_module: 'drawing_gallery',
+      drawing_version_id: meta && Number.isInteger(meta.versionId) ? meta.versionId : null,
+      drawing_series_id: meta && Number.isInteger(meta.seriesId) ? meta.seriesId : null,
     });
     writeCloudIndexForReq(req, idx);
     return { ok: true, cloud_stored_name: cloudName };
@@ -563,7 +566,10 @@ async function uploadDrawing(req, res) {
 
     await client.query('COMMIT');
 
-    const cloudSync = syncDrawingUploadToCloud(req, req.file, managerId);
+    const cloudSync = syncDrawingUploadToCloud(req, req.file, managerId, {
+      versionId,
+      seriesId,
+    });
 
     return res.status(201).json({
       success: true,
