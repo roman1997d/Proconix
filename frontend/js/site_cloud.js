@@ -11,6 +11,7 @@
   var activeFolder = 'files';
   var emailShareTarget = null;
   var activeNavMode = 'cloud';
+  var renderQueued = false;
 
   function getSession() {
     try {
@@ -82,6 +83,26 @@
     var d = document.createElement('div');
     d.textContent = String(s == null ? '' : s);
     return d.innerHTML;
+  }
+
+  function debounce(fn, wait) {
+    var t = null;
+    return function () {
+      var args = arguments;
+      if (t) window.clearTimeout(t);
+      t = window.setTimeout(function () {
+        fn.apply(null, args);
+      }, wait);
+    };
+  }
+
+  function scheduleRenderList() {
+    if (renderQueued) return;
+    renderQueued = true;
+    window.requestAnimationFrame(function () {
+      renderQueued = false;
+      renderList();
+    });
   }
 
   function folderMeta(folder) {
@@ -502,7 +523,7 @@
           return;
         }
         stateFiles = Array.isArray(out.data.files) ? out.data.files : [];
-        renderList();
+        scheduleRenderList();
       })
       .catch(function () {
         showError('Network error while loading files.');
@@ -620,7 +641,7 @@
           return;
         }
         stateDeletedFiles = Array.isArray(out.data.files) ? out.data.files : [];
-        renderList();
+        scheduleRenderList();
       })
       .catch(function () {
         showError('Network error while loading deleted files.');
@@ -650,7 +671,7 @@
           return;
         }
         stateSharedLinks = Array.isArray(out.data.links) ? out.data.links : [];
-        renderList();
+        scheduleRenderList();
       })
       .catch(function () {
         showError('Network error while loading shared links.');
@@ -1004,15 +1025,21 @@
     }
 
     if (search) {
-      search.addEventListener('input', function () {
+      var onMainSearch = debounce(function () {
         if (quickSearch) quickSearch.value = '';
-        renderList();
+        scheduleRenderList();
+      }, 120);
+      search.addEventListener('input', function () {
+        onMainSearch();
       });
     }
     if (quickSearch) {
-      quickSearch.addEventListener('input', function () {
+      var onQuickSearch = debounce(function () {
         if (search) search.value = '';
-        renderList();
+        scheduleRenderList();
+      }, 120);
+      quickSearch.addEventListener('input', function () {
+        onQuickSearch();
       });
     }
 
