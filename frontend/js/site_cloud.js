@@ -96,6 +96,14 @@
     return 'none';
   }
 
+  function isImageFile(file) {
+    if (!file) return false;
+    var mime = String(file.type || '').toLowerCase();
+    if (mime.indexOf('image/') === 0) return true;
+    var name = String(file.name || '').toLowerCase();
+    return /\.(png|jpe?g|webp|gif|svg|heic)$/.test(name);
+  }
+
   function renderList() {
     var list = document.getElementById('scList');
     var count = document.getElementById('scCount');
@@ -288,9 +296,10 @@
     var headers = getHeaders();
     if (!headers) return showError('Please open this page from Manager Dashboard.');
     if (!file) return;
+    var uploadFolder = isImageFile(file) ? 'images' : activeFolder;
     var fd = new FormData();
     fd.append('file', file);
-    fd.append('folder', activeFolder);
+    fd.append('folder', uploadFolder);
     showError('');
     setLoading(true, 'Scanning file and uploading...');
     fetch('/api/site-cloud/upload', {
