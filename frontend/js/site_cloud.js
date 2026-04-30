@@ -3,6 +3,7 @@
 
   var SESSION_KEY = 'proconix_manager_session';
   var stateFiles = [];
+  var TENANT_STORAGE_LIMIT_BYTES = 5 * 1024 * 1024 * 1024;
 
   function getSession() {
     try {
@@ -104,6 +105,7 @@
     var filesEl = document.getElementById('scStatFiles');
     var storageEl = document.getElementById('scStatStorage');
     var avgEl = document.getElementById('scStatAverage');
+    var usageEl = document.getElementById('scStatUsage');
     var total = stateFiles.length;
     var used = stateFiles.reduce(function (sum, f) {
       return sum + (Number(f.size_bytes) || 0);
@@ -112,6 +114,14 @@
     if (filesEl) filesEl.textContent = String(total);
     if (storageEl) storageEl.textContent = formatSize(used);
     if (avgEl) avgEl.textContent = formatSize(avg);
+    if (usageEl) {
+      usageEl.textContent =
+        'You are using ' +
+        formatSize(used) +
+        ' of ' +
+        formatSize(TENANT_STORAGE_LIMIT_BYTES) +
+        ' available storage.';
+    }
   }
 
   function loadFiles() {

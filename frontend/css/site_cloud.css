@@ -386,6 +386,13 @@ body.sc-module {
   color: #444f77;
 }
 
+.sc-storage-usage {
+  margin: 0.25rem 0 0.85rem;
+  font-size: 0.74rem;
+  line-height: 1.3;
+  color: #697395;
+}
+
 .sc-right-footer {
   margin-top: 1rem;
   border-radius: 14px;
