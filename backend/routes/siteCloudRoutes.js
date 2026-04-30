@@ -31,6 +31,7 @@ router.post(
 router.get('/files/:name/view', requireManagerAuth, resolveCompanyDocsDir, ctrl.viewFile);
 router.get('/files/:name/download', requireManagerAuth, resolveCompanyDocsDir, ctrl.downloadFile);
 router.post('/files/:name/share-link', requireManagerAuth, resolveCompanyDocsDir, ctrl.generateShareLink);
+router.post('/files/:name/send-email', requireManagerAuth, resolveCompanyDocsDir, ctrl.sendFileByEmail);
 router.get('/share/:token', ctrl.downloadSharedFile);
 router.delete('/files/:name', requireManagerAuth, resolveCompanyDocsDir, ctrl.removeFile);
 

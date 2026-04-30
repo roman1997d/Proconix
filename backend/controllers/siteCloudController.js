@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { pool } = require('../db/pool');
 const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
+const { createTransport } = require('../lib/sendCallbackRequestEmail');
 
 const MAX_FILES_PER_TENANT = parseInt(process.env.SITE_CLOUD_MAX_FILES || '1000', 10);
 const DEFAULT_STORAGE_LIMIT_BYTES = 500 * 1024 * 1024;
@@ -350,6 +351,57 @@ function downloadSharedFile(req, res) {
   return res.download(full, found.original_name || found.stored_name);
 }
 
+async function sendFileByEmail(req, res) {
+  ensureCloudDir(req);
+  const stored = sanitizeStoredName(decodeURIComponent(req.params.name || ''));
+  if (!stored) return res.status(400).json({ success: false, message: 'Invalid file name.' });
+  const to = String((req.body && req.body.email) || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    return res.status(400).json({ success: false, message: 'Valid recipient email is required.' });
+  }
+  const items = readIndex(req);
+  const found = items.find((it) => it.stored_name === stored);
+  if (!found) return res.status(404).json({ success: false, message: 'File not found.' });
+  const full = path.join(req.siteCloudCompanyDir, stored);
+  if (!fs.existsSync(full)) return res.status(404).json({ success: false, message: 'File missing on disk.' });
+
+  const transport = createTransport();
+  if (!transport) {
+    return res.status(503).json({
+      success: false,
+      message: 'Email is not configured on server (SMTP missing).',
+    });
+  }
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const managerName = req.manager && req.manager.name ? String(req.manager.name).trim() : 'Manager';
+  const subject = `Proconix Cloud shared file: ${found.original_name || stored}`;
+  const text = [
+    `Hello,`,
+    ``,
+    `${managerName} shared a file with you from Proconix Cloud.`,
+    `File: ${found.original_name || stored}`,
+    ``,
+    `Best regards,`,
+    `Proconix`,
+  ].join('\n');
+
+  await transport.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    attachments: [
+      {
+        filename: found.original_name || stored,
+        path: full,
+        contentType: found.mime_type || 'application/octet-stream',
+      },
+    ],
+  });
+
+  return res.status(200).json({ success: true, message: 'File sent by email.' });
+}
+
 module.exports = {
   ensureCloudDir,
   listFiles,
@@ -360,5 +412,6 @@ module.exports = {
   removeFile,
   generateShareLink,
   downloadSharedFile,
+  sendFileByEmail,
 };
 

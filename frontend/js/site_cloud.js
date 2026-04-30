@@ -6,6 +6,7 @@
   var stateStats = null;
   var TENANT_STORAGE_LIMIT_BYTES = 500 * 1024 * 1024;
   var activeFolder = 'files';
+  var emailShareTarget = null;
 
   function getSession() {
     try {
@@ -216,15 +217,58 @@
       });
   }
 
-  function shareViaEmail(storedName, originalName) {
-    createShareLink(storedName)
-      .then(function (link) {
-        var subject = 'Shared file - ' + (originalName || storedName);
-        var body = 'Hello,\n\nPlease use this link to download the file:\n' + link;
-        window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  function openEmailModal(storedName, originalName) {
+    emailShareTarget = { storedName: storedName, originalName: originalName || storedName };
+    var modal = document.getElementById('scEmailModal');
+    var fileLabel = document.getElementById('scEmailFileLabel');
+    var input = document.getElementById('scEmailTo');
+    if (fileLabel) fileLabel.textContent = 'File: ' + (originalName || storedName);
+    if (input) input.value = '';
+    if (modal) modal.classList.remove('sc-hidden');
+  }
+
+  function closeEmailModal() {
+    var modal = document.getElementById('scEmailModal');
+    if (modal) modal.classList.add('sc-hidden');
+    emailShareTarget = null;
+  }
+
+  function sendShareEmail() {
+    var headers = getHeaders();
+    var input = document.getElementById('scEmailTo');
+    var btn = document.getElementById('scEmailSendBtn');
+    if (!headers || !emailShareTarget || !input) return;
+    var email = String(input.value || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError('Please enter a valid recipient email.');
+      return;
+    }
+    if (btn) btn.disabled = true;
+    fetch('/api/site-cloud/files/' + encodeURIComponent(emailShareTarget.storedName) + '/send-email', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
+      credentials: 'same-origin',
+      body: JSON.stringify({ email: email }),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
       })
-      .catch(function (err) {
-        showError((err && err.message) || 'Share via email failed.');
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          showError((out.data && out.data.message) || 'Sending email failed.');
+          return;
+        }
+        showError('');
+        closeEmailModal();
+        window.alert('File sent successfully.');
+      })
+      .catch(function () {
+        showError('Network error while sending email.');
+      })
+      .finally(function () {
+        if (btn) btn.disabled = false;
       });
   }
 
@@ -527,6 +571,10 @@
     var folderCards = document.getElementById('scFolderCards');
     var viewerClose = document.getElementById('scViewerClose');
     var viewerBackdrop = document.getElementById('scViewerBackdrop');
+    var emailClose = document.getElementById('scEmailClose');
+    var emailBackdrop = document.getElementById('scEmailBackdrop');
+    var emailCancel = document.getElementById('scEmailCancel');
+    var emailSendBtn = document.getElementById('scEmailSendBtn');
 
     if (uploadBtn && fileInput) {
       uploadBtn.addEventListener('click', function () {
@@ -563,7 +611,7 @@
         var s = e.target.closest('.sc-share-link');
         if (s) return generateShareLink(s.getAttribute('data-name'));
         var m = e.target.closest('.sc-share-email');
-        if (m) return shareViaEmail(m.getAttribute('data-name'), m.getAttribute('data-original'));
+        if (m) return openEmailModal(m.getAttribute('data-name'), m.getAttribute('data-original'));
       });
     }
 
@@ -582,6 +630,10 @@
 
     if (viewerClose) viewerClose.addEventListener('click', closeViewer);
     if (viewerBackdrop) viewerBackdrop.addEventListener('click', closeViewer);
+    if (emailClose) emailClose.addEventListener('click', closeEmailModal);
+    if (emailBackdrop) emailBackdrop.addEventListener('click', closeEmailModal);
+    if (emailCancel) emailCancel.addEventListener('click', closeEmailModal);
+    if (emailSendBtn) emailSendBtn.addEventListener('click', sendShareEmail);
 
     loadStats();
     loadFiles();

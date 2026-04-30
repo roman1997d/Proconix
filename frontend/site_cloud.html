@@ -141,6 +141,25 @@
     </div>
   </div>
 
+  <div id="scEmailModal" class="sc-viewer sc-hidden" role="dialog" aria-modal="true" aria-label="Send file via email">
+    <div class="sc-viewer-backdrop" id="scEmailBackdrop"></div>
+    <div class="sc-viewer-card" style="height:auto;max-width:520px;">
+      <div class="sc-viewer-head">
+        <h3>Send via email</h3>
+        <button type="button" id="scEmailClose" class="sc-viewer-close" aria-label="Close email modal">&times;</button>
+      </div>
+      <div class="sc-viewer-body" style="padding:1rem;">
+        <p class="sc-muted" id="scEmailFileLabel">File: -</p>
+        <label for="scEmailTo" class="sc-muted" style="display:block;margin-bottom:0.35rem;">Recipient email</label>
+        <input id="scEmailTo" type="email" class="sc-input" placeholder="name@company.com" style="max-width:none;">
+        <div style="margin-top:0.9rem;display:flex;gap:0.5rem;justify-content:flex-end;">
+          <button type="button" class="sc-btn-chip" id="scEmailCancel">Cancel</button>
+          <button type="button" class="sc-btn-chip sc-view" id="scEmailSendBtn">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="js/site_cloud.js"></script>
 </body>
 </html>
