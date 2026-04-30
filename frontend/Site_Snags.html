@@ -496,7 +496,7 @@
             <div class="d-flex flex-column gap-1">
               <label class="d-flex align-items-center gap-2 mb-0"><input type="radio" name="nlSource" id="nlSourceUpload" value="upload" checked> Upload image file</label>
               <label class="d-flex align-items-center gap-2 mb-0"><input type="radio" name="nlSource" id="nlSourceGallery" value="gallery"> Select from Drawing Gallery</label>
-              <label class="d-flex align-items-center gap-2 mb-0"><input type="radio" name="nlSource" id="nlSourceCloud" value="cloud"> Get from Cloud (drawing folder)</label>
+              <label class="d-flex align-items-center gap-2 mb-0"><input type="radio" name="nlSource" id="nlSourceCloud" value="cloud"> Get from Cloud (any folder)</label>
             </div>
           </div>
           <div class="mb-2" id="nlUploadWrap">
@@ -516,11 +516,15 @@
             <div class="form-text text-secondary" id="nlGalleryHint">Choose discipline, then the plan (active image version only).</div>
           </div>
           <div class="mb-2" id="nlCloudWrap" style="display:none;">
-            <label class="form-label" for="nlCloudFile">Cloud file</label>
+            <label class="form-label" for="nlCloudFolder">Cloud folder</label>
+            <select class="form-select" id="nlCloudFolder" disabled>
+              <option value="">— Select cloud folder —</option>
+            </select>
+            <label class="form-label mt-2" for="nlCloudFile">Cloud file</label>
             <select class="form-select" id="nlCloudFile" disabled>
               <option value="">— Select cloud file —</option>
             </select>
-            <div class="form-text text-secondary" id="nlCloudHint">Only image files from Site Cloud / drawing are listed.</div>
+            <div class="form-text text-secondary" id="nlCloudHint">Choose folder first, then an image file from that folder.</div>
           </div>
         </div>
         <div class="modal-footer">
@@ -1426,23 +1430,82 @@
       if (pid) refreshNlGallerySelect(pid);
     }
     if (useCloud) {
-      refreshNlCloudFiles();
+      refreshNlCloudFolders();
     }
   }
 
+  function refreshNlCloudFolders() {
+    var folderSel = document.getElementById('nlCloudFolder');
+    var fileSel = document.getElementById('nlCloudFile');
+    var hint = document.getElementById('nlCloudHint');
+    if (!folderSel) return;
+    folderSel.innerHTML = '<option value="">— Select cloud folder —</option>';
+    folderSel.disabled = true;
+    if (fileSel) {
+      fileSel.innerHTML = '<option value="">— Select cloud file —</option>';
+      fileSel.disabled = true;
+    }
+    if (hint) hint.textContent = 'Loading cloud folders…';
+    var h = getSiteCloudFetchHeadersForSnags();
+    if (!h) {
+      if (hint) hint.textContent = 'Manager session required for Site Cloud access.';
+      return;
+    }
+    var defaults = ['files', 'drawing', 'images'];
+    fetch('/api/site-cloud/folders', {
+      headers: h,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          if (hint) hint.textContent = (out.data && out.data.message) || 'Could not load cloud files.';
+          return;
+        }
+        var extra = Array.isArray(out.data.folders) ? out.data.folders : [];
+        var seen = {};
+        defaults.concat(extra).forEach(function (folder) {
+          var fName = String(folder || '').trim();
+          if (!fName || seen[fName]) return;
+          seen[fName] = true;
+          var opt = document.createElement('option');
+          opt.value = fName;
+          opt.textContent = fName;
+          folderSel.appendChild(opt);
+        });
+        folderSel.disabled = folderSel.options.length <= 1;
+        if (hint) hint.textContent = folderSel.disabled
+          ? 'No folders available in Site Cloud.'
+          : 'Select a folder, then choose an image file.';
+      })
+      .catch(function () {
+        if (hint) hint.textContent = 'Network error while loading cloud folders.';
+      });
+  }
+
   function refreshNlCloudFiles() {
+    var folderSel = document.getElementById('nlCloudFolder');
     var sel = document.getElementById('nlCloudFile');
     var hint = document.getElementById('nlCloudHint');
-    if (!sel) return;
+    if (!sel || !folderSel) return;
     sel.innerHTML = '<option value="">— Select cloud file —</option>';
     sel.disabled = true;
+    var folder = String(folderSel.value || '').trim();
+    if (!folder) {
+      if (hint) hint.textContent = 'Select a folder first.';
+      return;
+    }
     if (hint) hint.textContent = 'Loading cloud files…';
     var h = getSiteCloudFetchHeadersForSnags();
     if (!h) {
       if (hint) hint.textContent = 'Manager session required for Site Cloud access.';
       return;
     }
-    fetch('/api/site-cloud/files?folder=drawing', {
+    fetch('/api/site-cloud/files?folder=' + encodeURIComponent(folder), {
       headers: h,
       credentials: 'same-origin',
     })
@@ -1470,7 +1533,7 @@
         });
         sel.disabled = sel.options.length <= 1;
         if (hint) hint.textContent = sel.disabled
-          ? 'No image files available in Site Cloud / drawing.'
+          ? 'No image files found in selected folder.'
           : 'Choose a cloud image file for this drawing.';
       })
       .catch(function () {
@@ -4233,9 +4296,11 @@
     var nlSrcGal = document.getElementById('nlSourceGallery');
     var nlSrcCloud = document.getElementById('nlSourceCloud');
     var nlProj = document.getElementById('nlProject');
+    var nlCloudFolder = document.getElementById('nlCloudFolder');
     if (nlSrcUp) nlSrcUp.addEventListener('change', syncNlSourceUi);
     if (nlSrcGal) nlSrcGal.addEventListener('change', syncNlSourceUi);
     if (nlSrcCloud) nlSrcCloud.addEventListener('change', syncNlSourceUi);
+    if (nlCloudFolder) nlCloudFolder.addEventListener('change', refreshNlCloudFiles);
     if (nlProj) {
       nlProj.addEventListener('change', function () {
         if (nlSrcGal && nlSrcGal.checked) refreshNlGallerySelect(nlProj.value);
