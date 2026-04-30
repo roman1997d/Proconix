@@ -153,6 +153,9 @@
   }
 
   var projectsCache = [];
+  var cloudFoldersCache = [];
+  var cloudFilesCache = [];
+  var activeCloudFolder = 'files';
 
   function fillProjectSelects() {
     var filterSel = document.getElementById('dsFilterProject');
@@ -468,6 +471,213 @@
     if (recipient) recipient.value = 'operatives';
   }
 
+  function showCloudError(msg) {
+    var el = document.getElementById('dsCloudError');
+    if (!el) return;
+    if (!msg) {
+      el.textContent = '';
+      el.classList.add('d-none');
+      return;
+    }
+    el.textContent = msg;
+    el.classList.remove('d-none');
+  }
+
+  function openCloudModal() {
+    var b = document.getElementById('dsCloudBackdrop');
+    var m = document.getElementById('dsCloudModal');
+    if (b) {
+      b.classList.remove('d-none');
+      b.setAttribute('aria-hidden', 'false');
+    }
+    if (m) {
+      m.classList.remove('d-none');
+      m.setAttribute('aria-hidden', 'false');
+    }
+    showCloudError('');
+    loadCloudFolders();
+  }
+
+  function closeCloudModal() {
+    var b = document.getElementById('dsCloudBackdrop');
+    var m = document.getElementById('dsCloudModal');
+    if (b) {
+      b.classList.add('d-none');
+      b.setAttribute('aria-hidden', 'true');
+    }
+    if (m) {
+      m.classList.add('d-none');
+      m.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function renderCloudFolders() {
+    var list = document.getElementById('dsCloudFolders');
+    if (!list) return;
+    var base = ['files', 'drawing', 'images'];
+    var all = base.concat(cloudFoldersCache || []);
+    var seen = {};
+    var uniq = all.filter(function (f) {
+      var k = String(f || '').toLowerCase();
+      if (!k || seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
+    list.innerHTML = uniq
+      .map(function (f) {
+        var active = String(f) === String(activeCloudFolder) ? ' is-active' : '';
+        return (
+          '<button type="button" class="ds-cloud-item' +
+          active +
+          '" data-cloud-folder="' +
+          attrEscape(f) +
+          '"><i class="bi bi-folder2-open"></i>' +
+          escapeHtml(f) +
+          '</button>'
+        );
+      })
+      .join('');
+  }
+
+  function renderCloudFiles() {
+    var list = document.getElementById('dsCloudFiles');
+    if (!list) return;
+    if (!cloudFilesCache.length) {
+      list.innerHTML = '<div class="ds-empty">No files in this folder.</div>';
+      return;
+    }
+    list.innerHTML = cloudFilesCache
+      .map(function (f) {
+        var name = f.original_name || f.stored_name || 'File';
+        return (
+          '<button type="button" class="ds-cloud-item" data-cloud-stored="' +
+          attrEscape(f.stored_name || '') +
+          '" data-cloud-name="' +
+          attrEscape(name) +
+          '"><i class="bi bi-file-earmark-pdf"></i>' +
+          escapeHtml(name) +
+          '</button>'
+        );
+      })
+      .join('');
+  }
+
+  function loadCloudFolders() {
+    var headers = getHeadersJson();
+    if (!headers) return;
+    fetch('/api/site-cloud/folders', { headers: headers, credentials: 'same-origin' })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          showCloudError((out.data && out.data.message) || 'Could not load cloud folders.');
+          return;
+        }
+        cloudFoldersCache = Array.isArray(out.data.folders) ? out.data.folders : [];
+        renderCloudFolders();
+        loadCloudFiles(activeCloudFolder);
+      })
+      .catch(function () {
+        showCloudError('Network error loading cloud folders.');
+      });
+  }
+
+  function loadCloudFiles(folder) {
+    var headers = getHeadersJson();
+    if (!headers) return;
+    activeCloudFolder = folder || 'files';
+    renderCloudFolders();
+    fetch('/api/site-cloud/files?folder=' + encodeURIComponent(activeCloudFolder), {
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          cloudFilesCache = [];
+          renderCloudFiles();
+          showCloudError((out.data && out.data.message) || 'Could not load files.');
+          return;
+        }
+        cloudFilesCache = (Array.isArray(out.data.files) ? out.data.files : []).filter(function (f) {
+          var n = String(f.original_name || f.stored_name || '').toLowerCase();
+          return n.endsWith('.pdf');
+        });
+        renderCloudFiles();
+      })
+      .catch(function () {
+        cloudFilesCache = [];
+        renderCloudFiles();
+        showCloudError('Network error loading files.');
+      });
+  }
+
+  function importCloudFile(storedName, originalName, btn) {
+    var headers = getHeadersJson();
+    var upHeaders = getHeadersUpload();
+    if (!headers || !upHeaders || !storedName) return;
+    showCloudError('');
+    if (btn) btn.disabled = true;
+    fetch('/api/site-cloud/files/' + encodeURIComponent(storedName) + '/download', {
+      headers: upHeaders,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().then(function (data) {
+            throw new Error((data && data.message) || 'Could not download file from cloud.');
+          });
+        }
+        return res.blob();
+      })
+      .then(function (blob) {
+        var cleanName = originalName || storedName || 'cloud-document.pdf';
+        var fileName = /\.pdf$/i.test(cleanName) ? cleanName : cleanName + '.pdf';
+        var file = new File([blob], fileName, { type: 'application/pdf' });
+        var fd = new FormData();
+        fd.append('file', file);
+        fd.append('title', fileName.replace(/\.pdf$/i, ''));
+        fd.append('recipient_group', 'operatives');
+        return fetch('/api/documents/upload', {
+          method: 'POST',
+          headers: upHeaders,
+          body: fd,
+          credentials: 'same-origin',
+        });
+      })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          showCloudError((out.data && out.data.message) || 'Import failed.');
+          return;
+        }
+        var id = out.data.document && out.data.document.id;
+        if (!id) {
+          closeCloudModal();
+          loadDocuments();
+          return;
+        }
+        window.location.href = 'digital_signature_builder.html?id=' + id;
+      })
+      .catch(function (err) {
+        showCloudError((err && err.message) || 'Network error importing file.');
+      })
+      .finally(function () {
+        if (btn) btn.disabled = false;
+      });
+  }
+
   function closeModal() {
     var backdrop = document.getElementById('dsModalBackdrop');
     var modal = document.getElementById('dsModalNew');
@@ -517,7 +727,7 @@
     }
     if (btnCloud) {
       btnCloud.addEventListener('click', function () {
-        window.location.href = 'site_cloud.html';
+        openCloudModal();
       });
     }
     if (quickSign) {
@@ -551,6 +761,10 @@
       document.getElementById('dsModalCancel').addEventListener('click', closeModal);
     document.getElementById('dsModalBackdrop') &&
       document.getElementById('dsModalBackdrop').addEventListener('click', closeModal);
+    document.getElementById('dsCloudClose') &&
+      document.getElementById('dsCloudClose').addEventListener('click', closeCloudModal);
+    document.getElementById('dsCloudBackdrop') &&
+      document.getElementById('dsCloudBackdrop').addEventListener('click', closeCloudModal);
 
     if (filterProj) {
       filterProj.addEventListener('change', function () {
@@ -586,6 +800,8 @@
     }
 
     var listMount = document.getElementById('dsListMount');
+    var cloudFoldersMount = document.getElementById('dsCloudFolders');
+    var cloudFilesMount = document.getElementById('dsCloudFiles');
     if (listMount) {
       listMount.addEventListener('click', function (e) {
         var prog = e.target.closest && e.target.closest('.ds-link-progress');
@@ -608,6 +824,23 @@
           var did = del.getAttribute('data-doc-id');
           if (did) deleteDocument(parseInt(did, 10));
         }
+      });
+    }
+    if (cloudFoldersMount) {
+      cloudFoldersMount.addEventListener('click', function (e) {
+        var btnFolder = e.target.closest && e.target.closest('[data-cloud-folder]');
+        if (!btnFolder) return;
+        var folder = btnFolder.getAttribute('data-cloud-folder') || 'files';
+        loadCloudFiles(folder);
+      });
+    }
+    if (cloudFilesMount) {
+      cloudFilesMount.addEventListener('click', function (e) {
+        var btnFile = e.target.closest && e.target.closest('[data-cloud-stored]');
+        if (!btnFile) return;
+        var stored = btnFile.getAttribute('data-cloud-stored');
+        var name = btnFile.getAttribute('data-cloud-name') || stored;
+        importCloudFile(stored, name, btnFile);
       });
     }
 

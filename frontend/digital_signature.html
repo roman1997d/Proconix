@@ -154,6 +154,30 @@
     </div>
   </div>
 
+  <div id="dsCloudBackdrop" class="ds-modal-backdrop d-none" aria-hidden="true"></div>
+  <div id="dsCloudModal" class="ds-modal d-none" role="dialog" aria-modal="true" aria-labelledby="dsCloudTitle">
+    <div class="ds-modal-card ds-cloud-card">
+      <div class="ds-modal-head">
+        <h2 id="dsCloudTitle" class="ds-modal-title">Get from Cloud</h2>
+        <button type="button" class="ds-modal-close" id="dsCloudClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="ds-modal-body">
+        <p id="dsCloudError" class="ds-form-error d-none" role="alert"></p>
+        <div class="ds-cloud-layout">
+          <aside class="ds-cloud-folders">
+            <p class="ds-cloud-label">Folders</p>
+            <div id="dsCloudFolders" class="ds-cloud-list"></div>
+          </aside>
+          <section class="ds-cloud-files">
+            <p class="ds-cloud-label">Files</p>
+            <div id="dsCloudFiles" class="ds-cloud-list"></div>
+          </section>
+        </div>
+        <p class="ds-cloud-note">Click a PDF file to import it into Documents and open Build signature fields and assign.</p>
+      </div>
+    </div>
+  </div>
+
   <script src="js/digital_signature.js"></script>
 </body>
 </html>
