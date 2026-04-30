@@ -15,7 +15,18 @@ function handleUploadError(err, req, res, next) {
 }
 
 router.get('/files', requireManagerAuth, resolveCompanyDocsDir, ctrl.listFiles);
-router.post('/upload', requireManagerAuth, resolveCompanyDocsDir, uploadCloudFile, handleUploadError, ctrl.uploadFile);
+router.post(
+  '/upload',
+  requireManagerAuth,
+  resolveCompanyDocsDir,
+  (req, res, next) => {
+    ctrl.ensureCloudDir(req);
+    next();
+  },
+  uploadCloudFile,
+  handleUploadError,
+  ctrl.uploadFile
+);
 router.get('/files/:name/download', requireManagerAuth, resolveCompanyDocsDir, ctrl.downloadFile);
 router.delete('/files/:name', requireManagerAuth, resolveCompanyDocsDir, ctrl.removeFile);
 
