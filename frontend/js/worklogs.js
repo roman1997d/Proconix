@@ -25,6 +25,150 @@
     };
   }
 
+  /** For multipart / Site Cloud (do not set Content-Type). */
+  function getManagerCloudHeaders() {
+    var session = getSession();
+    if (!session || session.manager_id == null || !session.email) return null;
+    return {
+      'X-Manager-Id': String(session.manager_id),
+      'X-Manager-Email': session.email,
+    };
+  }
+
+  function absoluteUrlForUploadPath(p) {
+    var s = String(p || '').trim();
+    if (!s) return '';
+    if (/^https?:\/\//i.test(s)) return s;
+    if (s.indexOf('/') !== 0) s = '/' + s;
+    return window.location.origin + s;
+  }
+
+  function loadWorklogCloudFolderOptions(selectEl, onDone) {
+    if (!selectEl) return;
+    var h = getManagerCloudHeaders();
+    selectEl.innerHTML = '<option value="">Loading folders…</option>';
+    selectEl.disabled = true;
+    if (!h) {
+      selectEl.innerHTML = '<option value="">Manager session required</option>';
+      if (onDone) onDone(false);
+      return;
+    }
+    fetch('/api/site-cloud/folders', { headers: h, credentials: 'same-origin' })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { res: res, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.res.ok || !out.data || !out.data.success) {
+          selectEl.innerHTML = '<option value="">Could not load folders</option>';
+          if (onDone) onDone(false);
+          return;
+        }
+        var defaults = ['files', 'drawing', 'images'];
+        var extras = Array.isArray(out.data.folders) ? out.data.folders : [];
+        var seen = {};
+        selectEl.innerHTML = '<option value="">Select folder</option>';
+        defaults.concat(extras).forEach(function (name) {
+          var v = String(name || '').trim();
+          if (!v || seen[v]) return;
+          seen[v] = true;
+          var opt = document.createElement('option');
+          opt.value = v;
+          opt.textContent = v;
+          selectEl.appendChild(opt);
+        });
+        selectEl.disabled = selectEl.options.length <= 1;
+        if (onDone) onDone(true);
+      })
+      .catch(function () {
+        selectEl.innerHTML = '<option value="">Network error</option>';
+        if (onDone) onDone(false);
+      });
+  }
+
+  function wireInvoiceSaveToCloud(content) {
+    var wrap = content.querySelector('.worklogs-details-invoice-save-cloud');
+    if (!wrap) return;
+    var selectEl = wrap.querySelector('.worklogs-cloud-folder-select');
+    var saveBtn = wrap.querySelector('.worklogs-btn-save-invoice-cloud');
+    var fb = wrap.querySelector('.worklogs-cloud-save-feedback');
+    var encoded = wrap.getAttribute('data-invoice-encoded');
+    var invoicePath = '';
+    try {
+      invoicePath = encoded ? decodeURIComponent(encoded) : '';
+    } catch (_) {
+      invoicePath = '';
+    }
+    if (!invoicePath || !selectEl || !saveBtn) return;
+
+    function setFeedback(msg, isError) {
+      if (!fb) return;
+      fb.textContent = msg || '';
+      fb.className = 'worklogs-cloud-save-feedback' + (msg ? (isError ? ' is-error' : ' is-success') : '');
+      fb.style.display = msg ? 'block' : 'none';
+    }
+
+    function updateSaveDisabled() {
+      saveBtn.disabled = !selectEl.value || !invoicePath;
+    }
+
+    loadWorklogCloudFolderOptions(selectEl, function () {
+      updateSaveDisabled();
+    });
+
+    selectEl.addEventListener('change', updateSaveDisabled);
+
+    saveBtn.addEventListener('click', function () {
+      var folder = selectEl.value;
+      if (!folder || !invoicePath) return;
+      var hdr = getManagerCloudHeaders();
+      if (!hdr) {
+        setFeedback('Manager session required.', true);
+        return;
+      }
+      setFeedback('');
+      saveBtn.disabled = true;
+      var url = absoluteUrlForUploadPath(invoicePath);
+      fetch(url, { credentials: 'same-origin' })
+        .then(function (res) {
+          if (!res.ok) throw new Error('load');
+          return res.blob();
+        })
+        .then(function (blob) {
+          var baseName = String(invoicePath).split(/[/\\]/).pop() || 'work-log-invoice.bin';
+          var mime = blob.type || 'application/octet-stream';
+          var file = new File([blob], baseName, { type: mime });
+          var fd = new FormData();
+          fd.append('file', file, baseName);
+          fd.append('folder', folder);
+          return fetch('/api/site-cloud/upload', {
+            method: 'POST',
+            headers: hdr,
+            body: fd,
+            credentials: 'same-origin',
+          }).then(function (r) {
+            return r.json().then(function (data) {
+              return { ok: r.ok, data: data };
+            });
+          });
+        })
+        .then(function (out) {
+          if (!out || !out.ok || !out.data || !out.data.success) {
+            setFeedback((out && out.data && out.data.message) || 'Could not save to cloud.', true);
+            return;
+          }
+          setFeedback('Saved to cloud folder "' + folder + '".', false);
+        })
+        .catch(function () {
+          setFeedback('Could not load invoice file or upload failed.', true);
+        })
+        .finally(function () {
+          saveBtn.disabled = !selectEl.value;
+        });
+    });
+  }
+
   function loadJobsFromApi(filters) {
     var headers = getHeaders();
     if (!headers) return Promise.resolve([]);
@@ -313,6 +457,14 @@
     if (invoicePath) {
       html += '<p class="worklogs-invoice-text">The worker uploaded an invoice file.</p>';
       html += '<button type="button" class="btn-worklogs btn-worklogs-primary worklogs-btn-download-invoice" data-job-id="' + (job.jobId || '') + '" data-invoice-path="' + invoicePath + '"><i class="bi bi-download"></i> Download file</button>';
+      html += '<div class="worklogs-details-invoice-save-cloud" data-invoice-encoded="' + encodeURIComponent(String(invoicePath)) + '">';
+      html += '<span class="worklogs-cloud-save-label">Save to cloud</span>';
+      html += '<div class="worklogs-cloud-save-row">';
+      html += '<select class="worklogs-cloud-folder-select" aria-label="Cloud folder"><option value="">Select folder</option></select>';
+      html += '<button type="button" class="btn-worklogs btn-worklogs-secondary worklogs-btn-save-invoice-cloud" disabled><i class="bi bi-cloud-upload"></i> Save</button>';
+      html += '</div>';
+      html += '<div class="worklogs-cloud-save-feedback" role="status" aria-live="polite"></div>';
+      html += '</div>';
     } else {
       html += '<p class="worklogs-invoice-text">No invoice file uploaded yet.</p>';
       html += '<button type="button" class="btn-worklogs btn-worklogs-primary worklogs-btn-download-invoice" disabled><i class="bi bi-download"></i> Download file</button>';
@@ -379,6 +531,8 @@
         a.click();
       });
     });
+
+    wireInvoiceSaveToCloud(content);
   }
 
   function openLightbox(url) {

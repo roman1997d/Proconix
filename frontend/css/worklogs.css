@@ -407,6 +407,54 @@
   margin: 0;
 }
 
+.worklogs-details-invoice-save-cloud {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+}
+.worklogs-details-invoice-save-cloud .worklogs-cloud-save-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.worklogs-details-invoice-save-cloud .worklogs-cloud-folder-select {
+  min-width: 200px;
+  max-width: 280px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--divider);
+  background: var(--bg-main);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+.worklogs-details-invoice-save-cloud .worklogs-cloud-save-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.worklogs-cloud-save-feedback {
+  margin-top: 8px;
+  font-size: 0.84rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  display: none;
+}
+.worklogs-cloud-save-feedback.is-error {
+  display: block;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+.worklogs-cloud-save-feedback.is-success {
+  display: block;
+  background: #ecfdf5;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
 .worklogs-details-subhd {
   font-size: 0.95rem;
   font-weight: 600;
