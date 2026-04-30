@@ -44,6 +44,18 @@
     };
   }
 
+  function hasOperativeSession() {
+    try {
+      var token = localStorage.getItem('proconix_operative_token') || sessionStorage.getItem('proconix_operative_token');
+      var userRaw = localStorage.getItem('proconix_operative_user') || sessionStorage.getItem('proconix_operative_user');
+      if (!token || !userRaw) return false;
+      var user = JSON.parse(userRaw);
+      return !!(user && user.id != null);
+    } catch (_) {
+      return false;
+    }
+  }
+
   function projectLabel(p) {
     var n = p.project_name != null ? String(p.project_name) : p.name != null ? String(p.name) : '';
     n = n.trim();
@@ -947,7 +959,7 @@
         if (!btnSign) return;
         var id = btnSign.getAttribute('data-doc-id');
         if (!id) return;
-        window.location.href = 'operative_document_sign.html?id=' + encodeURIComponent(id);
+        window.location.href = 'manager_document_sign.html?id=' + encodeURIComponent(id);
       });
     }
 

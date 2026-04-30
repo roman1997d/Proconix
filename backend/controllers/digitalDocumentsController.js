@@ -1022,6 +1022,129 @@ async function sign(req, res) {
   }
 }
 
+async function managerInPersonSign(req, res) {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid document id.' });
+  }
+  const body = req.body || {};
+  const fieldId = typeof body.field_id === 'string' ? body.field_id.trim() : '';
+  const confirmedRead = body.confirmed_read === true || body.confirmed_read === 'true';
+  const rawB64 = typeof body.signatureImageBase64 === 'string' ? body.signatureImageBase64.trim() : '';
+  const signerName = typeof body.signer_name === 'string' ? body.signer_name.trim() : '';
+
+  if (!fieldId) return res.status(400).json({ success: false, message: 'field_id is required.' });
+  if (!confirmedRead) return res.status(400).json({ success: false, message: 'Please confirm document read.' });
+  if (!signerName) return res.status(400).json({ success: false, message: 'Signer name is required.' });
+
+  const managerId = req.manager.id;
+  const companyId = req.manager.company_id;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const d = await client.query(
+      'SELECT id, company_id, fields_json, status FROM digital_documents WHERE id = $1',
+      [id]
+    );
+    if (!d.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Document not found.' });
+    }
+    const doc = d.rows[0];
+    if (doc.company_id !== companyId) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+    if (doc.status === 'cancelled' || doc.status === 'expired') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'Document is closed for signing.' });
+    }
+
+    const fields = normalizeFieldsArray(doc.fields_json);
+    const fieldDef = fields.find((f) => f && String(f.id) === fieldId);
+    if (!fieldDef || !SIGNABLE_FIELD_TYPES.includes(fieldDef.type)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'Invalid field_id for this document.' });
+    }
+    if (fieldDef.type !== 'signature' && fieldDef.type !== 'initials') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'In-person signing supports signature/initials fields only.' });
+    }
+    if (!rawB64) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'signatureImageBase64 is required.' });
+    }
+
+    let buf;
+    try {
+      const b64 = rawB64.includes(',') ? rawB64.split(',')[1] : rawB64;
+      buf = Buffer.from(b64, 'base64');
+      if (!buf.length || buf.length > 5 * 1024 * 1024) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, message: 'Invalid signature image.' });
+      }
+    } catch (_) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'Invalid base64 signature.' });
+    }
+
+    const fname = `sig-mgr-${id}-${managerId}-${fieldId.replace(/[^a-zA-Z0-9_-]/g, '')}-${Date.now()}.png`;
+    const rel = `${req.digitalDocsFolderName}/signatures/${fname}`;
+    const abs = path.join(req.digitalDocsSignaturesDir, fname);
+    fs.writeFileSync(abs, buf);
+    const url = `/uploads/${rel}`;
+    const meta = {
+      field_type: fieldDef.type,
+      signer_name: signerName,
+      signer_mode: 'in_person',
+      signed_by_manager_id: managerId,
+    };
+
+    await client.query(
+      `INSERT INTO digital_document_signatures (
+        document_id, user_id, field_id, signature_image_rel_path, signature_image_url, confirmed_read, client_meta
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+      ON CONFLICT (document_id, user_id, field_id)
+      DO UPDATE SET
+        signature_image_rel_path = EXCLUDED.signature_image_rel_path,
+        signature_image_url = EXCLUDED.signature_image_url,
+        confirmed_read = EXCLUDED.confirmed_read,
+        signed_at = NOW(),
+        client_meta = EXCLUDED.client_meta`,
+      [id, managerId, fieldId, rel, url, true, meta]
+    );
+
+    // Mark completed when all required signature/initials fields have at least one signature.
+    const reqInkIds = fields
+      .filter((f) => f && f.required !== false && (f.type === 'signature' || f.type === 'initials'))
+      .map((f) => String(f.id));
+    const signed = await client.query(
+      'SELECT DISTINCT field_id FROM digital_document_signatures WHERE document_id = $1',
+      [id]
+    );
+    const signedSet = new Set(signed.rows.map((r) => String(r.field_id)));
+    const done = reqInkIds.length > 0 && reqInkIds.every((fid) => signedSet.has(fid));
+    if (done) {
+      await client.query(`UPDATE digital_documents SET status = 'completed', updated_at = NOW() WHERE id = $1`, [id]);
+    } else if (doc.status === 'draft') {
+      await client.query(`UPDATE digital_documents SET status = 'pending_signatures', updated_at = NOW() WHERE id = $1`, [id]);
+    }
+
+    await insertAudit(client, id, 'sign_in_person', 'manager', managerId, { field_id: fieldId, signer_name: signerName });
+    await client.query('COMMIT');
+    return res.status(200).json({ success: true, message: 'Signature saved.', signature_url: url, document_completed: done });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (tableMissing(err)) {
+      return res.status(503).json({ success: false, message: 'Digital documents tables are missing.' });
+    }
+    console.error('managerInPersonSign:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Signing failed.' });
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * GET /api/documents/operative/document/:id — operative: view assigned document
  */
@@ -1091,4 +1214,5 @@ module.exports = {
   operativeInbox,
   getOneOperative,
   sign,
+  managerInPersonSign,
 };

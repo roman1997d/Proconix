@@ -26,6 +26,7 @@ function handleUploadError(err, req, res, next) {
 router.get('/operative/inbox', requireOperativeAuth, ctrl.operativeInbox);
 router.get('/operative/document/:id', requireOperativeAuth, ctrl.getOneOperative);
 router.post('/:id/sign', requireOperativeAuth, resolveCompanyDocsDirForDocument, ctrl.sign);
+router.post('/:id/manager-sign', requireManagerAuth, resolveCompanyDocsDirForDocument, ctrl.managerInPersonSign);
 
 router.get('/', requireManagerAuth, ctrl.list);
 router.post(
