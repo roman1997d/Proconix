@@ -152,6 +152,7 @@ body.sc-module {
   border-radius: 16px;
   border: 1px solid #eaedf8;
   padding: 0.8rem 0.9rem;
+  position: relative;
 }
 
 .sc-cloud-card.is-highlight {
@@ -186,6 +187,28 @@ body.sc-module {
 
 .sc-cloud-card.is-highlight p {
   color: rgba(255, 255, 255, 0.85);
+}
+
+.sc-folder-card {
+  padding-top: 1.2rem;
+}
+
+.sc-folder-card::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 12px;
+  width: 64px;
+  height: 16px;
+  border-radius: 10px 10px 0 0;
+  background: #eef1fb;
+  border: 1px solid #eaedf8;
+  border-bottom: none;
+}
+
+.sc-folder-card.is-highlight::before {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.24);
 }
 
 .sc-toolbar {
