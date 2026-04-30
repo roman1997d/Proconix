@@ -160,6 +160,24 @@
     </div>
   </div>
 
+  <div id="scShareModal" class="sc-viewer sc-hidden" role="dialog" aria-modal="true" aria-label="Share link">
+    <div class="sc-viewer-backdrop" id="scShareBackdrop"></div>
+    <div class="sc-viewer-card" style="height:auto;max-width:640px;">
+      <div class="sc-viewer-head">
+        <h3>Share link</h3>
+        <button type="button" id="scShareClose" class="sc-viewer-close" aria-label="Close share modal">&times;</button>
+      </div>
+      <div class="sc-viewer-body" style="padding:1rem;">
+        <label for="scShareLinkInput" class="sc-muted" style="display:block;margin-bottom:0.35rem;">Temporary public link</label>
+        <input id="scShareLinkInput" type="text" class="sc-input" readonly style="max-width:none;">
+        <div style="margin-top:0.9rem;display:flex;gap:0.5rem;justify-content:flex-end;">
+          <button type="button" class="sc-btn-chip" id="scShareCopyBtn">Copy</button>
+          <button type="button" class="sc-btn-chip sc-view" id="scShareDoneBtn">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="js/site_cloud.js"></script>
 </body>
 </html>

@@ -91,6 +91,15 @@ function writeGlobalShareIndex(items) {
   } catch (_) {}
 }
 
+function cleanupAndFindShare(token) {
+  const all = readGlobalShareIndex();
+  const now = Date.now();
+  const valid = all.filter((s) => s && s.expires_at && new Date(s.expires_at).getTime() > now);
+  if (valid.length !== all.length) writeGlobalShareIndex(valid);
+  const found = valid.find((s) => s.token === token);
+  return found || null;
+}
+
 function ensureCloudDir(req) {
   const dir = path.join(req.digitalDocsCompanyDir, 'cloud');
   fs.mkdirSync(dir, { recursive: true });
@@ -338,17 +347,29 @@ function generateShareLink(req, res) {
 function downloadSharedFile(req, res) {
   const token = String(req.params.token || '').trim();
   if (!token) return res.status(400).send('Invalid share token.');
-  const all = readGlobalShareIndex();
-  const now = Date.now();
-  const valid = all.filter((s) => s && s.expires_at && new Date(s.expires_at).getTime() > now);
-  if (valid.length !== all.length) writeGlobalShareIndex(valid);
-  const found = valid.find((s) => s.token === token);
+  const found = cleanupAndFindShare(token);
   if (!found) return res.status(404).send('Share link not found or expired.');
   const full = path.join(UPLOADS_ROOT, String(found.company_folder_name || ''), 'cloud', String(found.stored_name || ''));
   if (!fs.existsSync(full)) return res.status(404).send('Shared file no longer exists.');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
   return res.download(full, found.original_name || found.stored_name);
+}
+
+function viewSharedFile(req, res) {
+  const token = String(req.params.token || '').trim();
+  if (!token) return res.status(400).send('Invalid share token.');
+  const found = cleanupAndFindShare(token);
+  if (!found) return res.status(404).send('Share link not found or expired.');
+  const full = path.join(UPLOADS_ROOT, String(found.company_folder_name || ''), 'cloud', String(found.stored_name || ''));
+  if (!fs.existsSync(full)) return res.status(404).send('Shared file no longer exists.');
+  const contentType = previewMetaForFile(found.original_name || found.stored_name);
+  if (!contentType) return res.status(415).send('Preview unavailable for this file type.');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Disposition', `inline; filename="${String(found.original_name || found.stored_name).replace(/"/g, '')}"`);
+  return res.sendFile(full);
 }
 
 async function sendFileByEmail(req, res) {
@@ -421,6 +442,7 @@ module.exports = {
   removeFile,
   generateShareLink,
   downloadSharedFile,
+  viewSharedFile,
   sendFileByEmail,
 };
 

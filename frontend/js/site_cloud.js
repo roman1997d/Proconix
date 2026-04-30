@@ -194,27 +194,49 @@
         });
       })
       .then(function (out) {
-        if (!out.ok || !out.data || !out.data.success || !out.data.share || !out.data.share.path) {
+        if (!out.ok || !out.data || !out.data.success || !out.data.share || !out.data.share.token) {
           throw new Error((out.data && out.data.message) || 'Could not generate share link.');
         }
-        return window.location.origin + out.data.share.path;
+        return window.location.origin + '/site_cloud_share_view.html?token=' + encodeURIComponent(out.data.share.token);
       });
   }
 
   function generateShareLink(storedName) {
     createShareLink(storedName)
       .then(function (link) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          return navigator.clipboard.writeText(link).then(function () {
-            showError('');
-            window.alert('Share link copied to clipboard:\n' + link);
-          });
+        var input = document.getElementById('scShareLinkInput');
+        var modal = document.getElementById('scShareModal');
+        if (input) {
+          input.value = link;
+          input.focus();
+          input.select();
         }
-        window.prompt('Copy share link:', link);
+        if (modal) modal.classList.remove('sc-hidden');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(link).catch(function () {});
+        }
       })
       .catch(function (err) {
         showError((err && err.message) || 'Share link failed.');
       });
+  }
+
+  function closeShareModal() {
+    var modal = document.getElementById('scShareModal');
+    if (modal) modal.classList.add('sc-hidden');
+  }
+
+  function copyShareInput() {
+    var input = document.getElementById('scShareLinkInput');
+    if (!input) return;
+    input.focus();
+    input.select();
+    var val = input.value || '';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(val).catch(function () {});
+      return;
+    }
+    document.execCommand('copy');
   }
 
   function openEmailModal(storedName, originalName) {
@@ -575,6 +597,10 @@
     var emailBackdrop = document.getElementById('scEmailBackdrop');
     var emailCancel = document.getElementById('scEmailCancel');
     var emailSendBtn = document.getElementById('scEmailSendBtn');
+    var shareClose = document.getElementById('scShareClose');
+    var shareBackdrop = document.getElementById('scShareBackdrop');
+    var shareDone = document.getElementById('scShareDoneBtn');
+    var shareCopy = document.getElementById('scShareCopyBtn');
 
     if (uploadBtn && fileInput) {
       uploadBtn.addEventListener('click', function () {
@@ -634,6 +660,10 @@
     if (emailBackdrop) emailBackdrop.addEventListener('click', closeEmailModal);
     if (emailCancel) emailCancel.addEventListener('click', closeEmailModal);
     if (emailSendBtn) emailSendBtn.addEventListener('click', sendShareEmail);
+    if (shareClose) shareClose.addEventListener('click', closeShareModal);
+    if (shareBackdrop) shareBackdrop.addEventListener('click', closeShareModal);
+    if (shareDone) shareDone.addEventListener('click', closeShareModal);
+    if (shareCopy) shareCopy.addEventListener('click', copyShareInput);
 
     loadStats();
     loadFiles();

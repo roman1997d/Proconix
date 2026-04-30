@@ -33,6 +33,7 @@ router.get('/files/:name/download', requireManagerAuth, resolveCompanyDocsDir, c
 router.post('/files/:name/share-link', requireManagerAuth, resolveCompanyDocsDir, ctrl.generateShareLink);
 router.post('/files/:name/send-email', requireManagerAuth, resolveCompanyDocsDir, ctrl.sendFileByEmail);
 router.get('/share/:token', ctrl.downloadSharedFile);
+router.get('/share/:token/view', ctrl.viewSharedFile);
 router.delete('/files/:name', requireManagerAuth, resolveCompanyDocsDir, ctrl.removeFile);
 
 module.exports = router;
