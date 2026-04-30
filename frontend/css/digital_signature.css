@@ -733,6 +733,36 @@ body.ds-module {
   color: var(--ds-muted);
 }
 
+.ds-sign-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid #eff1f4;
+}
+
+.ds-sign-row:last-child {
+  border-bottom: 0;
+}
+
+.ds-sign-meta {
+  min-width: 0;
+}
+
+.ds-sign-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.ds-sign-sub {
+  font-size: 0.74rem;
+  color: var(--ds-muted);
+  margin-top: 0.1rem;
+}
+
 @media (max-width: 1080px) {
   .ds-table-head {
     display: none;

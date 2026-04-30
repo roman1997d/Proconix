@@ -156,6 +156,7 @@
   var cloudFoldersCache = [];
   var cloudFilesCache = [];
   var activeCloudFolder = 'files';
+  var signDocsCache = [];
 
   function fillProjectSelects() {
     var filterSel = document.getElementById('dsFilterProject');
@@ -511,6 +512,96 @@
     }
   }
 
+  function showSignError(msg) {
+    var el = document.getElementById('dsSignError');
+    if (!el) return;
+    if (!msg) {
+      el.textContent = '';
+      el.classList.add('d-none');
+      return;
+    }
+    el.textContent = msg;
+    el.classList.remove('d-none');
+  }
+
+  function openSignModal() {
+    var b = document.getElementById('dsSignBackdrop');
+    var m = document.getElementById('dsSignModal');
+    if (b) {
+      b.classList.remove('d-none');
+      b.setAttribute('aria-hidden', 'false');
+    }
+    if (m) {
+      m.classList.remove('d-none');
+      m.setAttribute('aria-hidden', 'false');
+    }
+    showSignError('');
+    loadSignDocuments();
+  }
+
+  function closeSignModal() {
+    var b = document.getElementById('dsSignBackdrop');
+    var m = document.getElementById('dsSignModal');
+    if (b) {
+      b.classList.add('d-none');
+      b.setAttribute('aria-hidden', 'true');
+    }
+    if (m) {
+      m.classList.add('d-none');
+      m.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function renderSignDocuments() {
+    var list = document.getElementById('dsSignList');
+    if (!list) return;
+    if (!signDocsCache.length) {
+      list.innerHTML = '<div class="ds-empty">No documents available for signing.</div>';
+      return;
+    }
+    list.innerHTML = signDocsCache
+      .map(function (d) {
+        var status = statusLabel(d.status);
+        return (
+          '<div class="ds-sign-row">' +
+          '<div class="ds-sign-meta"><p class="ds-sign-title">' +
+          escapeHtml(d.title || 'Untitled') +
+          '</p><div class="ds-sign-sub">ID #' +
+          escapeHtml(d.id) +
+          ' · ' +
+          escapeHtml(status) +
+          '</div></div>' +
+          '<button type="button" class="ds-btn-primary ds-sign-open" data-doc-id="' +
+          attrEscape(d.id) +
+          '"><i class="bi bi-pen"></i> Add signature</button>' +
+          '</div>'
+        );
+      })
+      .join('');
+  }
+
+  function loadSignDocuments() {
+    var headers = getHeadersJson();
+    if (!headers) return;
+    fetch('/api/documents', { headers: headers, credentials: 'same-origin' })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          showSignError((out.data && out.data.message) || 'Could not load documents.');
+          return;
+        }
+        signDocsCache = Array.isArray(out.data.documents) ? out.data.documents : [];
+        renderSignDocuments();
+      })
+      .catch(function () {
+        showSignError('Network error loading documents.');
+      });
+  }
+
   function renderCloudFolders() {
     var list = document.getElementById('dsCloudFolders');
     if (!list) return;
@@ -606,10 +697,7 @@
           showCloudError((out.data && out.data.message) || 'Could not load files.');
           return;
         }
-        cloudFilesCache = (Array.isArray(out.data.files) ? out.data.files : []).filter(function (f) {
-          var n = String(f.original_name || f.stored_name || '').toLowerCase();
-          return n.endsWith('.pdf');
-        });
+        cloudFilesCache = Array.isArray(out.data.files) ? out.data.files : [];
         renderCloudFiles();
       })
       .catch(function () {
@@ -623,6 +711,11 @@
     var headers = getHeadersJson();
     var upHeaders = getHeadersUpload();
     if (!headers || !upHeaders || !storedName) return;
+    var lower = String(originalName || storedName || '').toLowerCase();
+    if (!lower.endsWith('.pdf')) {
+      showCloudError('Only PDF files can be imported into Build signature fields and assign.');
+      return;
+    }
     showCloudError('');
     if (btn) btn.disabled = true;
     fetch('/api/site-cloud/files/' + encodeURIComponent(storedName) + '/download', {
@@ -732,7 +825,7 @@
     }
     if (quickSign) {
       quickSign.addEventListener('click', function () {
-        openModal();
+        openSignModal();
       });
     }
     if (quickTemplate) {
@@ -765,6 +858,10 @@
       document.getElementById('dsCloudClose').addEventListener('click', closeCloudModal);
     document.getElementById('dsCloudBackdrop') &&
       document.getElementById('dsCloudBackdrop').addEventListener('click', closeCloudModal);
+    document.getElementById('dsSignClose') &&
+      document.getElementById('dsSignClose').addEventListener('click', closeSignModal);
+    document.getElementById('dsSignBackdrop') &&
+      document.getElementById('dsSignBackdrop').addEventListener('click', closeSignModal);
 
     if (filterProj) {
       filterProj.addEventListener('change', function () {
@@ -802,6 +899,7 @@
     var listMount = document.getElementById('dsListMount');
     var cloudFoldersMount = document.getElementById('dsCloudFolders');
     var cloudFilesMount = document.getElementById('dsCloudFiles');
+    var signListMount = document.getElementById('dsSignList');
     if (listMount) {
       listMount.addEventListener('click', function (e) {
         var prog = e.target.closest && e.target.closest('.ds-link-progress');
@@ -841,6 +939,15 @@
         var stored = btnFile.getAttribute('data-cloud-stored');
         var name = btnFile.getAttribute('data-cloud-name') || stored;
         importCloudFile(stored, name, btnFile);
+      });
+    }
+    if (signListMount) {
+      signListMount.addEventListener('click', function (e) {
+        var btnSign = e.target.closest && e.target.closest('.ds-sign-open');
+        if (!btnSign) return;
+        var id = btnSign.getAttribute('data-doc-id');
+        if (!id) return;
+        window.location.href = 'operative_document_sign.html?id=' + encodeURIComponent(id);
       });
     }
 
