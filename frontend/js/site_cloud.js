@@ -91,6 +91,26 @@
     return { label: 'Files', icon: 'bi-folder2-open', cls: 'sc-folder-badge--files' };
   }
 
+  function fileTypeMeta(file) {
+    var name = String((file && file.original_name) || (file && file.stored_name) || '');
+    var ext = (name.split('.').pop() || '').toLowerCase();
+    var mime = String((file && file.mime_type) || '').toLowerCase();
+    if (mime.indexOf('image/') === 0 || ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'heic'].indexOf(ext) >= 0) {
+      return { label: 'Image', icon: 'bi-image', cls: 'sc-folder-badge--images' };
+    }
+    if (ext === 'pdf') return { label: 'PDF', icon: 'bi-file-earmark-pdf', cls: 'sc-folder-badge--files' };
+    if (ext === 'mp3' || ext === 'wav' || mime.indexOf('audio/') === 0) {
+      return { label: ext ? ext.toUpperCase() : 'Audio', icon: 'bi-file-earmark-music', cls: 'sc-folder-badge--drawing' };
+    }
+    if (ext === 'mp4' || ext === 'mov' || mime.indexOf('video/') === 0) {
+      return { label: ext ? ext.toUpperCase() : 'Video', icon: 'bi-file-earmark-play', cls: 'sc-folder-badge--drawing' };
+    }
+    if (ext === 'doc' || ext === 'docx') return { label: ext.toUpperCase(), icon: 'bi-file-earmark-word', cls: 'sc-folder-badge--files' };
+    if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') return { label: ext.toUpperCase(), icon: 'bi-file-earmark-spreadsheet', cls: 'sc-folder-badge--files' };
+    if (ext === 'ppt' || ext === 'pptx') return { label: ext.toUpperCase(), icon: 'bi-file-earmark-slides', cls: 'sc-folder-badge--files' };
+    return { label: ext ? ext.toUpperCase() : 'File', icon: 'bi-file-earmark', cls: 'sc-folder-badge--files' };
+  }
+
   function renderFolderCards() {
     var wrap = document.getElementById('scFolderCards');
     if (!wrap) return;
@@ -258,7 +278,7 @@
     }
     list.innerHTML = rows
       .map(function (f) {
-        var fm = folderMeta(f.folder);
+        var fm = fileTypeMeta(f);
         return (
           '<article class="sc-row" data-name="' +
           escapeHtml(f.stored_name) +
