@@ -10,9 +10,10 @@
 </head>
 <body class="dsb-module">
   <header class="dsb-top">
-    <div>
+    <div class="dsb-title-wrap">
       <a class="dsb-back" href="digital_signature.html"><i class="bi bi-arrow-left"></i> Documents</a>
       <h1 id="dsbTitle"><i class="bi bi-vector-pen"></i> Document Builder</h1>
+      <p class="dsb-subtitle">Build signature fields and assign recipients with full control.</p>
     </div>
     <div class="dsb-steps">
       <button type="button" class="dsb-step is-active" id="dsbTabBuild" data-step="build">1 · Fields</button>
@@ -32,7 +33,12 @@
 
   <div id="dsbPanelBuild" class="dsb-layout">
     <div class="dsb-canvas-col">
-      <p class="dsb-hint" style="margin-top:0">Choose a field type on the right, then click on a page to place it. Drag fields to move. Coordinates are stored per page (relative 0–1).</p>
+      <div class="dsb-callout">
+        <p class="dsb-hint">
+          <i class="bi bi-info-circle"></i>
+          Choose a field type, then click on the page to place it. Drag fields to move. Coordinates are stored per page (relative 0-1).
+        </p>
+      </div>
       <div id="dsbPages" class="dsb-pages"></div>
     </div>
     <aside class="dsb-side">
@@ -71,13 +77,15 @@
   </div>
 
   <div id="dsbPanelAssign" class="dsb-assign dsb-hidden">
-    <h2>Who must sign</h2>
-    <p class="dsb-hint">Select at least one operative. Optional deadline applies to all selected rows (same deadline per assignment in this version).</p>
-    <label for="dsbDeadline">Deadline (optional)</label>
-    <input type="datetime-local" id="dsbDeadline" class="dsb-props input" style="width:100%;max-width:320px;padding:0.5rem;border-radius:8px;border:1px solid #374151;background:#0f172a;color:#e5e7eb;margin-bottom:1rem;">
-    <div id="dsbOperativeList" class="dsb-cb-list"></div>
-    <div class="dsb-btn-row">
-      <button type="button" class="dsb-btn dsb-btn-primary" id="dsbSendAssign"><i class="bi bi-send"></i> Send for signatures</button>
+    <div class="dsb-assign-card">
+      <h2><i class="bi bi-people"></i> Assign recipients</h2>
+      <p class="dsb-hint">Select at least one operative. Optional deadline applies to all selected rows (same deadline per assignment in this version).</p>
+      <label for="dsbDeadline">Deadline (optional)</label>
+      <input type="datetime-local" id="dsbDeadline" class="dsb-input">
+      <div id="dsbOperativeList" class="dsb-cb-list"></div>
+      <div class="dsb-btn-row">
+        <button type="button" class="dsb-btn dsb-btn-primary" id="dsbSendAssign"><i class="bi bi-send"></i> Send for signatures</button>
+      </div>
     </div>
   </div>
 
