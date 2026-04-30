@@ -1038,6 +1038,9 @@
         if (out.res.status === 503 && out.data && out.data.code === 'site_snags_drawing_gallery_column_missing') {
           toast('Site Snags: run scripts/alter_site_snag_drawings_drawing_gallery.sql on the database.');
         }
+        if (out.res.status === 503 && out.data && out.data.code === 'site_snags_cloud_column_missing') {
+          toast('Site Snags: run scripts/alter_site_snag_drawings_cloud_stored_name.sql on the database.');
+        }
       })
       .catch(function () {
         siteSnagsBackendLastError = 'Network error';
@@ -1076,6 +1079,10 @@
         if (!out.res.ok) {
           if (out.res.status === 503 && out.data && out.data.code === 'site_snags_tables_missing') {
             siteSnagsBackendLastError = out.data.message || 'Tables missing';
+          } else if (out.res.status === 503 && out.data && out.data.code === 'site_snags_cloud_column_missing') {
+            siteSnagsBackendLastError =
+              out.data.message ||
+              'Database migration required: scripts/alter_site_snag_drawings_cloud_stored_name.sql';
           } else if (out.res.status === 401) {
             siteSnagsBackendLastError = null;
           } else {
