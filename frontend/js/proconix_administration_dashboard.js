@@ -222,7 +222,7 @@
     tbody.innerHTML = '';
     if (loading) {
       loading.classList.remove('d-none');
-      loading.textContent = 'Loading companies and upload storage…';
+      loading.textContent = 'Loading companies and cloud storage…';
     }
 
     var headers = sessionHeaders(sess);
@@ -357,7 +357,7 @@
             alertEl.className = 'alert alert-warning mb-3';
             alertEl.textContent =
               (stOut.data && stOut.data.message) ||
-              'Companies loaded, but upload storage could not be computed. Try Refresh.';
+              'Companies loaded, but cloud storage could not be computed. Try Refresh.';
             alertEl.classList.remove('d-none');
           }
         }

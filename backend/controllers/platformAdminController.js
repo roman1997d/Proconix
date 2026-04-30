@@ -19,11 +19,10 @@ const { countCompanySeats } = require('../utils/companyUserSeats');
 const { runCreateDemoRecords } = require('../lib/createDemoRecords');
 const {
   collectCompanyTenantUploadPaths,
-  collectCompanyTenantAllFilePaths,
-  sumStorageStatsForAbsolutePaths,
   unlinkCollectedUploadFiles,
   removeDigitalDocsCompanyFolders,
 } = require('../lib/companyTenantFileCleanup');
+const { UPLOADS_ROOT, sanitizeCompanyFolderName } = require('../middleware/resolveCompanyDocsDir');
 
 const SALT_ROUNDS = 10;
 const BACKUP_AUDIT_LOG_PATH = path.resolve(__dirname, '../logs/platform-admin-backup-audit.log');
@@ -594,20 +593,37 @@ async function listCompaniesStorageSummary(req, res) {
     for (let i = 0; i < companies.length; i++) {
       const c = companies[i];
       const cid = c.id;
-      const paths = await collectCompanyTenantAllFilePaths(pool, cid);
-      const stats = sumStorageStatsForAbsolutePaths(paths);
+      const safeName = sanitizeCompanyFolderName(c.name || `company${cid}`);
+      const cloudDir = path.join(UPLOADS_ROOT, `${safeName}_${cid}_docs`, 'cloud');
+      let cloudBytes = 0;
+      let cloudFiles = 0;
+      try {
+        if (fs.existsSync(cloudDir)) {
+          const entries = fs.readdirSync(cloudDir, { withFileTypes: true });
+          for (let j = 0; j < entries.length; j += 1) {
+            const e = entries[j];
+            if (!e || !e.isFile()) continue;
+            const fp = path.join(cloudDir, e.name);
+            try {
+              const st = fs.statSync(fp);
+              cloudBytes += Number(st.size) || 0;
+              cloudFiles += 1;
+            } catch (_) {}
+          }
+        }
+      } catch (_) {}
       const limitMb = Number(c.cloud_storage_limit_mb) > 0 ? Number(c.cloud_storage_limit_mb) : 500;
       const limitBytes = limitMb * 1024 * 1024;
-      const usagePercent = limitBytes > 0 ? Math.min(100, (stats.bytes / limitBytes) * 100) : 0;
+      const usagePercent = limitBytes > 0 ? Math.min(100, (cloudBytes / limitBytes) * 100) : 0;
       summaries.push({
         company_id: cid,
         company_name: c.name,
-        storage_bytes: stats.bytes,
+        storage_bytes: cloudBytes,
         storage_limit_mb: limitMb,
         storage_limit_bytes: limitBytes,
         storage_usage_percent: usagePercent,
-        file_count: stats.file_count,
-        missing_references: stats.missing_references,
+        file_count: cloudFiles,
+        missing_references: 0,
       });
     }
     return res.status(200).json({
