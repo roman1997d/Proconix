@@ -1,14 +1,82 @@
 body.sc-module {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: #f4f7f8;
-  color: #18202a;
+  color: #212633;
+  background: linear-gradient(135deg, #e6e8f2, #d7deef);
 }
 
-.sc-wrap {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1rem;
+.sc-app {
+  max-width: 1380px;
+  margin: 1rem auto;
+  border-radius: 24px;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 220px 1fr 270px;
+  background: #f7f8fd;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 18px 50px rgba(69, 74, 108, 0.18);
+  min-height: calc(100vh - 2rem);
+}
+
+.sc-sidebar {
+  background: #fff;
+  border-right: 1px solid #eceffa;
+  padding: 1.2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.sc-brand {
+  margin: 0 0 1.2rem;
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: #6c74d8;
+}
+
+.sc-brand span {
+  color: #4f46e5;
+}
+
+.sc-nav-title {
+  color: #a0a7bc;
+  font-size: 0.73rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 0.45rem;
+}
+
+.sc-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sc-nav-item {
+  text-decoration: none;
+  font-size: 0.87rem;
+  color: #667089;
+  border-radius: 10px;
+  padding: 0.5rem 0.55rem;
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.sc-nav-item.is-active {
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.1);
+  font-weight: 600;
+}
+
+.sc-tenant-note {
+  margin: 0;
+  font-size: 0.76rem;
+  color: #9aa2b7;
+}
+
+.sc-main {
+  padding: 1.1rem 1.2rem 1.15rem;
 }
 
 .sc-topbar {
@@ -21,27 +89,31 @@ body.sc-module {
 
 .sc-back {
   text-decoration: none;
-  color: #6b7280;
-  font-size: 0.88rem;
+  color: #77809b;
+  font-size: 0.82rem;
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  margin-bottom: 1rem;
 }
 
 .sc-back:hover {
-  color: #0f766e;
+  color: #4f46e5;
 }
 
 .sc-topbar h1 {
-  margin: 0.25rem 0 0.15rem;
-  font-size: 1.45rem;
+  margin: 0;
+  font-size: 1.25rem;
 }
 
 .sc-topbar h1 i {
-  color: #13b9a7;
+  color: #7279dd;
 }
 
 .sc-subtitle {
-  margin: 0;
-  color: #6b7280;
-  font-size: 0.85rem;
+  margin: 0.2rem 0 0;
+  color: #838ba5;
+  font-size: 0.8rem;
 }
 
 .sc-actions {
@@ -60,8 +132,60 @@ body.sc-module {
 }
 
 .sc-btn-primary {
-  background: linear-gradient(135deg, #13b9a7, #0ea5a0);
+  background: linear-gradient(135deg, #7b7de2, #5b5fcd);
   color: #fff;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.72rem;
+  padding: 0.52rem 1rem;
+}
+
+.sc-cloud-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 0.8rem;
+  margin: 0.9rem 0 1rem;
+}
+
+.sc-cloud-card {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #eaedf8;
+  padding: 0.8rem 0.9rem;
+}
+
+.sc-cloud-card.is-highlight {
+  background: linear-gradient(135deg, #757fd8, #6b73cf);
+  color: #fff;
+  border-color: transparent;
+}
+
+.sc-cloud-card-meta {
+  margin: 0;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #98a0b8;
+}
+
+.sc-cloud-card.is-highlight .sc-cloud-card-meta {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.sc-cloud-card h3 {
+  margin: 0.35rem 0 0.3rem;
+  font-size: 1rem;
+}
+
+.sc-cloud-card p {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: #6f7892;
+}
+
+.sc-cloud-card.is-highlight p {
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .sc-toolbar {
@@ -89,10 +213,11 @@ body.sc-module {
 .sc-input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
+  border: 1px solid #e2e7f6;
+  border-radius: 999px;
   padding: 0.55rem 0.75rem 0.55rem 2rem;
   font-size: 0.88rem;
+  background: #fff;
 }
 
 .sc-count {
@@ -102,8 +227,8 @@ body.sc-module {
 }
 
 .sc-table-wrap {
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border: 1px solid #e4e8f5;
+  border-radius: 16px;
   overflow: hidden;
   background: #fff;
 }
@@ -118,8 +243,8 @@ body.sc-module {
 
 .sc-table-head {
   padding: 0.68rem 0.8rem;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  border-bottom: 1px solid #eceffa;
+  background: #fbfcff;
   color: #6b7280;
   font-size: 0.76rem;
   font-weight: 700;
@@ -127,7 +252,7 @@ body.sc-module {
 
 .sc-row {
   padding: 0.72rem 0.8rem;
-  border-bottom: 1px solid #eff2f4;
+  border-bottom: 1px solid #f0f3fa;
 }
 
 .sc-row:last-child {
@@ -151,9 +276,9 @@ body.sc-module {
 }
 
 .sc-btn-chip {
-  border: 1px solid #d1d5db;
+  border: 1px solid #dfe4f5;
   background: #fff;
-  color: #4b5563;
+  color: #5f6b85;
   border-radius: 999px;
   padding: 0.23rem 0.55rem;
   font-size: 0.75rem;
@@ -184,18 +309,95 @@ body.sc-module {
   color: #6b7280;
 }
 
+.sc-right {
+  background: #fff;
+  border-left: 1px solid #eceffa;
+  padding: 1rem 0.9rem;
+}
+
+.sc-right-search {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.sc-right-search i {
+  position: absolute;
+  left: 0.62rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #a1a8bb;
+  font-size: 0.8rem;
+}
+
+.sc-right-search input {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 1px solid #e3e8f8;
+  background: #f7f9ff;
+  font-size: 0.76rem;
+  padding: 0.5rem 0.7rem 0.5rem 1.8rem;
+}
+
+.sc-right h3 {
+  margin: 0 0 0.55rem;
+  font-size: 0.95rem;
+}
+
+.sc-stat-card {
+  background: #f7f9ff;
+  border: 1px solid #e4e8f5;
+  border-radius: 12px;
+  padding: 0.55rem 0.65rem;
+  margin-bottom: 0.55rem;
+}
+
+.sc-stat-card p {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #7e87a1;
+}
+
+.sc-stat-card strong {
+  font-size: 1rem;
+  color: #444f77;
+}
+
+.sc-right-footer {
+  margin-top: 1rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #eceeff, #f6f7ff);
+  padding: 0.75rem;
+  text-align: center;
+  color: #697395;
+  font-size: 0.78rem;
+}
+
+.sc-right-footer i {
+  font-size: 1.25rem;
+  color: #6e76dd;
+}
+
+.sc-right-footer p {
+  margin: 0.35rem 0 0;
+}
+
 @media (max-width: 900px) {
-  .sc-topbar {
-    flex-direction: column;
-  }
-
-  .sc-table-head {
-    display: none;
-  }
-
-  .sc-row {
+  .sc-app {
     grid-template-columns: 1fr;
-    gap: 0.3rem;
+    margin: 0;
+    border-radius: 0;
+    min-height: 100vh;
+  }
+
+  .sc-sidebar,
+  .sc-right {
+    border: none;
+    border-bottom: 1px solid #eceffa;
+  }
+
+  .sc-cloud-cards {
+    grid-template-columns: 1fr;
   }
 }
 

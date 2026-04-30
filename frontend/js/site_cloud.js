@@ -58,7 +58,9 @@
     var list = document.getElementById('scList');
     var count = document.getElementById('scCount');
     if (!list) return;
-    var q = (document.getElementById('scSearch').value || '').trim().toLowerCase();
+    var mainQ = (document.getElementById('scSearch').value || '').trim().toLowerCase();
+    var quickQ = (document.getElementById('scQuickSearch').value || '').trim().toLowerCase();
+    var q = mainQ || quickQ;
     var rows = stateFiles.filter(function (f) {
       return !q || String(f.original_name || '').toLowerCase().indexOf(q) !== -1;
     });
@@ -98,6 +100,20 @@
       .join('');
   }
 
+  function renderStats() {
+    var filesEl = document.getElementById('scStatFiles');
+    var storageEl = document.getElementById('scStatStorage');
+    var avgEl = document.getElementById('scStatAverage');
+    var total = stateFiles.length;
+    var used = stateFiles.reduce(function (sum, f) {
+      return sum + (Number(f.size_bytes) || 0);
+    }, 0);
+    var avg = total ? Math.round(used / total) : 0;
+    if (filesEl) filesEl.textContent = String(total);
+    if (storageEl) storageEl.textContent = formatSize(used);
+    if (avgEl) avgEl.textContent = formatSize(avg);
+  }
+
   function loadFiles() {
     var headers = getHeaders();
     if (!headers) return showError('Please open this page from Manager Dashboard.');
@@ -114,6 +130,7 @@
           return;
         }
         stateFiles = Array.isArray(out.data.files) ? out.data.files : [];
+        renderStats();
         renderList();
       })
       .catch(function () {
@@ -211,6 +228,7 @@
     var uploadBtn = document.getElementById('scUploadBtn');
     var fileInput = document.getElementById('scFileInput');
     var search = document.getElementById('scSearch');
+    var quickSearch = document.getElementById('scQuickSearch');
     var list = document.getElementById('scList');
 
     if (uploadBtn && fileInput) {
@@ -225,7 +243,16 @@
     }
 
     if (search) {
-      search.addEventListener('input', renderList);
+      search.addEventListener('input', function () {
+        if (quickSearch) quickSearch.value = '';
+        renderList();
+      });
+    }
+    if (quickSearch) {
+      quickSearch.addEventListener('input', function () {
+        if (search) search.value = '';
+        renderList();
+      });
     }
 
     if (list) {

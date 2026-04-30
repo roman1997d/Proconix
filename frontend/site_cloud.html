@@ -12,40 +12,97 @@
   <link href="css/site_cloud.css" rel="stylesheet">
 </head>
 <body class="sc-module">
-  <div class="sc-wrap">
-    <header class="sc-topbar">
+  <div class="sc-app">
+    <aside class="sc-sidebar">
       <div>
-        <a class="sc-back" href="digital_signature.html"><i class="bi bi-arrow-left"></i> Back to Documents &amp; Signatures</a>
-        <h1><i class="bi bi-cloud-arrow-up"></i> Site Cloud</h1>
-        <p class="sc-subtitle">Multi-tenant file space. Files are private to your company.</p>
+        <p class="sc-brand">drive<span>.</span></p>
+        <a class="sc-back" href="digital_signature.html"><i class="bi bi-arrow-left"></i> Back to Documents</a>
       </div>
-      <div class="sc-actions">
-        <input type="file" id="scFileInput" hidden>
-        <button type="button" class="sc-btn sc-btn-primary" id="scUploadBtn">
-          <i class="bi bi-upload"></i> Upload file
-        </button>
-      </div>
-    </header>
+      <nav class="sc-nav">
+        <p class="sc-nav-title">My files</p>
+        <a href="#" class="sc-nav-item is-active"><i class="bi bi-cloud-check"></i> Site cloud</a>
+        <a href="#" class="sc-nav-item"><i class="bi bi-folder2-open"></i> Shared files</a>
+        <a href="#" class="sc-nav-item"><i class="bi bi-trash3"></i> Deleted</a>
+      </nav>
+      <p class="sc-tenant-note">Multi-tenant protected space</p>
+    </aside>
 
-    <div id="scError" class="sc-error sc-hidden" role="alert"></div>
+    <main class="sc-main">
+      <header class="sc-topbar">
+        <div>
+          <h1><i class="bi bi-cloud-arrow-up"></i> Site Cloud</h1>
+          <p class="sc-subtitle">Files are isolated by company and visible only to your tenant.</p>
+        </div>
+        <div class="sc-actions">
+          <input type="file" id="scFileInput" hidden>
+          <button type="button" class="sc-btn sc-btn-primary" id="scUploadBtn">
+            Upload new file
+          </button>
+        </div>
+      </header>
 
-    <section class="sc-toolbar">
-      <div class="sc-search-wrap">
+      <div id="scError" class="sc-error sc-hidden" role="alert"></div>
+
+      <section class="sc-cloud-cards">
+        <article class="sc-cloud-card is-highlight">
+          <p class="sc-cloud-card-meta">Protected tenant folder</p>
+          <h3>Company Shared Files</h3>
+          <p>Use this space for RAMS, drawings, and handover packs.</p>
+        </article>
+        <article class="sc-cloud-card">
+          <p class="sc-cloud-card-meta">Quick action</p>
+          <h3>Upload and share</h3>
+          <p>Upload files and distribute to your operatives in seconds.</p>
+        </article>
+        <article class="sc-cloud-card">
+          <p class="sc-cloud-card-meta">Retention</p>
+          <h3>Safe and auditable</h3>
+          <p>Delete and download actions stay inside your company workspace.</p>
+        </article>
+      </section>
+
+      <section class="sc-toolbar">
+        <div class="sc-search-wrap">
+          <i class="bi bi-search"></i>
+          <input type="search" id="scSearch" class="sc-input" placeholder="Search your content...">
+        </div>
+        <span class="sc-count" id="scCount">0 files</span>
+      </section>
+
+      <section class="sc-table-wrap">
+        <div class="sc-table-head">
+          <span>File</span>
+          <span>Uploaded</span>
+          <span>Size</span>
+          <span>Actions</span>
+        </div>
+        <div id="scList" class="sc-table-body"></div>
+      </section>
+    </main>
+
+    <aside class="sc-right">
+      <div class="sc-right-search">
         <i class="bi bi-search"></i>
-        <input type="search" id="scSearch" class="sc-input" placeholder="Search by file name...">
+        <input type="search" id="scQuickSearch" placeholder="Search your content">
       </div>
-      <span class="sc-count" id="scCount">0 files</span>
-    </section>
-
-    <section class="sc-table-wrap">
-      <div class="sc-table-head">
-        <span>File</span>
-        <span>Uploaded</span>
-        <span>Size</span>
-        <span>Actions</span>
+      <h3>Statistics</h3>
+      <div class="sc-stat-card">
+        <p>Total files</p>
+        <strong id="scStatFiles">0</strong>
       </div>
-      <div id="scList" class="sc-table-body"></div>
-    </section>
+      <div class="sc-stat-card">
+        <p>Used storage</p>
+        <strong id="scStatStorage">0 MB</strong>
+      </div>
+      <div class="sc-stat-card">
+        <p>Average file size</p>
+        <strong id="scStatAverage">0 MB</strong>
+      </div>
+      <div class="sc-right-footer">
+        <i class="bi bi-shield-lock"></i>
+        <p>Your files are private to your company.</p>
+      </div>
+    </aside>
   </div>
 
   <script src="js/site_cloud.js"></script>
