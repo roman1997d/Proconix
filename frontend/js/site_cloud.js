@@ -37,6 +37,13 @@
     el.classList.remove('sc-hidden');
   }
 
+  function showAccessDenied() {
+    var denied = document.getElementById('scAccessDenied');
+    var app = document.querySelector('.sc-app');
+    if (app) app.classList.add('sc-hidden');
+    if (denied) denied.classList.remove('sc-hidden');
+  }
+
   function setLoading(on, text) {
     var loader = document.getElementById('scLoader');
     var loaderText = document.getElementById('scLoaderText');
@@ -437,6 +444,11 @@
   }
 
   function init() {
+    var headers0 = getHeaders();
+    if (!headers0) {
+      showAccessDenied();
+      return;
+    }
     var uploadBtn = document.getElementById('scUploadBtn');
     var fileInput = document.getElementById('scFileInput');
     var search = document.getElementById('scSearch');

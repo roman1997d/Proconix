@@ -5,6 +5,55 @@ body.sc-module {
   background: linear-gradient(135deg, #e6e8f2, #d7deef);
 }
 
+.sc-access-denied {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.2rem;
+}
+
+.sc-access-card {
+  width: min(520px, 100%);
+  background: #fff;
+  border: 1px solid #e1e6f7;
+  border-radius: 18px;
+  box-shadow: 0 24px 48px rgba(27, 33, 59, 0.2);
+  text-align: center;
+  padding: 1.6rem 1.2rem;
+}
+
+.sc-access-icon {
+  font-size: 3.2rem;
+  line-height: 1;
+  color: #dc2626;
+  margin-bottom: 0.5rem;
+}
+
+.sc-access-card h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  color: #1f2945;
+}
+
+.sc-access-card p {
+  margin: 0.55rem 0 1rem;
+  color: #5f6988;
+}
+
+.sc-access-login {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 0.58rem 0.9rem;
+  font-weight: 600;
+}
+
 .sc-app {
   max-width: 1380px;
   margin: 1rem auto;
