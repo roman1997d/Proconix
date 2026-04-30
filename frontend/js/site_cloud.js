@@ -915,6 +915,9 @@
           showError((out.data && out.data.message) || 'Delete failed.');
           return;
         }
+        if (out.data && out.data.drawing_gallery_removed) {
+          window.alert('File moved to Deleted. It was removed from Drawing Gallery as well.');
+        }
         loadStats();
         loadFiles();
       })

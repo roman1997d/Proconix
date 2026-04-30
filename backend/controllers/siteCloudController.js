@@ -130,9 +130,9 @@ function writeFolderIndex(req, names) {
 
 async function removeDrawingGalleryVersionForCloudItem(req, item) {
   try {
-    if (!item || String(item.source_module || '') !== 'drawing_gallery') return;
+    if (!item || String(item.source_module || '') !== 'drawing_gallery') return false;
     const versionId = parseInt(item.drawing_version_id, 10);
-    if (!Number.isInteger(versionId) || versionId < 1) return;
+    if (!Number.isInteger(versionId) || versionId < 1) return false;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -145,12 +145,12 @@ async function removeDrawingGalleryVersionForCloudItem(req, item) {
       );
       if (!vr.rows.length) {
         await client.query('ROLLBACK');
-        return;
+        return false;
       }
       const v = vr.rows[0];
       if (parseInt(v.company_id, 10) !== parseInt(req.digitalDocsCompanyId, 10)) {
         await client.query('ROLLBACK');
-        return;
+        return false;
       }
       await client.query('DELETE FROM drawing_version WHERE id = $1', [versionId]);
       const remain = await client.query('SELECT id, version_number FROM drawing_version WHERE series_id = $1 ORDER BY version_number DESC', [v.series_id]);
@@ -167,14 +167,18 @@ async function removeDrawingGalleryVersionForCloudItem(req, item) {
           if (fs.existsSync(abs)) fs.unlinkSync(abs);
         } catch (_) {}
       }
+      return true;
     } catch (_) {
       try {
         await client.query('ROLLBACK');
       } catch (_) {}
+      return false;
     } finally {
       client.release();
     }
-  } catch (_) {}
+  } catch (_) {
+    return false;
+  }
 }
 
 function resolveFolder(req, value) {
@@ -518,7 +522,7 @@ function viewFile(req, res) {
   return res.sendFile(full);
 }
 
-function removeFile(req, res) {
+async function removeFile(req, res) {
   ensureCloudDir(req);
   purgeExpiredDeletedForRequest(req);
   const stored = sanitizeStoredName(decodeURIComponent(req.params.name || ''));
@@ -557,8 +561,14 @@ function removeFile(req, res) {
       )
   );
   writeGlobalShareIndex(shares);
-  removeDrawingGalleryVersionForCloudItem(req, found);
-  return res.status(200).json({ success: true, message: 'File moved to Deleted.' });
+  const drawingGalleryRemoved = String(found.source_module || '') === 'drawing_gallery'
+    ? await removeDrawingGalleryVersionForCloudItem(req, found)
+    : false;
+  return res.status(200).json({
+    success: true,
+    message: 'File moved to Deleted.',
+    drawing_gallery_removed: !!drawingGalleryRemoved,
+  });
 }
 
 function listDeletedFiles(req, res) {

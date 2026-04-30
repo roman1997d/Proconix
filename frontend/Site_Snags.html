@@ -496,6 +496,7 @@
             <div class="d-flex flex-column gap-1">
               <label class="d-flex align-items-center gap-2 mb-0"><input type="radio" name="nlSource" id="nlSourceUpload" value="upload" checked> Upload image file</label>
               <label class="d-flex align-items-center gap-2 mb-0"><input type="radio" name="nlSource" id="nlSourceGallery" value="gallery"> Select from Drawing Gallery</label>
+              <label class="d-flex align-items-center gap-2 mb-0"><input type="radio" name="nlSource" id="nlSourceCloud" value="cloud"> Get from Cloud (drawing folder)</label>
             </div>
           </div>
           <div class="mb-2" id="nlUploadWrap">
@@ -513,6 +514,13 @@
               <option value="">— Select drawing —</option>
             </select>
             <div class="form-text text-secondary" id="nlGalleryHint">Choose discipline, then the plan (active image version only).</div>
+          </div>
+          <div class="mb-2" id="nlCloudWrap" style="display:none;">
+            <label class="form-label" for="nlCloudFile">Cloud file</label>
+            <select class="form-select" id="nlCloudFile" disabled>
+              <option value="">— Select cloud file —</option>
+            </select>
+            <div class="form-text text-secondary" id="nlCloudHint">Only image files from Site Cloud / drawing are listed.</div>
           </div>
         </div>
         <div class="modal-footer">
@@ -1372,13 +1380,17 @@
 
   function syncNlSourceUi() {
     var gal = document.getElementById('nlSourceGallery');
+    var cloud = document.getElementById('nlSourceCloud');
     var up = document.getElementById('nlUploadWrap');
     var gw = document.getElementById('nlGalleryWrap');
+    var cw = document.getElementById('nlCloudWrap');
     var hint = document.getElementById('nlGalleryHint');
-    if (!gal || !up || !gw) return;
+    if (!gal || !up || !gw || !cloud || !cw) return;
     var useGal = gal.checked;
-    up.style.display = useGal ? 'none' : 'block';
+    var useCloud = cloud.checked;
+    up.style.display = useGal || useCloud ? 'none' : 'block';
     gw.style.display = useGal ? 'block' : 'none';
+    cw.style.display = useCloud ? 'block' : 'none';
     if (hint) {
       hint.textContent = siteSnagsApiEnabled()
         ? 'Choose discipline, then the plan (active image version only).'
@@ -1389,6 +1401,52 @@
       var pid = nl && nl.value;
       if (pid) refreshNlGallerySelect(pid);
     }
+    if (useCloud) {
+      refreshNlCloudFiles();
+    }
+  }
+
+  function refreshNlCloudFiles() {
+    var sel = document.getElementById('nlCloudFile');
+    var hint = document.getElementById('nlCloudHint');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Select cloud file —</option>';
+    sel.disabled = true;
+    if (hint) hint.textContent = 'Loading cloud files…';
+    fetch('/api/site-cloud/files?folder=drawing', {
+      headers: getAuthHeaders(),
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          if (hint) hint.textContent = (out.data && out.data.message) || 'Could not load cloud files.';
+          return;
+        }
+        var files = Array.isArray(out.data.files) ? out.data.files : [];
+        files.forEach(function (f) {
+          var mime = String(f.mime_type || '').toLowerCase();
+          var n = String(f.original_name || f.stored_name || '').toLowerCase();
+          var isImage = mime.indexOf('image/') === 0 || /\.(png|jpe?g|webp|gif|svg|heic)$/.test(n);
+          if (!isImage) return;
+          var opt = document.createElement('option');
+          opt.value = String(f.stored_name || '');
+          opt.textContent = (f.original_name || f.stored_name || 'Image') + ' (' + (mime.split('/').pop() || 'image') + ')';
+          opt.setAttribute('data-original', String(f.original_name || f.stored_name || 'image'));
+          sel.appendChild(opt);
+        });
+        sel.disabled = sel.options.length <= 1;
+        if (hint) hint.textContent = sel.disabled
+          ? 'No image files available in Site Cloud / drawing.'
+          : 'Choose a cloud image file for this drawing.';
+      })
+      .catch(function () {
+        if (hint) hint.textContent = 'Network error while loading cloud files.';
+      });
   }
 
   function resetNlGalleryDrawingSelect() {
@@ -3996,6 +4054,7 @@
       var ptmNew = parseFloat(document.getElementById('nlPixelsToMm').value);
       if (!isFinite(ptmNew) || ptmNew <= 0) ptmNew = 1;
       var useGallery = document.getElementById('nlSourceGallery') && document.getElementById('nlSourceGallery').checked;
+      var useCloud = document.getElementById('nlSourceCloud') && document.getElementById('nlSourceCloud').checked;
       if (!pid || !name) {
         toast('Project and drawing name are required.');
         return;
@@ -4037,6 +4096,67 @@
         toast('Drawing saved.');
         return;
       }
+      if (useCloud) {
+        var cloudSel = document.getElementById('nlCloudFile');
+        var stored = cloudSel && !cloudSel.disabled ? String(cloudSel.value || '') : '';
+        if (!stored) {
+          toast('Please select an image from cloud.');
+          return;
+        }
+        fetch('/api/site-cloud/files/' + encodeURIComponent(stored) + '/download', {
+          headers: getAuthHeaders(),
+          credentials: 'same-origin'
+        })
+          .then(function (res) {
+            if (!res.ok) throw new Error('download');
+            return res.blob();
+          })
+          .then(function (blob) {
+            if (!blob || !(String(blob.type || '').toLowerCase().indexOf('image/') === 0)) {
+              throw new Error('image_only');
+            }
+            var fr = new FileReader();
+            fr.onload = function () {
+              var locC = {
+                id: uid(),
+                projectId: pid,
+                name: name,
+                block: block || '—',
+                floor: floor || '—',
+                imageDataUrl: fr.result,
+                pixelsToMm: ptmNew,
+                drawingGalleryVersionId: null
+              };
+              state.locations.push(locC);
+              saveState();
+              document.getElementById('filterProject').value = pid;
+              fillLocationSelect();
+              document.getElementById('selectLocation').value = locC.id;
+              showDrawing(locC);
+              renderPins();
+              renderSnagList();
+              var nmC = bootstrap.Modal.getInstance(document.getElementById('modalNewLocation'));
+              if (nmC) nmC.hide();
+              document.getElementById('nlName').value = '';
+              document.getElementById('nlBlock').value = '';
+              document.getElementById('nlFloor').value = '';
+              document.getElementById('nlFile').value = '';
+              document.getElementById('nlPixelsToMm').value = '1';
+              document.getElementById('nlSourceUpload').checked = true;
+              syncNlSourceUi();
+              toast('Drawing imported from cloud.');
+            };
+            fr.readAsDataURL(blob);
+          })
+          .catch(function (err) {
+            if (err && err.message === 'image_only') {
+              toast('Selected cloud file is not an image.');
+              return;
+            }
+            toast('Could not import selected cloud file.');
+          });
+        return;
+      }
       var file = document.getElementById('nlFile').files[0];
       if (!file) {
         toast('Please choose an image file.');
@@ -4076,9 +4196,11 @@
 
     var nlSrcUp = document.getElementById('nlSourceUpload');
     var nlSrcGal = document.getElementById('nlSourceGallery');
+    var nlSrcCloud = document.getElementById('nlSourceCloud');
     var nlProj = document.getElementById('nlProject');
     if (nlSrcUp) nlSrcUp.addEventListener('change', syncNlSourceUi);
     if (nlSrcGal) nlSrcGal.addEventListener('change', syncNlSourceUi);
+    if (nlSrcCloud) nlSrcCloud.addEventListener('change', syncNlSourceUi);
     if (nlProj) {
       nlProj.addEventListener('change', function () {
         if (nlSrcGal && nlSrcGal.checked) refreshNlGallerySelect(nlProj.value);
