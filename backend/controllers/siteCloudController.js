@@ -640,7 +640,14 @@ function deleteExtraFolder(req, res) {
     return res.status(400).json({ success: false, message: 'Default folders cannot be deleted.' });
   }
 
-  const allFolders = readFolderIndex(req);
+  const indexFolders = readFolderIndex(req);
+  const filesFolders = readIndex(req)
+    .map((it) => normalizeSubfolderName(it && it.folder))
+    .filter((n) => n && !ALLOWED_FOLDERS.has(String(n).toLowerCase()));
+  const deletedFolders = readTrashIndex(req)
+    .map((it) => normalizeSubfolderName(it && it.folder))
+    .filter((n) => n && !ALLOWED_FOLDERS.has(String(n).toLowerCase()));
+  const allFolders = Array.from(new Set(indexFolders.concat(filesFolders, deletedFolders)));
   const exists = allFolders.some((n) => String(n || '').toLowerCase() === folderName.toLowerCase());
   if (!exists) return res.status(404).json({ success: false, message: 'Folder not found.' });
 
@@ -688,7 +695,7 @@ function deleteExtraFolder(req, res) {
     writeGlobalShareIndex(shares);
   }
 
-  const nextFolders = allFolders.filter((n) => String(n || '').toLowerCase() !== folderName.toLowerCase());
+  const nextFolders = indexFolders.filter((n) => String(n || '').toLowerCase() !== folderName.toLowerCase());
   writeFolderIndex(req, nextFolders);
 
   return res.status(200).json({
