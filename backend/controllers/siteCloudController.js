@@ -6,6 +6,13 @@ const MAX_TOTAL_BYTES_PER_TENANT = parseInt(
   process.env.SITE_CLOUD_MAX_TOTAL_BYTES || String(5 * 1024 * 1024 * 1024),
   10
 );
+const ALLOWED_FOLDERS = new Set(['files', 'drawing', 'images']);
+
+function normalizeFolder(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (ALLOWED_FOLDERS.has(v)) return v;
+  return 'files';
+}
 
 function indexPath(req) {
   return path.join(req.digitalDocsCompanyDir, 'cloud_index.json');
@@ -39,6 +46,7 @@ function ensureCloudDir(req) {
 function mapItem(item) {
   return {
     id: item.id,
+    folder: normalizeFolder(item.folder),
     stored_name: item.stored_name,
     original_name: item.original_name,
     mime_type: item.mime_type || 'application/octet-stream',
@@ -51,10 +59,12 @@ function mapItem(item) {
 function listFiles(req, res) {
   ensureCloudDir(req);
   const q = String(req.query.q || '').trim().toLowerCase();
+  const folder = normalizeFolder(req.query.folder);
   const current = readIndex(req).filter((it) => {
     if (!it || !it.stored_name) return false;
     const full = path.join(req.siteCloudCompanyDir, it.stored_name);
     if (!fs.existsSync(full)) return false;
+    if (normalizeFolder(it.folder) !== folder) return false;
     if (!q) return true;
     const hay = `${it.original_name || ''} ${it.stored_name || ''}`.toLowerCase();
     return hay.includes(q);
@@ -90,6 +100,7 @@ function uploadFile(req, res) {
   }
   const entry = {
     id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    folder: normalizeFolder(req.body && req.body.folder),
     stored_name: req.file.filename,
     original_name: req.file.originalname || req.file.filename,
     mime_type: req.file.mimetype || 'application/octet-stream',

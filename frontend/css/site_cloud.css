@@ -176,6 +176,16 @@ body.sc-module {
   border-color: transparent;
 }
 
+.sc-cloud-card {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.sc-cloud-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(91, 95, 205, 0.15);
+}
+
 .sc-cloud-card-meta {
   margin: 0;
   font-size: 0.66rem;

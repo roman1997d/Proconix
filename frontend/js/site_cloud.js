@@ -4,6 +4,7 @@
   var SESSION_KEY = 'proconix_manager_session';
   var stateFiles = [];
   var TENANT_STORAGE_LIMIT_BYTES = 5 * 1024 * 1024 * 1024;
+  var activeFolder = 'files';
 
   function getSession() {
     try {
@@ -128,7 +129,10 @@
     var headers = getHeaders();
     if (!headers) return showError('Please open this page from Manager Dashboard.');
     showError('');
-    fetch('/api/site-cloud/files', { headers: headers, credentials: 'same-origin' })
+    fetch('/api/site-cloud/files?folder=' + encodeURIComponent(activeFolder), {
+      headers: headers,
+      credentials: 'same-origin',
+    })
       .then(function (res) {
         return res.json().then(function (data) {
           return { ok: res.ok, data: data };
@@ -154,6 +158,7 @@
     if (!file) return;
     var fd = new FormData();
     fd.append('file', file);
+    fd.append('folder', activeFolder);
     showError('');
     fetch('/api/site-cloud/upload', {
       method: 'POST',
@@ -240,6 +245,7 @@
     var search = document.getElementById('scSearch');
     var quickSearch = document.getElementById('scQuickSearch');
     var list = document.getElementById('scList');
+    var folderCards = document.getElementById('scFolderCards');
 
     if (uploadBtn && fileInput) {
       uploadBtn.addEventListener('click', function () {
@@ -271,6 +277,19 @@
         if (d) return downloadFile(d.getAttribute('data-name'));
         var x = e.target.closest('.sc-delete');
         if (x) return deleteFile(x.getAttribute('data-name'));
+      });
+    }
+
+    if (folderCards) {
+      folderCards.addEventListener('click', function (e) {
+        var card = e.target.closest('.sc-folder-card');
+        if (!card) return;
+        var folder = (card.getAttribute('data-folder') || 'files').toLowerCase();
+        activeFolder = folder;
+        folderCards.querySelectorAll('.sc-folder-card').forEach(function (el) {
+          el.classList.toggle('is-highlight', el === card);
+        });
+        loadFiles();
       });
     }
 
