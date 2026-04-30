@@ -299,6 +299,8 @@
             '</td>';
           var tdStorage = document.createElement('td');
           tdStorage.className = 'text-end align-middle';
+          var tdUsage = document.createElement('td');
+          tdUsage.className = 'text-center align-middle';
           var st = storageById[c.id];
           if (st && typeof st.storage_bytes === 'number') {
             var strong = document.createElement('strong');
@@ -316,13 +318,37 @@
                 String(st.missing_references) + ' DB path' + (st.missing_references === 1 ? '' : 's') + ' missing on disk';
               tdStorage.appendChild(miss);
             }
+            var usagePct = Number(st.storage_usage_percent) || 0;
+            var roundedPct = usagePct.toFixed(1) + '%';
+            var badge = document.createElement('span');
+            if (usagePct >= 85) {
+              badge.className = 'badge bg-danger';
+              badge.textContent = 'High ' + roundedPct;
+            } else if (usagePct >= 60) {
+              badge.className = 'badge bg-warning text-dark';
+              badge.textContent = 'Medium ' + roundedPct;
+            } else {
+              badge.className = 'badge bg-success';
+              badge.textContent = 'Healthy ' + roundedPct;
+            }
+            tdUsage.appendChild(badge);
+            var lim = document.createElement('div');
+            lim.className = 'text-white-50 small mt-1';
+            lim.textContent =
+              formatStorageBytes(st.storage_bytes) +
+              ' / ' +
+              formatStorageBytes(st.storage_limit_bytes || ((st.storage_limit_mb || 500) * 1024 * 1024));
+            tdUsage.appendChild(lim);
           } else {
             tdStorage.textContent = '—';
+            tdUsage.textContent = '—';
             if (stOut.status !== 200 || !stOut.data || !stOut.data.success) {
               tdStorage.title = 'Could not load storage summary';
+              tdUsage.title = 'Could not load storage summary';
             }
           }
           tr.appendChild(tdStorage);
+          tr.appendChild(tdUsage);
           tbody.appendChild(tr);
         });
         if (wrap) wrap.classList.remove('d-none');

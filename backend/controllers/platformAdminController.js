@@ -577,7 +577,18 @@ async function listCompanies(req, res) {
  */
 async function listCompaniesStorageSummary(req, res) {
   try {
-    const cRes = await pool.query('SELECT id, name FROM companies ORDER BY id ASC');
+    let cRes;
+    try {
+      cRes = await pool.query(
+        'SELECT id, name, COALESCE(cloud_storage_limit_mb, 500) AS cloud_storage_limit_mb FROM companies ORDER BY id ASC'
+      );
+    } catch (colErr) {
+      if (colErr && colErr.code === '42703') {
+        cRes = await pool.query('SELECT id, name, 500 AS cloud_storage_limit_mb FROM companies ORDER BY id ASC');
+      } else {
+        throw colErr;
+      }
+    }
     const companies = cRes.rows || [];
     const summaries = [];
     for (let i = 0; i < companies.length; i++) {
@@ -585,10 +596,16 @@ async function listCompaniesStorageSummary(req, res) {
       const cid = c.id;
       const paths = await collectCompanyTenantAllFilePaths(pool, cid);
       const stats = sumStorageStatsForAbsolutePaths(paths);
+      const limitMb = Number(c.cloud_storage_limit_mb) > 0 ? Number(c.cloud_storage_limit_mb) : 500;
+      const limitBytes = limitMb * 1024 * 1024;
+      const usagePercent = limitBytes > 0 ? Math.min(100, (stats.bytes / limitBytes) * 100) : 0;
       summaries.push({
         company_id: cid,
         company_name: c.name,
         storage_bytes: stats.bytes,
+        storage_limit_mb: limitMb,
+        storage_limit_bytes: limitBytes,
+        storage_usage_percent: usagePercent,
         file_count: stats.file_count,
         missing_references: stats.missing_references,
       });
