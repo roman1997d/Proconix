@@ -293,6 +293,19 @@ body.sc-module {
   margin-bottom: 0.8rem;
 }
 
+.sc-folder-hint {
+  margin: -0.2rem 0 0.75rem;
+  font-size: 0.78rem;
+  color: #5f6988;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sc-folder-hint i {
+  color: #4f46e5;
+}
+
 .sc-search-wrap {
   position: relative;
   flex: 1;
