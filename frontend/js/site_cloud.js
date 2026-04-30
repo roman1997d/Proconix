@@ -302,23 +302,58 @@
     var body = document.getElementById('scViewerBody');
     var title = document.getElementById('scViewerTitle');
     if (!viewer || !body || !title) return;
+    var headers = getHeaders();
+    if (!headers) {
+      showError('Please open this page from Manager Dashboard.');
+      return;
+    }
     var src = '/api/site-cloud/files/' + encodeURIComponent(storedName) + '/view';
     title.textContent = 'Preview - ' + (originalName || storedName);
-    if (type === 'image') {
-      body.innerHTML = '<img alt="Preview image" src="' + src + '">';
-    } else if (type === 'video') {
-      body.innerHTML = '<video controls preload="metadata"><source src="' + src + '"></video>';
-    } else if (type === 'audio') {
-      body.innerHTML = '<audio controls preload="metadata"><source src="' + src + '"></audio>';
-    } else {
-      body.innerHTML = '<iframe title="Document preview" src="' + src + '"></iframe>';
-    }
+    body.innerHTML = '<div class="sc-empty">Loading preview...</div>';
     viewer.classList.remove('sc-hidden');
+    fetch(src, {
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().then(function (data) {
+            throw new Error((data && data.message) || 'Preview failed.');
+          });
+        }
+        return Promise.all([res.blob(), res.headers.get('Content-Type') || 'application/octet-stream']);
+      })
+      .then(function (parts) {
+        var blob = parts[0];
+        var contentType = parts[1];
+        var objectUrl = URL.createObjectURL(new Blob([blob], { type: contentType }));
+        body.setAttribute('data-object-url', objectUrl);
+        if (type === 'image') {
+          body.innerHTML = '<img alt="Preview image" src="' + objectUrl + '">';
+        } else if (type === 'video') {
+          body.innerHTML =
+            '<video controls preload="metadata"><source src="' + objectUrl + '" type="' + escapeHtml(contentType) + '"></video>';
+        } else if (type === 'audio') {
+          body.innerHTML =
+            '<audio controls preload="metadata"><source src="' + objectUrl + '" type="' + escapeHtml(contentType) + '"></audio>';
+        } else {
+          body.innerHTML = '<iframe title="Document preview" src="' + objectUrl + '"></iframe>';
+        }
+      })
+      .catch(function (err) {
+        closeViewer();
+        showError((err && err.message) || 'Preview failed.');
+      });
   }
 
   function closeViewer() {
     var viewer = document.getElementById('scViewer');
     var body = document.getElementById('scViewerBody');
+    var objectUrl = body ? body.getAttribute('data-object-url') : '';
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      body.removeAttribute('data-object-url');
+    }
     if (viewer) viewer.classList.add('sc-hidden');
     if (body) body.innerHTML = '';
   }
