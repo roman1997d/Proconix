@@ -318,19 +318,58 @@
         if (list) {
           list.innerHTML = operativesCache
             .map(function (op) {
+              var name = (op.name || 'User').trim();
+              var email = (op.email || '').trim();
+              var searchText = (name + ' ' + email).toLowerCase();
               return (
-                '<label class="dsb-cb-item"><input type="checkbox" name="op" value="' +
+                '<label class="dsb-cb-item" data-search="' +
+                escapeHtml(searchText) +
+                '"><input type="checkbox" name="op" value="' +
                 op.id +
-                '"> ' +
-                (op.name || 'User') +
-                ' <span class="dsb-hint">(' +
-                (op.email || '') +
-                ')</span></label>'
+                '"><span class="dsb-cb-item-meta"><span class="dsb-cb-item-name">' +
+                escapeHtml(name || 'User') +
+                '</span><span class="dsb-cb-item-email">' +
+                escapeHtml(email) +
+                '</span></span></label>'
               );
             })
             .join('');
+          bindOperativeListUi();
+          updateSelectedCount();
         }
       });
+  }
+
+  function updateSelectedCount() {
+    var countEl = document.getElementById('dsbSelectedCount');
+    var list = document.getElementById('dsbOperativeList');
+    if (!countEl || !list) return;
+    var checked = list.querySelectorAll('input[name="op"]:checked').length;
+    var total = list.querySelectorAll('input[name="op"]').length;
+    countEl.textContent = checked + ' selected of ' + total;
+  }
+
+  function filterOperativesList() {
+    var list = document.getElementById('dsbOperativeList');
+    var search = document.getElementById('dsbOperativeSearch');
+    if (!list || !search) return;
+    var q = search.value.trim().toLowerCase();
+    list.querySelectorAll('.dsb-cb-item').forEach(function (item) {
+      var text = item.getAttribute('data-search') || '';
+      var visible = !q || text.indexOf(q) !== -1;
+      item.style.display = visible ? '' : 'none';
+    });
+  }
+
+  function bindOperativeListUi() {
+    var list = document.getElementById('dsbOperativeList');
+    if (!list || list.getAttribute('data-ui-bound') === '1') return;
+    list.setAttribute('data-ui-bound', '1');
+    list.addEventListener('change', function (e) {
+      if (e.target && e.target.matches('input[name="op"]')) {
+        updateSelectedCount();
+      }
+    });
   }
 
   function loadDocument() {
@@ -479,6 +518,34 @@
     document.getElementById('dsbSaveFields').addEventListener('click', saveFields);
 
     document.getElementById('dsbSendAssign').addEventListener('click', sendAssign);
+    var searchOps = document.getElementById('dsbOperativeSearch');
+    if (searchOps) {
+      searchOps.addEventListener('input', filterOperativesList);
+    }
+    var btnSelectAllOps = document.getElementById('dsbSelectAllOps');
+    if (btnSelectAllOps) {
+      btnSelectAllOps.addEventListener('click', function () {
+        var list = document.getElementById('dsbOperativeList');
+        if (!list) return;
+        list.querySelectorAll('.dsb-cb-item').forEach(function (row) {
+          if (row.style.display === 'none') return;
+          var cb = row.querySelector('input[name="op"]');
+          if (cb) cb.checked = true;
+        });
+        updateSelectedCount();
+      });
+    }
+    var btnClearAllOps = document.getElementById('dsbClearAllOps');
+    if (btnClearAllOps) {
+      btnClearAllOps.addEventListener('click', function () {
+        var list = document.getElementById('dsbOperativeList');
+        if (!list) return;
+        list.querySelectorAll('input[name="op"]').forEach(function (cb) {
+          cb.checked = false;
+        });
+        updateSelectedCount();
+      });
+    }
 
     var btnResetDoc = document.getElementById('dsbBtnResetDoc');
     if (btnResetDoc) {

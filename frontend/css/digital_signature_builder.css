@@ -366,6 +366,49 @@ html.dsb-html {
   box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
 }
 
+.dsb-assign-tools {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.dsb-assign-search-wrap {
+  position: relative;
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+
+.dsb-assign-search-wrap i {
+  position: absolute;
+  left: 0.58rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  font-size: 0.82rem;
+}
+
+.dsb-input-search {
+  max-width: none;
+  margin-bottom: 0;
+  padding-left: 1.8rem;
+}
+
+.dsb-assign-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.dsb-selected-count {
+  margin: 0.2rem 0 0.55rem;
+  font-size: 0.78rem;
+  color: #4b5563;
+  font-weight: 600;
+}
+
 .dsb-assign-card h2 {
   margin-top: 0;
   font-size: 1rem;
@@ -386,7 +429,7 @@ html.dsb-html {
 }
 
 .dsb-cb-list {
-  max-height: 280px;
+  max-height: min(52vh, 520px);
   overflow: auto;
   border: 1px solid #d1d5db;
   border-radius: 8px;
@@ -397,14 +440,34 @@ html.dsb-html {
 
 .dsb-cb-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
-  padding: 0.35rem;
+  padding: 0.4rem 0.45rem;
   border-radius: 4px;
 }
 
 .dsb-cb-item:hover {
   background: rgba(19, 185, 167, 0.08);
+}
+
+.dsb-cb-item input[type='checkbox'] {
+  margin-top: 0.16rem;
+}
+
+.dsb-cb-item-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.dsb-cb-item-name {
+  font-size: 0.85rem;
+  color: #111827;
+}
+
+.dsb-cb-item-email {
+  font-size: 0.75rem;
+  color: #6b7280;
 }
 
 .dsb-hidden {

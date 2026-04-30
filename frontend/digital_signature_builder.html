@@ -82,6 +82,17 @@
       <p class="dsb-hint">Select at least one operative. Optional deadline applies to all selected rows (same deadline per assignment in this version).</p>
       <label for="dsbDeadline">Deadline (optional)</label>
       <input type="datetime-local" id="dsbDeadline" class="dsb-input">
+      <div class="dsb-assign-tools">
+        <div class="dsb-assign-search-wrap">
+          <i class="bi bi-search" aria-hidden="true"></i>
+          <input type="search" id="dsbOperativeSearch" class="dsb-input dsb-input-search" placeholder="Search operative by name or email...">
+        </div>
+        <div class="dsb-assign-actions">
+          <button type="button" class="dsb-btn dsb-btn-secondary dsb-btn-sm" id="dsbSelectAllOps">Select all visible</button>
+          <button type="button" class="dsb-btn dsb-btn-secondary dsb-btn-sm" id="dsbClearAllOps">Clear</button>
+        </div>
+      </div>
+      <p class="dsb-selected-count" id="dsbSelectedCount">0 selected</p>
       <div id="dsbOperativeList" class="dsb-cb-list"></div>
       <div class="dsb-btn-row">
         <button type="button" class="dsb-btn dsb-btn-primary" id="dsbSendAssign"><i class="bi bi-send"></i> Send for signatures</button>
