@@ -376,6 +376,29 @@ body.sc-module {
   margin-bottom: 0.7rem;
 }
 
+.sc-loader {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4b5563;
+  background: #ffffff;
+  border: 1px solid #dfe4f5;
+  border-radius: 999px;
+  padding: 0.38rem 0.68rem;
+  margin-bottom: 0.7rem;
+}
+
+.sc-loader-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #d4daf5;
+  border-top-color: #5b5fcd;
+  animation: scSpin 0.8s linear infinite;
+}
+
 .sc-hidden {
   display: none !important;
 }
@@ -552,6 +575,15 @@ body.sc-module {
   }
   50% {
     margin-left: 6px;
+  }
+}
+
+@keyframes scSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 

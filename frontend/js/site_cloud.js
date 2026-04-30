@@ -36,6 +36,21 @@
     el.classList.remove('sc-hidden');
   }
 
+  function setLoading(on, text) {
+    var loader = document.getElementById('scLoader');
+    var loaderText = document.getElementById('scLoaderText');
+    var uploadBtn = document.getElementById('scUploadBtn');
+    if (!loader) return;
+    if (!on) {
+      loader.classList.add('sc-hidden');
+      if (uploadBtn) uploadBtn.disabled = false;
+      return;
+    }
+    if (loaderText && text) loaderText.textContent = text;
+    loader.classList.remove('sc-hidden');
+    if (uploadBtn) uploadBtn.disabled = true;
+  }
+
   function formatSize(bytes) {
     var n = Number(bytes) || 0;
     if (n < 1024) return n + ' B';
@@ -144,6 +159,7 @@
     var headers = getHeaders();
     if (!headers) return showError('Please open this page from Manager Dashboard.');
     showError('');
+    setLoading(true, 'Loading files...');
     fetch('/api/site-cloud/files?folder=' + encodeURIComponent(activeFolder), {
       headers: headers,
       credentials: 'same-origin',
@@ -164,6 +180,9 @@
       })
       .catch(function () {
         showError('Network error while loading files.');
+      })
+      .finally(function () {
+        setLoading(false);
       });
   }
 
@@ -175,6 +194,7 @@
     fd.append('file', file);
     fd.append('folder', activeFolder);
     showError('');
+    setLoading(true, 'Scanning file and uploading...');
     fetch('/api/site-cloud/upload', {
       method: 'POST',
       headers: headers,
@@ -195,6 +215,9 @@
       })
       .catch(function () {
         showError('Network error while uploading.');
+      })
+      .finally(function () {
+        setLoading(false);
       });
   }
 

@@ -7,11 +7,46 @@ const MAX_TOTAL_BYTES_PER_TENANT = parseInt(
   10
 );
 const ALLOWED_FOLDERS = new Set(['files', 'drawing', 'images']);
+const MAX_SCAN_BYTES = 2 * 1024 * 1024;
 
 function normalizeFolder(value) {
   const v = String(value || '').trim().toLowerCase();
   if (ALLOWED_FOLDERS.has(v)) return v;
   return 'files';
+}
+
+function basicMalwareScan(filePath) {
+  const suspiciousSignatures = [
+    { type: 'pe', bytes: [0x4d, 0x5a] }, // MZ
+    { type: 'elf', bytes: [0x7f, 0x45, 0x4c, 0x46] }, // ELF
+    { type: 'mach-o', bytes: [0xcf, 0xfa, 0xed, 0xfe] },
+    { type: 'mach-o', bytes: [0xfe, 0xed, 0xfa, 0xcf] },
+    { type: 'mach-o', bytes: [0xca, 0xfe, 0xba, 0xbe] },
+  ];
+  try {
+    const stat = fs.statSync(filePath);
+    const readLen = Math.max(0, Math.min(stat.size, MAX_SCAN_BYTES));
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(readLen);
+    fs.readSync(fd, buf, 0, readLen, 0);
+    fs.closeSync(fd);
+
+    for (let i = 0; i < suspiciousSignatures.length; i += 1) {
+      const sig = suspiciousSignatures[i];
+      const bytes = sig.bytes;
+      if (buf.length >= bytes.length && bytes.every((b, idx) => buf[idx] === b)) {
+        return { ok: false, reason: `Blocked suspicious binary signature (${sig.type}).` };
+      }
+    }
+
+    const headText = buf.toString('latin1');
+    if (headText.includes('X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR')) {
+      return { ok: false, reason: 'Blocked malware test signature (EICAR).' };
+    }
+    return { ok: true };
+  } catch (_) {
+    return { ok: false, reason: 'Could not verify file safety. Upload blocked.' };
+  }
 }
 
 function indexPath(req) {
@@ -76,6 +111,13 @@ function listFiles(req, res) {
 function uploadFile(req, res) {
   ensureCloudDir(req);
   if (!req.file) return res.status(400).json({ success: false, message: 'File is required.' });
+  const scan = basicMalwareScan(req.file.path);
+  if (!scan.ok) {
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(400).json({ success: false, message: scan.reason });
+  }
   const items = readIndex(req);
   const activeItems = items.filter((it) => it && it.stored_name);
   if (activeItems.length >= MAX_FILES_PER_TENANT) {
