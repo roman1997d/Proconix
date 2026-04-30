@@ -959,6 +959,15 @@
     return base + path;
   }
 
+  function getSiteCloudFetchHeadersForSnags() {
+    var h = getManagerSessionHeaders();
+    if (!h) return null;
+    return {
+      'X-Manager-Id': h['X-Manager-Id'],
+      'X-Manager-Email': h['X-Manager-Email']
+    };
+  }
+
   function updateSiteSnagsSyncBadge() {
     var badge = document.getElementById('ssSyncBadge');
     if (!badge) return;
@@ -1413,8 +1422,13 @@
     sel.innerHTML = '<option value="">— Select cloud file —</option>';
     sel.disabled = true;
     if (hint) hint.textContent = 'Loading cloud files…';
+    var h = getSiteCloudFetchHeadersForSnags();
+    if (!h) {
+      if (hint) hint.textContent = 'Manager session required for Site Cloud access.';
+      return;
+    }
     fetch('/api/site-cloud/files?folder=drawing', {
-      headers: getAuthHeaders(),
+      headers: h,
       credentials: 'same-origin',
     })
       .then(function (res) {
@@ -4103,8 +4117,13 @@
           toast('Please select an image from cloud.');
           return;
         }
+        var cloudHeaders = getSiteCloudFetchHeadersForSnags();
+        if (!cloudHeaders) {
+          toast('Manager session required for cloud import.');
+          return;
+        }
         fetch('/api/site-cloud/files/' + encodeURIComponent(stored) + '/download', {
-          headers: getAuthHeaders(),
+          headers: cloudHeaders,
           credentials: 'same-origin'
         })
           .then(function (res) {
