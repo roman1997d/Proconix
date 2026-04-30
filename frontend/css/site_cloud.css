@@ -284,7 +284,7 @@ body.sc-module {
 .sc-table-head,
 .sc-row {
   display: grid;
-  grid-template-columns: 2.2fr 1fr 0.7fr 1.2fr;
+  grid-template-columns: 2fr 0.9fr 1fr 0.7fr 1.2fr;
   gap: 0.6rem;
   align-items: center;
 }
@@ -315,6 +315,35 @@ body.sc-module {
 .sc-muted {
   font-size: 0.76rem;
   color: #6b7280;
+}
+
+.sc-folder-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.52rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.sc-folder-badge--files {
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.11);
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+.sc-folder-badge--drawing {
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.11);
+  border-color: rgba(20, 184, 166, 0.2);
+}
+
+.sc-folder-badge--images {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.2);
 }
 
 .sc-actions-row {

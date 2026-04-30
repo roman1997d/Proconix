@@ -56,6 +56,13 @@
     return d.innerHTML;
   }
 
+  function folderMeta(folder) {
+    var f = String(folder || 'files').toLowerCase();
+    if (f === 'drawing') return { label: 'Drawing', icon: 'bi-vector-pen', cls: 'sc-folder-badge--drawing' };
+    if (f === 'images') return { label: 'Images', icon: 'bi-image', cls: 'sc-folder-badge--images' };
+    return { label: 'Files', icon: 'bi-folder2-open', cls: 'sc-folder-badge--files' };
+  }
+
   function renderList() {
     var list = document.getElementById('scList');
     var count = document.getElementById('scCount');
@@ -73,6 +80,7 @@
     }
     list.innerHTML = rows
       .map(function (f) {
+        var fm = folderMeta(f.folder);
         return (
           '<article class="sc-row" data-name="' +
           escapeHtml(f.stored_name) +
@@ -82,6 +90,13 @@
           '</div><div class="sc-muted">' +
           escapeHtml(f.mime_type || 'file') +
           '</div></div>' +
+          '<div><span class="sc-folder-badge ' +
+          fm.cls +
+          '"><i class="bi ' +
+          fm.icon +
+          '"></i>' +
+          escapeHtml(fm.label) +
+          '</span></div>' +
           '<div class="sc-muted">' +
           escapeHtml(formatDate(f.uploaded_at)) +
           '</div>' +
