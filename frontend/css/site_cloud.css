@@ -588,6 +588,32 @@ body.sc-module {
   padding: 0.55rem 0.6rem;
 }
 
+.sc-storage-progress-wrap {
+  margin: 0 0 0.75rem;
+}
+
+.sc-storage-progress {
+  height: 10px;
+  border-radius: 999px;
+  background: #e5eafc;
+  border: 1px solid #d7def8;
+  overflow: hidden;
+}
+
+.sc-storage-progress span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #6e76dd, #4f46e5);
+  transition: width 0.25s ease;
+}
+
+.sc-storage-progress-meta {
+  margin-top: 0.35rem;
+  font-size: 0.74rem;
+  color: #5d6683;
+}
+
 .sc-storage-contact {
   margin: 0 0 0.9rem;
   font-size: 0.74rem;

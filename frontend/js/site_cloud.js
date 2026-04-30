@@ -3,6 +3,7 @@
 
   var SESSION_KEY = 'proconix_manager_session';
   var stateFiles = [];
+  var stateStats = null;
   var TENANT_STORAGE_LIMIT_BYTES = 5 * 1024 * 1024 * 1024;
   var activeFolder = 'files';
 
@@ -156,11 +157,13 @@
     var storageEl = document.getElementById('scStatStorage');
     var avgEl = document.getElementById('scStatAverage');
     var usageEl = document.getElementById('scStatUsage');
-    var total = stateFiles.length;
-    var used = stateFiles.reduce(function (sum, f) {
-      return sum + (Number(f.size_bytes) || 0);
-    }, 0);
-    var avg = total ? Math.round(used / total) : 0;
+    var progressBar = document.getElementById('scStorageProgressBar');
+    var progressText = document.getElementById('scStorageProgressText');
+    var total = stateStats ? Number(stateStats.total_files) || 0 : 0;
+    var used = stateStats ? Number(stateStats.used_bytes) || 0 : 0;
+    var avg = stateStats ? Number(stateStats.average_bytes) || 0 : 0;
+    var limit = stateStats ? Number(stateStats.limit_bytes) || TENANT_STORAGE_LIMIT_BYTES : TENANT_STORAGE_LIMIT_BYTES;
+    var percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
     if (filesEl) filesEl.textContent = String(total);
     if (storageEl) storageEl.textContent = formatSize(used);
     if (avgEl) avgEl.textContent = formatSize(avg);
@@ -169,9 +172,11 @@
         'You are using ' +
         formatSize(used) +
         ' of ' +
-        formatSize(TENANT_STORAGE_LIMIT_BYTES) +
+        formatSize(limit) +
         ' available storage.';
     }
+    if (progressBar) progressBar.style.width = percent.toFixed(1) + '%';
+    if (progressText) progressText.textContent = percent.toFixed(1) + '%';
   }
 
   function loadFiles() {
@@ -194,7 +199,6 @@
           return;
         }
         stateFiles = Array.isArray(out.data.files) ? out.data.files : [];
-        renderStats();
         renderList();
       })
       .catch(function () {
@@ -203,6 +207,26 @@
       .finally(function () {
         setLoading(false);
       });
+  }
+
+  function loadStats() {
+    var headers = getHeaders();
+    if (!headers) return;
+    fetch('/api/site-cloud/stats', {
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success || !out.data.stats) return;
+        stateStats = out.data.stats;
+        renderStats();
+      })
+      .catch(function () {});
   }
 
   function uploadSelected(file) {
@@ -230,6 +254,7 @@
           showError((out.data && out.data.message) || 'Upload failed.');
           return;
         }
+        loadStats();
         loadFiles();
       })
       .catch(function () {
@@ -289,6 +314,7 @@
           showError((out.data && out.data.message) || 'Delete failed.');
           return;
         }
+        loadStats();
         loadFiles();
       })
       .catch(function () {
@@ -423,6 +449,7 @@
     if (viewerClose) viewerClose.addEventListener('click', closeViewer);
     if (viewerBackdrop) viewerBackdrop.addEventListener('click', closeViewer);
 
+    loadStats();
     loadFiles();
   }
 

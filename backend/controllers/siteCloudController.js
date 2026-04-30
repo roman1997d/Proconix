@@ -108,6 +108,30 @@ function listFiles(req, res) {
   return res.status(200).json({ success: true, files: current.map(mapItem) });
 }
 
+function getStats(req, res) {
+  ensureCloudDir(req);
+  const activeItems = readIndex(req).filter((it) => {
+    if (!it || !it.stored_name) return false;
+    const full = path.join(req.siteCloudCompanyDir, it.stored_name);
+    return fs.existsSync(full);
+  });
+  const totalFiles = activeItems.length;
+  const usedBytes = activeItems.reduce((sum, it) => sum + (Number(it.size_bytes) || 0), 0);
+  const averageBytes = totalFiles ? Math.round(usedBytes / totalFiles) : 0;
+  return res.status(200).json({
+    success: true,
+    stats: {
+      total_files: totalFiles,
+      used_bytes: usedBytes,
+      average_bytes: averageBytes,
+      limit_bytes: MAX_TOTAL_BYTES_PER_TENANT,
+      usage_percent: MAX_TOTAL_BYTES_PER_TENANT
+        ? Math.min(100, (usedBytes / MAX_TOTAL_BYTES_PER_TENANT) * 100)
+        : 0,
+    },
+  });
+}
+
 function uploadFile(req, res) {
   ensureCloudDir(req);
   if (!req.file) return res.status(400).json({ success: false, message: 'File is required.' });
@@ -245,6 +269,7 @@ function removeFile(req, res) {
 module.exports = {
   ensureCloudDir,
   listFiles,
+  getStats,
   uploadFile,
   downloadFile,
   viewFile,
