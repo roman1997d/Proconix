@@ -11,7 +11,6 @@
   var activeFolder = 'files';
   var emailShareTarget = null;
   var activeNavMode = 'cloud';
-  var activeSubfolder = '';
 
   function getSession() {
     try {
@@ -92,29 +91,45 @@
     return { label: 'Files', icon: 'bi-folder2-open', cls: 'sc-folder-badge--files' };
   }
 
-  function renderExtraFolders() {
-    var wrap = document.getElementById('scExtraFoldersList');
+  function renderFolderCards() {
+    var wrap = document.getElementById('scFolderCards');
     if (!wrap) return;
-    var allChip =
-      '<button type="button" class="sc-extra-folder-chip ' +
-      (!activeSubfolder ? 'is-active' : '') +
-      '" data-subfolder="">All</button>';
-    var chips = stateExtraFolders
-      .map(function (name) {
-        var active = String(name) === String(activeSubfolder) ? 'is-active' : '';
+    var defaults = [
+      { key: 'files', title: 'Files', desc: 'Store RAMS, handover packs, and key project documents.' },
+      { key: 'drawing', title: 'Drawing', desc: 'Keep technical drawings and revisions in one place.' },
+      { key: 'images', title: 'Images', desc: 'Collect site photos, progress captures, and visual references.' },
+    ];
+    var html = defaults
+      .map(function (f) {
         return (
-          '<button type="button" class="sc-extra-folder-chip ' +
-          active +
-          '" data-subfolder="' +
-          escapeHtml(name) +
+          '<article class="sc-cloud-card sc-folder-card ' +
+          (activeFolder === f.key ? 'is-highlight' : '') +
+          '" data-folder="' +
+          f.key +
           '">' +
-          '<i class="bi bi-folder2"></i> ' +
-          escapeHtml(name) +
-          '</button>'
+          '<p class="sc-cloud-card-meta">Folder</p><h3>' +
+          escapeHtml(f.title) +
+          '</h3><p>' +
+          escapeHtml(f.desc) +
+          '</p></article>'
         );
       })
       .join('');
-    wrap.innerHTML = allChip + chips;
+    html += stateExtraFolders
+      .map(function (name) {
+        return (
+          '<article class="sc-cloud-card sc-folder-card sc-folder-card--extra ' +
+          (activeFolder === name ? 'is-highlight' : '') +
+          '" data-folder="' +
+          escapeHtml(name) +
+          '">' +
+          '<p class="sc-cloud-card-meta">Extra folder</p><h3>' +
+          escapeHtml(name) +
+          '</h3><p>Independent cloud folder. Upload files and images directly here.</p></article>'
+        );
+      })
+      .join('');
+    wrap.innerHTML = html;
   }
 
   function previewType(fileName) {
@@ -256,7 +271,6 @@
           escapeHtml(f.original_name || f.stored_name) +
           '</button><div class="sc-muted">' +
           escapeHtml(f.mime_type || 'file') +
-          (f.subfolder ? ' • Folder: ' + escapeHtml(f.subfolder) : '') +
           '</div></div>' +
           '<div><span class="sc-folder-badge ' +
           fm.cls +
@@ -450,7 +464,6 @@
     showError('');
     setLoading(true, 'Loading files...');
     var url = '/api/site-cloud/files?folder=' + encodeURIComponent(activeFolder);
-    if (activeSubfolder) url += '&subfolder=' + encodeURIComponent(activeSubfolder);
     fetch(url, {
       headers: headers,
       credentials: 'same-origin',
@@ -491,8 +504,7 @@
       .then(function (out) {
         if (!out.ok || !out.data || !out.data.success) return;
         stateExtraFolders = Array.isArray(out.data.folders) ? out.data.folders : [];
-        if (activeSubfolder && stateExtraFolders.indexOf(activeSubfolder) === -1) activeSubfolder = '';
-        renderExtraFolders();
+        renderFolderCards();
       })
       .catch(function () {});
   }
@@ -520,7 +532,7 @@
           showError((out.data && out.data.message) || 'Could not create folder.');
           return;
         }
-        activeSubfolder = String((out.data && out.data.folder) || clean);
+        activeFolder = String((out.data && out.data.folder) || clean);
         loadExtraFolders();
         if (activeNavMode === 'cloud') loadFiles();
       })
@@ -686,11 +698,11 @@
     var headers = getHeaders();
     if (!headers) return showError('Please open this page from Manager Dashboard.');
     if (!file) return;
-    var uploadFolder = isImageFile(file) ? 'images' : activeFolder;
+    var uploadFolder = activeFolder;
+    if (activeFolder === 'files' && isImageFile(file)) uploadFolder = 'images';
     var fd = new FormData();
     fd.append('file', file);
     fd.append('folder', uploadFolder);
-    if (activeSubfolder) fd.append('subfolder', activeSubfolder);
     showError('');
     setLoading(true, 'Scanning file and uploading...');
     fetch('/api/site-cloud/upload', {
@@ -908,7 +920,6 @@
     var quickSearch = document.getElementById('scQuickSearch');
     var list = document.getElementById('scList');
     var folderCards = document.getElementById('scFolderCards');
-    var extraFolders = document.getElementById('scExtraFoldersList');
     var createFolderBtn = document.getElementById('scCreateFolderBtn');
     var sideNav = document.querySelector('.sc-nav');
     var viewerClose = document.getElementById('scViewerClose');
@@ -979,21 +990,10 @@
       folderCards.addEventListener('click', function (e) {
         var card = e.target.closest('.sc-folder-card');
         if (!card) return;
-        var folder = (card.getAttribute('data-folder') || 'files').toLowerCase();
+        var folder = String(card.getAttribute('data-folder') || 'files');
         activeFolder = folder;
-        folderCards.querySelectorAll('.sc-folder-card').forEach(function (el) {
-          el.classList.toggle('is-highlight', el === card);
-        });
+        renderFolderCards();
         loadFiles();
-      });
-    }
-    if (extraFolders) {
-      extraFolders.addEventListener('click', function (e) {
-        var chip = e.target.closest('.sc-extra-folder-chip');
-        if (!chip) return;
-        activeSubfolder = String(chip.getAttribute('data-subfolder') || '');
-        renderExtraFolders();
-        if (activeNavMode === 'cloud') loadFiles();
       });
     }
     if (createFolderBtn) createFolderBtn.addEventListener('click', createExtraFolder);

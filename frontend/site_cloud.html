@@ -42,6 +42,9 @@
         </div>
         <div class="sc-actions">
           <input type="file" id="scFileInput" hidden>
+          <button type="button" class="sc-btn-chip sc-view" id="scCreateFolderBtn">
+            <i class="bi bi-folder-plus"></i> Create new folder
+          </button>
           <button type="button" class="sc-btn sc-btn-primary" id="scUploadBtn">
             <i class="bi bi-cloud-arrow-up-fill" aria-hidden="true"></i> Upload new file
           </button>
@@ -72,14 +75,6 @@
         </article>
       </section>
       <p class="sc-folder-hint"><i class="bi bi-info-circle"></i> If you intend to upload a drawing, please click the <strong>Drawing</strong> folder first.</p>
-      <section class="sc-extra-folders">
-        <div class="sc-extra-folders-head">
-          <h4><i class="bi bi-folder-plus"></i> Extra folders</h4>
-          <button type="button" class="sc-btn-chip sc-view" id="scCreateFolderBtn">Create new folder</button>
-        </div>
-        <div id="scExtraFoldersList" class="sc-extra-folders-list"></div>
-      </section>
-
       <section class="sc-toolbar">
         <div class="sc-search-wrap">
           <i class="bi bi-search"></i>

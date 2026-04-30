@@ -128,6 +128,14 @@ function writeFolderIndex(req, names) {
   fs.writeFileSync(p, JSON.stringify(unique, null, 2), 'utf8');
 }
 
+function resolveFolder(req, value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (ALLOWED_FOLDERS.has(raw)) return raw;
+  const extras = readFolderIndex(req);
+  const found = extras.find((n) => String(n || '').toLowerCase() === raw);
+  return found || 'files';
+}
+
 function readGlobalShareIndex() {
   try {
     if (!fs.existsSync(GLOBAL_SHARE_INDEX_PATH)) return [];
@@ -280,8 +288,7 @@ function ensureCloudDir(req) {
 function mapItem(item) {
   return {
     id: item.id,
-    folder: normalizeFolder(item.folder),
-    subfolder: normalizeSubfolderName(item.subfolder),
+    folder: item.folder,
     stored_name: item.stored_name,
     original_name: item.original_name,
     mime_type: item.mime_type || 'application/octet-stream',
@@ -308,14 +315,12 @@ async function getTenantStorageLimitBytes(req) {
 function listFiles(req, res) {
   ensureCloudDir(req);
   const q = String(req.query.q || '').trim().toLowerCase();
-  const folder = normalizeFolder(req.query.folder);
-  const subfolder = normalizeSubfolderName(req.query.subfolder);
+  const folder = resolveFolder(req, req.query.folder);
   const current = readIndex(req).filter((it) => {
     if (!it || !it.stored_name) return false;
     const full = path.join(req.siteCloudCompanyDir, it.stored_name);
     if (!fs.existsSync(full)) return false;
-    if (normalizeFolder(it.folder) !== folder) return false;
-    if (subfolder && normalizeSubfolderName(it.subfolder) !== subfolder) return false;
+    if (String(it.folder || 'files') !== folder) return false;
     if (!q) return true;
     const hay = `${it.original_name || ''} ${it.stored_name || ''}`.toLowerCase();
     return hay.includes(q);
@@ -384,8 +389,7 @@ async function uploadFile(req, res) {
   }
   const entry = {
     id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    folder: normalizeFolder(req.body && req.body.folder),
-    subfolder: normalizeSubfolderName(req.body && req.body.subfolder),
+    folder: resolveFolder(req, req.body && req.body.folder),
     stored_name: req.file.filename,
     original_name: req.file.originalname || req.file.filename,
     mime_type: req.file.mimetype || 'application/octet-stream',
@@ -394,10 +398,6 @@ async function uploadFile(req, res) {
     uploaded_by_manager_id: req.manager.id,
   };
   items.push(entry);
-  if (entry.subfolder) {
-    const folders = readFolderIndex(req);
-    if (!folders.includes(entry.subfolder)) writeFolderIndex(req, folders.concat([entry.subfolder]));
-  }
   writeIndex(req, items);
   return res.status(201).json({ success: true, file: mapItem(entry) });
 }
@@ -496,8 +496,7 @@ function removeFile(req, res) {
     original_name: found.original_name || stored,
     mime_type: found.mime_type || 'application/octet-stream',
     size_bytes: found.size_bytes || 0,
-    folder: normalizeFolder(found.folder),
-    subfolder: normalizeSubfolderName(found.subfolder),
+    folder: found.folder || 'files',
     deleted_at: new Date().toISOString(),
   });
   writeTrashIndex(req, trashItems);
@@ -530,8 +529,7 @@ function listDeletedFiles(req, res) {
       original_name: it.original_name,
       mime_type: it.mime_type || 'application/octet-stream',
       size_bytes: it.size_bytes || 0,
-      folder: normalizeFolder(it.folder),
-      subfolder: normalizeSubfolderName(it.subfolder),
+      folder: it.folder || 'files',
       deleted_at: it.deleted_at,
       delete_after_at: new Date(new Date(it.deleted_at || Date.now()).getTime() + DELETED_RETENTION_MS).toISOString(),
     }));
@@ -567,8 +565,7 @@ function restoreDeletedFile(req, res) {
   const items = readIndex(req);
   items.push({
     id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    folder: normalizeFolder(item.folder),
-    subfolder: normalizeSubfolderName(item.subfolder),
+    folder: resolveFolder(req, item.folder),
     stored_name: restoredStored,
     original_name: item.original_name || restoredStored,
     mime_type: item.mime_type || 'application/octet-stream',
@@ -603,8 +600,12 @@ function permanentlyDeleteFile(req, res) {
 
 function listExtraFolders(req, res) {
   ensureCloudDir(req);
-  const filesFolders = readIndex(req).map((it) => normalizeSubfolderName(it && it.subfolder)).filter(Boolean);
-  const deletedFolders = readTrashIndex(req).map((it) => normalizeSubfolderName(it && it.subfolder)).filter(Boolean);
+  const filesFolders = readIndex(req)
+    .map((it) => String((it && it.folder) || '').trim())
+    .filter((n) => n && !ALLOWED_FOLDERS.has(String(n).toLowerCase()));
+  const deletedFolders = readTrashIndex(req)
+    .map((it) => String((it && it.folder) || '').trim())
+    .filter((n) => n && !ALLOWED_FOLDERS.has(String(n).toLowerCase()));
   const all = Array.from(new Set(readFolderIndex(req).concat(filesFolders, deletedFolders))).sort((a, b) => a.localeCompare(b));
   writeFolderIndex(req, all);
   return res.status(200).json({ success: true, folders: all });
@@ -618,6 +619,9 @@ function createExtraFolder(req, res) {
       success: false,
       message: 'Folder name is required (letters, numbers, space, - or _, max 32 chars).',
     });
+  }
+  if (ALLOWED_FOLDERS.has(name.toLowerCase())) {
+    return res.status(400).json({ success: false, message: 'This folder name is reserved.' });
   }
   const all = readFolderIndex(req);
   const exists = all.some((n) => n.toLowerCase() === name.toLowerCase());

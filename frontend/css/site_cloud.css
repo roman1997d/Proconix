@@ -306,52 +306,8 @@ body.sc-module {
   color: #4f46e5;
 }
 
-.sc-extra-folders {
-  margin: -0.1rem 0 0.8rem;
-  background: #fff;
-  border: 1px solid #e7ebf8;
-  border-radius: 12px;
-  padding: 0.55rem 0.65rem;
-}
-
-.sc-extra-folders-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.45rem;
-}
-
-.sc-extra-folders-head h4 {
-  margin: 0;
-  font-size: 0.8rem;
-  color: #4a567b;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.sc-extra-folders-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.sc-extra-folder-chip {
-  border: 1px solid #dfe4f5;
-  background: #f9faff;
-  color: #596482;
-  border-radius: 999px;
-  padding: 0.22rem 0.56rem;
-  font-size: 0.72rem;
-  cursor: pointer;
-}
-
-.sc-extra-folder-chip.is-active {
-  color: #4f46e5;
-  background: rgba(99, 102, 241, 0.12);
-  border-color: rgba(99, 102, 241, 0.25);
-  font-weight: 600;
+.sc-folder-card--extra .sc-cloud-card-meta {
+  color: #7e87a1;
 }
 
 .sc-search-wrap {
