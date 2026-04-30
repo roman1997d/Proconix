@@ -161,6 +161,30 @@ function sanitizeStoredName(raw) {
   return s;
 }
 
+function previewMetaForFile(fileName) {
+  const ext = path.extname(String(fileName || '')).toLowerCase();
+  const map = {
+    '.pdf': 'application/pdf',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+    '.svg': 'image/svg+xml',
+    '.txt': 'text/plain; charset=utf-8',
+    '.csv': 'text/csv; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.xml': 'application/xml; charset=utf-8',
+    '.html': 'text/html; charset=utf-8',
+    '.htm': 'text/html; charset=utf-8',
+    '.mp4': 'video/mp4',
+    '.mov': 'video/quicktime',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+  };
+  return map[ext] || null;
+}
+
 function downloadFile(req, res) {
   ensureCloudDir(req);
   const stored = sanitizeStoredName(decodeURIComponent(req.params.name || ''));
@@ -173,6 +197,29 @@ function downloadFile(req, res) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
   return res.download(full, found.original_name || stored);
+}
+
+function viewFile(req, res) {
+  ensureCloudDir(req);
+  const stored = sanitizeStoredName(decodeURIComponent(req.params.name || ''));
+  if (!stored) return res.status(400).json({ success: false, message: 'Invalid file name.' });
+  const items = readIndex(req);
+  const found = items.find((it) => it.stored_name === stored);
+  if (!found) return res.status(404).json({ success: false, message: 'File not found.' });
+  const full = path.join(req.siteCloudCompanyDir, stored);
+  if (!fs.existsSync(full)) return res.status(404).json({ success: false, message: 'File missing on disk.' });
+  const contentType = previewMetaForFile(found.original_name || stored);
+  if (!contentType) {
+    return res.status(415).json({
+      success: false,
+      message: 'Preview is not available for this file type. Use Download instead.',
+    });
+  }
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Disposition', `inline; filename="${String(found.original_name || stored).replace(/"/g, '')}"`);
+  return res.sendFile(full);
 }
 
 function removeFile(req, res) {
@@ -200,6 +247,7 @@ module.exports = {
   listFiles,
   uploadFile,
   downloadFile,
+  viewFile,
   removeFile,
 };
 

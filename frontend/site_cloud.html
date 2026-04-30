@@ -114,6 +114,17 @@
     </aside>
   </div>
 
+  <div id="scViewer" class="sc-viewer sc-hidden" role="dialog" aria-modal="true" aria-label="Document viewer">
+    <div class="sc-viewer-backdrop" id="scViewerBackdrop"></div>
+    <div class="sc-viewer-card">
+      <div class="sc-viewer-head">
+        <h3 id="scViewerTitle">Preview</h3>
+        <button type="button" id="scViewerClose" class="sc-viewer-close" aria-label="Close viewer">&times;</button>
+      </div>
+      <div id="scViewerBody" class="sc-viewer-body"></div>
+    </div>
+  </div>
+
   <script src="js/site_cloud.js"></script>
 </body>
 </html>

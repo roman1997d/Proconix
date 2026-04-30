@@ -27,6 +27,7 @@ router.post(
   handleUploadError,
   ctrl.uploadFile
 );
+router.get('/files/:name/view', requireManagerAuth, resolveCompanyDocsDir, ctrl.viewFile);
 router.get('/files/:name/download', requireManagerAuth, resolveCompanyDocsDir, ctrl.downloadFile);
 router.delete('/files/:name', requireManagerAuth, resolveCompanyDocsDir, ctrl.removeFile);
 

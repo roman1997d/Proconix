@@ -78,6 +78,16 @@
     return { label: 'Files', icon: 'bi-folder2-open', cls: 'sc-folder-badge--files' };
   }
 
+  function previewType(fileName) {
+    var ext = (String(fileName || '').split('.').pop() || '').toLowerCase();
+    if (ext === 'pdf') return 'pdf';
+    if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].indexOf(ext) >= 0) return 'image';
+    if (['mp4', 'mov'].indexOf(ext) >= 0) return 'video';
+    if (['mp3', 'wav'].indexOf(ext) >= 0) return 'audio';
+    if (['txt', 'csv', 'json', 'xml', 'html', 'htm'].indexOf(ext) >= 0) return 'text';
+    return 'none';
+  }
+
   function renderList() {
     var list = document.getElementById('scList');
     var count = document.getElementById('scCount');
@@ -119,6 +129,11 @@
           escapeHtml(formatSize(f.size_bytes)) +
           '</div>' +
           '<div class="sc-actions-row">' +
+          '<button type="button" class="sc-btn-chip sc-view sc-preview" data-name="' +
+          escapeHtml(f.stored_name) +
+          '" data-original="' +
+          escapeHtml(f.original_name || f.stored_name) +
+          '">View</button>' +
           '<button type="button" class="sc-btn-chip sc-download" data-name="' +
           escapeHtml(f.stored_name) +
           '">Download</button>' +
@@ -277,6 +292,37 @@
       });
   }
 
+  function openViewer(storedName, originalName) {
+    var type = previewType(originalName || storedName);
+    if (type === 'none') {
+      showError('In-app preview is not available for this file type. Use Download.');
+      return;
+    }
+    var viewer = document.getElementById('scViewer');
+    var body = document.getElementById('scViewerBody');
+    var title = document.getElementById('scViewerTitle');
+    if (!viewer || !body || !title) return;
+    var src = '/api/site-cloud/files/' + encodeURIComponent(storedName) + '/view';
+    title.textContent = 'Preview - ' + (originalName || storedName);
+    if (type === 'image') {
+      body.innerHTML = '<img alt="Preview image" src="' + src + '">';
+    } else if (type === 'video') {
+      body.innerHTML = '<video controls preload="metadata"><source src="' + src + '"></video>';
+    } else if (type === 'audio') {
+      body.innerHTML = '<audio controls preload="metadata"><source src="' + src + '"></audio>';
+    } else {
+      body.innerHTML = '<iframe title="Document preview" src="' + src + '"></iframe>';
+    }
+    viewer.classList.remove('sc-hidden');
+  }
+
+  function closeViewer() {
+    var viewer = document.getElementById('scViewer');
+    var body = document.getElementById('scViewerBody');
+    if (viewer) viewer.classList.add('sc-hidden');
+    if (body) body.innerHTML = '';
+  }
+
   function init() {
     var uploadBtn = document.getElementById('scUploadBtn');
     var fileInput = document.getElementById('scFileInput');
@@ -284,6 +330,8 @@
     var quickSearch = document.getElementById('scQuickSearch');
     var list = document.getElementById('scList');
     var folderCards = document.getElementById('scFolderCards');
+    var viewerClose = document.getElementById('scViewerClose');
+    var viewerBackdrop = document.getElementById('scViewerBackdrop');
 
     if (uploadBtn && fileInput) {
       uploadBtn.addEventListener('click', function () {
@@ -311,6 +359,8 @@
 
     if (list) {
       list.addEventListener('click', function (e) {
+        var p = e.target.closest('.sc-preview');
+        if (p) return openViewer(p.getAttribute('data-name'), p.getAttribute('data-original'));
         var d = e.target.closest('.sc-download');
         if (d) return downloadFile(d.getAttribute('data-name'));
         var x = e.target.closest('.sc-delete');
@@ -330,6 +380,9 @@
         loadFiles();
       });
     }
+
+    if (viewerClose) viewerClose.addEventListener('click', closeViewer);
+    if (viewerBackdrop) viewerBackdrop.addEventListener('click', closeViewer);
 
     loadFiles();
   }
