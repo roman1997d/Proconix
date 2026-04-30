@@ -87,6 +87,14 @@
     });
   }
 
+  function recipientLabel(value) {
+    if (!value) return '';
+    var v = String(value).toLowerCase();
+    if (v === 'operatives') return 'Operatives';
+    if (v === 'client') return 'Client';
+    return 'Other';
+  }
+
   function countByStatus(docs, status) {
     return docs.filter(function (d) {
       return d.status === status;
@@ -276,6 +284,9 @@
               '</h3>' +
               '<p class="ds-row-meta">' +
               (d.document_type ? escapeHtml(d.document_type) + ' · ' : '') +
+              (recipientLabel(d.recipient_group || d.recipient_type)
+                ? 'Recipient: ' + escapeHtml(recipientLabel(d.recipient_group || d.recipient_type)) + ' · '
+                : '') +
               'ID #' +
               d.id +
               '</p>' +
@@ -432,9 +443,11 @@
     var title = document.getElementById('dsUpTitle');
     var file = document.getElementById('dsUpFile');
     var desc = document.getElementById('dsUpDesc');
+    var recipient = document.getElementById('dsUpRecipientGroup');
     if (title) title.value = '';
     if (file) file.value = '';
     if (desc) desc.value = '';
+    if (recipient) recipient.value = 'operatives';
   }
 
   function closeModal() {
@@ -578,9 +591,11 @@
         var desc = document.getElementById('dsUpDesc');
         var typ = document.getElementById('dsUpType');
         var proj = document.getElementById('dsUpProject');
+        var recipient = document.getElementById('dsUpRecipientGroup');
         if (desc && desc.value.trim()) fd.append('description', desc.value.trim());
         if (typ && typ.value) fd.append('document_type', typ.value);
         if (proj && proj.value) fd.append('project_id', proj.value);
+        if (recipient && recipient.value) fd.append('recipient_group', recipient.value);
 
         var submitBtn = document.getElementById('dsModalSubmit');
         if (submitBtn) submitBtn.disabled = true;
