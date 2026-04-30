@@ -15,6 +15,8 @@ function handleUploadError(err, req, res, next) {
 }
 
 router.get('/files', requireManagerAuth, resolveCompanyDocsDir, ctrl.listFiles);
+router.get('/folders', requireManagerAuth, resolveCompanyDocsDir, ctrl.listExtraFolders);
+router.post('/folders', requireManagerAuth, resolveCompanyDocsDir, ctrl.createExtraFolder);
 router.get('/stats', requireManagerAuth, resolveCompanyDocsDir, ctrl.getStats);
 router.post(
   '/upload',

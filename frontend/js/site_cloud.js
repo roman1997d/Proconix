@@ -6,10 +6,12 @@
   var stateStats = null;
   var stateSharedLinks = [];
   var stateDeletedFiles = [];
+  var stateExtraFolders = [];
   var TENANT_STORAGE_LIMIT_BYTES = 500 * 1024 * 1024;
   var activeFolder = 'files';
   var emailShareTarget = null;
   var activeNavMode = 'cloud';
+  var activeSubfolder = '';
 
   function getSession() {
     try {
@@ -88,6 +90,31 @@
     if (f === 'drawing') return { label: 'Drawing', icon: 'bi-vector-pen', cls: 'sc-folder-badge--drawing' };
     if (f === 'images') return { label: 'Images', icon: 'bi-image', cls: 'sc-folder-badge--images' };
     return { label: 'Files', icon: 'bi-folder2-open', cls: 'sc-folder-badge--files' };
+  }
+
+  function renderExtraFolders() {
+    var wrap = document.getElementById('scExtraFoldersList');
+    if (!wrap) return;
+    var allChip =
+      '<button type="button" class="sc-extra-folder-chip ' +
+      (!activeSubfolder ? 'is-active' : '') +
+      '" data-subfolder="">All</button>';
+    var chips = stateExtraFolders
+      .map(function (name) {
+        var active = String(name) === String(activeSubfolder) ? 'is-active' : '';
+        return (
+          '<button type="button" class="sc-extra-folder-chip ' +
+          active +
+          '" data-subfolder="' +
+          escapeHtml(name) +
+          '">' +
+          '<i class="bi bi-folder2"></i> ' +
+          escapeHtml(name) +
+          '</button>'
+        );
+      })
+      .join('');
+    wrap.innerHTML = allChip + chips;
   }
 
   function previewType(fileName) {
@@ -229,6 +256,7 @@
           escapeHtml(f.original_name || f.stored_name) +
           '</button><div class="sc-muted">' +
           escapeHtml(f.mime_type || 'file') +
+          (f.subfolder ? ' • Folder: ' + escapeHtml(f.subfolder) : '') +
           '</div></div>' +
           '<div><span class="sc-folder-badge ' +
           fm.cls +
@@ -421,7 +449,9 @@
     if (!headers) return showError('Please open this page from Manager Dashboard.');
     showError('');
     setLoading(true, 'Loading files...');
-    fetch('/api/site-cloud/files?folder=' + encodeURIComponent(activeFolder), {
+    var url = '/api/site-cloud/files?folder=' + encodeURIComponent(activeFolder);
+    if (activeSubfolder) url += '&subfolder=' + encodeURIComponent(activeSubfolder);
+    fetch(url, {
       headers: headers,
       credentials: 'same-origin',
     })
@@ -443,6 +473,59 @@
       })
       .finally(function () {
         setLoading(false);
+      });
+  }
+
+  function loadExtraFolders() {
+    var headers = getHeaders();
+    if (!headers) return;
+    fetch('/api/site-cloud/folders', {
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) return;
+        stateExtraFolders = Array.isArray(out.data.folders) ? out.data.folders : [];
+        if (activeSubfolder && stateExtraFolders.indexOf(activeSubfolder) === -1) activeSubfolder = '';
+        renderExtraFolders();
+      })
+      .catch(function () {});
+  }
+
+  function createExtraFolder() {
+    var headers = getHeaders();
+    if (!headers) return;
+    var name = window.prompt('New folder name (max 32 characters):', '');
+    if (name == null) return;
+    var clean = String(name || '').trim();
+    if (!clean) return;
+    fetch('/api/site-cloud/folders', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
+      credentials: 'same-origin',
+      body: JSON.stringify({ name: clean }),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          showError((out.data && out.data.message) || 'Could not create folder.');
+          return;
+        }
+        activeSubfolder = String((out.data && out.data.folder) || clean);
+        loadExtraFolders();
+        if (activeNavMode === 'cloud') loadFiles();
+      })
+      .catch(function () {
+        showError('Network error while creating folder.');
       });
   }
 
@@ -607,6 +690,7 @@
     var fd = new FormData();
     fd.append('file', file);
     fd.append('folder', uploadFolder);
+    if (activeSubfolder) fd.append('subfolder', activeSubfolder);
     showError('');
     setLoading(true, 'Scanning file and uploading...');
     fetch('/api/site-cloud/upload', {
@@ -626,6 +710,7 @@
           return;
         }
         loadStats();
+        loadExtraFolders();
         loadFiles();
       })
       .catch(function () {
@@ -823,6 +908,8 @@
     var quickSearch = document.getElementById('scQuickSearch');
     var list = document.getElementById('scList');
     var folderCards = document.getElementById('scFolderCards');
+    var extraFolders = document.getElementById('scExtraFoldersList');
+    var createFolderBtn = document.getElementById('scCreateFolderBtn');
     var sideNav = document.querySelector('.sc-nav');
     var viewerClose = document.getElementById('scViewerClose');
     var viewerBackdrop = document.getElementById('scViewerBackdrop');
@@ -900,6 +987,16 @@
         loadFiles();
       });
     }
+    if (extraFolders) {
+      extraFolders.addEventListener('click', function (e) {
+        var chip = e.target.closest('.sc-extra-folder-chip');
+        if (!chip) return;
+        activeSubfolder = String(chip.getAttribute('data-subfolder') || '');
+        renderExtraFolders();
+        if (activeNavMode === 'cloud') loadFiles();
+      });
+    }
+    if (createFolderBtn) createFolderBtn.addEventListener('click', createExtraFolder);
     if (sideNav) {
       sideNav.addEventListener('click', function (e) {
         var link = e.target.closest('.sc-nav-item[data-nav-mode]');
@@ -932,6 +1029,7 @@
     if (shareCopy) shareCopy.addEventListener('click', copyShareInput);
 
     loadStats();
+    loadExtraFolders();
     loadFiles();
   }
 

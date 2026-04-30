@@ -97,6 +97,37 @@ function writeTrashIndex(req, items) {
   fs.writeFileSync(p, JSON.stringify(items, null, 2), 'utf8');
 }
 
+function folderIndexPath(req) {
+  return path.join(req.digitalDocsCompanyDir, 'cloud_folders_index.json');
+}
+
+function normalizeSubfolderName(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const cleaned = raw.replace(/\s+/g, ' ').slice(0, 32);
+  if (!/^[a-zA-Z0-9 _-]+$/.test(cleaned)) return '';
+  return cleaned;
+}
+
+function readFolderIndex(req) {
+  try {
+    const p = folderIndexPath(req);
+    if (!fs.existsSync(p)) return [];
+    const raw = fs.readFileSync(p, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((n) => normalizeSubfolderName(n)).filter(Boolean);
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeFolderIndex(req, names) {
+  const p = folderIndexPath(req);
+  const unique = Array.from(new Set((Array.isArray(names) ? names : []).map((n) => normalizeSubfolderName(n)).filter(Boolean)));
+  fs.writeFileSync(p, JSON.stringify(unique, null, 2), 'utf8');
+}
+
 function readGlobalShareIndex() {
   try {
     if (!fs.existsSync(GLOBAL_SHARE_INDEX_PATH)) return [];
@@ -250,6 +281,7 @@ function mapItem(item) {
   return {
     id: item.id,
     folder: normalizeFolder(item.folder),
+    subfolder: normalizeSubfolderName(item.subfolder),
     stored_name: item.stored_name,
     original_name: item.original_name,
     mime_type: item.mime_type || 'application/octet-stream',
@@ -277,11 +309,13 @@ function listFiles(req, res) {
   ensureCloudDir(req);
   const q = String(req.query.q || '').trim().toLowerCase();
   const folder = normalizeFolder(req.query.folder);
+  const subfolder = normalizeSubfolderName(req.query.subfolder);
   const current = readIndex(req).filter((it) => {
     if (!it || !it.stored_name) return false;
     const full = path.join(req.siteCloudCompanyDir, it.stored_name);
     if (!fs.existsSync(full)) return false;
     if (normalizeFolder(it.folder) !== folder) return false;
+    if (subfolder && normalizeSubfolderName(it.subfolder) !== subfolder) return false;
     if (!q) return true;
     const hay = `${it.original_name || ''} ${it.stored_name || ''}`.toLowerCase();
     return hay.includes(q);
@@ -351,6 +385,7 @@ async function uploadFile(req, res) {
   const entry = {
     id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     folder: normalizeFolder(req.body && req.body.folder),
+    subfolder: normalizeSubfolderName(req.body && req.body.subfolder),
     stored_name: req.file.filename,
     original_name: req.file.originalname || req.file.filename,
     mime_type: req.file.mimetype || 'application/octet-stream',
@@ -359,6 +394,10 @@ async function uploadFile(req, res) {
     uploaded_by_manager_id: req.manager.id,
   };
   items.push(entry);
+  if (entry.subfolder) {
+    const folders = readFolderIndex(req);
+    if (!folders.includes(entry.subfolder)) writeFolderIndex(req, folders.concat([entry.subfolder]));
+  }
   writeIndex(req, items);
   return res.status(201).json({ success: true, file: mapItem(entry) });
 }
@@ -458,6 +497,7 @@ function removeFile(req, res) {
     mime_type: found.mime_type || 'application/octet-stream',
     size_bytes: found.size_bytes || 0,
     folder: normalizeFolder(found.folder),
+    subfolder: normalizeSubfolderName(found.subfolder),
     deleted_at: new Date().toISOString(),
   });
   writeTrashIndex(req, trashItems);
@@ -491,6 +531,7 @@ function listDeletedFiles(req, res) {
       mime_type: it.mime_type || 'application/octet-stream',
       size_bytes: it.size_bytes || 0,
       folder: normalizeFolder(it.folder),
+      subfolder: normalizeSubfolderName(it.subfolder),
       deleted_at: it.deleted_at,
       delete_after_at: new Date(new Date(it.deleted_at || Date.now()).getTime() + DELETED_RETENTION_MS).toISOString(),
     }));
@@ -527,6 +568,7 @@ function restoreDeletedFile(req, res) {
   items.push({
     id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     folder: normalizeFolder(item.folder),
+    subfolder: normalizeSubfolderName(item.subfolder),
     stored_name: restoredStored,
     original_name: item.original_name || restoredStored,
     mime_type: item.mime_type || 'application/octet-stream',
@@ -557,6 +599,31 @@ function permanentlyDeleteFile(req, res) {
   trashItems.splice(idx, 1);
   writeTrashIndex(req, trashItems);
   return res.status(200).json({ success: true, message: 'File permanently deleted.' });
+}
+
+function listExtraFolders(req, res) {
+  ensureCloudDir(req);
+  const filesFolders = readIndex(req).map((it) => normalizeSubfolderName(it && it.subfolder)).filter(Boolean);
+  const deletedFolders = readTrashIndex(req).map((it) => normalizeSubfolderName(it && it.subfolder)).filter(Boolean);
+  const all = Array.from(new Set(readFolderIndex(req).concat(filesFolders, deletedFolders))).sort((a, b) => a.localeCompare(b));
+  writeFolderIndex(req, all);
+  return res.status(200).json({ success: true, folders: all });
+}
+
+function createExtraFolder(req, res) {
+  ensureCloudDir(req);
+  const name = normalizeSubfolderName(req.body && req.body.name);
+  if (!name) {
+    return res.status(400).json({
+      success: false,
+      message: 'Folder name is required (letters, numbers, space, - or _, max 32 chars).',
+    });
+  }
+  const all = readFolderIndex(req);
+  const exists = all.some((n) => n.toLowerCase() === name.toLowerCase());
+  if (!exists) all.push(name);
+  writeFolderIndex(req, all);
+  return res.status(201).json({ success: true, folder: name });
 }
 
 function generateShareLink(req, res) {
@@ -718,6 +785,8 @@ async function sendFileByEmail(req, res) {
 module.exports = {
   ensureCloudDir,
   listFiles,
+  listExtraFolders,
+  createExtraFolder,
   listDeletedFiles,
   getStats,
   uploadFile,
