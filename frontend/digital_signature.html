@@ -13,22 +13,33 @@
 </head>
 <body class="ds-module">
   <div class="ds-wrap">
-    <div class="ds-toolbar">
-      <h1><i class="bi bi-file-earmark-medical" aria-hidden="true"></i> Documents &amp; Signatures</h1>
+    <div class="ds-topbar">
+      <h1><i class="bi bi-journal-text" aria-hidden="true"></i> Documents &amp; Signatures</h1>
       <button type="button" class="ds-btn-primary" id="dsBtnNewDoc" disabled title="Upload a PDF">
-        <i class="bi bi-plus-lg" aria-hidden="true"></i> New document
+        <i class="bi bi-cloud-upload" aria-hidden="true"></i> Upload document
       </button>
     </div>
 
+    <section class="ds-stats" id="dsStats" aria-live="polite"></section>
+
+    <div class="ds-tabs" id="dsTabs" role="tablist" aria-label="Document status tabs">
+      <button type="button" class="ds-tab is-active" data-status="">All</button>
+      <button type="button" class="ds-tab" data-status="draft">Draft</button>
+      <button type="button" class="ds-tab" data-status="pending_signatures">In progress</button>
+      <button type="button" class="ds-tab" data-status="completed">Signed</button>
+      <button type="button" class="ds-tab" data-status="expired">Expired</button>
+      <button type="button" class="ds-tab" data-status="cancelled">Cancelled</button>
+    </div>
+
     <div class="ds-filters">
-      <div>
-        <label for="dsFilterProject">Project</label>
+      <div class="ds-filter-item">
+        <label for="dsFilterProject"><i class="bi bi-building"></i> Project</label>
         <select id="dsFilterProject" class="ds-select" aria-label="Filter by project">
           <option value="">All projects</option>
         </select>
       </div>
-      <div>
-        <label for="dsFilterStatus">Status</label>
+      <div class="ds-filter-item">
+        <label for="dsFilterStatus"><i class="bi bi-funnel"></i> Status</label>
         <select id="dsFilterStatus" class="ds-select" aria-label="Filter by status">
           <option value="">All</option>
           <option value="draft">Draft</option>
@@ -36,23 +47,28 @@
           <option value="completed">Completed</option>
         </select>
       </div>
-      <div>
-        <label for="dsSearch">Search</label>
-        <input type="search" id="dsSearch" class="ds-input" placeholder="Title…" autocomplete="off" disabled>
+      <div class="ds-filter-item ds-filter-item--search">
+        <label for="dsSearch"><i class="bi bi-search"></i> Search</label>
+        <input type="search" id="dsSearch" class="ds-input" placeholder="Search documents..." autocomplete="off" disabled>
       </div>
     </div>
 
-    <div id="dsListMount" class="ds-grid" aria-live="polite"></div>
+    <section class="ds-table-wrap">
+      <div class="ds-table-head">
+        <span>Document</span>
+        <span>Created</span>
+        <span>Progress</span>
+        <span>Status</span>
+        <span>Actions</span>
+      </div>
+      <div id="dsListMount" class="ds-table-body" aria-live="polite"></div>
+    </section>
 
     <div id="dsEmpty" class="ds-empty">
       <i class="bi bi-journal-text" aria-hidden="true"></i>
       <p class="mb-1"><strong>No documents yet</strong></p>
-      <p class="mb-0 small">When the documents API is enabled, your RAMS, toolbox talks and signed PDFs will appear here. Use <strong>New document</strong> to upload and assign signatures.</p>
+      <p class="mb-0 small">Upload your first PDF and use <strong>Build &amp; Assign</strong> to place signature fields and assign recipients.</p>
     </div>
-
-    <p class="ds-hint mb-0" role="note">
-      <strong>Manager workflow:</strong> upload PDF → place signature fields → assign operatives → track progress. Operatives sign on mobile with the same password flow as the rest of Proconix.
-    </p>
   </div>
 
   <div id="dsModalBackdrop" class="ds-modal-backdrop d-none" aria-hidden="true"></div>

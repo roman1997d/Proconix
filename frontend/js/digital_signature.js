@@ -60,8 +60,8 @@
   function statusLabel(st) {
     var map = {
       draft: 'Draft',
-      pending_signatures: 'Pending',
-      completed: 'Completed',
+      pending_signatures: 'In progress',
+      completed: 'Signed',
       cancelled: 'Cancelled',
       expired: 'Expired',
     };
@@ -71,7 +71,70 @@
   function statusClass(st) {
     if (st === 'completed') return 'ds-badge--signed';
     if (st === 'draft') return 'ds-badge--draft';
+    if (st === 'expired') return 'ds-badge--expired';
+    if (st === 'cancelled') return 'ds-badge--cancelled';
     return 'ds-badge--pending';
+  }
+
+  function formatDate(value) {
+    if (!value) return '—';
+    var d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+
+  function countByStatus(docs, status) {
+    return docs.filter(function (d) {
+      return d.status === status;
+    }).length;
+  }
+
+  function renderStats(docs) {
+    var statsEl = document.getElementById('dsStats');
+    if (!statsEl) return;
+    var total = docs.length;
+    var inProgress = countByStatus(docs, 'pending_signatures');
+    var signed = countByStatus(docs, 'completed');
+    var drafts = countByStatus(docs, 'draft');
+
+    statsEl.innerHTML =
+      '<article class="ds-stat-card">' +
+      '<p class="ds-stat-label"><i class="bi bi-files"></i> Total documents</p>' +
+      '<p class="ds-stat-value">' +
+      total +
+      '</p>' +
+      '</article>' +
+      '<article class="ds-stat-card">' +
+      '<p class="ds-stat-label"><i class="bi bi-pen"></i> Signatures in progress</p>' +
+      '<p class="ds-stat-value">' +
+      inProgress +
+      '</p>' +
+      '</article>' +
+      '<article class="ds-stat-card">' +
+      '<p class="ds-stat-label"><i class="bi bi-patch-check"></i> Signed documents</p>' +
+      '<p class="ds-stat-value">' +
+      signed +
+      '</p>' +
+      '</article>' +
+      '<article class="ds-stat-card">' +
+      '<p class="ds-stat-label"><i class="bi bi-file-earmark"></i> Drafts</p>' +
+      '<p class="ds-stat-value">' +
+      drafts +
+      '</p>' +
+      '</article>';
+  }
+
+  function syncTabsWithStatus(status) {
+    var tabs = document.querySelectorAll('.ds-tab');
+    tabs.forEach(function (tab) {
+      var isActive = (tab.getAttribute('data-status') || '') === (status || '');
+      tab.classList.toggle('is-active', isActive);
+      tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
   }
 
   var projectsCache = [];
@@ -148,12 +211,14 @@
       .then(function (out) {
         if (out.status === 401) {
           if (emptyEl) emptyEl.classList.add('d-none');
+          renderStats([]);
           listEl.innerHTML =
             '<div class="ds-empty"><p>Session expired. Reload the dashboard and sign in again.</p></div>';
           return;
         }
         if (!out.ok || !out.data || !out.data.success) {
           if (emptyEl) emptyEl.classList.add('d-none');
+          renderStats([]);
           var msg = (out.data && out.data.message) || 'Could not load documents.';
           if (out.status === 503) {
             msg = 'Documents module: run DB migration scripts/create_digital_documents_tables.sql';
@@ -162,6 +227,7 @@
           return;
         }
         var docs = out.data.documents || [];
+        renderStats(docs);
         if (docs.length === 0) {
           listEl.innerHTML = '';
           if (emptyEl) emptyEl.classList.remove('d-none');
@@ -173,62 +239,71 @@
             var prog = d.signatures_progress || '0/0';
             var buildHref = 'digital_signature_builder.html?id=' + d.id;
             var actions =
-              '<a href="' +
+              '<a class="ds-action ds-action-primary" href="' +
               attrEscape(buildHref) +
-              '">Build &amp; assign</a>';
+              '"><i class="bi bi-pencil-square"></i> Build &amp; Assign</a>';
             if (d.status === 'pending_signatures' || d.status === 'completed') {
               actions +=
-                ' · <a href="#" class="ds-link-progress" data-doc-id="' +
+                '<a class="ds-action ds-link-progress" href="#" data-doc-id="' +
                 d.id +
-                '">Progress</a>';
+                '"><i class="bi bi-activity"></i> Progress</a>';
               actions +=
-                ' · <a href="' +
+                '<a class="ds-action" href="' +
                 attrEscape('digital_signature_view.html?id=' + d.id) +
-                '">View signatures</a>';
+                '"><i class="bi bi-eye"></i> View signatures</a>';
             }
             actions +=
               (d.file_url
-                ? ' · <a href="' +
+                ? '<a class="ds-action" href="' +
                   attrEscape(d.file_url) +
-                  '" target="_blank" rel="noopener noreferrer">Original PDF</a>'
+                  '" target="_blank" rel="noopener noreferrer"><i class="bi bi-file-earmark-pdf"></i> Original PDF</a>'
                 : '');
             actions +=
-              ' · <a href="#" class="ds-link-reset" data-doc-id="' +
+              '<a href="#" class="ds-action ds-link-reset" data-doc-id="' +
               d.id +
-              '">Reset</a>';
+              '"><i class="bi bi-arrow-counterclockwise"></i> Reset</a>';
             actions +=
-              ' · <a href="#" class="ds-link-delete" data-doc-id="' +
+              '<a href="#" class="ds-action ds-link-delete" data-doc-id="' +
               d.id +
-              '">Delete</a>';
+              '"><i class="bi bi-trash3"></i> Delete</a>';
             return (
-              '<article class="ds-card" data-id="' +
+              '<article class="ds-row" data-id="' +
               d.id +
               '">' +
-              '<span class="ds-badge ' +
+              '<div class="ds-row-doc">' +
+              '<h3 class="ds-row-title">' +
+              escapeHtml(d.title || 'Untitled') +
+              '</h3>' +
+              '<p class="ds-row-meta">' +
+              (d.document_type ? escapeHtml(d.document_type) + ' · ' : '') +
+              'ID #' +
+              d.id +
+              '</p>' +
+              '</div>' +
+              '<div class="ds-row-date">' +
+              formatDate(d.created_at) +
+              '</div>' +
+              '<div class="ds-row-progress"><span>' +
+              escapeHtml(prog) +
+              '</span><div class="ds-progress"><div class="ds-progress-bar" style="width:' +
+              progressPercent(d) +
+              '%"></div></div></div>' +
+              '<div><span class="ds-badge ' +
               statusClass(d.status) +
               '">' +
               escapeHtml(statusLabel(d.status)) +
-              '</span>' +
-              '<h3 class="ds-card-title">' +
-              escapeHtml(d.title || 'Untitled') +
-              '</h3>' +
-              '<p class="ds-card-meta">' +
-              (d.document_type ? escapeHtml(d.document_type) + ' · ' : '') +
-              'Progress: ' +
-              escapeHtml(prog) +
-              '</p>' +
-              '<div class="ds-progress"><div class="ds-progress-bar" style="width:' +
-              progressPercent(d) +
-              '%"></div></div>' +
-              '<div class="ds-card-actions">' +
+              '</span></div>' +
+              '<div class="ds-row-actions">' +
               actions +
-              '</div></article>'
+              '</div>' +
+              '</article>'
             );
           })
           .join('');
       })
       .catch(function () {
         if (emptyEl) emptyEl.classList.add('d-none');
+        renderStats([]);
         listEl.innerHTML = '<div class="ds-empty"><p>Network error loading documents.</p></div>';
       });
   }
@@ -423,6 +498,7 @@
     }
     if (filterSt) {
       filterSt.addEventListener('change', function () {
+        syncTabsWithStatus(filterSt.value);
         loadDocuments();
       });
     }
@@ -434,6 +510,18 @@
           loadDocuments();
         }, 350);
       });
+    }
+    var tabsWrap = document.getElementById('dsTabs');
+    if (tabsWrap && filterSt) {
+      tabsWrap.addEventListener('click', function (e) {
+        var btnTab = e.target.closest && e.target.closest('.ds-tab');
+        if (!btnTab) return;
+        var status = btnTab.getAttribute('data-status') || '';
+        filterSt.value = status;
+        syncTabsWithStatus(status);
+        loadDocuments();
+      });
+      syncTabsWithStatus(filterSt.value);
     }
 
     var listMount = document.getElementById('dsListMount');
