@@ -517,7 +517,7 @@
     }
     if (btnCloud) {
       btnCloud.addEventListener('click', function () {
-        window.alert('Cloud import will be available soon.');
+        window.location.href = 'site_cloud.html';
       });
     }
     if (quickSign) {

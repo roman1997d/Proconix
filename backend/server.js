@@ -35,6 +35,7 @@ const siteChatRoutes = require('./routes/siteChatRoutes');
 const unitProgressRoutes = require('./routes/unitProgressRoutes');
 const { runSiteChatAgentReminders } = require('./controllers/siteChatController');
 const digitalDocumentsRoutes = require('./routes/digitalDocumentsRoutes');
+const siteCloudRoutes = require('./routes/siteCloudRoutes');
 const { metricsMiddleware } = require('./middleware/metricsMiddleware');
 const { printStartupConsoleBanner } = require('./lib/startupConsoleBanner');
 
@@ -108,6 +109,7 @@ app.use('/api/worklogs', worklogsRoutes);
 // Documents & digital signatures — register BEFORE the broad `app.use('/api', qaRoutes)` so
 // GET /api/documents is never shadowed by the QA router stack (Express 4 order matters).
 app.use('/api/documents', digitalDocumentsRoutes);
+app.use('/api/site-cloud', siteCloudRoutes);
 
 // Crews — same as documents: must be BEFORE `app.use('/api', qaRoutes)` so /api/crews/* is not lost.
 app.use('/api/crews', crewRoutes);
