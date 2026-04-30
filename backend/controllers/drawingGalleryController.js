@@ -453,6 +453,12 @@ async function uploadDrawing(req, res) {
   const floorLabel = req.body.floor_label != null ? String(req.body.floor_label).trim() : null;
   const zoneLabel = req.body.zone_label != null ? String(req.body.zone_label).trim() : null;
   const discipline = req.body.discipline != null ? String(req.body.discipline).trim() : null;
+  if (!discipline) {
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(400).json({ success: false, message: 'Discipline is required.' });
+  }
   const keywords = req.body.keywords != null ? String(req.body.keywords).trim() : null;
   const versionDescription = req.body.version_description != null ? String(req.body.version_description).trim() : null;
 

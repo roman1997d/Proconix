@@ -151,8 +151,8 @@
             </div>
             <div class="mb-2 mt-2">
               <label class="form-label">Discipline</label>
-              <select class="form-select" name="discipline">
-                <option value="">—</option>
+              <select class="form-select" name="discipline" required>
+                <option value="" selected disabled>— Select discipline —</option>
                 <option>Drywall</option>
                 <option>MEP</option>
                 <option>Electrical</option>
@@ -197,7 +197,13 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <div id="dg-cloud-alert" class="small text-muted mb-2">Loading files from Site Cloud / drawing…</div>
+          <div class="mb-2">
+            <label class="form-label form-label-sm">Cloud folder</label>
+            <select id="dg-cloud-folder" class="form-select form-select-sm" disabled>
+              <option value="">— Select cloud folder —</option>
+            </select>
+          </div>
+          <div id="dg-cloud-alert" class="small text-muted mb-2">Loading cloud folders…</div>
           <div id="dg-cloud-list" class="list-group"></div>
         </div>
       </div>
@@ -329,6 +335,7 @@
     notifCount: document.getElementById('dg-notif-count'),
     notifBody: document.getElementById('dg-notif-body'),
     btnGetCloud: document.getElementById('dg-btn-get-cloud'),
+    cloudFolder: document.getElementById('dg-cloud-folder'),
     cloudList: document.getElementById('dg-cloud-list'),
     cloudAlert: document.getElementById('dg-cloud-alert'),
   };
@@ -632,11 +639,60 @@
       .catch(function () { toast('Download failed'); });
   }
 
-  function loadCloudDrawingFiles() {
-    if (!el.cloudList) return;
+  function loadCloudFolders() {
+    if (!el.cloudFolder || !el.cloudList) return;
+    el.cloudFolder.innerHTML = '<option value="">— Select cloud folder —</option>';
+    el.cloudFolder.disabled = true;
     el.cloudList.innerHTML = '';
-    if (el.cloudAlert) el.cloudAlert.textContent = 'Loading files from Site Cloud / drawing…';
-    fetch('/api/site-cloud/files?folder=drawing', {
+    if (el.cloudAlert) el.cloudAlert.textContent = 'Loading cloud folders…';
+    fetch('/api/site-cloud/folders', {
+      headers: getAuthHeaders(),
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          if (el.cloudAlert) el.cloudAlert.textContent = (out.data && out.data.message) || 'Could not load cloud folders.';
+          return;
+        }
+        var defaults = ['files', 'drawing', 'images'];
+        var extras = Array.isArray(out.data.folders) ? out.data.folders : [];
+        var seen = {};
+        defaults.concat(extras).forEach(function (folder) {
+          var name = String(folder || '').trim();
+          if (!name || seen[name]) return;
+          seen[name] = true;
+          var opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          el.cloudFolder.appendChild(opt);
+        });
+        el.cloudFolder.disabled = el.cloudFolder.options.length <= 1;
+        if (el.cloudAlert) {
+          el.cloudAlert.textContent = el.cloudFolder.disabled
+            ? 'No cloud folders available.'
+            : 'Select a folder, then pick a file.';
+        }
+      })
+      .catch(function () {
+        if (el.cloudAlert) el.cloudAlert.textContent = 'Network error while loading cloud folders.';
+      });
+  }
+
+  function loadCloudDrawingFiles() {
+    if (!el.cloudList || !el.cloudFolder) return;
+    el.cloudList.innerHTML = '';
+    var folder = String(el.cloudFolder.value || '').trim();
+    if (!folder) {
+      if (el.cloudAlert) el.cloudAlert.textContent = 'Select a cloud folder first.';
+      return;
+    }
+    if (el.cloudAlert) el.cloudAlert.textContent = 'Loading files from Site Cloud / ' + folder + '…';
+    fetch('/api/site-cloud/files?folder=' + encodeURIComponent(folder), {
       headers: getAuthHeaders(),
       credentials: 'same-origin',
     })
@@ -652,7 +708,7 @@
         }
         var files = Array.isArray(out.data.files) ? out.data.files : [];
         if (!files.length) {
-          if (el.cloudAlert) el.cloudAlert.textContent = 'No files found in cloud drawing folder.';
+          if (el.cloudAlert) el.cloudAlert.textContent = 'No files found in selected folder.';
           return;
         }
         if (el.cloudAlert) el.cloudAlert.textContent = 'Select a file to import into Upload drawing.';
@@ -850,7 +906,10 @@
   document.getElementById('dg-submit-upload').addEventListener('click', function () {
     var form = document.getElementById('dg-form-upload');
     var pid = el.project.value;
-    if (!form.checkValidity() || !pid) return;
+    if (!form.checkValidity() || !pid) {
+      form.reportValidity();
+      return;
+    }
     var fd = new FormData(form);
     var fileInput = form.querySelector('[name="file"]');
     if (!fileInput.files || !fileInput.files[0]) {
@@ -898,9 +957,12 @@
   });
   if (el.btnGetCloud) {
     el.btnGetCloud.addEventListener('click', function () {
-      loadCloudDrawingFiles();
+      loadCloudFolders();
       new bootstrap.Modal(document.getElementById('dg-modal-cloud')).show();
     });
+  }
+  if (el.cloudFolder) {
+    el.cloudFolder.addEventListener('change', loadCloudDrawingFiles);
   }
   if (el.cloudList) {
     el.cloudList.addEventListener('click', function (e) {
