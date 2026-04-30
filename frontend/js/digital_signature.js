@@ -284,9 +284,6 @@
               '</h3>' +
               '<p class="ds-row-meta">' +
               (d.document_type ? escapeHtml(d.document_type) + ' · ' : '') +
-              (recipientLabel(d.recipient_group || d.recipient_type)
-                ? 'Recipient: ' + escapeHtml(recipientLabel(d.recipient_group || d.recipient_type)) + ' · '
-                : '') +
               'ID #' +
               d.id +
               '</p>' +
@@ -304,6 +301,9 @@
               '">' +
               escapeHtml(statusLabel(d.status)) +
               '</span></div>' +
+              '<div class="ds-row-recipient">' +
+              escapeHtml(recipientLabel(d.recipient_group || d.recipient_type) || '—') +
+              '</div>' +
               '<div class="ds-row-actions">' +
               actions +
               '</div>' +

@@ -191,7 +191,7 @@ body.ds-module {
 .ds-table-head,
 .ds-row {
   display: grid;
-  grid-template-columns: 2fr 0.9fr 1.1fr 0.8fr 2fr;
+  grid-template-columns: 1.8fr 0.9fr 1fr 0.8fr 0.9fr 2fr;
   gap: 0.65rem;
   align-items: center;
 }
@@ -232,6 +232,12 @@ body.ds-module {
 
 .ds-row-date {
   font-size: 0.82rem;
+}
+
+.ds-row-recipient {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #1f2937;
 }
 
 .ds-row-progress span {
