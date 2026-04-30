@@ -8,18 +8,33 @@ const ALLOWED_EXTENSIONS = new Set([
   '.jpg',
   '.jpeg',
   '.webp',
+  '.svg',
+  '.heic',
   '.gif',
+  '.html',
+  '.htm',
   '.txt',
   '.csv',
+  '.json',
+  '.xml',
   '.doc',
   '.docx',
   '.xls',
   '.xlsx',
   '.ppt',
   '.pptx',
+  '.dwg',
+  '.dxf',
+  '.ifc',
+  '.mp4',
+  '.mov',
+  '.mp3',
+  '.wav',
   '.zip',
   '.rar',
   '.7z',
+  '.gz',
+  '.tar',
 ]);
 
 const DANGEROUS_EXTENSIONS = new Set([
@@ -40,6 +55,7 @@ const DANGEROUS_EXTENSIONS = new Set([
   '.rb',
   '.pl',
   '.apk',
+  '.log',
 ]);
 
 function safeBaseName(name) {
@@ -57,7 +73,11 @@ function buildStoredName(original) {
 }
 
 function isAllowedUpload(originalName) {
-  const ext = path.extname(String(originalName || '')).toLowerCase();
+  const rawName = String(originalName || '').trim().toLowerCase();
+  if (!rawName) return false;
+  if (rawName === '.env' || rawName.endsWith('.env') || rawName.endsWith('.config')) return false;
+  if (rawName.endsWith('.tar.gz')) return true;
+  const ext = path.extname(rawName).toLowerCase();
   if (!ext) return false;
   if (DANGEROUS_EXTENSIONS.has(ext)) return false;
   return ALLOWED_EXTENSIONS.has(ext);
