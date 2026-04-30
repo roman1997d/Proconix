@@ -15,6 +15,55 @@ function tableMissing(err) {
   return err && err.code === '42P01';
 }
 
+function cloudIndexPathForReq(req) {
+  return path.join(req.digitalDocsCompanyDir, 'cloud_index.json');
+}
+
+function readCloudIndexForReq(req) {
+  try {
+    const p = cloudIndexPathForReq(req);
+    if (!fs.existsSync(p)) return [];
+    const raw = fs.readFileSync(p, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeCloudIndexForReq(req, items) {
+  const p = cloudIndexPathForReq(req);
+  fs.writeFileSync(p, JSON.stringify(Array.isArray(items) ? items : [], null, 2), 'utf8');
+}
+
+function syncDrawingUploadToCloud(req, file, managerId) {
+  try {
+    if (!req || !file || !req.digitalDocsCompanyDir) return { ok: false };
+    const cloudDir = path.join(req.digitalDocsCompanyDir, 'cloud');
+    fs.mkdirSync(cloudDir, { recursive: true });
+    const ext = path.extname(String(file.originalname || file.filename || '')).toLowerCase() || '.bin';
+    const cloudName = `cloud-drawing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+    const cloudAbs = path.join(cloudDir, cloudName);
+    fs.copyFileSync(file.path, cloudAbs);
+    const idx = readCloudIndexForReq(req);
+    idx.push({
+      id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      folder: 'drawing',
+      stored_name: cloudName,
+      original_name: file.originalname || file.filename || cloudName,
+      mime_type: file.mimetype || 'application/octet-stream',
+      size_bytes: Number(file.size) || 0,
+      uploaded_at: new Date().toISOString(),
+      uploaded_by_manager_id: managerId,
+    });
+    writeCloudIndexForReq(req, idx);
+    return { ok: true, cloud_stored_name: cloudName };
+  } catch (err) {
+    console.error('drawingGallery syncDrawingUploadToCloud:', err && err.message ? err.message : err);
+    return { ok: false };
+  }
+}
+
 function titleKey(title) {
   return String(title || '')
     .trim()
@@ -514,11 +563,14 @@ async function uploadDrawing(req, res) {
 
     await client.query('COMMIT');
 
+    const cloudSync = syncDrawingUploadToCloud(req, req.file, managerId);
+
     return res.status(201).json({
       success: true,
       series_id: seriesId,
       version: insV.rows[0],
       version_id: versionId,
+      cloud_synced: !!cloudSync.ok,
       message: 'Drawing uploaded.',
     });
   } catch (err) {
