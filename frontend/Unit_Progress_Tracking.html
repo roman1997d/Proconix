@@ -1280,6 +1280,17 @@
           <button type="button" class="btn btn-dark" id="doc-download-btn" disabled style="margin-top:10px;">
             <i class="bi bi-download"></i> Download package
           </button>
+          <div class="field" id="doc-save-cloud-wrap" style="margin-top:10px;">
+            <label for="doc-cloud-folder">Save to cloud</label>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <select id="doc-cloud-folder" style="min-width:220px;" disabled>
+                <option value="">Select folder</option>
+              </select>
+              <button type="button" class="btn btn-primary" id="doc-save-cloud-btn" disabled>
+                <i class="bi bi-cloud-upload"></i> Save
+              </button>
+            </div>
+          </div>
           <div class="feedback" id="doc-feedback"></div>
         </div>
       </div>
@@ -1440,6 +1451,9 @@
     const docGenerateBtn = document.getElementById("doc-generate-btn");
     const docLoader = document.getElementById("doc-loader");
     const docDownloadBtn = document.getElementById("doc-download-btn");
+    const docCloudFolder = document.getElementById("doc-cloud-folder");
+    const docSaveCloudBtn = document.getElementById("doc-save-cloud-btn");
+    const docSaveCloudWrap = document.getElementById("doc-save-cloud-wrap");
     const docFeedback = document.getElementById("doc-feedback");
     const progressModal = document.getElementById("progress-modal");
     const progressModalBackdrop = document.getElementById("progress-modal-backdrop");
@@ -2589,6 +2603,18 @@
       generatedDocPackageName = "";
       docDownloadBtn.disabled = true;
       docDownloadBtn.style.opacity = "0.6";
+      if (docSaveCloudBtn) {
+        docSaveCloudBtn.disabled = true;
+        docSaveCloudBtn.style.opacity = "0.6";
+      }
+      if (docCloudFolder) {
+        docCloudFolder.innerHTML = '<option value="">Select folder</option>';
+        docCloudFolder.disabled = true;
+      }
+      const managerHeaders = getManagerHeaders();
+      if (docSaveCloudWrap) {
+        docSaveCloudWrap.style.display = managerHeaders ? "block" : "none";
+      }
       docLoader.classList.add("hidden");
       docCreatePdfToggle.classList.remove("active");
       docCreatePdfToggle.setAttribute("aria-pressed", "false");
@@ -2596,6 +2622,9 @@
       if (defaultMode) defaultMode.checked = true;
       docModal.classList.add("open");
       docModal.setAttribute("aria-hidden", "false");
+      if (managerHeaders) {
+        loadDocCloudFolders(managerHeaders);
+      }
       setTimeout(() => docNameInput.focus(), 0);
     }
 
@@ -2608,6 +2637,97 @@
       docGenerateBtn.disabled = isGenerating;
       docGenerateBtn.style.opacity = isGenerating ? "0.7" : "1";
       docLoader.classList.toggle("hidden", !isGenerating);
+      if (docSaveCloudBtn && generatedDocPackageBlob) {
+        docSaveCloudBtn.disabled = isGenerating || !docCloudFolder || !docCloudFolder.value;
+      }
+    }
+
+    async function loadDocCloudFolders(managerHeaders) {
+      if (!docCloudFolder) return;
+      docCloudFolder.innerHTML = '<option value="">Loading folders…</option>';
+      docCloudFolder.disabled = true;
+      try {
+        const response = await fetch("/api/site-cloud/folders", {
+          method: "GET",
+          headers: managerHeaders,
+          credentials: "same-origin"
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data || !data.success) {
+          docCloudFolder.innerHTML = '<option value="">Folder load failed</option>';
+          return;
+        }
+        const defaults = ["files", "drawing", "images"];
+        const extras = Array.isArray(data.folders) ? data.folders : [];
+        const seen = new Set();
+        const folders = [];
+        defaults.concat(extras).forEach((name) => {
+          const v = String(name || "").trim();
+          if (!v || seen.has(v)) return;
+          seen.add(v);
+          folders.push(v);
+        });
+        docCloudFolder.innerHTML = '<option value="">Select folder</option>';
+        folders.forEach((folder) => {
+          const opt = document.createElement("option");
+          opt.value = folder;
+          opt.textContent = folder;
+          docCloudFolder.appendChild(opt);
+        });
+        docCloudFolder.disabled = folders.length === 0;
+      } catch (_) {
+        docCloudFolder.innerHTML = '<option value="">Folder load failed</option>';
+      }
+    }
+
+    async function saveGeneratedPackageToCloud() {
+      if (!generatedDocPackageBlob) {
+        docFeedback.style.display = "block";
+        docFeedback.textContent = "Generate package first.";
+        return;
+      }
+      if (!docCloudFolder || !docCloudFolder.value) {
+        docFeedback.style.display = "block";
+        docFeedback.textContent = "Select a cloud folder.";
+        return;
+      }
+      const managerHeaders = getManagerHeaders();
+      if (!managerHeaders) {
+        docFeedback.style.display = "block";
+        docFeedback.textContent = "Manager session required for cloud save.";
+        return;
+      }
+
+      const fileName = generatedDocPackageName || "documentation-package.zip";
+      const uploadFile = new File([generatedDocPackageBlob], fileName, { type: "application/zip" });
+      const fd = new FormData();
+      fd.append("file", uploadFile, fileName);
+      fd.append("folder", String(docCloudFolder.value));
+
+      docSaveCloudBtn.disabled = true;
+      docSaveCloudBtn.style.opacity = "0.7";
+      try {
+        const response = await fetch("/api/site-cloud/upload", {
+          method: "POST",
+          headers: managerHeaders,
+          body: fd,
+          credentials: "same-origin"
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data || !data.success) {
+          docFeedback.style.display = "block";
+          docFeedback.textContent = (data && data.message) || "Could not save package to cloud.";
+          return;
+        }
+        docFeedback.style.display = "block";
+        docFeedback.textContent = `Saved to cloud folder "${docCloudFolder.value}".`;
+      } catch (_) {
+        docFeedback.style.display = "block";
+        docFeedback.textContent = "Network error while saving to cloud.";
+      } finally {
+        docSaveCloudBtn.disabled = !generatedDocPackageBlob || !docCloudFolder || !docCloudFolder.value;
+        docSaveCloudBtn.style.opacity = docSaveCloudBtn.disabled ? "0.6" : "1";
+      }
     }
 
     function sanitizeFileName(name) {
@@ -3182,6 +3302,10 @@
         generatedDocPackageName = `${safeFolderName}.zip`;
         docDownloadBtn.disabled = false;
         docDownloadBtn.style.opacity = "1";
+        if (docSaveCloudBtn) {
+          docSaveCloudBtn.disabled = !docCloudFolder || !docCloudFolder.value;
+          docSaveCloudBtn.style.opacity = docSaveCloudBtn.disabled ? "0.6" : "1";
+        }
         docFeedback.style.display = "block";
         docFeedback.textContent = "Package generated. Click Download package.";
       } catch (error) {
@@ -3203,6 +3327,16 @@
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 120000);
     });
+    if (docCloudFolder) {
+      docCloudFolder.addEventListener("change", () => {
+        if (!docSaveCloudBtn) return;
+        docSaveCloudBtn.disabled = !generatedDocPackageBlob || !docCloudFolder.value;
+        docSaveCloudBtn.style.opacity = docSaveCloudBtn.disabled ? "0.6" : "1";
+      });
+    }
+    if (docSaveCloudBtn) {
+      docSaveCloudBtn.addEventListener("click", saveGeneratedPackageToCloud);
+    }
 
     progressModalBackdrop.addEventListener("click", closeProgressModal);
     progressModalClose.addEventListener("click", closeProgressModal);
