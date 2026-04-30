@@ -33,6 +33,7 @@ router.post(
 );
 router.get('/files/:name/view', requireManagerAuth, resolveCompanyDocsDir, ctrl.viewFile);
 router.get('/files/:name/download', requireManagerAuth, resolveCompanyDocsDir, ctrl.downloadFile);
+router.post('/files/:name/move-folder', requireManagerAuth, resolveCompanyDocsDir, ctrl.moveFileToFolder);
 router.post('/files/:name/share-link', requireManagerAuth, resolveCompanyDocsDir, ctrl.generateShareLink);
 router.post('/files/:name/send-email', requireManagerAuth, resolveCompanyDocsDir, ctrl.sendFileByEmail);
 router.get('/shared-links', requireManagerAuth, resolveCompanyDocsDir, ctrl.listSharedLinks);

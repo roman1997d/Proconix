@@ -861,6 +861,23 @@ async function sendFileByEmail(req, res) {
   return res.status(200).json({ success: true, message: 'File sent by email.' });
 }
 
+function moveFileToFolder(req, res) {
+  ensureCloudDir(req);
+  const stored = sanitizeStoredName(decodeURIComponent(req.params.name || ''));
+  if (!stored) return res.status(400).json({ success: false, message: 'Invalid file name.' });
+  const targetFolder = resolveFolder(req, req.body && req.body.folder);
+  const items = readIndex(req);
+  const idx = items.findIndex((it) => it && it.stored_name === stored);
+  if (idx < 0) return res.status(404).json({ success: false, message: 'File not found.' });
+  const current = items[idx];
+  if (String(current.folder || 'files') === String(targetFolder)) {
+    return res.status(200).json({ success: true, message: 'File is already in this folder.', file: mapItem(current) });
+  }
+  items[idx] = Object.assign({}, current, { folder: targetFolder });
+  writeIndex(req, items);
+  return res.status(200).json({ success: true, message: 'File moved successfully.', file: mapItem(items[idx]) });
+}
+
 module.exports = {
   ensureCloudDir,
   listFiles,
@@ -881,6 +898,7 @@ module.exports = {
   downloadSharedFile,
   viewSharedFile,
   sendFileByEmail,
+  moveFileToFolder,
   startShareLinkCleanupScheduler,
   startDeletedFilesCleanupScheduler,
 };

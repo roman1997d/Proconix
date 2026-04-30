@@ -303,6 +303,7 @@
     list.innerHTML = rows
       .map(function (f) {
         var fm = fileTypeMeta(f);
+        var moveOptions = buildMoveFolderOptions(f.folder || 'files');
         return (
           '<article class="sc-row" data-name="' +
           escapeHtml(f.stored_name) +
@@ -353,6 +354,14 @@
           '" data-original="' +
           escapeHtml(f.original_name || f.stored_name) +
           '">Send via email</button>' +
+          '<select class="sc-btn-chip sc-move-folder" data-name="' +
+          escapeHtml(f.stored_name) +
+          '">' +
+          moveOptions +
+          '</select>' +
+          '<button type="button" class="sc-btn-chip sc-move-folder-apply" data-name="' +
+          escapeHtml(f.stored_name) +
+          '">Move</button>' +
           '</div>' +
           '</article>'
         );
@@ -398,6 +407,50 @@
       })
       .catch(function (err) {
         showError((err && err.message) || 'Share link failed.');
+      });
+  }
+
+  function buildMoveFolderOptions(currentFolder) {
+    var defaults = ['files', 'drawing', 'images'];
+    var all = defaults.concat(stateExtraFolders || []);
+    var seen = {};
+    return all
+      .filter(function (name) {
+        var key = String(name || '').toLowerCase();
+        if (!key || seen[key]) return false;
+        seen[key] = true;
+        return true;
+      })
+      .map(function (name) {
+        var selected = String(name) === String(currentFolder || 'files') ? ' selected' : '';
+        return '<option value="' + escapeHtml(name) + '"' + selected + '>' + escapeHtml(name) + '</option>';
+      })
+      .join('');
+  }
+
+  function moveFileToFolder(storedName, folder) {
+    var headers = getHeaders();
+    if (!headers || !storedName || !folder) return;
+    fetch('/api/site-cloud/files/' + encodeURIComponent(storedName) + '/move-folder', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
+      credentials: 'same-origin',
+      body: JSON.stringify({ folder: folder }),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          showError((out.data && out.data.message) || 'Could not move file.');
+          return;
+        }
+        if (activeNavMode === 'cloud') loadFiles();
+      })
+      .catch(function () {
+        showError('Network error while moving file.');
       });
   }
 
@@ -1055,6 +1108,14 @@
         if (s) return generateShareLink(s.getAttribute('data-name'));
         var m = e.target.closest('.sc-share-email');
         if (m) return openEmailModal(m.getAttribute('data-name'), m.getAttribute('data-original'));
+        var mv = e.target.closest('.sc-move-folder-apply');
+        if (mv) {
+          var targetName = mv.getAttribute('data-name');
+          var row = mv.closest('.sc-row');
+          var sel = row ? row.querySelector('.sc-move-folder[data-name="' + targetName + '"]') : null;
+          var folder = sel ? String(sel.value || '') : '';
+          return moveFileToFolder(targetName, folder);
+        }
         var so = e.target.closest('.sc-shared-open');
         if (so) return window.open(so.getAttribute('data-view'), '_blank');
         var sc = e.target.closest('.sc-shared-copy');
