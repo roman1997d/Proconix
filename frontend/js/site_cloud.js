@@ -5,6 +5,7 @@
   var stateFiles = [];
   var stateStats = null;
   var stateSharedLinks = [];
+  var stateDeletedFiles = [];
   var TENANT_STORAGE_LIMIT_BYTES = 500 * 1024 * 1024;
   var activeFolder = 'files';
   var emailShareTarget = null;
@@ -119,14 +120,21 @@
       rows = stateSharedLinks.filter(function (s) {
         return !q || String(s.original_name || '').toLowerCase().indexOf(q) !== -1;
       });
+    } else if (activeNavMode === 'deleted') {
+      rows = stateDeletedFiles.filter(function (f) {
+        return !q || String(f.original_name || '').toLowerCase().indexOf(q) !== -1;
+      });
     } else {
       rows = stateFiles.filter(function (f) {
         return !q || String(f.original_name || '').toLowerCase().indexOf(q) !== -1;
       });
     }
-    if (count) count.textContent = rows.length + ' files';
+    if (count) {
+      var countLabel = activeNavMode === 'shared' ? 'links' : 'files';
+      count.textContent = rows.length + ' ' + countLabel;
+    }
     if (!rows.length) {
-      list.innerHTML = '<div class="sc-empty">' + (activeNavMode === 'shared' ? 'No shared links found.' : 'No files found.') + '</div>';
+      list.innerHTML = '<div class="sc-empty">' + (activeNavMode === 'shared' ? 'No shared links found.' : activeNavMode === 'deleted' ? 'No deleted files found.' : 'No files found.') + '</div>';
       return;
     }
     if (activeNavMode === 'shared') {
@@ -156,6 +164,49 @@
             '<button type="button" class="sc-btn-chip sc-danger sc-shared-revoke" data-token="' +
             escapeHtml(s.token || '') +
             '">Revoke</button>' +
+            '</div>' +
+            '</article>'
+          );
+        })
+        .join('');
+      return;
+    }
+    if (activeNavMode === 'deleted') {
+      list.innerHTML = rows
+        .map(function (f) {
+          var fm = folderMeta(f.folder);
+          return (
+            '<article class="sc-row" data-trash-id="' +
+            escapeHtml(f.trash_id || '') +
+            '">' +
+            '<div><div class="sc-file-name">' +
+            escapeHtml(f.original_name || 'Deleted file') +
+            '</div><div class="sc-muted">' +
+            escapeHtml(f.mime_type || 'file') +
+            '</div></div>' +
+            '<div><span class="sc-folder-badge ' +
+            fm.cls +
+            '"><i class="bi ' +
+            fm.icon +
+            '"></i>' +
+            escapeHtml(fm.label) +
+            '</span></div>' +
+            '<div class="sc-muted">' +
+            escapeHtml(formatDate(f.deleted_at)) +
+            '</div>' +
+            '<div class="sc-muted">' +
+            escapeHtml(formatSize(f.size_bytes)) +
+            '</div>' +
+            '<div class="sc-actions-row">' +
+            '<button type="button" class="sc-btn-chip sc-view sc-deleted-restore" data-id="' +
+            escapeHtml(f.trash_id || '') +
+            '">Restore</button>' +
+            '<button type="button" class="sc-btn-chip sc-danger sc-deleted-permanent" data-id="' +
+            escapeHtml(f.trash_id || '') +
+            '">Delete permanently</button>' +
+            '</div>' +
+            '<div class="sc-muted">Auto delete: ' +
+            escapeHtml(formatDate(f.delete_after_at)) +
             '</div>' +
             '</article>'
           );
@@ -365,7 +416,7 @@
   }
 
   function loadFiles() {
-    if (activeNavMode === 'shared') return;
+    if (activeNavMode === 'shared' || activeNavMode === 'deleted') return;
     var headers = getHeaders();
     if (!headers) return showError('Please open this page from Manager Dashboard.');
     showError('');
@@ -389,6 +440,36 @@
       })
       .catch(function () {
         showError('Network error while loading files.');
+      })
+      .finally(function () {
+        setLoading(false);
+      });
+  }
+
+  function loadDeletedFiles() {
+    var headers = getHeaders();
+    if (!headers) return;
+    showError('');
+    setLoading(true, 'Loading deleted files...');
+    fetch('/api/site-cloud/deleted', {
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          showError((out.data && out.data.message) || 'Could not load deleted files.');
+          return;
+        }
+        stateDeletedFiles = Array.isArray(out.data.files) ? out.data.files : [];
+        renderList();
+      })
+      .catch(function () {
+        showError('Network error while loading deleted files.');
       })
       .finally(function () {
         setLoading(false);
@@ -588,7 +669,7 @@
   function deleteFile(storedName) {
     var headers = getHeaders();
     if (!headers || !storedName) return;
-    if (!window.confirm('Delete this file from cloud storage?')) return;
+    if (!window.confirm('Move this file to Deleted?')) return;
     fetch('/api/site-cloud/files/' + encodeURIComponent(storedName), {
       method: 'DELETE',
       headers: headers,
@@ -609,6 +690,58 @@
       })
       .catch(function () {
         showError('Delete failed.');
+      });
+  }
+
+  function restoreDeletedFile(trashId) {
+    var headers = getHeaders();
+    if (!headers || !trashId) return;
+    fetch('/api/site-cloud/deleted/' + encodeURIComponent(trashId) + '/restore', {
+      method: 'POST',
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          showError((out.data && out.data.message) || 'Could not restore file.');
+          return;
+        }
+        loadStats();
+        loadDeletedFiles();
+      })
+      .catch(function () {
+        showError('Restore failed.');
+      });
+  }
+
+  function permanentlyDeleteFile(trashId) {
+    var headers = getHeaders();
+    if (!headers || !trashId) return;
+    if (!window.confirm('Delete this file permanently? This action cannot be undone.')) return;
+    fetch('/api/site-cloud/deleted/' + encodeURIComponent(trashId) + '/permanent', {
+      method: 'DELETE',
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          showError((out.data && out.data.message) || 'Permanent delete failed.');
+          return;
+        }
+        loadDeletedFiles();
+      })
+      .catch(function () {
+        showError('Permanent delete failed.');
       });
   }
 
@@ -748,6 +881,10 @@
         }
         var sr = e.target.closest('.sc-shared-revoke');
         if (sr) return revokeSharedLink(sr.getAttribute('data-token'));
+        var dr = e.target.closest('.sc-deleted-restore');
+        if (dr) return restoreDeletedFile(dr.getAttribute('data-id'));
+        var dp = e.target.closest('.sc-deleted-permanent');
+        if (dp) return permanentlyDeleteFile(dp.getAttribute('data-id'));
       });
     }
 
@@ -775,6 +912,8 @@
         });
         if (mode === 'shared') {
           loadSharedLinks();
+        } else if (mode === 'deleted') {
+          loadDeletedFiles();
         } else {
           loadFiles();
         }

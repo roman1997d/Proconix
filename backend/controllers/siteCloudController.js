@@ -12,6 +12,8 @@ const MAX_SCAN_BYTES = 2 * 1024 * 1024;
 const SHARE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const GLOBAL_SHARE_INDEX_PATH = path.join(UPLOADS_ROOT, 'site_cloud_share_links.json');
 let shareCleanupSchedulerStarted = false;
+const DELETED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+let deletedCleanupSchedulerStarted = false;
 
 function normalizeFolder(value) {
   const v = String(value || '').trim().toLowerCase();
@@ -74,6 +76,27 @@ function writeIndex(req, items) {
   fs.writeFileSync(p, JSON.stringify(items, null, 2), 'utf8');
 }
 
+function trashIndexPath(req) {
+  return path.join(req.digitalDocsCompanyDir, 'cloud_trash_index.json');
+}
+
+function readTrashIndex(req) {
+  try {
+    const p = trashIndexPath(req);
+    if (!fs.existsSync(p)) return [];
+    const raw = fs.readFileSync(p, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeTrashIndex(req, items) {
+  const p = trashIndexPath(req);
+  fs.writeFileSync(p, JSON.stringify(items, null, 2), 'utf8');
+}
+
 function readGlobalShareIndex() {
   try {
     if (!fs.existsSync(GLOBAL_SHARE_INDEX_PATH)) return [];
@@ -127,10 +150,98 @@ function startShareLinkCleanupScheduler() {
   purgeExpiredShareLinks();
 }
 
+function purgeExpiredDeletedForRequest(req) {
+  ensureCloudDir(req);
+  const now = Date.now();
+  const items = readTrashIndex(req);
+  if (!items.length) return 0;
+  const kept = [];
+  let removed = 0;
+  for (let i = 0; i < items.length; i += 1) {
+    const it = items[i];
+    const ts = new Date(it && it.deleted_at ? it.deleted_at : 0).getTime();
+    if (!ts || now - ts < DELETED_RETENTION_MS) {
+      kept.push(it);
+      continue;
+    }
+    const full = path.join(req.siteCloudTrashDir, String(it.trashed_name || ''));
+    try {
+      if (fs.existsSync(full)) fs.unlinkSync(full);
+    } catch (_) {}
+    removed += 1;
+  }
+  if (removed > 0) writeTrashIndex(req, kept);
+  return removed;
+}
+
+function purgeExpiredDeletedForAllTenants() {
+  try {
+    if (!fs.existsSync(UPLOADS_ROOT)) return 0;
+    const now = Date.now();
+    const entries = fs.readdirSync(UPLOADS_ROOT, { withFileTypes: true });
+    let removedTotal = 0;
+    for (let i = 0; i < entries.length; i += 1) {
+      const e = entries[i];
+      if (!e || !e.isDirectory() || !/_\d+_docs$/.test(e.name)) continue;
+      const docsDir = path.join(UPLOADS_ROOT, e.name);
+      const trashDir = path.join(docsDir, 'cloud_trash');
+      const idxPath = path.join(docsDir, 'cloud_trash_index.json');
+      if (!fs.existsSync(idxPath)) continue;
+      let items;
+      try {
+        const raw = fs.readFileSync(idxPath, 'utf8');
+        const parsed = JSON.parse(raw);
+        items = Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        items = [];
+      }
+      if (!items.length) continue;
+      const kept = [];
+      let removed = 0;
+      for (let j = 0; j < items.length; j += 1) {
+        const it = items[j];
+        const ts = new Date(it && it.deleted_at ? it.deleted_at : 0).getTime();
+        if (!ts || now - ts < DELETED_RETENTION_MS) {
+          kept.push(it);
+          continue;
+        }
+        const full = path.join(trashDir, String(it.trashed_name || ''));
+        try {
+          if (fs.existsSync(full)) fs.unlinkSync(full);
+        } catch (_) {}
+        removed += 1;
+      }
+      if (removed > 0) {
+        fs.writeFileSync(idxPath, JSON.stringify(kept, null, 2), 'utf8');
+        removedTotal += removed;
+      }
+    }
+    return removedTotal;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function startDeletedFilesCleanupScheduler() {
+  if (deletedCleanupSchedulerStarted) return;
+  deletedCleanupSchedulerStarted = true;
+  const intervalMs = Math.max(
+    60 * 1000,
+    parseInt(process.env.SITE_CLOUD_DELETED_CLEANUP_MS || String(60 * 60 * 1000), 10)
+  );
+  setInterval(() => {
+    purgeExpiredDeletedForAllTenants();
+  }, intervalMs);
+  purgeExpiredDeletedForAllTenants();
+}
+
 function ensureCloudDir(req) {
   const dir = path.join(req.digitalDocsCompanyDir, 'cloud');
+  const trashDir = path.join(req.digitalDocsCompanyDir, 'cloud_trash');
   fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(trashDir, { recursive: true });
   req.siteCloudCompanyDir = dir;
+  req.siteCloudTrashDir = trashDir;
   req.siteCloudFolderName = `${req.digitalDocsFolderName}/cloud`;
   return dir;
 }
@@ -321,22 +432,131 @@ function viewFile(req, res) {
 
 function removeFile(req, res) {
   ensureCloudDir(req);
+  purgeExpiredDeletedForRequest(req);
   const stored = sanitizeStoredName(decodeURIComponent(req.params.name || ''));
   if (!stored) return res.status(400).json({ success: false, message: 'Invalid file name.' });
   const items = readIndex(req);
   const found = items.find((it) => it.stored_name === stored);
   if (!found) return res.status(404).json({ success: false, message: 'File not found.' });
   const full = path.join(req.siteCloudCompanyDir, stored);
+  const trashedName = `${Date.now()}_${stored}`;
+  const trashFull = path.join(req.siteCloudTrashDir, trashedName);
   try {
-    if (fs.existsSync(full)) fs.unlinkSync(full);
+    if (fs.existsSync(full)) fs.renameSync(full, trashFull);
   } catch (_) {
-    return res.status(500).json({ success: false, message: 'Could not delete file from disk.' });
+    return res.status(500).json({ success: false, message: 'Could not move file to deleted folder.' });
   }
   writeIndex(
     req,
     items.filter((it) => it.stored_name !== stored)
   );
-  return res.status(200).json({ success: true, message: 'File deleted.' });
+  const trashItems = readTrashIndex(req);
+  trashItems.push({
+    trash_id: `td_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    trashed_name: trashedName,
+    original_name: found.original_name || stored,
+    mime_type: found.mime_type || 'application/octet-stream',
+    size_bytes: found.size_bytes || 0,
+    folder: normalizeFolder(found.folder),
+    deleted_at: new Date().toISOString(),
+  });
+  writeTrashIndex(req, trashItems);
+  const shares = readGlobalShareIndex().filter(
+    (s) =>
+      !(
+        String(s.company_folder_name || '') === String(req.digitalDocsFolderName || '') &&
+        String(s.stored_name || '') === stored
+      )
+  );
+  writeGlobalShareIndex(shares);
+  return res.status(200).json({ success: true, message: 'File moved to Deleted.' });
+}
+
+function listDeletedFiles(req, res) {
+  ensureCloudDir(req);
+  purgeExpiredDeletedForRequest(req);
+  const q = String(req.query.q || '').trim().toLowerCase();
+  const items = readTrashIndex(req)
+    .filter((it) => {
+      if (!it || !it.trashed_name) return false;
+      const full = path.join(req.siteCloudTrashDir, it.trashed_name);
+      if (!fs.existsSync(full)) return false;
+      if (!q) return true;
+      return String(it.original_name || '').toLowerCase().includes(q);
+    })
+    .sort((a, b) => new Date(b.deleted_at || 0) - new Date(a.deleted_at || 0))
+    .map((it) => ({
+      trash_id: it.trash_id,
+      original_name: it.original_name,
+      mime_type: it.mime_type || 'application/octet-stream',
+      size_bytes: it.size_bytes || 0,
+      folder: normalizeFolder(it.folder),
+      deleted_at: it.deleted_at,
+      delete_after_at: new Date(new Date(it.deleted_at || Date.now()).getTime() + DELETED_RETENTION_MS).toISOString(),
+    }));
+  return res.status(200).json({ success: true, files: items });
+}
+
+function restoreDeletedFile(req, res) {
+  ensureCloudDir(req);
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json({ success: false, message: 'Invalid deleted item id.' });
+  const trashItems = readTrashIndex(req);
+  const idx = trashItems.findIndex((it) => String(it.trash_id || '') === id);
+  if (idx < 0) return res.status(404).json({ success: false, message: 'Deleted file not found.' });
+  const item = trashItems[idx];
+  const fromFull = path.join(req.siteCloudTrashDir, String(item.trashed_name || ''));
+  if (!fs.existsSync(fromFull)) return res.status(404).json({ success: false, message: 'Deleted file missing on disk.' });
+  const baseStored = sanitizeStoredName(item.original_name || '') || `restored_${Date.now()}`;
+  let restoredStored = baseStored;
+  let targetFull = path.join(req.siteCloudCompanyDir, restoredStored);
+  let n = 1;
+  while (fs.existsSync(targetFull)) {
+    const ext = path.extname(baseStored);
+    const nameNoExt = ext ? baseStored.slice(0, -ext.length) : baseStored;
+    restoredStored = `${nameNoExt}_${n}${ext}`;
+    targetFull = path.join(req.siteCloudCompanyDir, restoredStored);
+    n += 1;
+  }
+  try {
+    fs.renameSync(fromFull, targetFull);
+  } catch (_) {
+    return res.status(500).json({ success: false, message: 'Could not restore file.' });
+  }
+  const items = readIndex(req);
+  items.push({
+    id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    folder: normalizeFolder(item.folder),
+    stored_name: restoredStored,
+    original_name: item.original_name || restoredStored,
+    mime_type: item.mime_type || 'application/octet-stream',
+    size_bytes: item.size_bytes || 0,
+    uploaded_at: new Date().toISOString(),
+    uploaded_by_manager_id: req.manager.id,
+  });
+  writeIndex(req, items);
+  trashItems.splice(idx, 1);
+  writeTrashIndex(req, trashItems);
+  return res.status(200).json({ success: true, message: 'File restored.' });
+}
+
+function permanentlyDeleteFile(req, res) {
+  ensureCloudDir(req);
+  const id = String(req.params.id || '').trim();
+  if (!id) return res.status(400).json({ success: false, message: 'Invalid deleted item id.' });
+  const trashItems = readTrashIndex(req);
+  const idx = trashItems.findIndex((it) => String(it.trash_id || '') === id);
+  if (idx < 0) return res.status(404).json({ success: false, message: 'Deleted file not found.' });
+  const item = trashItems[idx];
+  const full = path.join(req.siteCloudTrashDir, String(item.trashed_name || ''));
+  try {
+    if (fs.existsSync(full)) fs.unlinkSync(full);
+  } catch (_) {
+    return res.status(500).json({ success: false, message: 'Could not delete file permanently.' });
+  }
+  trashItems.splice(idx, 1);
+  writeTrashIndex(req, trashItems);
+  return res.status(200).json({ success: true, message: 'File permanently deleted.' });
 }
 
 function generateShareLink(req, res) {
@@ -498,11 +718,14 @@ async function sendFileByEmail(req, res) {
 module.exports = {
   ensureCloudDir,
   listFiles,
+  listDeletedFiles,
   getStats,
   uploadFile,
   downloadFile,
   viewFile,
   removeFile,
+  restoreDeletedFile,
+  permanentlyDeleteFile,
   generateShareLink,
   listSharedLinks,
   revokeSharedLink,
@@ -510,5 +733,6 @@ module.exports = {
   viewSharedFile,
   sendFileByEmail,
   startShareLinkCleanupScheduler,
+  startDeletedFilesCleanupScheduler,
 };
 

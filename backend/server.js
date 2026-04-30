@@ -36,7 +36,7 @@ const unitProgressRoutes = require('./routes/unitProgressRoutes');
 const { runSiteChatAgentReminders } = require('./controllers/siteChatController');
 const digitalDocumentsRoutes = require('./routes/digitalDocumentsRoutes');
 const siteCloudRoutes = require('./routes/siteCloudRoutes');
-const { startShareLinkCleanupScheduler } = require('./controllers/siteCloudController');
+const { startShareLinkCleanupScheduler, startDeletedFilesCleanupScheduler } = require('./controllers/siteCloudController');
 const { metricsMiddleware } = require('./middleware/metricsMiddleware');
 const { printStartupConsoleBanner } = require('./lib/startupConsoleBanner');
 
@@ -200,4 +200,5 @@ app.listen(PORT, HOST, async () => {
   runSiteChatAgentReminders().catch(() => {});
   startPlatformAutoBackupScheduler();
   startShareLinkCleanupScheduler();
+  startDeletedFilesCleanupScheduler();
 });
