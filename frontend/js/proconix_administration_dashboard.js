@@ -2747,6 +2747,12 @@
     setVal('pxCo_office_address', company.office_address);
     setVal('pxCo_security_question1', company.security_question1);
     setVal('pxCo_security_token1', company.security_token1);
+    var cloudLimEl = document.getElementById('pxCo_cloud_storage_limit_mb');
+    if (cloudLimEl) {
+      var cloudLimRaw = company.cloud_storage_limit_mb;
+      var cloudLim = parseInt(String(cloudLimRaw == null ? '' : cloudLimRaw), 10);
+      cloudLimEl.value = Number.isInteger(cloudLim) && cloudLim >= 1 ? String(cloudLim) : '500';
+    }
 
     var limRaw = company.user_limit;
     var lim =
@@ -2866,6 +2872,8 @@
       hideModalFeedback();
       var limInp = document.getElementById('pxCo_user_limit');
       var limStr = limInp && limInp.value != null ? String(limInp.value).trim() : '';
+      var cloudLimInp = document.getElementById('pxCo_cloud_storage_limit_mb');
+      var cloudLimStr = cloudLimInp && cloudLimInp.value != null ? String(cloudLimInp.value).trim() : '';
       var userLimitPayload = null;
       if (limStr === '') {
         userLimitPayload = null;
@@ -2877,6 +2885,11 @@
         }
         userLimitPayload = ln;
       }
+      var cloudStorageLimitPayload = parseInt(cloudLimStr || '500', 10);
+      if (!Number.isInteger(cloudStorageLimitPayload) || cloudStorageLimitPayload < 1) {
+        showModalFeedback('Cloud storage limit must be a positive integer (MB).', 'error');
+        return;
+      }
       var companyPayload = {
         name: document.getElementById('pxCo_name') && document.getElementById('pxCo_name').value,
         industry_type: document.getElementById('pxCo_industry_type') && document.getElementById('pxCo_industry_type').value,
@@ -2887,6 +2900,7 @@
         security_question1: document.getElementById('pxCo_security_question1') && document.getElementById('pxCo_security_question1').value,
         security_token1: document.getElementById('pxCo_security_token1') && document.getElementById('pxCo_security_token1').value,
         user_limit: userLimitPayload,
+        cloud_storage_limit_mb: cloudStorageLimitPayload,
       };
       var hmIdEl = document.getElementById('pxHm_id');
       var hmPayload = {};

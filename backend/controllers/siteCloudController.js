@@ -1,11 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const { pool } = require('../db/pool');
 
 const MAX_FILES_PER_TENANT = parseInt(process.env.SITE_CLOUD_MAX_FILES || '1000', 10);
-const MAX_TOTAL_BYTES_PER_TENANT = parseInt(
-  process.env.SITE_CLOUD_MAX_TOTAL_BYTES || String(5 * 1024 * 1024 * 1024),
-  10
-);
+const DEFAULT_STORAGE_LIMIT_BYTES = 500 * 1024 * 1024;
 const ALLOWED_FOLDERS = new Set(['files', 'drawing', 'images']);
 const MAX_SCAN_BYTES = 2 * 1024 * 1024;
 
@@ -91,6 +89,20 @@ function mapItem(item) {
   };
 }
 
+async function getTenantStorageLimitBytes(req) {
+  const companyId = req && req.digitalDocsCompanyId;
+  if (!Number.isInteger(companyId) || companyId < 1) return DEFAULT_STORAGE_LIMIT_BYTES;
+  try {
+    const r = await pool.query('SELECT cloud_storage_limit_mb FROM companies WHERE id = $1', [companyId]);
+    if (!r.rows.length) return DEFAULT_STORAGE_LIMIT_BYTES;
+    const mb = parseInt(String(r.rows[0].cloud_storage_limit_mb == null ? '' : r.rows[0].cloud_storage_limit_mb), 10);
+    if (!Number.isInteger(mb) || mb < 1) return DEFAULT_STORAGE_LIMIT_BYTES;
+    return mb * 1024 * 1024;
+  } catch (_) {
+    return DEFAULT_STORAGE_LIMIT_BYTES;
+  }
+}
+
 function listFiles(req, res) {
   ensureCloudDir(req);
   const q = String(req.query.q || '').trim().toLowerCase();
@@ -108,8 +120,9 @@ function listFiles(req, res) {
   return res.status(200).json({ success: true, files: current.map(mapItem) });
 }
 
-function getStats(req, res) {
+async function getStats(req, res) {
   ensureCloudDir(req);
+  const limitBytes = await getTenantStorageLimitBytes(req);
   const activeItems = readIndex(req).filter((it) => {
     if (!it || !it.stored_name) return false;
     const full = path.join(req.siteCloudCompanyDir, it.stored_name);
@@ -124,15 +137,15 @@ function getStats(req, res) {
       total_files: totalFiles,
       used_bytes: usedBytes,
       average_bytes: averageBytes,
-      limit_bytes: MAX_TOTAL_BYTES_PER_TENANT,
-      usage_percent: MAX_TOTAL_BYTES_PER_TENANT
-        ? Math.min(100, (usedBytes / MAX_TOTAL_BYTES_PER_TENANT) * 100)
+      limit_bytes: limitBytes,
+      usage_percent: limitBytes
+        ? Math.min(100, (usedBytes / limitBytes) * 100)
         : 0,
     },
   });
 }
 
-function uploadFile(req, res) {
+async function uploadFile(req, res) {
   ensureCloudDir(req);
   if (!req.file) return res.status(400).json({ success: false, message: 'File is required.' });
   const scan = basicMalwareScan(req.file.path);
@@ -154,8 +167,9 @@ function uploadFile(req, res) {
     });
   }
   const usedBytes = activeItems.reduce((sum, it) => sum + (Number(it.size_bytes) || 0), 0);
+  const maxTotalBytesPerTenant = await getTenantStorageLimitBytes(req);
   const nextTotal = usedBytes + (Number(req.file.size) || 0);
-  if (nextTotal > MAX_TOTAL_BYTES_PER_TENANT) {
+  if (nextTotal > maxTotalBytesPerTenant) {
     try {
       fs.unlinkSync(req.file.path);
     } catch (_) {}

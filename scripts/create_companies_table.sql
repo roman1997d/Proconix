@@ -11,5 +11,6 @@ CREATE TABLE IF NOT EXISTS companies (
   created_by        VARCHAR(255),
   security_question1 VARCHAR(255),
   security_token1   VARCHAR(255),
-  office_address    VARCHAR(500)
+  office_address    VARCHAR(500),
+  cloud_storage_limit_mb INTEGER NOT NULL DEFAULT 500
 );

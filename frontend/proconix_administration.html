@@ -881,6 +881,11 @@
                 <input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxCo_user_limit" min="1" step="1" placeholder="No limit" aria-describedby="pxCo_user_limit_help">
                 <p id="pxCo_user_limit_help" class="form-text text-white-50 small mb-0">Leave empty for no cap. Applies to total seats (same count as above).</p>
               </div>
+              <div class="col-md-6">
+                <label class="form-label text-white-50 small" for="pxCo_cloud_storage_limit_mb">Cloud storage limit (MB)</label>
+                <input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" id="pxCo_cloud_storage_limit_mb" min="1" step="1" value="500" aria-describedby="pxCo_cloud_storage_limit_help">
+                <p id="pxCo_cloud_storage_limit_help" class="form-text text-white-50 small mb-0">Initial tenant cloud storage is 500 MB. Set a custom value per company.</p>
+              </div>
               <div class="col-12 d-none" id="pxCo_user_limit_warning">
                 <div class="alert alert-warning py-2 px-3 mb-0 small" role="status">
                   Current users exceed the limit. Remove users or raise the limit.

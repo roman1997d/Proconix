@@ -4,7 +4,7 @@
   var SESSION_KEY = 'proconix_manager_session';
   var stateFiles = [];
   var stateStats = null;
-  var TENANT_STORAGE_LIMIT_BYTES = 5 * 1024 * 1024 * 1024;
+  var TENANT_STORAGE_LIMIT_BYTES = 500 * 1024 * 1024;
   var activeFolder = 'files';
 
   function getSession() {

@@ -658,6 +658,7 @@ const COMPANY_PATCH_KEYS = [
   'office_address',
   'security_question1',
   'security_token1',
+  'cloud_storage_limit_mb',
 ];
 
 /**
@@ -690,6 +691,19 @@ async function updateCompany(req, res) {
     let p = 1;
     COMPANY_PATCH_KEYS.forEach((key) => {
       if (Object.prototype.hasOwnProperty.call(companyIn, key)) {
+        if (key === 'cloud_storage_limit_mb') {
+          const raw = companyIn[key];
+          const n = parseInt(String(raw == null ? '' : raw).trim(), 10);
+          if (!Number.isInteger(n) || n < 1) {
+            throw Object.assign(new Error('cloud_storage_limit_mb must be a positive integer (MB).'), {
+              statusCode: 400,
+            });
+          }
+          sets.push(`${key} = $${p}`);
+          vals.push(n);
+          p += 1;
+          return;
+        }
         sets.push(`${key} = $${p}`);
         vals.push(companyIn[key] == null ? null : String(companyIn[key]));
         p += 1;
@@ -870,6 +884,16 @@ async function updateCompany(req, res) {
       /* ignore */
     }
     console.error('platformAdmin updateCompany error:', err);
+    if (err && err.statusCode) {
+      return res.status(err.statusCode).json({ success: false, message: err.message || 'Update failed.' });
+    }
+    if (err && err.code === '42703') {
+      return res.status(503).json({
+        success: false,
+        message:
+          'Column cloud_storage_limit_mb is missing on companies. Run: scripts/alter_companies_cloud_storage_limit.sql',
+      });
+    }
     return res.status(500).json({ success: false, message: err.message || 'Update failed.' });
   } finally {
     client.release();
