@@ -743,6 +743,10 @@
       } else {
         o.drawingGalleryVersionId = null;
       }
+      o.cloudStoredName =
+        o.cloudStoredName != null && String(o.cloudStoredName).trim() !== ''
+          ? String(o.cloudStoredName).trim()
+          : null;
       return o;
     });
     state.snags = (data.snags || []).map(function (s) {
@@ -836,7 +840,11 @@
           floor: l.floor,
           imageDataUrl: img,
           pixelsToMm: l.pixelsToMm != null && isFinite(Number(l.pixelsToMm)) ? Number(l.pixelsToMm) : 1,
-          drawingGalleryVersionId: dg != null && isFinite(dg) && dg >= 1 ? dg : null
+          drawingGalleryVersionId: dg != null && isFinite(dg) && dg >= 1 ? dg : null,
+          cloudStoredName:
+            l.cloudStoredName != null && String(l.cloudStoredName).trim() !== ''
+              ? String(l.cloudStoredName).trim()
+              : null
         };
       }),
       snags: state.snags.map(function (s) {
@@ -4144,7 +4152,8 @@
                 floor: floor || '—',
                 imageDataUrl: fr.result,
                 pixelsToMm: ptmNew,
-                drawingGalleryVersionId: null
+                drawingGalleryVersionId: null,
+                cloudStoredName: stored
               };
               state.locations.push(locC);
               saveState();

@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS site_snag_drawings (
   block VARCHAR(200) NOT NULL DEFAULT '—',
   floor VARCHAR(200) NOT NULL DEFAULT '—',
   image_data TEXT,
+  cloud_stored_name VARCHAR(700),
   pixels_to_mm DOUBLE PRECISION NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

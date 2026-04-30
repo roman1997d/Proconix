@@ -2,7 +2,10 @@
  * Site Snags — workspace API: projects & people from DB; drawings/snags/measurements/highlights persisted relationally.
  */
 
+const fs = require('fs');
+const path = require('path');
 const { pool } = require('../db/pool');
+const { UPLOADS_ROOT, sanitizeCompanyFolderName } = require('../middleware/resolveCompanyDocsDir');
 
 function getCompanyId(req) {
   return req.manager && req.manager.company_id != null ? req.manager.company_id : null;
@@ -78,6 +81,51 @@ async function fetchPeopleForCompany(companyId) {
   return people;
 }
 
+async function readCloudStoredNamesForCompany(companyId) {
+  try {
+    const r = await pool.query('SELECT name FROM companies WHERE id = $1', [companyId]);
+    const rawName = r.rows[0] && r.rows[0].name ? String(r.rows[0].name) : 'company' + companyId;
+    const folderName = sanitizeCompanyFolderName(rawName) + '_' + companyId + '_docs';
+    const idxPath = path.join(UPLOADS_ROOT, folderName, 'cloud_index.json');
+    if (!fs.existsSync(idxPath)) return new Set();
+    const raw = fs.readFileSync(idxPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(
+      parsed
+        .map((it) => (it && it.stored_name ? String(it.stored_name) : ''))
+        .filter(Boolean)
+    );
+  } catch (_) {
+    return new Set();
+  }
+}
+
+async function cleanupMissingCloudLinkedDrawings(client, companyId) {
+  try {
+    const dr = await client.query(
+      `SELECT id, cloud_stored_name
+       FROM site_snag_drawings
+       WHERE company_id = $1
+         AND cloud_stored_name IS NOT NULL
+         AND TRIM(cloud_stored_name) <> ''`,
+      [companyId]
+    );
+    if (!dr.rows.length) return;
+    const existingCloud = await readCloudStoredNamesForCompany(companyId);
+    const toDelete = dr.rows
+      .filter((row) => !existingCloud.has(String(row.cloud_stored_name || '')))
+      .map((row) => String(row.id));
+    if (!toDelete.length) return;
+    await client.query('DELETE FROM site_snag_measurements WHERE drawing_id = ANY($1::varchar[])', [toDelete]);
+    await client.query('DELETE FROM site_snag_highlights WHERE drawing_id = ANY($1::varchar[])', [toDelete]);
+    await client.query('DELETE FROM site_snags WHERE drawing_id = ANY($1::varchar[])', [toDelete]);
+    await client.query('DELETE FROM site_snag_drawings WHERE id = ANY($1::varchar[])', [toDelete]);
+  } catch (_) {
+    // non-fatal cleanup
+  }
+}
+
 function rowToSnag(row) {
   return {
     id: row.id,
@@ -124,6 +172,7 @@ async function getWorkspace(req, res) {
     return res.status(400).json({ success: false, message: 'Manager has no company_id.' });
   }
   try {
+    await cleanupMissingCloudLinkedDrawings(pool, companyId);
     const [projects, people] = await Promise.all([
       fetchProjectsForCompany(companyId),
       fetchPeopleForCompany(companyId),
@@ -135,7 +184,7 @@ async function getWorkspace(req, res) {
     let dr;
     try {
       dr = await pool.query(
-        `SELECT id, project_id, name, block, floor, image_data, pixels_to_mm, drawing_gallery_version_id
+        `SELECT id, project_id, name, block, floor, image_data, pixels_to_mm, drawing_gallery_version_id, cloud_stored_name
          FROM site_snag_drawings WHERE company_id = $1 ORDER BY created_at`,
         [companyId]
       );
@@ -160,6 +209,7 @@ async function getWorkspace(req, res) {
       pixelsToMm: row.pixels_to_mm != null ? Number(row.pixels_to_mm) : 1,
       drawingGalleryVersionId:
         row.drawing_gallery_version_id != null ? Number(row.drawing_gallery_version_id) : null,
+          cloudStoredName: row.cloud_stored_name || null,
     }));
 
     const drawingIds = locations.map((l) => l.id);
@@ -438,10 +488,14 @@ async function putWorkspace(req, res) {
         const p = parseInt(loc.drawingGalleryVersionId, 10);
         if (Number.isInteger(p) && p >= 1) dgVid = p;
       }
+      let cloudStored = null;
+      if (loc.cloudStoredName != null && String(loc.cloudStoredName).trim() !== '') {
+        cloudStored = String(loc.cloudStoredName).trim();
+      }
       try {
         await client.query(
-          `INSERT INTO site_snag_drawings (id, company_id, project_id, name, block, floor, image_data, pixels_to_mm, drawing_gallery_version_id, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          `INSERT INTO site_snag_drawings (id, company_id, project_id, name, block, floor, image_data, pixels_to_mm, drawing_gallery_version_id, cloud_stored_name, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
           [
             String(loc.id),
             companyId,
@@ -452,6 +506,7 @@ async function putWorkspace(req, res) {
             hasImg ? String(loc.imageDataUrl) : null,
             loc.pixelsToMm != null && isFinite(Number(loc.pixelsToMm)) ? Number(loc.pixelsToMm) : 1,
             dgVid,
+            cloudStored,
             now,
             now,
           ]
@@ -461,9 +516,9 @@ async function putWorkspace(req, res) {
           await client.query('ROLLBACK');
           return res.status(503).json({
             success: false,
-            code: 'site_snags_drawing_gallery_column_missing',
+            code: 'site_snags_cloud_column_missing',
             message:
-              'Database migration required for Drawing Gallery link: run scripts/alter_site_snag_drawings_drawing_gallery.sql',
+              'Database migration required for cloud linkage: run scripts/alter_site_snag_drawings_cloud_stored_name.sql',
           });
         }
         throw insErr;
@@ -804,10 +859,14 @@ async function putWorkspaceSupervisor(req, res) {
         const p = parseInt(loc.drawingGalleryVersionId, 10);
         if (Number.isInteger(p) && p >= 1) dgVid = p;
       }
+      let cloudStored = null;
+      if (loc.cloudStoredName != null && String(loc.cloudStoredName).trim() !== '') {
+        cloudStored = String(loc.cloudStoredName).trim();
+      }
       try {
         await client.query(
-          `INSERT INTO site_snag_drawings (id, company_id, project_id, name, block, floor, image_data, pixels_to_mm, drawing_gallery_version_id, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          `INSERT INTO site_snag_drawings (id, company_id, project_id, name, block, floor, image_data, pixels_to_mm, drawing_gallery_version_id, cloud_stored_name, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
           [
             String(loc.id),
             companyId,
@@ -818,6 +877,7 @@ async function putWorkspaceSupervisor(req, res) {
             hasImg ? String(loc.imageDataUrl) : null,
             loc.pixelsToMm != null && isFinite(Number(loc.pixelsToMm)) ? Number(loc.pixelsToMm) : 1,
             dgVid,
+            cloudStored,
             now,
             now,
           ]
@@ -827,9 +887,9 @@ async function putWorkspaceSupervisor(req, res) {
           await client.query('ROLLBACK');
           return res.status(503).json({
             success: false,
-            code: 'site_snags_drawing_gallery_column_missing',
+            code: 'site_snags_cloud_column_missing',
             message:
-              'Database migration required for Drawing Gallery link: run scripts/alter_site_snag_drawings_drawing_gallery.sql',
+              'Database migration required for cloud linkage: run scripts/alter_site_snag_drawings_cloud_stored_name.sql',
           });
         }
         throw insErr;
