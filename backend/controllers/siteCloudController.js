@@ -1,6 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 
+const MAX_FILES_PER_TENANT = parseInt(process.env.SITE_CLOUD_MAX_FILES || '1000', 10);
+const MAX_TOTAL_BYTES_PER_TENANT = parseInt(
+  process.env.SITE_CLOUD_MAX_TOTAL_BYTES || String(5 * 1024 * 1024 * 1024),
+  10
+);
+
 function indexPath(req) {
   return path.join(req.digitalDocsCompanyDir, 'cloud_index.json');
 }
@@ -61,6 +67,27 @@ function uploadFile(req, res) {
   ensureCloudDir(req);
   if (!req.file) return res.status(400).json({ success: false, message: 'File is required.' });
   const items = readIndex(req);
+  const activeItems = items.filter((it) => it && it.stored_name);
+  if (activeItems.length >= MAX_FILES_PER_TENANT) {
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(400).json({
+      success: false,
+      message: `Tenant storage limit reached (max ${MAX_FILES_PER_TENANT} files).`,
+    });
+  }
+  const usedBytes = activeItems.reduce((sum, it) => sum + (Number(it.size_bytes) || 0), 0);
+  const nextTotal = usedBytes + (Number(req.file.size) || 0);
+  if (nextTotal > MAX_TOTAL_BYTES_PER_TENANT) {
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (_) {}
+    return res.status(400).json({
+      success: false,
+      message: 'Tenant storage quota reached. Delete files or request more space.',
+    });
+  }
   const entry = {
     id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     stored_name: req.file.filename,
@@ -90,6 +117,8 @@ function downloadFile(req, res) {
   if (!found) return res.status(404).json({ success: false, message: 'File not found.' });
   const full = path.join(req.siteCloudCompanyDir, stored);
   if (!fs.existsSync(full)) return res.status(404).json({ success: false, message: 'File missing on disk.' });
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
   return res.download(full, found.original_name || stored);
 }
 
