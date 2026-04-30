@@ -143,6 +143,9 @@
           '" data-folder="' +
           escapeHtml(name) +
           '">' +
+          '<button type="button" class="sc-folder-delete" data-folder-delete="' +
+          escapeHtml(name) +
+          '" title="Delete folder" aria-label="Delete extra folder"><i class="bi bi-trash3"></i></button>' +
           '<p class="sc-cloud-card-meta">Extra folder</p><h3>' +
           escapeHtml(name) +
           '</h3><p>Independent cloud folder. Upload files and images directly here.</p></article>'
@@ -558,6 +561,42 @@
       })
       .catch(function () {
         showError('Network error while creating folder.');
+      });
+  }
+
+  function deleteExtraFolder(folderName) {
+    var headers = getHeaders();
+    if (!headers || !folderName) return;
+    var ok = window.confirm(
+      'Important: If you delete this folder, all files inside will be removed from this folder and moved to Deleted.\n\nPress OK to continue or Cancel to keep the folder.'
+    );
+    if (!ok) return;
+    fetch('/api/site-cloud/folders/' + encodeURIComponent(folderName), {
+      method: 'DELETE',
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          showError((out.data && out.data.message) || 'Could not delete folder.');
+          return;
+        }
+        if (activeFolder === folderName) activeFolder = 'files';
+        loadStats();
+        loadExtraFolders();
+        if (activeNavMode === 'deleted') {
+          loadDeletedFiles();
+        } else if (activeNavMode === 'cloud') {
+          loadFiles();
+        }
+      })
+      .catch(function () {
+        showError('Network error while deleting folder.');
       });
   }
 
@@ -1008,6 +1047,11 @@
 
     if (folderCards) {
       folderCards.addEventListener('click', function (e) {
+        var delBtn = e.target.closest('.sc-folder-delete');
+        if (delBtn) {
+          e.stopPropagation();
+          return deleteExtraFolder(delBtn.getAttribute('data-folder-delete'));
+        }
         var card = e.target.closest('.sc-folder-card');
         if (!card) return;
         var folder = String(card.getAttribute('data-folder') || 'files');

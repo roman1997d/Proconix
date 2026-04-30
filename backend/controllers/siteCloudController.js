@@ -630,6 +630,74 @@ function createExtraFolder(req, res) {
   return res.status(201).json({ success: true, folder: name });
 }
 
+function deleteExtraFolder(req, res) {
+  ensureCloudDir(req);
+  purgeExpiredDeletedForRequest(req);
+  const raw = decodeURIComponent(req.params.name || '');
+  const folderName = normalizeSubfolderName(raw);
+  if (!folderName) return res.status(400).json({ success: false, message: 'Invalid folder name.' });
+  if (ALLOWED_FOLDERS.has(folderName.toLowerCase())) {
+    return res.status(400).json({ success: false, message: 'Default folders cannot be deleted.' });
+  }
+
+  const allFolders = readFolderIndex(req);
+  const exists = allFolders.some((n) => String(n || '').toLowerCase() === folderName.toLowerCase());
+  if (!exists) return res.status(404).json({ success: false, message: 'Folder not found.' });
+
+  const items = readIndex(req);
+  const toMove = items.filter((it) => String(it.folder || '').toLowerCase() === folderName.toLowerCase());
+  const keep = items.filter((it) => String(it.folder || '').toLowerCase() !== folderName.toLowerCase());
+  const trashItems = readTrashIndex(req);
+  const movedStoredNames = [];
+
+  for (let i = 0; i < toMove.length; i += 1) {
+    const it = toMove[i];
+    const stored = sanitizeStoredName(it && it.stored_name);
+    if (!stored) continue;
+    const full = path.join(req.siteCloudCompanyDir, stored);
+    if (!fs.existsSync(full)) continue;
+    const trashedName = `${Date.now()}_${stored}`;
+    const trashFull = path.join(req.siteCloudTrashDir, trashedName);
+    try {
+      fs.renameSync(full, trashFull);
+      movedStoredNames.push(stored);
+      trashItems.push({
+        trash_id: `td_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        trashed_name: trashedName,
+        original_name: it.original_name || stored,
+        mime_type: it.mime_type || 'application/octet-stream',
+        size_bytes: it.size_bytes || 0,
+        folder: it.folder || folderName,
+        deleted_at: new Date().toISOString(),
+      });
+    } catch (_) {}
+  }
+
+  writeIndex(req, keep);
+  writeTrashIndex(req, trashItems);
+
+  if (movedStoredNames.length) {
+    const movedSet = new Set(movedStoredNames);
+    const shares = readGlobalShareIndex().filter(
+      (s) =>
+        !(
+          String(s.company_folder_name || '') === String(req.digitalDocsFolderName || '') &&
+          movedSet.has(String(s.stored_name || ''))
+        )
+    );
+    writeGlobalShareIndex(shares);
+  }
+
+  const nextFolders = allFolders.filter((n) => String(n || '').toLowerCase() !== folderName.toLowerCase());
+  writeFolderIndex(req, nextFolders);
+
+  return res.status(200).json({
+    success: true,
+    message: 'Folder deleted. Files moved to Deleted.',
+    moved_files: movedStoredNames.length,
+  });
+}
+
 function generateShareLink(req, res) {
   ensureCloudDir(req);
   const stored = sanitizeStoredName(decodeURIComponent(req.params.name || ''));
@@ -791,6 +859,7 @@ module.exports = {
   listFiles,
   listExtraFolders,
   createExtraFolder,
+  deleteExtraFolder,
   listDeletedFiles,
   getStats,
   uploadFile,

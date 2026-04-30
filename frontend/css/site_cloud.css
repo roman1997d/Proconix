@@ -310,6 +310,29 @@ body.sc-module {
   color: #7e87a1;
 }
 
+.sc-folder-delete {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 1px solid #e6d5d5;
+  background: #fff;
+  color: #b94848;
+  border-radius: 999px;
+  width: 24px;
+  height: 24px;
+  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sc-folder-card.is-highlight .sc-folder-delete {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+}
+
 .sc-search-wrap {
   position: relative;
   flex: 1;
