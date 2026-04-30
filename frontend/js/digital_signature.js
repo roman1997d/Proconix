@@ -95,6 +95,13 @@
     return 'Other';
   }
 
+  function recipientMeta(value) {
+    var v = String(value || '').toLowerCase();
+    if (v === 'operatives') return { label: 'Operatives', icon: 'bi-people', cls: 'ds-recipient--operatives' };
+    if (v === 'client') return { label: 'Client', icon: 'bi-building', cls: 'ds-recipient--client' };
+    return { label: 'Other', icon: 'bi-person-badge', cls: 'ds-recipient--other' };
+  }
+
   function countByStatus(docs, status) {
     return docs.filter(function (d) {
       return d.status === status;
@@ -302,7 +309,18 @@
               escapeHtml(statusLabel(d.status)) +
               '</span></div>' +
               '<div class="ds-row-recipient">' +
-              escapeHtml(recipientLabel(d.recipient_group || d.recipient_type) || '—') +
+              (function () {
+                var rm = recipientMeta(d.recipient_group || d.recipient_type);
+                return (
+                  '<span class="ds-recipient-pill ' +
+                  rm.cls +
+                  '"><i class="bi ' +
+                  rm.icon +
+                  '"></i>' +
+                  escapeHtml(rm.label) +
+                  '</span>'
+                );
+              })() +
               '</div>' +
               '<div class="ds-row-actions">' +
               actions +
