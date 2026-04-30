@@ -373,16 +373,25 @@ async function sendFileByEmail(req, res) {
     });
   }
   const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
-  const managerName = req.manager && req.manager.name ? String(req.manager.name).trim() : 'Manager';
+  const managerName = [req.manager && req.manager.name, req.manager && req.manager.surname]
+    .filter(Boolean)
+    .join(' ')
+    .trim() || 'Manager';
+  let companyName = 'your company';
+  try {
+    const cr = await pool.query('SELECT name FROM companies WHERE id = $1', [req.manager.company_id]);
+    if (cr.rows.length && cr.rows[0].name) companyName = String(cr.rows[0].name).trim();
+  } catch (_) {}
+  const proconixUrl = (process.env.PROCONIX_PUBLIC_URL || 'https://proconix.uk').trim();
   const subject = `Proconix Cloud shared file: ${found.original_name || stored}`;
   const text = [
-    `Hello,`,
+    'Hello,',
     ``,
-    `${managerName} shared a file with you from Proconix Cloud.`,
+    `${managerName} from ${companyName} shared a file with you from Proconix Cloud.`,
     `File: ${found.original_name || stored}`,
     ``,
-    `Best regards,`,
-    `Proconix`,
+    'Best regards,',
+    `Proconix.uk (${proconixUrl})`,
   ].join('\n');
 
   await transport.sendMail({
