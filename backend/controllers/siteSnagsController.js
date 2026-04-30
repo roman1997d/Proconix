@@ -150,26 +150,7 @@ function parseImageDataUrl(value) {
   return { mime, ext, buffer: Buffer.from(b64, 'base64') };
 }
 
-function displayNameFromManagerReq(req) {
-  if (!req || !req.manager) return '';
-  const parts = [req.manager.name, req.manager.surname]
-    .filter(Boolean)
-    .map((s) => String(s).trim())
-    .filter(Boolean);
-  if (parts.length) return parts.join(' ');
-  if (req.manager.email) return String(req.manager.email).trim();
-  return '';
-}
-
-function displayNameFromSupervisorReq(req) {
-  if (!req || !req.supervisor) return '';
-  const n = String(req.supervisor.name || '').trim();
-  if (n) return n;
-  if (req.supervisor.email) return String(req.supervisor.email).trim();
-  return '';
-}
-
-async function syncSiteSnagsDrawingToCloud(companyId, managerId, loc, sourceActor) {
+async function syncSiteSnagsDrawingToCloud(companyId, managerId, loc) {
   try {
     if (!loc) return null;
     const raw = loc.imageDataUrl != null ? String(loc.imageDataUrl).trim() : '';
@@ -196,8 +177,6 @@ async function syncSiteSnagsDrawingToCloud(companyId, managerId, loc, sourceActo
       size_bytes: parsed.buffer.length,
       uploaded_at: existingIdx >= 0 && idx[existingIdx] && idx[existingIdx].uploaded_at ? idx[existingIdx].uploaded_at : now,
       uploaded_by_manager_id: managerId != null ? Number(managerId) : null,
-      source_module: 'site_snags',
-      source_actor: sourceActor && String(sourceActor).trim() ? String(sourceActor).trim().slice(0, 200) : null,
       drawing_id: String(loc.id),
       updated_at: now,
     };
@@ -603,12 +582,7 @@ async function putWorkspace(req, res) {
         cloudStored = String(loc.cloudStoredName).trim();
       }
       if (!cloudStored && hasImg && dgVid == null) {
-        cloudStored = await syncSiteSnagsDrawingToCloud(
-          companyId,
-          req.manager && req.manager.id,
-          loc,
-          displayNameFromManagerReq(req)
-        );
+        cloudStored = await syncSiteSnagsDrawingToCloud(companyId, req.manager && req.manager.id, loc);
       }
       try {
         await client.query(
@@ -982,7 +956,7 @@ async function putWorkspaceSupervisor(req, res) {
         cloudStored = String(loc.cloudStoredName).trim();
       }
       if (!cloudStored && hasImg && dgVid == null) {
-        cloudStored = await syncSiteSnagsDrawingToCloud(companyId, null, loc, displayNameFromSupervisorReq(req));
+        cloudStored = await syncSiteSnagsDrawingToCloud(companyId, null, loc);
       }
       try {
         await client.query(

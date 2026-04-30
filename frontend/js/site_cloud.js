@@ -31,29 +31,8 @@
     };
   }
 
-  function managerDisplayFromSession() {
-    var s = getSession();
-    if (!s) return '';
-    var parts = [s.name, s.surname]
-      .filter(function (x) {
-        return x && String(x).trim();
-      })
-      .map(function (x) {
-        return String(x).trim();
-      });
-    if (parts.length) return parts.join(' ');
-    if (s.email) return String(s.email).trim();
-    return '';
-  }
-
   function cloudFileSearchHay(f) {
-    return String(
-      (f && (f.original_name || '')) +
-        ' ' +
-        (f && (f.stored_name || '')) +
-        ' ' +
-        (f && (f.from_where || f.source_actor || f.source_module || ''))
-    ).toLowerCase();
+    return String((f && (f.original_name || '')) + ' ' + (f && (f.stored_name || ''))).toLowerCase();
   }
 
   function showError(msg) {
@@ -286,7 +265,6 @@
       list.innerHTML = rows
         .map(function (f) {
           var fm = folderMeta(f.folder);
-          var fw = f.from_where && String(f.from_where).trim() ? String(f.from_where).trim() : '';
           return (
             '<article class="sc-row" data-trash-id="' +
             escapeHtml(f.trash_id || '') +
@@ -294,9 +272,6 @@
             '<div class="sc-file-cell"><div class="sc-file-name">' +
             escapeHtml(f.original_name || 'Deleted file') +
             '</div>' +
-            (fw
-              ? '<div class="sc-muted sc-from-where">' + escapeHtml(fw) + '</div>'
-              : '') +
             '<div class="sc-muted">' +
             escapeHtml(f.mime_type || 'file') +
             '</div></div>' +
@@ -334,7 +309,6 @@
       .map(function (f) {
         var fm = fileTypeMeta(f);
         var moveOptions = buildMoveFolderOptions(f.folder || 'files');
-        var fw = f.from_where && String(f.from_where).trim() ? String(f.from_where).trim() : '';
         return (
           '<article class="sc-row" data-name="' +
           escapeHtml(f.stored_name) +
@@ -346,7 +320,6 @@
           '">' +
           escapeHtml(f.original_name || f.stored_name) +
           '</button>' +
-          (fw ? '<div class="sc-muted sc-from-where">' + escapeHtml(fw) + '</div>' : '') +
           '<div class="sc-muted">' +
           escapeHtml(f.mime_type || 'file') +
           '</div></div>' +
@@ -869,9 +842,6 @@
     var fd = new FormData();
     fd.append('file', file);
     fd.append('folder', uploadFolder);
-    fd.append('source_module', 'cloud_browser');
-    var actor = managerDisplayFromSession();
-    if (actor) fd.append('source_actor', actor);
     showError('');
     setLoading(true, 'Scanning file and uploading...');
     fetch('/api/site-cloud/upload', {

@@ -409,15 +409,6 @@ body.sc-module {
   font-weight: 600;
 }
 
-.sc-from-where {
-  font-size: 0.76rem;
-  font-style: italic;
-  color: #64748b;
-  line-height: 1.25;
-  max-width: 100%;
-  word-break: break-word;
-}
-
 .sc-file-link {
   border: 0;
   background: transparent;

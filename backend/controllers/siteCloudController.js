@@ -21,46 +21,6 @@ function normalizeFolder(value) {
   return 'files';
 }
 
-const CLOUD_SOURCE_LABELS = {
-  work_logs: 'Work logs',
-  unit_progress: 'Unit progress tracking',
-  drawing_gallery: 'Drawing gallery',
-  site_snags: 'Site snags',
-  cloud_browser: 'Cloud',
-  site_cloud: 'Cloud',
-};
-
-function sanitizeCloudMetaString(value, maxLen) {
-  if (value == null) return '';
-  const s = String(value).trim();
-  if (!s) return '';
-  return s.slice(0, maxLen);
-}
-
-function sanitizeSourceModule(value) {
-  const s = sanitizeCloudMetaString(value, 80).toLowerCase();
-  if (!s || !/^[a-z0-9_]+$/.test(s)) return '';
-  return s;
-}
-
-function humanizeSourceSlug(slug) {
-  return String(slug || '')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
-/** Human line: "Work logs · Jane Doe" for cloud file list. */
-function buildFromWhereLabel(item) {
-  if (!item) return '';
-  if (item.from_where && String(item.from_where).trim()) return String(item.from_where).trim();
-  const mod = String(item.source_module || '').trim().toLowerCase();
-  const actor = String(item.source_actor || item.worker_name || '').trim();
-  const base = CLOUD_SOURCE_LABELS[mod] || (mod ? humanizeSourceSlug(mod) : '');
-  if (base && actor) return `${base} · ${actor}`;
-  if (actor) return actor;
-  return base || '';
-}
-
 function basicMalwareScan(filePath) {
   const suspiciousSignatures = [
     { type: 'pe', bytes: [0x4d, 0x5a] }, // MZ
@@ -170,7 +130,7 @@ function writeFolderIndex(req, names) {
 
 async function removeDrawingGalleryVersionForCloudItem(req, item) {
   try {
-    if (!item || String(item.source_module || '') !== 'drawing_gallery') return false;
+    if (!item) return false;
     const versionId = parseInt(item.drawing_version_id, 10);
     if (!Number.isInteger(versionId) || versionId < 1) return false;
     const client = await pool.connect();
@@ -388,9 +348,6 @@ function mapItem(item) {
     size_bytes: item.size_bytes || 0,
     uploaded_at: item.uploaded_at,
     uploaded_by_manager_id: item.uploaded_by_manager_id,
-    source_module: item.source_module || null,
-    source_actor: item.source_actor || item.worker_name || null,
-    from_where: buildFromWhereLabel(item) || null,
   };
 }
 
@@ -418,7 +375,7 @@ function listFiles(req, res) {
     if (!fs.existsSync(full)) return false;
     if (String(it.folder || 'files') !== folder) return false;
     if (!q) return true;
-    const hay = `${it.original_name || ''} ${it.stored_name || ''} ${buildFromWhereLabel(it)}`.toLowerCase();
+    const hay = `${it.original_name || ''} ${it.stored_name || ''}`.toLowerCase();
     return hay.includes(q);
   });
   current.sort((a, b) => new Date(b.uploaded_at || 0) - new Date(a.uploaded_at || 0));
@@ -483,10 +440,6 @@ async function uploadFile(req, res) {
       message: 'Tenant storage quota reached. Delete files or request more space.',
     });
   }
-  const body = req.body || {};
-  const sourceModule = sanitizeSourceModule(body.source_module);
-  const sourceActor = sanitizeCloudMetaString(body.source_actor || body.worker_name, 200) || null;
-
   const entry = {
     id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     folder: resolveFolder(req, req.body && req.body.folder),
@@ -497,8 +450,6 @@ async function uploadFile(req, res) {
     uploaded_at: new Date().toISOString(),
     uploaded_by_manager_id: req.manager.id,
   };
-  if (sourceModule) entry.source_module = sourceModule;
-  if (sourceActor) entry.source_actor = sourceActor;
   items.push(entry);
   writeIndex(req, items);
   return res.status(201).json({ success: true, file: mapItem(entry) });
@@ -600,8 +551,6 @@ async function removeFile(req, res) {
     size_bytes: found.size_bytes || 0,
     folder: found.folder || 'files',
     deleted_at: new Date().toISOString(),
-    source_module: found.source_module || null,
-    source_actor: found.source_actor || found.worker_name || null,
   });
   writeTrashIndex(req, trashItems);
   const shares = readGlobalShareIndex().filter(
@@ -612,9 +561,7 @@ async function removeFile(req, res) {
       )
   );
   writeGlobalShareIndex(shares);
-  const drawingGalleryRemoved = String(found.source_module || '') === 'drawing_gallery'
-    ? await removeDrawingGalleryVersionForCloudItem(req, found)
-    : false;
+  const drawingGalleryRemoved = await removeDrawingGalleryVersionForCloudItem(req, found);
   return res.status(200).json({
     success: true,
     message: 'File moved to Deleted.',
@@ -632,8 +579,7 @@ function listDeletedFiles(req, res) {
       const full = path.join(req.siteCloudTrashDir, it.trashed_name);
       if (!fs.existsSync(full)) return false;
       if (!q) return true;
-      const hay = `${it.original_name || ''} ${buildFromWhereLabel(it)}`.toLowerCase();
-      return hay.includes(q);
+      return String(it.original_name || '').toLowerCase().includes(q);
     })
     .sort((a, b) => new Date(b.deleted_at || 0) - new Date(a.deleted_at || 0))
     .map((it) => ({
@@ -644,9 +590,6 @@ function listDeletedFiles(req, res) {
       folder: it.folder || 'files',
       deleted_at: it.deleted_at,
       delete_after_at: new Date(new Date(it.deleted_at || Date.now()).getTime() + DELETED_RETENTION_MS).toISOString(),
-      source_module: it.source_module || null,
-      source_actor: it.source_actor || it.worker_name || null,
-      from_where: buildFromWhereLabel(it) || null,
     }));
   return res.status(200).json({ success: true, files: items });
 }
@@ -678,7 +621,7 @@ function restoreDeletedFile(req, res) {
     return res.status(500).json({ success: false, message: 'Could not restore file.' });
   }
   const items = readIndex(req);
-  const restoredEntry = {
+  items.push({
     id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     folder: resolveFolder(req, item.folder),
     stored_name: restoredStored,
@@ -687,12 +630,7 @@ function restoreDeletedFile(req, res) {
     size_bytes: item.size_bytes || 0,
     uploaded_at: new Date().toISOString(),
     uploaded_by_manager_id: req.manager.id,
-  };
-  if (item.source_module) restoredEntry.source_module = item.source_module;
-  if (item.source_actor || item.worker_name) {
-    restoredEntry.source_actor = item.source_actor || item.worker_name;
-  }
-  items.push(restoredEntry);
+  });
   writeIndex(req, items);
   trashItems.splice(idx, 1);
   writeTrashIndex(req, trashItems);
@@ -796,8 +734,6 @@ function deleteExtraFolder(req, res) {
         size_bytes: it.size_bytes || 0,
         folder: it.folder || folderName,
         deleted_at: new Date().toISOString(),
-        source_module: it.source_module || null,
-        source_actor: it.source_actor || it.worker_name || null,
       });
       removeDrawingGalleryVersionForCloudItem(req, it);
     } catch (_) {}

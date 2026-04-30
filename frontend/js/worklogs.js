@@ -94,18 +94,11 @@
     var saveBtn = wrap.querySelector('.worklogs-btn-save-invoice-cloud');
     var fb = wrap.querySelector('.worklogs-cloud-save-feedback');
     var encoded = wrap.getAttribute('data-invoice-encoded');
-    var workerEnc = wrap.getAttribute('data-worker-encoded');
     var invoicePath = '';
-    var workerName = '';
     try {
       invoicePath = encoded ? decodeURIComponent(encoded) : '';
     } catch (_) {
       invoicePath = '';
-    }
-    try {
-      workerName = workerEnc ? decodeURIComponent(workerEnc) : '';
-    } catch (_) {
-      workerName = '';
     }
     if (!invoicePath || !selectEl || !saveBtn) return;
 
@@ -147,11 +140,9 @@
           var mime = blob.type || 'application/octet-stream';
           var file = new File([blob], baseName, { type: mime });
           var fd = new FormData();
-        fd.append('file', file, baseName);
-        fd.append('folder', folder);
-        fd.append('source_module', 'work_logs');
-        if (workerName) fd.append('source_actor', workerName);
-        return fetch('/api/site-cloud/upload', {
+          fd.append('file', file, baseName);
+          fd.append('folder', folder);
+          return fetch('/api/site-cloud/upload', {
             method: 'POST',
             headers: hdr,
             body: fd,
@@ -469,8 +460,6 @@
       html +=
         '<div class="worklogs-details-invoice-save-cloud" data-invoice-encoded="' +
         encodeURIComponent(String(invoicePath)) +
-        '" data-worker-encoded="' +
-        encodeURIComponent(String(job.workerName || '')) +
         '">';
       html += '<span class="worklogs-cloud-save-label">Save to cloud</span>';
       html += '<div class="worklogs-cloud-save-row">';
