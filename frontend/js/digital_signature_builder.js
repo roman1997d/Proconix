@@ -15,6 +15,8 @@
   var activeTool = null;
   var operativesCache = [];
   var dragState = null;
+  var hasUnsavedChanges = false;
+  var templateSaved = false;
 
   function getSession() {
     try {
@@ -128,6 +130,46 @@
     }
   }
 
+  function hasSignableField() {
+    return fields.some(function (f) {
+      return f.type === 'signature' || f.type === 'initials';
+    });
+  }
+
+  function markDirty() {
+    hasUnsavedChanges = true;
+    templateSaved = false;
+    updateStatusBar();
+  }
+
+  function markSaved() {
+    hasUnsavedChanges = false;
+    templateSaved = true;
+    updateStatusBar();
+  }
+
+  function updateStatusBar() {
+    var statFields = document.getElementById('dsbStatFields');
+    var statSign = document.getElementById('dsbStatSignFields');
+    var statRecipients = document.getElementById('dsbStatRecipients');
+    var statTemplate = document.getElementById('dsbStatTemplate');
+    var assignTab = document.getElementById('dsbTabAssign');
+    var selectedRecipients = document.querySelectorAll('#dsbOperativeList input[name="op"]:checked').length;
+    var signFields = fields.filter(function (f) {
+      return f.type === 'signature' || f.type === 'initials';
+    }).length;
+    if (statFields) statFields.textContent = String(fields.length);
+    if (statSign) statSign.textContent = String(signFields);
+    if (statRecipients) statRecipients.textContent = String(selectedRecipients);
+    if (statTemplate) statTemplate.textContent = templateSaved ? 'Saved' : hasUnsavedChanges ? 'Unsaved changes' : 'Not saved';
+    if (assignTab) {
+      assignTab.disabled = !hasSignableField();
+      assignTab.title = hasSignableField()
+        ? 'Open assignment step'
+        : 'Add at least one Signature or Initials field first';
+    }
+  }
+
   function renderFieldOverlays() {
     document.querySelectorAll('.dsb-overlay').forEach(function (overlay) {
       var pageNum = parseInt(overlay.getAttribute('data-page'), 10);
@@ -153,6 +195,7 @@
           overlay.appendChild(el);
         });
     });
+    updateStatusBar();
   }
 
   function attachOverlayHandlers(overlay, pageNum) {
@@ -205,6 +248,7 @@
       };
       fields.push(nf);
       selectedId = nf.id;
+      markDirty();
       syncProps();
       renderFieldOverlays();
     });
@@ -228,6 +272,7 @@
     f.y = clamp01(dragState.origY + dy);
     if (f.x + f.w > 1) f.x = 1 - f.w;
     if (f.y + f.h > 1) f.y = 1 - f.h;
+    markDirty();
     renderFieldOverlays();
   }
 
@@ -336,6 +381,7 @@
             .join('');
           bindOperativeListUi();
           updateSelectedCount();
+          updateStatusBar();
         }
       });
   }
@@ -347,6 +393,7 @@
     var checked = list.querySelectorAll('input[name="op"]:checked').length;
     var total = list.querySelectorAll('input[name="op"]').length;
     countEl.textContent = checked + ' selected of ' + total;
+    updateStatusBar();
   }
 
   function filterOperativesList() {
@@ -402,6 +449,9 @@
         }
         fields = normalizeFieldsFromServer(docRow.fields_json);
         selectedId = fields.length ? fields[0].id : null;
+        hasUnsavedChanges = false;
+        templateSaved = fields.length > 0;
+        updateStatusBar();
         syncProps();
 
         if (typeof pdfjsLib === 'undefined') {
@@ -430,6 +480,10 @@
   function saveFields() {
     var headers = getHeaders();
     if (!headers) return;
+    if (!hasSignableField()) {
+      showError('Add at least one Signature or Initials field before saving.');
+      return;
+    }
     showError('');
     fetch('/api/documents/' + docId + '/fields', {
       method: 'PATCH',
@@ -444,6 +498,7 @@
       })
       .then(function (out) {
         if (out.ok && out.data.success) {
+          markSaved();
           setStep('assign');
           loadOperatives();
         } else {
@@ -511,6 +566,10 @@
       setStep('build');
     });
     document.getElementById('dsbTabAssign').addEventListener('click', function () {
+      if (!hasSignableField()) {
+        showError('Add at least one Signature or Initials field before opening Assign.');
+        return;
+      }
       setStep('assign');
       loadOperatives();
     });
@@ -575,6 +634,8 @@
             if (out.ok && out.data.success) {
               fields = [];
               selectedId = null;
+              hasUnsavedChanges = false;
+              templateSaved = false;
               syncProps();
               renderFieldOverlays();
               setStep('build');
@@ -637,6 +698,7 @@
           f.h = clamp01(parseFloat(document.getElementById('dsbPropH').value) || f.h);
           if (f.x + f.w > 1) f.x = 1 - f.w;
           if (f.y + f.h > 1) f.y = 1 - f.h;
+          markDirty();
           renderFieldOverlays();
         });
       }
@@ -648,7 +710,10 @@
         var f = fields.find(function (x) {
           return x.id === selectedId;
         });
-        if (f) f.required = rq.checked;
+        if (f) {
+          f.required = rq.checked;
+          markDirty();
+        }
       });
     }
 
@@ -661,6 +726,7 @@
         if (!f) return;
         var v = pu.value;
         f.for_user_id = v ? parseInt(v, 10) : null;
+        markDirty();
       });
     }
 
@@ -670,8 +736,15 @@
         return x.id !== selectedId;
       });
       selectedId = fields.length ? fields[0].id : null;
+      markDirty();
       syncProps();
       renderFieldOverlays();
+    });
+
+    window.addEventListener('beforeunload', function (e) {
+      if (!hasUnsavedChanges) return;
+      e.preventDefault();
+      e.returnValue = '';
     });
 
     window.addEventListener('mousemove', onWinMouseMove);
@@ -679,6 +752,7 @@
 
     loadDocument();
     loadOperatives();
+    updateStatusBar();
   }
 
   if (document.readyState === 'loading') {

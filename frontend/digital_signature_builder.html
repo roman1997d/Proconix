@@ -30,6 +30,12 @@
   </header>
 
   <div id="dsbError" class="dsb-error dsb-hidden" role="alert"></div>
+  <div class="dsb-statusbar" id="dsbStatusBar" aria-live="polite">
+    <span class="dsb-status-chip"><i class="bi bi-bounding-box"></i> Fields: <strong id="dsbStatFields">0</strong></span>
+    <span class="dsb-status-chip"><i class="bi bi-pen"></i> Sign fields: <strong id="dsbStatSignFields">0</strong></span>
+    <span class="dsb-status-chip"><i class="bi bi-people"></i> Selected recipients: <strong id="dsbStatRecipients">0</strong></span>
+    <span class="dsb-status-chip"><i class="bi bi-check2-circle"></i> Template: <strong id="dsbStatTemplate">Not saved</strong></span>
+  </div>
 
   <div id="dsbPanelBuild" class="dsb-layout">
     <div class="dsb-canvas-col">

@@ -352,6 +352,38 @@ html.dsb-html {
   flex-shrink: 0;
 }
 
+.dsb-statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 1rem 0.65rem;
+}
+
+.dsb-status-chip {
+  background: #ffffff;
+  border: 1px solid #dbe2e8;
+  border-radius: 999px;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.78rem;
+  color: #4b5563;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+}
+
+.dsb-status-chip i {
+  color: #13b9a7;
+}
+
+.dsb-status-chip strong {
+  color: #111827;
+}
+
+.dsb-step:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .dsb-assign {
   padding: 1rem;
   max-width: 640px;
