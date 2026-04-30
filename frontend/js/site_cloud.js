@@ -161,10 +161,71 @@
           escapeHtml(f.stored_name) +
           '">Delete</button>' +
           '</div>' +
+          '<div class="sc-actions-row">' +
+          '<button type="button" class="sc-btn-chip sc-share-link" data-name="' +
+          escapeHtml(f.stored_name) +
+          '" data-original="' +
+          escapeHtml(f.original_name || f.stored_name) +
+          '">Generate link</button>' +
+          '<button type="button" class="sc-btn-chip sc-share-email" data-name="' +
+          escapeHtml(f.stored_name) +
+          '" data-original="' +
+          escapeHtml(f.original_name || f.stored_name) +
+          '">Send via email</button>' +
+          '</div>' +
           '</article>'
         );
       })
       .join('');
+  }
+
+  function createShareLink(storedName) {
+    var headers = getHeaders();
+    if (!headers || !storedName) return Promise.reject(new Error('Manager session required.'));
+    return fetch('/api/site-cloud/files/' + encodeURIComponent(storedName) + '/share-link', {
+      method: 'POST',
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success || !out.data.share || !out.data.share.path) {
+          throw new Error((out.data && out.data.message) || 'Could not generate share link.');
+        }
+        return window.location.origin + out.data.share.path;
+      });
+  }
+
+  function generateShareLink(storedName) {
+    createShareLink(storedName)
+      .then(function (link) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          return navigator.clipboard.writeText(link).then(function () {
+            showError('');
+            window.alert('Share link copied to clipboard:\n' + link);
+          });
+        }
+        window.prompt('Copy share link:', link);
+      })
+      .catch(function (err) {
+        showError((err && err.message) || 'Share link failed.');
+      });
+  }
+
+  function shareViaEmail(storedName, originalName) {
+    createShareLink(storedName)
+      .then(function (link) {
+        var subject = 'Shared file - ' + (originalName || storedName);
+        var body = 'Hello,\n\nPlease use this link to download the file:\n' + link;
+        window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+      })
+      .catch(function (err) {
+        showError((err && err.message) || 'Share via email failed.');
+      });
   }
 
   function renderStats() {
@@ -499,6 +560,10 @@
         if (d) return downloadFile(d.getAttribute('data-name'));
         var x = e.target.closest('.sc-delete');
         if (x) return deleteFile(x.getAttribute('data-name'));
+        var s = e.target.closest('.sc-share-link');
+        if (s) return generateShareLink(s.getAttribute('data-name'));
+        var m = e.target.closest('.sc-share-email');
+        if (m) return shareViaEmail(m.getAttribute('data-name'), m.getAttribute('data-original'));
       });
     }
 

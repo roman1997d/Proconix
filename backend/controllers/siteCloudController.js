@@ -1,11 +1,15 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { pool } = require('../db/pool');
+const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
 
 const MAX_FILES_PER_TENANT = parseInt(process.env.SITE_CLOUD_MAX_FILES || '1000', 10);
 const DEFAULT_STORAGE_LIMIT_BYTES = 500 * 1024 * 1024;
 const ALLOWED_FOLDERS = new Set(['files', 'drawing', 'images']);
 const MAX_SCAN_BYTES = 2 * 1024 * 1024;
+const SHARE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const GLOBAL_SHARE_INDEX_PATH = path.join(UPLOADS_ROOT, 'site_cloud_share_links.json');
 
 function normalizeFolder(value) {
   const v = String(value || '').trim().toLowerCase();
@@ -66,6 +70,24 @@ function readIndex(req) {
 function writeIndex(req, items) {
   const p = indexPath(req);
   fs.writeFileSync(p, JSON.stringify(items, null, 2), 'utf8');
+}
+
+function readGlobalShareIndex() {
+  try {
+    if (!fs.existsSync(GLOBAL_SHARE_INDEX_PATH)) return [];
+    const raw = fs.readFileSync(GLOBAL_SHARE_INDEX_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeGlobalShareIndex(items) {
+  try {
+    fs.mkdirSync(path.dirname(GLOBAL_SHARE_INDEX_PATH), { recursive: true });
+    fs.writeFileSync(GLOBAL_SHARE_INDEX_PATH, JSON.stringify(items, null, 2), 'utf8');
+  } catch (_) {}
 }
 
 function ensureCloudDir(req) {
@@ -280,6 +302,54 @@ function removeFile(req, res) {
   return res.status(200).json({ success: true, message: 'File deleted.' });
 }
 
+function generateShareLink(req, res) {
+  ensureCloudDir(req);
+  const stored = sanitizeStoredName(decodeURIComponent(req.params.name || ''));
+  if (!stored) return res.status(400).json({ success: false, message: 'Invalid file name.' });
+  const items = readIndex(req);
+  const found = items.find((it) => it.stored_name === stored);
+  if (!found) return res.status(404).json({ success: false, message: 'File not found.' });
+  const full = path.join(req.siteCloudCompanyDir, stored);
+  if (!fs.existsSync(full)) return res.status(404).json({ success: false, message: 'File missing on disk.' });
+
+  const token = crypto.randomBytes(24).toString('hex');
+  const expiresAt = new Date(Date.now() + SHARE_LINK_TTL_MS).toISOString();
+  const all = readGlobalShareIndex().filter((s) => s && s.expires_at && new Date(s.expires_at).getTime() > Date.now());
+  all.push({
+    token,
+    company_folder_name: req.digitalDocsFolderName,
+    stored_name: stored,
+    original_name: found.original_name || stored,
+    created_at: new Date().toISOString(),
+    expires_at: expiresAt,
+  });
+  writeGlobalShareIndex(all);
+  return res.status(201).json({
+    success: true,
+    share: {
+      token,
+      expires_at: expiresAt,
+      path: `/api/site-cloud/share/${token}`,
+    },
+  });
+}
+
+function downloadSharedFile(req, res) {
+  const token = String(req.params.token || '').trim();
+  if (!token) return res.status(400).send('Invalid share token.');
+  const all = readGlobalShareIndex();
+  const now = Date.now();
+  const valid = all.filter((s) => s && s.expires_at && new Date(s.expires_at).getTime() > now);
+  if (valid.length !== all.length) writeGlobalShareIndex(valid);
+  const found = valid.find((s) => s.token === token);
+  if (!found) return res.status(404).send('Share link not found or expired.');
+  const full = path.join(UPLOADS_ROOT, String(found.company_folder_name || ''), 'cloud', String(found.stored_name || ''));
+  if (!fs.existsSync(full)) return res.status(404).send('Shared file no longer exists.');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+  return res.download(full, found.original_name || found.stored_name);
+}
+
 module.exports = {
   ensureCloudDir,
   listFiles,
@@ -288,5 +358,7 @@ module.exports = {
   downloadFile,
   viewFile,
   removeFile,
+  generateShareLink,
+  downloadSharedFile,
 };
 

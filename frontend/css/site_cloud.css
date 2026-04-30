@@ -346,7 +346,7 @@ body.sc-module {
 .sc-table-head,
 .sc-row {
   display: grid;
-  grid-template-columns: 2fr 0.9fr 1fr 0.7fr 1.2fr;
+  grid-template-columns: 1.8fr 0.9fr 1fr 0.7fr 1.1fr 1.2fr;
   gap: 0.6rem;
   align-items: center;
 }
