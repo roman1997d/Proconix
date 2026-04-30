@@ -405,6 +405,21 @@
       display: none;
     }
 
+    /* Generate Documentation Snapshot — errors (e.g. cloud quota) */
+    #doc-feedback.doc-feedback--error {
+      border: 1px solid #b91c1c;
+      background: #dc2626;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    #doc-feedback.doc-feedback--success {
+      border: 1px solid #bbf7d0;
+      background: #f0fdf4;
+      color: #166534;
+      font-weight: normal;
+    }
+
     .progress-loader {
       margin-top: 10px;
       display: flex;
@@ -2595,8 +2610,26 @@
       progressLoader.classList.toggle("hidden", !isSubmitting);
     }
 
-    function openDocModal() {
+    function hideDocFeedback() {
+      if (!docFeedback) return;
       docFeedback.style.display = "none";
+      docFeedback.classList.remove("doc-feedback--error", "doc-feedback--success");
+    }
+
+    function setDocFeedbackMessage(message, variant) {
+      if (!docFeedback) return;
+      docFeedback.classList.remove("doc-feedback--error", "doc-feedback--success");
+      if (variant === "error") {
+        docFeedback.classList.add("doc-feedback--error");
+      } else if (variant === "success") {
+        docFeedback.classList.add("doc-feedback--success");
+      }
+      docFeedback.textContent = message;
+      docFeedback.style.display = "block";
+    }
+
+    function openDocModal() {
+      hideDocFeedback();
       docForm.reset();
       shouldCreateDocPdf = false;
       generatedDocPackageBlob = null;
@@ -2682,19 +2715,16 @@
 
     async function saveGeneratedPackageToCloud() {
       if (!generatedDocPackageBlob) {
-        docFeedback.style.display = "block";
-        docFeedback.textContent = "Generate package first.";
+        setDocFeedbackMessage("Generate package first.", "error");
         return;
       }
       if (!docCloudFolder || !docCloudFolder.value) {
-        docFeedback.style.display = "block";
-        docFeedback.textContent = "Select a cloud folder.";
+        setDocFeedbackMessage("Select a cloud folder.", "error");
         return;
       }
       const managerHeaders = getManagerHeaders();
       if (!managerHeaders) {
-        docFeedback.style.display = "block";
-        docFeedback.textContent = "Manager session required for cloud save.";
+        setDocFeedbackMessage("Manager session required for cloud save.", "error");
         return;
       }
 
@@ -2715,15 +2745,12 @@
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data || !data.success) {
-          docFeedback.style.display = "block";
-          docFeedback.textContent = (data && data.message) || "Could not save package to cloud.";
+          setDocFeedbackMessage((data && data.message) || "Could not save package to cloud.", "error");
           return;
         }
-        docFeedback.style.display = "block";
-        docFeedback.textContent = `Saved to cloud folder "${docCloudFolder.value}".`;
+        setDocFeedbackMessage(`Saved to cloud folder "${docCloudFolder.value}".`, "success");
       } catch (_) {
-        docFeedback.style.display = "block";
-        docFeedback.textContent = "Network error while saving to cloud.";
+        setDocFeedbackMessage("Network error while saving to cloud.", "error");
       } finally {
         docSaveCloudBtn.disabled = !generatedDocPackageBlob || !docCloudFolder || !docCloudFolder.value;
         docSaveCloudBtn.style.opacity = docSaveCloudBtn.disabled ? "0.6" : "1";
@@ -3239,15 +3266,14 @@
 
       const documentTitle = docNameInput.value.trim();
       if (!documentTitle) {
-        docFeedback.style.display = "block";
-        docFeedback.textContent = "Document name is required.";
+        setDocFeedbackMessage("Document name is required.", "error");
         return;
       }
 
       const modeInput = docForm.querySelector('input[name="doc-content-mode"]:checked');
       const mode = modeInput ? modeInput.value : "photos_text";
       const snapshot = generateDocumentSnapshot(unit);
-      docFeedback.style.display = "none";
+      hideDocFeedback();
       setDocGenerating(true);
       generatedDocPackageBlob = null;
       generatedDocPackageName = "";
@@ -3306,11 +3332,9 @@
           docSaveCloudBtn.disabled = !docCloudFolder || !docCloudFolder.value;
           docSaveCloudBtn.style.opacity = docSaveCloudBtn.disabled ? "0.6" : "1";
         }
-        docFeedback.style.display = "block";
-        docFeedback.textContent = "Package generated. Click Download package.";
+        setDocFeedbackMessage("Package generated. Click Download package.", "success");
       } catch (error) {
-        docFeedback.style.display = "block";
-        docFeedback.textContent = "Could not generate the package. Check PDF/ZIP support.";
+        setDocFeedbackMessage("Could not generate the package. Check PDF/ZIP support.", "error");
       } finally {
         setDocGenerating(false);
       }
