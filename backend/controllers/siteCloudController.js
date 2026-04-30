@@ -661,12 +661,13 @@ function listExtraFolders(req, res) {
   const filesFolders = readIndex(req)
     .map((it) => String((it && it.folder) || '').trim())
     .filter((n) => n && !ALLOWED_FOLDERS.has(String(n).toLowerCase()));
-  const deletedFolders = readTrashIndex(req)
-    .map((it) => String((it && it.folder) || '').trim())
-    .filter((n) => n && !ALLOWED_FOLDERS.has(String(n).toLowerCase()));
-  const all = Array.from(new Set(readFolderIndex(req).concat(filesFolders, deletedFolders))).sort((a, b) => a.localeCompare(b));
-  writeFolderIndex(req, all);
-  return res.status(200).json({ success: true, folders: all });
+  const indexFolders = readFolderIndex(req);
+  // Only persist folders from the on-disk index + folders that still have live files.
+  // Do not merge trash item `folder` values: after deleteExtraFolder, trashed rows keep the
+  // original folder label for display in Deleted — merging them here re-created "deleted" extras.
+  const persisted = Array.from(new Set(indexFolders.concat(filesFolders))).sort((a, b) => a.localeCompare(b));
+  writeFolderIndex(req, persisted);
+  return res.status(200).json({ success: true, folders: persisted });
 }
 
 function createExtraFolder(req, res) {
