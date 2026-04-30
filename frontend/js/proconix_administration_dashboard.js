@@ -1312,9 +1312,9 @@
     backupCreateBtn.addEventListener('click', function () {
       hideBackupAlert();
       resetBackupDownloadUrl();
-      setBackupStatus('Generating backup… please wait');
+      setBackupStatus('Generating backup (database + files + Site Cloud)… please wait');
       backupCreateBtn.disabled = true;
-      showGlobalLoader('Generating backup package...');
+      showGlobalLoader('Generating backup package (including Site Cloud)...');
 
       fetch('/api/admin/backup', {
         method: 'POST',
@@ -1374,7 +1374,7 @@
             backupDownloadBtn.classList.remove('d-none');
           }
           setBackupStatus('Backup ready');
-          showBackupAlert('Backup generated successfully. Click Download backup.', 'success');
+          showBackupAlert('Backup generated successfully (including Site Cloud). Click Download backup.', 'success');
           showBottomToast('Backup generated successfully.', 'success');
           refreshBackupList();
         })

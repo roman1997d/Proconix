@@ -270,6 +270,7 @@ async function generateBackupToServer(options) {
     await runCommand(pgDumpCmd, dumpArgs, { env: cmdEnv, cwd: projectRoot });
 
     const fileSources = [];
+    // Includes tenant Site Cloud because it lives under backend/uploads/*_docs/cloud.
     ['backend/uploads', 'backend/output', 'output'].forEach((rel) => {
       const abs = path.join(projectRoot, rel);
       if (fs.existsSync(abs)) fileSources.push(rel);
@@ -301,6 +302,7 @@ async function generateBackupToServer(options) {
       actor_email: actorEmail,
       actor_ip: actorIp,
       size_bytes: st.size,
+      includes_site_cloud: true,
     };
     await fsp.writeFile(path.join(BACKUP_STORAGE_DIR, `${finalZipName}.json`), JSON.stringify(meta, null, 2), 'utf8');
     await cleanupOldBackups();
@@ -1523,6 +1525,7 @@ async function createBackup(req, res) {
       admin_email: adminEmail,
       ip: backupIp,
       file_name: out.fileName,
+      includes_site_cloud: true,
     });
 
     return res.download(out.filePath, out.fileName, async (err) => {
@@ -1788,6 +1791,7 @@ function startPlatformAutoBackupScheduler() {
           event: 'backup_auto_created',
           at: new Date().toISOString(),
           file_name: out.fileName,
+          includes_site_cloud: true,
         });
       } catch (err) {
         await appendBackupAuditLog({
