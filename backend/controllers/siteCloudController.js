@@ -11,6 +11,7 @@ const ALLOWED_FOLDERS = new Set(['files', 'drawing', 'images']);
 const MAX_SCAN_BYTES = 2 * 1024 * 1024;
 const SHARE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const GLOBAL_SHARE_INDEX_PATH = path.join(UPLOADS_ROOT, 'site_cloud_share_links.json');
+let shareCleanupSchedulerStarted = false;
 
 function normalizeFolder(value) {
   const v = String(value || '').trim().toLowerCase();
@@ -98,6 +99,32 @@ function cleanupAndFindShare(token) {
   if (valid.length !== all.length) writeGlobalShareIndex(valid);
   const found = valid.find((s) => s.token === token);
   return found || null;
+}
+
+function purgeExpiredShareLinks() {
+  try {
+    const all = readGlobalShareIndex();
+    if (!all.length) return 0;
+    const now = Date.now();
+    const valid = all.filter((s) => s && s.expires_at && new Date(s.expires_at).getTime() > now);
+    if (valid.length !== all.length) {
+      writeGlobalShareIndex(valid);
+      return all.length - valid.length;
+    }
+    return 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function startShareLinkCleanupScheduler() {
+  if (shareCleanupSchedulerStarted) return;
+  shareCleanupSchedulerStarted = true;
+  const intervalMs = Math.max(60 * 1000, parseInt(process.env.SITE_CLOUD_SHARE_CLEANUP_MS || String(60 * 60 * 1000), 10));
+  setInterval(() => {
+    purgeExpiredShareLinks();
+  }, intervalMs);
+  purgeExpiredShareLinks();
 }
 
 function ensureCloudDir(req) {
@@ -482,5 +509,6 @@ module.exports = {
   downloadSharedFile,
   viewSharedFile,
   sendFileByEmail,
+  startShareLinkCleanupScheduler,
 };
 
