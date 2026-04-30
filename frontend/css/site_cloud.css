@@ -312,6 +312,21 @@ body.sc-module {
   font-weight: 600;
 }
 
+.sc-file-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  color: #2f3a5f;
+}
+
+.sc-file-link:hover {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+
 .sc-muted {
   font-size: 0.76rem;
   color: #6b7280;

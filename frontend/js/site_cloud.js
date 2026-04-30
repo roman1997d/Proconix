@@ -110,9 +110,13 @@
           '<article class="sc-row" data-name="' +
           escapeHtml(f.stored_name) +
           '">' +
-          '<div><div class="sc-file-name">' +
+          '<div><button type="button" class="sc-file-name sc-file-link sc-preview" data-name="' +
+          escapeHtml(f.stored_name) +
+          '" data-original="' +
           escapeHtml(f.original_name || f.stored_name) +
-          '</div><div class="sc-muted">' +
+          '">' +
+          escapeHtml(f.original_name || f.stored_name) +
+          '</button><div class="sc-muted">' +
           escapeHtml(f.mime_type || 'file') +
           '</div></div>' +
           '<div><span class="sc-folder-badge ' +
