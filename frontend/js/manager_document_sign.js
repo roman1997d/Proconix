@@ -7,6 +7,7 @@
   var docPayload = null;
   var pdfDoc = null;
   var pendingFields = [];
+  var allowResignAll = false;
 
   function getSession() {
     try {
@@ -106,21 +107,48 @@
       wrap.className = 'ods-field-block';
       wrap.setAttribute('data-fid', f.id);
       wrap.innerHTML = '<div><strong>' + esc(f.type) + '</strong> <span class="ods-muted">(field ' + esc(f.id) + ')</span></div>';
-      var sc = document.createElement('div');
-      sc.className = 'ods-sig-wrap';
-      var c = document.createElement('canvas');
-      c.width = f.type === 'initials' ? 280 : 400;
-      c.height = f.type === 'initials' ? 100 : 140;
-      sc.appendChild(c);
-      wrap.appendChild(sc);
-      var clrFn = bindSignatureCanvas(c);
-      var clr = document.createElement('button');
-      clr.type = 'button';
-      clr.className = 'ods-btn ods-btn-secondary';
-      clr.textContent = 'Clear';
-      clr.addEventListener('click', function () { clrFn(); });
-      wrap.appendChild(clr);
-      wrap._getImage = function () { return c.toDataURL('image/png'); };
+      if (f.type === 'signature' || f.type === 'initials') {
+        var sc = document.createElement('div');
+        sc.className = 'ods-sig-wrap';
+        var c = document.createElement('canvas');
+        c.width = f.type === 'initials' ? 280 : 400;
+        c.height = f.type === 'initials' ? 100 : 140;
+        sc.appendChild(c);
+        wrap.appendChild(sc);
+        var clrFn = bindSignatureCanvas(c);
+        var clr = document.createElement('button');
+        clr.type = 'button';
+        clr.className = 'ods-btn ods-btn-secondary';
+        clr.textContent = 'Clear';
+        clr.addEventListener('click', function () { clrFn(); });
+        wrap.appendChild(clr);
+        wrap._getImage = function () { return c.toDataURL('image/png'); };
+      } else if (f.type === 'text') {
+        var ti = document.createElement('input');
+        ti.type = 'text';
+        ti.className = 'ods-input';
+        ti.value = (document.getElementById('odsSignerName') && document.getElementById('odsSignerName').value) || '';
+        ti.placeholder = 'Will use Signer name';
+        ti.readOnly = true;
+        wrap.appendChild(ti);
+      } else if (f.type === 'checkbox') {
+        var lb = document.createElement('label');
+        lb.className = 'ods-muted';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        cb.disabled = true;
+        lb.appendChild(cb);
+        lb.appendChild(document.createTextNode(' Confirmed'));
+        wrap.appendChild(lb);
+      } else if (f.type === 'date') {
+        var di = document.createElement('input');
+        di.type = 'text';
+        di.className = 'ods-input';
+        di.value = new Date().toLocaleDateString();
+        di.readOnly = true;
+        wrap.appendChild(di);
+      }
       mount.appendChild(wrap);
     });
   }
@@ -172,7 +200,10 @@
         var fields = Array.isArray(docPayload.fields_json) ? docPayload.fields_json : [];
         var signedSet = new Set((docPayload.signatures || []).map(function (s) { return String(s.field_id); }));
         pendingFields = fields.filter(function (f) {
-          return f && f.required !== false && (f.type === 'signature' || f.type === 'initials') && !signedSet.has(String(f.id));
+          if (!f || f.required === false) return false;
+          if (['signature', 'initials', 'text', 'checkbox', 'date'].indexOf(f.type) < 0) return false;
+          if (allowResignAll) return true;
+          return !signedSet.has(String(f.id));
         });
         var meta = document.getElementById('odsMeta');
         if (meta) meta.textContent = (fields.length - pendingFields.length) + '/' + fields.length + ' fields';
@@ -198,17 +229,27 @@
     for (var i = 0; i < pendingFields.length; i += 1) {
       var f = pendingFields[i];
       var b = document.querySelector('#odsFieldsMount .ods-field-block[data-fid="' + f.id + '"]');
-      if (!b || !b._getImage) continue;
-      var img = b._getImage();
-      if (!img || img.length < 100) return showErr('Please sign field ' + f.id + '.');
-      jobs.push({
-        field_id: String(f.id),
-        confirmed_read: true,
-        signer_name: signer,
-        signatureImageBase64: img,
-      });
+      if (!b) continue;
+      if (f.type === 'signature' || f.type === 'initials') {
+        if (!b._getImage) continue;
+        var img = b._getImage();
+        if (!img || img.length < 100) return showErr('Please sign field ' + f.id + '.');
+        jobs.push({
+          field_id: String(f.id),
+          confirmed_read: true,
+          signer_name: signer,
+          signatureImageBase64: img,
+        });
+      } else {
+        jobs.push({
+          field_id: String(f.id),
+          confirmed_read: true,
+          signer_name: signer,
+        });
+      }
     }
     var btn = document.getElementById('odsBtnSubmit');
+    var addMoreBtn = document.getElementById('odsBtnAddMore');
     if (btn) btn.disabled = true;
     showErr('');
     var chain = Promise.resolve();
@@ -228,6 +269,8 @@
     chain.then(function () {
       showOk('Signatures saved successfully.');
       if (btn) btn.disabled = false;
+      if (addMoreBtn) addMoreBtn.classList.remove('d-none');
+      allowResignAll = false;
       load();
     }).catch(function (e) {
       if (btn) btn.disabled = false;
@@ -238,6 +281,15 @@
   function init() {
     var b = document.getElementById('odsBtnSubmit');
     if (b) b.addEventListener('click', submitAll);
+    var addMore = document.getElementById('odsBtnAddMore');
+    if (addMore) {
+      addMore.addEventListener('click', function () {
+        allowResignAll = true;
+        showErr('');
+        showOk('');
+        load();
+      });
+    }
     var back = document.getElementById('odsBtnViewDash');
     if (back) back.addEventListener('click', function () { window.location.href = 'digital_signature.html'; });
     load();

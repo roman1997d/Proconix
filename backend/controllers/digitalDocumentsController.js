@@ -1066,26 +1066,41 @@ async function managerInPersonSign(req, res) {
       await client.query('ROLLBACK');
       return res.status(400).json({ success: false, message: 'Invalid field_id for this document.' });
     }
-    if (fieldDef.type !== 'signature' && fieldDef.type !== 'initials') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ success: false, message: 'In-person signing supports signature/initials fields only.' });
-    }
-    if (!rawB64) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ success: false, message: 'signatureImageBase64 is required.' });
-    }
-
     let buf;
-    try {
-      const b64 = rawB64.includes(',') ? rawB64.split(',')[1] : rawB64;
-      buf = Buffer.from(b64, 'base64');
-      if (!buf.length || buf.length > 5 * 1024 * 1024) {
+    const meta = {
+      field_type: fieldDef.type,
+      signer_name: signerName,
+      signer_mode: 'in_person',
+      signed_by_manager_id: managerId,
+    };
+    if (fieldDef.type === 'signature' || fieldDef.type === 'initials') {
+      if (!rawB64) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ success: false, message: 'Invalid signature image.' });
+        return res.status(400).json({ success: false, message: 'signatureImageBase64 is required.' });
       }
-    } catch (_) {
+      try {
+        const b64 = rawB64.includes(',') ? rawB64.split(',')[1] : rawB64;
+        buf = Buffer.from(b64, 'base64');
+        if (!buf.length || buf.length > 5 * 1024 * 1024) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ success: false, message: 'Invalid signature image.' });
+        }
+      } catch (_) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ success: false, message: 'Invalid base64 signature.' });
+      }
+    } else if (fieldDef.type === 'text') {
+      meta.text_value = signerName;
+      buf = PLACEHOLDER_PNG;
+    } else if (fieldDef.type === 'checkbox') {
+      meta.checkbox_value = true;
+      buf = PLACEHOLDER_PNG;
+    } else if (fieldDef.type === 'date') {
+      meta.date_value = new Date().toISOString();
+      buf = PLACEHOLDER_PNG;
+    } else {
       await client.query('ROLLBACK');
-      return res.status(400).json({ success: false, message: 'Invalid base64 signature.' });
+      return res.status(400).json({ success: false, message: 'Unsupported field type for in-person signing.' });
     }
 
     const fname = `sig-mgr-${id}-${managerId}-${fieldId.replace(/[^a-zA-Z0-9_-]/g, '')}-${Date.now()}.png`;
@@ -1093,13 +1108,6 @@ async function managerInPersonSign(req, res) {
     const abs = path.join(req.digitalDocsSignaturesDir, fname);
     fs.writeFileSync(abs, buf);
     const url = `/uploads/${rel}`;
-    const meta = {
-      field_type: fieldDef.type,
-      signer_name: signerName,
-      signer_mode: 'in_person',
-      signed_by_manager_id: managerId,
-    };
-
     await client.query(
       `INSERT INTO digital_document_signatures (
         document_id, user_id, field_id, signature_image_rel_path, signature_image_url, confirmed_read, client_meta
