@@ -344,6 +344,42 @@ function generateShareLink(req, res) {
   });
 }
 
+function listSharedLinks(req, res) {
+  ensureCloudDir(req);
+  const all = readGlobalShareIndex();
+  const now = Date.now();
+  const valid = all.filter((s) => s && s.expires_at && new Date(s.expires_at).getTime() > now);
+  if (valid.length !== all.length) writeGlobalShareIndex(valid);
+  const mine = valid
+    .filter((s) => String(s.company_folder_name || '') === String(req.digitalDocsFolderName || ''))
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    .map((s) => ({
+      token: s.token,
+      original_name: s.original_name || s.stored_name,
+      created_at: s.created_at,
+      expires_at: s.expires_at,
+      view_path: `/site_cloud_share_view.html?token=${encodeURIComponent(s.token)}`,
+    }));
+  return res.status(200).json({ success: true, links: mine });
+}
+
+function revokeSharedLink(req, res) {
+  ensureCloudDir(req);
+  const token = String(req.params.token || '').trim();
+  if (!token) return res.status(400).json({ success: false, message: 'Invalid share token.' });
+  const all = readGlobalShareIndex();
+  const before = all.length;
+  const kept = all.filter((s) => {
+    if (!s || s.token !== token) return true;
+    return String(s.company_folder_name || '') !== String(req.digitalDocsFolderName || '');
+  });
+  if (kept.length === before) {
+    return res.status(404).json({ success: false, message: 'Share link not found.' });
+  }
+  writeGlobalShareIndex(kept);
+  return res.status(200).json({ success: true, message: 'Share link revoked.' });
+}
+
 function downloadSharedFile(req, res) {
   const token = String(req.params.token || '').trim();
   if (!token) return res.status(400).send('Invalid share token.');
@@ -441,6 +477,8 @@ module.exports = {
   viewFile,
   removeFile,
   generateShareLink,
+  listSharedLinks,
+  revokeSharedLink,
   downloadSharedFile,
   viewSharedFile,
   sendFileByEmail,

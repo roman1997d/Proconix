@@ -4,9 +4,11 @@
   var SESSION_KEY = 'proconix_manager_session';
   var stateFiles = [];
   var stateStats = null;
+  var stateSharedLinks = [];
   var TENANT_STORAGE_LIMIT_BYTES = 500 * 1024 * 1024;
   var activeFolder = 'files';
   var emailShareTarget = null;
+  var activeNavMode = 'cloud';
 
   function getSession() {
     try {
@@ -112,12 +114,53 @@
     var mainQ = (document.getElementById('scSearch').value || '').trim().toLowerCase();
     var quickQ = (document.getElementById('scQuickSearch').value || '').trim().toLowerCase();
     var q = mainQ || quickQ;
-    var rows = stateFiles.filter(function (f) {
-      return !q || String(f.original_name || '').toLowerCase().indexOf(q) !== -1;
-    });
+    var rows;
+    if (activeNavMode === 'shared') {
+      rows = stateSharedLinks.filter(function (s) {
+        return !q || String(s.original_name || '').toLowerCase().indexOf(q) !== -1;
+      });
+    } else {
+      rows = stateFiles.filter(function (f) {
+        return !q || String(f.original_name || '').toLowerCase().indexOf(q) !== -1;
+      });
+    }
     if (count) count.textContent = rows.length + ' files';
     if (!rows.length) {
-      list.innerHTML = '<div class="sc-empty">No files found.</div>';
+      list.innerHTML = '<div class="sc-empty">' + (activeNavMode === 'shared' ? 'No shared links found.' : 'No files found.') + '</div>';
+      return;
+    }
+    if (activeNavMode === 'shared') {
+      list.innerHTML = rows
+        .map(function (s) {
+          return (
+            '<article class="sc-row">' +
+            '<div><div class="sc-file-name">' +
+            escapeHtml(s.original_name || 'Shared file') +
+            '</div><div class="sc-muted">Share token</div></div>' +
+            '<div><span class="sc-folder-badge sc-folder-badge--files"><i class="bi bi-link-45deg"></i>Shared</span></div>' +
+            '<div class="sc-muted">' +
+            escapeHtml(formatDate(s.created_at)) +
+            '</div>' +
+            '<div class="sc-muted">' +
+            escapeHtml(formatDate(s.expires_at)) +
+            '</div>' +
+            '<div class="sc-actions-row">' +
+            '<button type="button" class="sc-btn-chip sc-shared-open" data-view="' +
+            escapeHtml(s.view_path || '') +
+            '">Open</button>' +
+            '<button type="button" class="sc-btn-chip sc-shared-copy" data-view="' +
+            escapeHtml(s.view_path || '') +
+            '">Copy link</button>' +
+            '</div>' +
+            '<div class="sc-actions-row">' +
+            '<button type="button" class="sc-btn-chip sc-danger sc-shared-revoke" data-token="' +
+            escapeHtml(s.token || '') +
+            '">Revoke</button>' +
+            '</div>' +
+            '</article>'
+          );
+        })
+        .join('');
       return;
     }
     list.innerHTML = rows
@@ -322,6 +365,7 @@
   }
 
   function loadFiles() {
+    if (activeNavMode === 'shared') return;
     var headers = getHeaders();
     if (!headers) return showError('Please open this page from Manager Dashboard.');
     showError('');
@@ -348,6 +392,61 @@
       })
       .finally(function () {
         setLoading(false);
+      });
+  }
+
+  function loadSharedLinks() {
+    var headers = getHeaders();
+    if (!headers) return;
+    showError('');
+    setLoading(true, 'Loading shared links...');
+    fetch('/api/site-cloud/shared-links', {
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          showError((out.data && out.data.message) || 'Could not load shared links.');
+          return;
+        }
+        stateSharedLinks = Array.isArray(out.data.links) ? out.data.links : [];
+        renderList();
+      })
+      .catch(function () {
+        showError('Network error while loading shared links.');
+      })
+      .finally(function () {
+        setLoading(false);
+      });
+  }
+
+  function revokeSharedLink(token) {
+    var headers = getHeaders();
+    if (!headers || !token) return;
+    fetch('/api/site-cloud/shared-links/' + encodeURIComponent(token), {
+      method: 'DELETE',
+      headers: headers,
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { ok: res.ok, data: data };
+        });
+      })
+      .then(function (out) {
+        if (!out.ok || !out.data || !out.data.success) {
+          showError((out.data && out.data.message) || 'Could not revoke shared link.');
+          return;
+        }
+        loadSharedLinks();
+      })
+      .catch(function () {
+        showError('Network error while revoking shared link.');
       });
   }
 
@@ -591,6 +690,7 @@
     var quickSearch = document.getElementById('scQuickSearch');
     var list = document.getElementById('scList');
     var folderCards = document.getElementById('scFolderCards');
+    var sideNav = document.querySelector('.sc-nav');
     var viewerClose = document.getElementById('scViewerClose');
     var viewerBackdrop = document.getElementById('scViewerBackdrop');
     var emailClose = document.getElementById('scEmailClose');
@@ -638,6 +738,16 @@
         if (s) return generateShareLink(s.getAttribute('data-name'));
         var m = e.target.closest('.sc-share-email');
         if (m) return openEmailModal(m.getAttribute('data-name'), m.getAttribute('data-original'));
+        var so = e.target.closest('.sc-shared-open');
+        if (so) return window.open(so.getAttribute('data-view'), '_blank');
+        var sc = e.target.closest('.sc-shared-copy');
+        if (sc) {
+          var sharedUrl = window.location.origin + String(sc.getAttribute('data-view') || '');
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(sharedUrl).catch(function () {});
+          return;
+        }
+        var sr = e.target.closest('.sc-shared-revoke');
+        if (sr) return revokeSharedLink(sr.getAttribute('data-token'));
       });
     }
 
@@ -651,6 +761,23 @@
           el.classList.toggle('is-highlight', el === card);
         });
         loadFiles();
+      });
+    }
+    if (sideNav) {
+      sideNav.addEventListener('click', function (e) {
+        var link = e.target.closest('.sc-nav-item[data-nav-mode]');
+        if (!link) return;
+        e.preventDefault();
+        var mode = String(link.getAttribute('data-nav-mode') || 'cloud');
+        activeNavMode = mode;
+        sideNav.querySelectorAll('.sc-nav-item[data-nav-mode]').forEach(function (el) {
+          el.classList.toggle('is-active', el === link);
+        });
+        if (mode === 'shared') {
+          loadSharedLinks();
+        } else {
+          loadFiles();
+        }
       });
     }
 
