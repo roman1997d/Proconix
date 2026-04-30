@@ -405,6 +405,15 @@ body.sc-module {
   margin: 0.35rem 0 0;
 }
 
+.sc-right-footer-protection {
+  margin-top: 0.45rem !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: #4f46e5;
+}
+
 @media (max-width: 900px) {
   .sc-app {
     grid-template-columns: 1fr;
