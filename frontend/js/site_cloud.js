@@ -212,6 +212,49 @@
   function loadStats() {
     var headers = getHeaders();
     if (!headers) return;
+    function setStatsFromFiles(allFiles) {
+      var safe = Array.isArray(allFiles) ? allFiles : [];
+      var total = safe.length;
+      var used = safe.reduce(function (sum, f) {
+        return sum + (Number(f.size_bytes) || 0);
+      }, 0);
+      var limit = TENANT_STORAGE_LIMIT_BYTES;
+      stateStats = {
+        total_files: total,
+        used_bytes: used,
+        average_bytes: total ? Math.round(used / total) : 0,
+        limit_bytes: limit,
+      };
+      renderStats();
+    }
+
+    function loadStatsFallback() {
+      var folders = ['files', 'drawing', 'images'];
+      Promise.all(
+        folders.map(function (folder) {
+          return fetch('/api/site-cloud/files?folder=' + encodeURIComponent(folder), {
+            headers: headers,
+            credentials: 'same-origin',
+          })
+            .then(function (res) {
+              return res.json().then(function (data) {
+                return { ok: res.ok, data: data };
+              });
+            })
+            .then(function (out) {
+              if (!out.ok || !out.data || !out.data.success) return [];
+              return Array.isArray(out.data.files) ? out.data.files : [];
+            })
+            .catch(function () {
+              return [];
+            });
+        })
+      ).then(function (grouped) {
+        var all = [].concat.apply([], grouped || []);
+        setStatsFromFiles(all);
+      });
+    }
+
     fetch('/api/site-cloud/stats', {
       headers: headers,
       credentials: 'same-origin',
@@ -222,11 +265,16 @@
         });
       })
       .then(function (out) {
-        if (!out.ok || !out.data || !out.data.success || !out.data.stats) return;
+        if (!out.ok || !out.data || !out.data.success || !out.data.stats) {
+          loadStatsFallback();
+          return;
+        }
         stateStats = out.data.stats;
         renderStats();
       })
-      .catch(function () {});
+      .catch(function () {
+        loadStatsFallback();
+      });
   }
 
   function uploadSelected(file) {
