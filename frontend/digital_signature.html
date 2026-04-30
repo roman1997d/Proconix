@@ -15,9 +15,35 @@
   <div class="ds-wrap">
     <div class="ds-topbar">
       <h1><i class="bi bi-journal-text" aria-hidden="true"></i> Documents &amp; Signatures</h1>
-      <button type="button" class="ds-btn-primary" id="dsBtnNewDoc" disabled title="Upload a PDF">
-        <i class="bi bi-cloud-upload" aria-hidden="true"></i> Upload document
-      </button>
+      <section class="ds-send-panel" aria-label="Send a new document">
+        <p class="ds-send-title">Send a New Document</p>
+        <div class="ds-send-content">
+          <div class="ds-send-left">
+            <div class="ds-send-icon" aria-hidden="true">
+              <i class="bi bi-file-earmark-arrow-up"></i>
+            </div>
+            <div class="ds-send-buttons">
+              <button type="button" class="ds-send-btn ds-send-btn-primary" id="dsBtnNewDoc" disabled title="Upload a PDF">Upload a file</button>
+              <button type="button" class="ds-send-btn ds-send-btn-secondary" id="dsBtnCloudDoc" title="Coming soon">Get from cloud</button>
+            </div>
+          </div>
+          <div class="ds-send-divider" aria-hidden="true"></div>
+          <div class="ds-send-links">
+            <button type="button" class="ds-send-link" id="dsQuickSignDoc">
+              <i class="bi bi-file-earmark-check"></i>
+              <span><strong>Sign a document</strong><small>Sign quickly if you are the only signer.</small></span>
+            </button>
+            <button type="button" class="ds-send-link" id="dsQuickUseTemplate">
+              <i class="bi bi-file-earmark-richtext"></i>
+              <span><strong>Use a template</strong><small>Send with one of your templates.</small></span>
+            </button>
+            <button type="button" class="ds-send-link" id="dsQuickContinueDraft">
+              <i class="bi bi-file-earmark-text"></i>
+              <span><strong>Continue a draft</strong><small>Open your pending draft documents.</small></span>
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
 
     <section class="ds-stats" id="dsStats" aria-live="polite"></section>

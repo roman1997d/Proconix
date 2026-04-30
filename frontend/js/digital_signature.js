@@ -484,6 +484,10 @@
   function init() {
     var session = getSession();
     var btn = document.getElementById('dsBtnNewDoc');
+    var btnCloud = document.getElementById('dsBtnCloudDoc');
+    var quickSign = document.getElementById('dsQuickSignDoc');
+    var quickTemplate = document.getElementById('dsQuickUseTemplate');
+    var quickDraft = document.getElementById('dsQuickContinueDraft');
     var search = document.getElementById('dsSearch');
     var filterProj = document.getElementById('dsFilterProject');
     var filterSt = document.getElementById('dsFilterStatus');
@@ -509,6 +513,32 @@
       btn.removeAttribute('title');
       btn.addEventListener('click', function () {
         openModal();
+      });
+    }
+    if (btnCloud) {
+      btnCloud.addEventListener('click', function () {
+        window.alert('Cloud import will be available soon.');
+      });
+    }
+    if (quickSign) {
+      quickSign.addEventListener('click', function () {
+        openModal();
+      });
+    }
+    if (quickTemplate) {
+      quickTemplate.addEventListener('click', function () {
+        var st = document.getElementById('dsFilterStatus');
+        if (st) st.value = 'draft';
+        syncTabsWithStatus('draft');
+        loadDocuments();
+      });
+    }
+    if (quickDraft) {
+      quickDraft.addEventListener('click', function () {
+        var st = document.getElementById('dsFilterStatus');
+        if (st) st.value = 'draft';
+        syncTabsWithStatus('draft');
+        loadDocuments();
       });
     }
     if (search) {
