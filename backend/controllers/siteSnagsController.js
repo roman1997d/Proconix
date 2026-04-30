@@ -101,6 +101,96 @@ async function readCloudStoredNamesForCompany(companyId) {
   }
 }
 
+async function resolveCompanyDocsDirByCompanyId(companyId) {
+  const r = await pool.query('SELECT name FROM companies WHERE id = $1', [companyId]);
+  const rawName = r.rows[0] && r.rows[0].name ? String(r.rows[0].name) : 'company' + companyId;
+  const folderName = sanitizeCompanyFolderName(rawName) + '_' + companyId + '_docs';
+  const abs = path.join(UPLOADS_ROOT, folderName);
+  fs.mkdirSync(abs, { recursive: true });
+  return abs;
+}
+
+function cloudIndexPathFromCompanyDir(companyDir) {
+  return path.join(companyDir, 'cloud_index.json');
+}
+
+function readCloudIndexFromCompanyDir(companyDir) {
+  try {
+    const p = cloudIndexPathFromCompanyDir(companyDir);
+    if (!fs.existsSync(p)) return [];
+    const raw = fs.readFileSync(p, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeCloudIndexFromCompanyDir(companyDir, items) {
+  const p = cloudIndexPathFromCompanyDir(companyDir);
+  fs.writeFileSync(p, JSON.stringify(Array.isArray(items) ? items : [], null, 2), 'utf8');
+}
+
+function parseImageDataUrl(value) {
+  const raw = String(value || '').trim();
+  const m = raw.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!m) return null;
+  const mime = String(m[1]).toLowerCase();
+  const b64 = m[2];
+  const extByMime = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/jpg': '.jpg',
+    'image/webp': '.webp',
+    'image/gif': '.gif',
+    'image/svg+xml': '.svg',
+    'image/bmp': '.bmp',
+  };
+  const ext = extByMime[mime] || '.png';
+  return { mime, ext, buffer: Buffer.from(b64, 'base64') };
+}
+
+async function syncSiteSnagsDrawingToCloud(companyId, managerId, loc) {
+  try {
+    if (!loc) return null;
+    const raw = loc.imageDataUrl != null ? String(loc.imageDataUrl).trim() : '';
+    if (!raw) return null;
+    const parsed = parseImageDataUrl(raw);
+    if (!parsed || !parsed.buffer || !parsed.buffer.length) return null;
+    const companyDir = await resolveCompanyDocsDirByCompanyId(companyId);
+    const cloudDir = path.join(companyDir, 'cloud');
+    fs.mkdirSync(cloudDir, { recursive: true });
+    const cloudName = `cloud-site-snag-${String(loc.id)}${parsed.ext}`;
+    fs.writeFileSync(path.join(cloudDir, cloudName), parsed.buffer);
+
+    const idx = readCloudIndexFromCompanyDir(companyDir);
+    const now = new Date().toISOString();
+    const existingIdx = idx.findIndex((it) => String(it && it.stored_name ? it.stored_name : '') === cloudName);
+    const payload = {
+      id: existingIdx >= 0 && idx[existingIdx] && idx[existingIdx].id
+        ? String(idx[existingIdx].id)
+        : `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      folder: 'drawing',
+      stored_name: cloudName,
+      original_name: `${String(loc.name || 'site-snag-drawing').slice(0, 120)}${parsed.ext}`,
+      mime_type: parsed.mime,
+      size_bytes: parsed.buffer.length,
+      uploaded_at: existingIdx >= 0 && idx[existingIdx] && idx[existingIdx].uploaded_at ? idx[existingIdx].uploaded_at : now,
+      uploaded_by_manager_id: managerId != null ? Number(managerId) : null,
+      source_module: 'site_snags',
+      drawing_id: String(loc.id),
+      updated_at: now,
+    };
+    if (existingIdx >= 0) idx[existingIdx] = Object.assign({}, idx[existingIdx], payload);
+    else idx.push(payload);
+    writeCloudIndexFromCompanyDir(companyDir, idx);
+    return cloudName;
+  } catch (err) {
+    console.error('siteSnags syncSiteSnagsDrawingToCloud:', err && err.message ? err.message : err);
+    return null;
+  }
+}
+
 async function cleanupMissingCloudLinkedDrawings(client, companyId) {
   try {
     const dr = await client.query(
@@ -492,6 +582,9 @@ async function putWorkspace(req, res) {
       if (loc.cloudStoredName != null && String(loc.cloudStoredName).trim() !== '') {
         cloudStored = String(loc.cloudStoredName).trim();
       }
+      if (!cloudStored && hasImg && dgVid == null) {
+        cloudStored = await syncSiteSnagsDrawingToCloud(companyId, req.manager && req.manager.id, loc);
+      }
       try {
         await client.query(
           `INSERT INTO site_snag_drawings (id, company_id, project_id, name, block, floor, image_data, pixels_to_mm, drawing_gallery_version_id, cloud_stored_name, created_at, updated_at)
@@ -862,6 +955,9 @@ async function putWorkspaceSupervisor(req, res) {
       let cloudStored = null;
       if (loc.cloudStoredName != null && String(loc.cloudStoredName).trim() !== '') {
         cloudStored = String(loc.cloudStoredName).trim();
+      }
+      if (!cloudStored && hasImg && dgVid == null) {
+        cloudStored = await syncSiteSnagsDrawingToCloud(companyId, null, loc);
       }
       try {
         await client.query(
