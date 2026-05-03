@@ -1286,10 +1286,13 @@
     <section id="floorView" class="card hidden">
       <div class="view-actions">
         <button type="button" class="btn btn-soft" id="back-to-towers"><i class="bi bi-arrow-left"></i> Back to Towers</button>
-        <button type="button" class="btn btn-dark" id="add-floor-btn" style="margin-left:auto;"><i class="bi bi-plus-lg"></i> Add floor</button>
+        <div class="floor-view-toolbar-actions" style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-dark hidden" id="add-unit-btn"><i class="bi bi-plus-lg"></i> Add unit</button>
+          <button type="button" class="btn btn-dark" id="add-floor-btn"><i class="bi bi-plus-lg"></i> Add floor</button>
+        </div>
       </div>
       <h2 class="section-title">View 2 - Floor View</h2>
-      <p class="hint">Select a floor from the active tower.</p>
+      <p class="hint" id="floor-view-hint">Select a floor from the active tower.</p>
       <p class="breadcrumb" id="floor-breadcrumb">Tower: -</p>
       <div id="floor-list" class="list-grid"></div>
     </section>
@@ -1617,6 +1620,9 @@
     const floorList = document.getElementById("floor-list");
     const timelineList = document.getElementById("timeline-list");
 
+    const addFloorBtn = document.getElementById("add-floor-btn");
+    const addUnitBtn = document.getElementById("add-unit-btn");
+    const floorViewHint = document.getElementById("floor-view-hint");
     const floorBreadcrumb = document.getElementById("floor-breadcrumb");
     const unitBreadcrumb = document.getElementById("unit-breadcrumb");
     const unitTitle = document.getElementById("unit-title");
@@ -2798,6 +2804,86 @@
       return String(a ?? "") === String(b ?? "");
     }
 
+    function updateFloorViewToolbar(mode) {
+      if (!addFloorBtn || !addUnitBtn) return;
+      if (mode === "units") {
+        addFloorBtn.classList.add("hidden");
+        addUnitBtn.classList.remove("hidden");
+        if (floorViewHint) {
+          floorViewHint.textContent = "Select a unit, or add one with Add unit.";
+        }
+      } else {
+        addFloorBtn.classList.remove("hidden");
+        addUnitBtn.classList.add("hidden");
+        if (floorViewHint) {
+          floorViewHint.textContent = "Select a floor from the active tower.";
+        }
+      }
+    }
+
+    function allocateNextUnitId() {
+      let maxId = 0;
+      DATA.units.forEach((u) => {
+        const id = Number(u && u.id);
+        if (Number.isFinite(id) && id > maxId) maxId = id;
+      });
+      return maxId + 1;
+    }
+
+    async function addUnitForCurrentFloor() {
+      const floorId = state.currentFloor;
+      if (!floorId) {
+        wizardStatus.textContent = "Open a floor first.";
+        return;
+      }
+      const floor = DATA.floors.find((f) => f.id === floorId);
+      if (!floor) return;
+
+      const rawName = prompt("Unit name", "");
+      if (rawName == null) return;
+      const safeName = String(rawName).trim();
+      if (!safeName) {
+        wizardStatus.textContent = "Unit name cannot be empty.";
+        return;
+      }
+      const duplicate = DATA.units.some((candidate) => (
+        towerIdMatches(candidate.tower, floor.tower)
+        && Number(candidate.floor) === Number(floor.number)
+        && String(candidate.name || "").trim().toLowerCase() === safeName.toLowerCase()
+      ));
+      if (duplicate) {
+        wizardStatus.textContent = "A unit with this name already exists on the same floor.";
+        return;
+      }
+
+      const sibling = DATA.units.find((u) => towerIdMatches(u.tower, floor.tower));
+      const projectId = sibling && sibling.project_id != null ? Number(sibling.project_id) : null;
+
+      DATA.units.push({
+        id: allocateNextUnitId(),
+        name: safeName,
+        tower: floor.tower,
+        floor: floor.number,
+        project_id: projectId,
+        timeline: []
+      });
+
+      beginUnitProgressWait("Saving…");
+      let saved = false;
+      try {
+        saved = await persistWorkspace("unit_add");
+      } finally {
+        endUnitProgressWait();
+      }
+      if (!saved) {
+        DATA.units.pop();
+        wizardStatus.textContent = "Unit added locally; backend sync failed.";
+        return;
+      }
+      wizardStatus.textContent = "Unit added.";
+      loadUnits(floorId);
+    }
+
     async function addFloorForCurrentTower() {
       const towerId = state.currentTower;
       if (towerId == null || towerId === "") {
@@ -2920,13 +3006,16 @@
         btn.addEventListener("click", () => openFloor(floor.id));
         floorList.appendChild(btn);
       });
+      updateFloorViewToolbar("floors");
     }
 
     function loadUnits(floorId) {
       const floor = DATA.floors.find((f) => f.id === floorId);
       if (!floor) return;
 
-      const units = DATA.units.filter((u) => u.tower === floor.tower && u.floor === floor.number);
+      const units = DATA.units.filter(
+        (u) => towerIdMatches(u.tower, floor.tower) && Number(u.floor) === Number(floor.number)
+      );
       floorList.innerHTML = "";
 
       units.forEach((unit) => {
@@ -2989,6 +3078,7 @@
       });
 
       floorBreadcrumb.textContent = `Tower: ${floor.tower} | Floor: ${floor.number}`;
+      updateFloorViewToolbar("units");
     }
 
     function renderTimeline(unit) {
@@ -3790,8 +3880,11 @@
       renderTowers();
     });
 
-    document.getElementById("add-floor-btn").addEventListener("click", () => {
+    addFloorBtn.addEventListener("click", () => {
       addFloorForCurrentTower();
+    });
+    addUnitBtn.addEventListener("click", () => {
+      addUnitForCurrentFloor();
     });
 
     document.getElementById("back-to-floors").addEventListener("click", () => {
