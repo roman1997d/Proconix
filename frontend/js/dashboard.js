@@ -756,6 +756,22 @@
               }
             } catch (err) {}
           }
+          var fb = contentEl && contentEl.querySelector('#dashboard-overview-project-feedback');
+          if (fb) {
+            clearTimeout(selNow._projectFeedbackTimer);
+            if (selNow.value) {
+              var opt = selNow.options[selNow.selectedIndex];
+              var label = opt ? String(opt.textContent || '').trim() : '';
+              fb.textContent = label ? '\u201C' + label + '\u201D selected' : '';
+              fb.classList.toggle('is-visible', Boolean(label));
+              selNow._projectFeedbackTimer = setTimeout(function () {
+                fb.classList.remove('is-visible');
+              }, 5000);
+            } else {
+              fb.textContent = '';
+              fb.classList.remove('is-visible');
+            }
+          }
         });
       })
       .catch(function () {

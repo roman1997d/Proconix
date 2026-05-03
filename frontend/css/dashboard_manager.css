@@ -556,6 +556,25 @@ body.dashboard-manager {
   box-shadow: 0 0 0 3px var(--accent-bg);
 }
 
+.project-overview-today-feedback {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--status-green);
+  min-height: 0;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: opacity 0.3s ease, max-height 0.3s ease, margin-top 0.3s ease;
+}
+
+.project-overview-today-feedback.is-visible {
+  margin-top: 4px;
+  max-height: 3rem;
+  opacity: 1;
+}
+
 /* ===== Stat cards (3-col grid → 4 cards) ===== */
 .stat-cards {
   display: grid;

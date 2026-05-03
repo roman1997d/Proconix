@@ -33,6 +33,7 @@ function getProjectOverviewHtml() {
       <select id="dashboard-overview-project-select" class="project-overview-today-select" autocomplete="off">
         <option value="">Loading projects…</option>
       </select>
+      <p class="project-overview-today-feedback" id="dashboard-overview-project-feedback" role="status" aria-live="polite"></p>
     </section>
     <section class="stat-cards">
       <div class="stat-card stat-card-patients">
