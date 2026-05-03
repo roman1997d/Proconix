@@ -283,7 +283,7 @@
           }
           var qs = 'embed_project_id=' + encodeURIComponent(String(proj.id));
           contentEl.innerHTML =
-            '<iframe src="' +
+            '<iframe id="iframe-unit-progress" src="' +
             iframeModuleSrc('Unit_Progress_Tracking.html?' + qs) +
             '" class="dashboard-qa-iframe" title="Unit Progress Tracking"></iframe>';
         })
@@ -322,6 +322,23 @@
       if (e.state && e.state.module) {
         loadModule(e.state.module, false);
       }
+    });
+
+    window.addEventListener('message', function (event) {
+      try {
+        var data = event.data;
+        if (!data || typeof data !== 'object' || data.type !== 'proconix-unit-progress-reload-workspace') {
+          return;
+        }
+        var upFrame = document.getElementById('iframe-unit-progress');
+        if (
+          upFrame &&
+          upFrame.contentWindow &&
+          typeof upFrame.contentWindow.__proconixReloadWorkspace === 'function'
+        ) {
+          upFrame.contentWindow.__proconixReloadWorkspace();
+        }
+      } catch (_) {}
     });
 
     loadModule('manage-material', false);

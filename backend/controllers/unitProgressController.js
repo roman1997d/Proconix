@@ -163,15 +163,27 @@ function mergePhotosPreserveSrc(prevPhotos, incPhotos) {
   });
 }
 
-function mergeTimelineEntries(prevTl, incTl) {
+function mergeTimelineEntries(prevTl, incTl, removedQaJobIdsRaw) {
   const prev = Array.isArray(prevTl) ? prevTl : [];
   const inc = Array.isArray(incTl) ? incTl : [];
+  const removedQaIds = new Set();
+  if (Array.isArray(removedQaJobIdsRaw)) {
+    removedQaJobIdsRaw.forEach((rid) => {
+      const n = Number(rid);
+      if (Number.isInteger(n) && n >= 1) removedQaIds.add(n);
+    });
+  }
   const prevByKey = new Map();
   prev.forEach((e) => {
     const k = timelineEntryKey(e);
     if (k && !prevByKey.has(k)) prevByKey.set(k, e);
   });
-  return inc.map((entry) => {
+  const incKeys = new Set();
+  inc.forEach((e) => {
+    const k = timelineEntryKey(e);
+    if (k) incKeys.add(k);
+  });
+  const mergedInc = inc.map((entry) => {
     if (!entry || typeof entry !== 'object') return entry;
     const prevEntry = prevByKey.get(timelineEntryKey(entry));
     if (!prevEntry) return entry;
@@ -180,6 +192,27 @@ function mergeTimelineEntries(prevTl, incTl) {
       photos: mergePhotosPreserveSrc(prevEntry.photos, entry.photos),
     };
   });
+  /*
+   * The client timeline may be stale (e.g. created a QA job server-side → new row exists in DB
+   * but the browser PUT still lacks it). Preserve qa_job rows from DB unless explicitly removed,
+   * and never resurrect rows the user deliberately removed (_removedQaJobIds).
+   */
+  const prevQaAnchors = prev.filter((e) => {
+    if (!e || typeof e !== 'object' || String(e.entryType || '').trim() !== 'qa_job') return false;
+    const jid = Number(e.qaJobId);
+    if (!Number.isInteger(jid)) return false;
+    if (removedQaIds.has(jid)) return false;
+    const k = timelineEntryKey(e);
+    return !!(k && !incKeys.has(k));
+  });
+  let out = [...mergedInc, ...prevQaAnchors];
+  out = out.filter((e) => {
+    if (!e || typeof e !== 'object' || String(e.entryType || '').trim() !== 'qa_job') return true;
+    const jid = Number(e.qaJobId);
+    if (!Number.isInteger(jid)) return true;
+    return !removedQaIds.has(jid);
+  });
+  return out;
 }
 
 /**
@@ -197,9 +230,10 @@ function mergeWorkspacePreserveTimelinePhotos(existing, incoming) {
     const id = normalizeUnitId(u && u.id);
     const prev = byId.get(id);
     if (!prev || !Array.isArray(prev.timeline)) return u;
+    const removedQaRaw = u && Array.isArray(u._removedQaJobIds) ? u._removedQaJobIds : [];
     return {
       ...u,
-      timeline: mergeTimelineEntries(prev.timeline, u.timeline),
+      timeline: mergeTimelineEntries(prev.timeline, u.timeline, removedQaRaw),
     };
   });
   return sanitized;

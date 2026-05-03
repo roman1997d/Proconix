@@ -912,9 +912,11 @@
     }
 
     .timeline-entry--qa-job .timeline-card--qa-job {
-      border-left: 4px solid #7c3aed;
-      background: linear-gradient(135deg, #faf5ff 0%, #ffffff 52%);
-      box-shadow: 0 1px 12px rgba(124, 58, 237, 0.12);
+      border-left: 6px solid #6d28d9;
+      outline: 2px solid rgba(109, 40, 217, 0.45);
+      outline-offset: -1px;
+      background: linear-gradient(135deg, #f3e8ff 0%, #ffffff 55%);
+      box-shadow: 0 2px 14px rgba(91, 33, 182, 0.28);
     }
 
     .timeline-qa-strip {
@@ -926,14 +928,15 @@
     }
 
     .timeline-qa-badge {
-      font-size: 0.6rem;
-      font-weight: 700;
-      letter-spacing: 0.07em;
+      font-size: 0.65rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      background: #7c3aed;
+      background: #6d28d9;
       color: #fff;
-      padding: 4px 9px;
-      border-radius: 6px;
+      padding: 5px 10px;
+      border-radius: 7px;
+      box-shadow: 0 1px 6px rgba(91, 33, 182, 0.35);
     }
 
     .timeline-qa-jobline {
@@ -2032,6 +2035,13 @@
       );
       if (!proceed) return;
       const { unit } = pair;
+      if (qaDel && pair.entry && pair.entry.qaJobId != null) {
+        const jid = Number(pair.entry.qaJobId);
+        if (Number.isInteger(jid) && jid >= 1) {
+          if (!Array.isArray(unit._removedQaJobIds)) unit._removedQaJobIds = [];
+          if (!unit._removedQaJobIds.includes(jid)) unit._removedQaJobIds.push(jid);
+        }
+      }
       const ctx = timelineEventEditContext;
       const idx = ctx.entryIndex;
       const backupTimeline = cloneJson(unit.timeline);
@@ -2558,7 +2568,8 @@
     }
 
     function timelineEntryIsQaJob(entry) {
-      return !!(entry && entry.entryType === "qa_job");
+      if (!entry || typeof entry !== "object") return false;
+      return String(entry.entryType || "").trim().toLowerCase() === "qa_job";
     }
 
     function resetTimelineModalChrome() {
@@ -4868,6 +4879,26 @@
         onDashboardProjectContextChanged();
       });
     }
+
+    window.__proconixReloadWorkspace = async function () {
+      try {
+        await loadWorkspaceFromBackend();
+        updateProjectFilterNote();
+        renderTowers();
+        if (state.currentUnitId != null) {
+          const uid = state.currentUnitId;
+          const unitAfter = findUnitById(uid);
+          if (unitAfter) {
+            unitAfter._timelineHydrated = false;
+            await loadUnitTimeline(uid);
+            renderTimeline(unitAfter);
+            unitProgress.textContent = `Progress: ${computeProgress(unitAfter)}%`;
+          }
+        }
+      } catch (err) {
+        /* Ignore — user can refresh Unit Progress from the menu */
+      }
+    };
 
     bootstrapUnitProgressModule();
   </script>

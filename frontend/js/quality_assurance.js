@@ -2900,7 +2900,17 @@
       stepMaterials: collectJobCreateStepMaterials()
     };
     qaApi.createJob(job).then(function () {
-      showToast('Job created.', 'success');
+      showToast(
+        job.unitProgressUnitId
+          ? 'Job created. Linked unit timeline will refresh if Unit Progress is already open.'
+          : 'Job created.',
+        'success'
+      );
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'proconix-unit-progress-reload-workspace' }, '*');
+        }
+      } catch (err) {}
       showView('home');
     }).catch(function (err) {
       showToast(err && err.message ? err.message : 'Failed to create job.', 'error');
