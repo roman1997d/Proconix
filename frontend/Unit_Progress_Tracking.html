@@ -1273,6 +1273,7 @@
     <section id="towerView" class="card">
       <h2 class="section-title">View 1 - Tower View</h2>
       <p class="hint">Select a tower to continue. No unit timeline shown at this level.</p>
+      <p id="up-project-filter-note" class="hint up-project-filter-note" hidden></p>
       <div class="tower-search">
         <label for="tower-unit-search" style="margin:0;">Search unit by name</label>
         <input id="tower-unit-search" type="search" placeholder="Type unit name, e.g. Apartment 202">
@@ -2905,7 +2906,21 @@
 
     function renderTowers() {
       towerList.innerHTML = "";
-      DATA.towers.forEach((tower) => {
+      const pid = getUnitProgressProjectFilterId();
+      const filteredUnits = getFilteredUnitsForDisplay();
+      let towers = DATA.towers;
+      if (pid) {
+        towers = DATA.towers.filter((t) => towerVisibleForProjectFilter(t.id, pid, filteredUnits));
+      }
+      if (!towers.length) {
+        towerList.innerHTML = pid
+          ? "<div class='timeline-empty'>No towers or units for the selected project. Pick another project on Dashboard / Project Overview or use the wizard.</div>"
+          : "<div class='timeline-empty'>No towers yet. Use the wizard to create a structure.</div>";
+        updateProjectFilterNote();
+        renderTowerUnitSearchResults("");
+        return;
+      }
+      towers.forEach((tower) => {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "list-item";
@@ -2919,6 +2934,7 @@
         btn.addEventListener("click", () => openTower(tower.id));
         towerList.appendChild(btn);
       });
+      updateProjectFilterNote();
       renderTowerUnitSearchResults("");
     }
 
@@ -2926,7 +2942,7 @@
       const query = String(queryRaw || "").trim().toLowerCase();
       towerSearchResults.innerHTML = "";
       if (!query) return;
-      const matches = DATA.units
+      const matches = getFilteredUnitsForDisplay()
         .filter((unit) => String(unit && unit.name ? unit.name : "").toLowerCase().includes(query))
         .slice(0, 20);
 
@@ -2950,6 +2966,66 @@
 
     function towerIdMatches(a, b) {
       return String(a ?? "") === String(b ?? "");
+    }
+
+    /**
+     * Dashboard “today” project first, then wizard selection. Empty = no filter (show all).
+     * Display-only filter; full workspace stays in DATA for saves.
+     */
+    function getUnitProgressProjectFilterId() {
+      let raw = "";
+      if (typeof window.ProconixDashboardProject !== "undefined") {
+        raw = window.ProconixDashboardProject.getSelectedProjectId() || "";
+      }
+      if (!raw && wizardState && wizardState.projectId != null && String(wizardState.projectId).trim() !== "") {
+        raw = String(wizardState.projectId).trim();
+      }
+      if (!raw) return null;
+      const n = Number(raw);
+      return Number.isFinite(n) && n > 0 ? String(Math.trunc(n)) : null;
+    }
+
+    function getFilteredUnitsForDisplay() {
+      const pid = getUnitProgressProjectFilterId();
+      const units = DATA.units || [];
+      if (!pid) return units;
+      const n = Number(pid);
+      return units.filter((u) => u.project_id != null && Number(u.project_id) === n);
+    }
+
+    function towerVisibleForProjectFilter(towerId, pid, filteredUnits) {
+      if (!pid) return true;
+      const tid = String(towerId);
+      if (filteredUnits.some((u) => String(u.tower) === tid)) return true;
+      return DATA.floors.some((f) => {
+        if (!towerIdMatches(f.tower, towerId)) return false;
+        const allOnFloor = DATA.units.filter(
+          (u) => towerIdMatches(u.tower, towerId) && Number(u.floor) === Number(f.number)
+        );
+        return allOnFloor.length === 0;
+      });
+    }
+
+    function updateProjectFilterNote() {
+      const el = document.getElementById("up-project-filter-note");
+      if (!el) return;
+      const pid = getUnitProgressProjectFilterId();
+      if (!pid) {
+        el.hidden = true;
+        el.textContent = "";
+        return;
+      }
+      el.hidden = false;
+      el.textContent =
+        "Showing towers, floors, and units for the selected dashboard project only. Change it under Dashboard → Project Overview if needed.";
+    }
+
+    function onDashboardProjectContextChanged() {
+      state.currentTower = null;
+      state.currentFloor = null;
+      state.currentUnitId = null;
+      show("towerView");
+      renderTowers();
     }
 
     function updateFloorViewToolbar(mode) {
@@ -3005,7 +3081,11 @@
       }
 
       const sibling = DATA.units.find((u) => towerIdMatches(u.tower, floor.tower));
-      const projectId = sibling && sibling.project_id != null ? Number(sibling.project_id) : null;
+      const filterPid = getUnitProgressProjectFilterId();
+      let projectId = sibling && sibling.project_id != null ? Number(sibling.project_id) : null;
+      if (projectId == null && filterPid != null) {
+        projectId = Number(filterPid);
+      }
 
       DATA.units.push({
         id: allocateNextUnitId(),
@@ -3126,14 +3206,30 @@
 
     function loadFloors(towerId) {
       floorList.innerHTML = "";
+      const pid = getUnitProgressProjectFilterId();
+      const filteredUnits = getFilteredUnitsForDisplay();
       const floors = DATA.floors
         .filter((f) => towerIdMatches(f.tower, towerId))
+        .filter((f) => {
+          if (!pid) return true;
+          const allOnFloor = DATA.units.filter(
+            (u) => towerIdMatches(u.tower, towerId) && Number(u.floor) === Number(f.number)
+          );
+          if (allOnFloor.length === 0) return true;
+          return filteredUnits.some(
+            (u) => towerIdMatches(u.tower, towerId) && Number(u.floor) === Number(f.number)
+          );
+        })
         .slice()
         .sort((a, b) => Number(a.number) - Number(b.number));
       floors.forEach((floor) => {
-        const unitsCount = DATA.units.filter(
-          (u) => towerIdMatches(u.tower, towerId) && Number(u.floor) === Number(floor.number)
-        ).length;
+        const unitsCount = pid
+          ? filteredUnits.filter(
+            (u) => towerIdMatches(u.tower, towerId) && Number(u.floor) === Number(floor.number)
+          ).length
+          : DATA.units.filter(
+            (u) => towerIdMatches(u.tower, towerId) && Number(u.floor) === Number(floor.number)
+          ).length;
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "list-item";
@@ -3162,7 +3258,7 @@
       const floor = DATA.floors.find((f) => f.id === floorId);
       if (!floor) return;
 
-      const units = DATA.units.filter(
+      const units = getFilteredUnitsForDisplay().filter(
         (u) => towerIdMatches(u.tower, floor.tower) && Number(u.floor) === Number(floor.number)
       );
       floorList.innerHTML = "";
@@ -4415,6 +4511,19 @@
           }, 500);
         }
       }
+
+      var dashKey =
+        typeof window.ProconixDashboardProject !== "undefined"
+          ? window.ProconixDashboardProject.STORAGE_KEY
+          : "proconix_dashboard_today_project_id";
+      window.addEventListener("storage", function (e) {
+        if (e.key === dashKey) {
+          onDashboardProjectContextChanged();
+        }
+      });
+      window.addEventListener("proconix-dashboard-project-changed", function () {
+        onDashboardProjectContextChanged();
+      });
     }
 
     bootstrapUnitProgressModule();
