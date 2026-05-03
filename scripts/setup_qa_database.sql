@@ -139,11 +139,13 @@ CREATE TABLE IF NOT EXISTS qa_jobs (
   created_by             VARCHAR(255),
   updated_at             TIMESTAMP,
   updated_by             VARCHAR(255),
+  unit_progress_unit_id  VARCHAR(128),
   CONSTRAINT uq_qa_jobs_project_number UNIQUE (project_id, job_number)
 );
 CREATE INDEX IF NOT EXISTS idx_qa_jobs_project_id ON qa_jobs(project_id);
 CREATE INDEX IF NOT EXISTS idx_qa_jobs_status_id ON qa_jobs(status_id);
 CREATE INDEX IF NOT EXISTS idx_qa_jobs_target_date ON qa_jobs(target_completion_date);
+CREATE INDEX IF NOT EXISTS idx_qa_jobs_unit_progress_unit_id ON qa_jobs(unit_progress_unit_id);
 
 -- -----------------------------------------------------------------------------
 -- 8. QA – Legături job ↔ template și job ↔ workers

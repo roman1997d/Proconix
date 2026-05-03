@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const { pool } = require('../db/pool');
+const { appendQaJobLinkToUnitTimeline } = require('./unitProgressController');
 const { computeEntryMoneyForTemplates, loadStepsByTemplateForQaJob } = require('../lib/qaPriceWorkMoney');
 const { buildJobMaterialRequirements, eachStepMaterialPair } = require('../lib/qaMaterialCalculationEngine');
 
@@ -1045,6 +1046,10 @@ function jobRowToJson(row, templateIds, workerIds, floorCode, costCode, statusCo
     responsibleId,
     workerIds: workerIds || [],
     status: statusCode || 'new',
+    unitProgressUnitId:
+      row.unit_progress_unit_id != null && String(row.unit_progress_unit_id).trim() !== ''
+        ? String(row.unit_progress_unit_id).trim()
+        : '',
   };
   if (forSupervisor) {
     delete base.costIncluded;
@@ -1077,7 +1082,7 @@ async function listJobs(req, res) {
     const jobs = await pool.query(
       `SELECT j.id, j.project_id, j.job_number, j.job_title, j.floor_id, j.floor_code, j.location, j.sqm, j.linear_meters,
               j.total_units, j.step_quantities, j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
-              j.cost_value, j.responsible_id, j.responsible_user_id, j.status_id, j.created_at, j.created_by
+              j.cost_value, j.responsible_id, j.responsible_user_id, j.status_id, j.created_at, j.created_by, j.unit_progress_unit_id
        FROM qa_jobs j
        WHERE j.project_id = $1 ORDER BY j.created_at DESC NULLS LAST, j.id DESC`,
       [pid]
@@ -1235,7 +1240,7 @@ async function getJob(req, res) {
     const job = await pool.query(
       `SELECT j.id, j.project_id, j.job_number, j.job_title, j.floor_id, j.floor_code, j.location, j.sqm, j.linear_meters,
               j.total_units, j.step_quantities, j.specification, j.description, j.target_completion_date, j.cost_included, j.cost_type_id,
-              j.cost_value, j.responsible_id, j.responsible_user_id, j.status_id, j.created_at, j.created_by
+              j.cost_value, j.responsible_id, j.responsible_user_id, j.status_id, j.created_at, j.created_by, j.unit_progress_unit_id
        FROM qa_jobs j
        INNER JOIN projects p ON p.id = j.project_id AND p.company_id = $1
        WHERE j.id = $2`,
@@ -1360,6 +1365,11 @@ async function createJob(req, res) {
     finalJobNumber = await allocateNextJobNumber(pool, projectId);
   }
 
+  const unitProgressUnitIdStored =
+    b.unitProgressUnitId != null && String(b.unitProgressUnitId).trim() !== ''
+      ? String(b.unitProgressUnitId).trim()
+      : null;
+
   const responsibleUserId = b.responsibleId ? parseInt(String(b.responsibleId), 10) : null;
   const workerIds = Array.isArray(b.workerIds) ? b.workerIds : [];
   if (responsibleUserId != null || workerIds.length > 0) {
@@ -1413,12 +1423,12 @@ async function createJob(req, res) {
         project_id, job_number, job_title, floor_id, floor_code, location, sqm, linear_meters, total_units,
         step_quantities,
         specification, description, target_completion_date, cost_included, cost_type_id, cost_value,
-        responsible_user_id, status_id, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        responsible_user_id, status_id, created_by, unit_progress_unit_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING id, project_id, job_number, job_title, floor_id, floor_code, location, sqm, linear_meters, total_units,
         step_quantities,
         specification, description, target_completion_date, cost_included, cost_type_id, cost_value,
-        responsible_user_id, status_id, created_at, created_by`,
+        responsible_user_id, status_id, created_at, created_by, unit_progress_unit_id`,
       [
         projectId,
         finalJobNumber,
@@ -1439,6 +1449,7 @@ async function createJob(req, res) {
         responsibleUserId,
         statusId,
         createdBy,
+        unitProgressUnitIdStored,
       ]
     );
     const row = insert.rows[0];
@@ -1525,6 +1536,27 @@ async function createJob(req, res) {
       console.error('Auto planning sync from QA createJob failed:', err);
     }
 
+    if (unitProgressUnitIdStored) {
+      try {
+        const tl = await appendQaJobLinkToUnitTimeline({
+          companyId,
+          unitId: unitProgressUnitIdStored,
+          projectId,
+          qaJobId: jobId,
+          qaJobNumber: finalJobNumber,
+          qaJobTitle: jobTitle,
+          actorKind: req.supervisor ? 'supervisor' : 'manager',
+          actorId: req.manager?.id ?? req.supervisor?.id ?? null,
+          actorLabel: getCreatedBy(req) || 'Quality Assurance',
+        });
+        if (!tl || !tl.ok) {
+          console.warn('QA job created but Unit Progress timeline link was skipped:', tl && tl.reason);
+        }
+      } catch (e) {
+        console.error('QA createJob Unit Progress timeline append failed:', e);
+      }
+    }
+
     const createdPayload = jobRowToJson(
       row,
       outTemplateIds,
@@ -1554,6 +1586,11 @@ async function createJob(req, res) {
       return res.status(503).json({
         message:
           'Database schema out of date. Run QA migrations including scripts/alter_qa_jobs_step_quantities.sql',
+      });
+    }
+    if (err.code === '42703' && /unit_progress_unit_id/i.test(err.message || '')) {
+      return res.status(503).json({
+        message: 'Database schema out of date. Run scripts/alter_qa_jobs_unit_progress_unit_id.sql.',
       });
     }
     console.error('QA createJob:', err);

@@ -2871,11 +2871,17 @@
       showToast('Enter a location (free text), or finish the tower → floor → unit selection.', 'error');
       return;
     }
+    var unitProgressUnitId = '';
+    if (getQaJobLocationSrc() === 'upt') {
+      var ue = document.getElementById('qa-job-loc-unit');
+      unitProgressUnitId = ue && ue.value ? String(ue.value).trim() : '';
+    }
     var job = {
       projectId: projectId,
       jobTitle: jobTitle,
       floor: (document.getElementById('qa-job-floor') && document.getElementById('qa-job-floor').value) || '',
       location: locationVal,
+      unitProgressUnitId: unitProgressUnitId || undefined,
       stepQuantities: stepQuantities,
       specification: (document.getElementById('qa-job-spec') && document.getElementById('qa-job-spec').value) || '',
       description: (document.getElementById('qa-job-description') && document.getElementById('qa-job-description').value) || '',

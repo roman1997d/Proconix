@@ -911,6 +911,86 @@
       background: #991b1b;
     }
 
+    .timeline-entry--qa-job .timeline-card--qa-job {
+      border-left: 4px solid #7c3aed;
+      background: linear-gradient(135deg, #faf5ff 0%, #ffffff 52%);
+      box-shadow: 0 1px 12px rgba(124, 58, 237, 0.12);
+    }
+
+    .timeline-qa-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .timeline-qa-badge {
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      background: #7c3aed;
+      color: #fff;
+      padding: 4px 9px;
+      border-radius: 6px;
+    }
+
+    .timeline-qa-jobline {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #5b21b6;
+      line-height: 1.3;
+    }
+
+    .timeline-dot.dot-qa {
+      background: #7c3aed;
+      box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.25);
+    }
+
+    .timeline-content .status.qa-job-tag {
+      background: #ede9fe;
+      color: #5b21b6;
+    }
+
+    .timeline-modal-qa-banner {
+      margin: 0 0 14px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #ddd6fe;
+      background: #faf5ff;
+    }
+
+    .timeline-modal-qa-banner .timeline-modal-qa-kicker {
+      margin: 0 0 6px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #6d28d9;
+    }
+
+    .timeline-modal-qa-banner .timeline-modal-qa-title {
+      margin: 0 0 4px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #4c1d95;
+      line-height: 1.35;
+    }
+
+    .timeline-modal-qa-banner .timeline-modal-qa-meta {
+      margin: 0 0 12px;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .timeline-modal-qa-banner .timeline-modal-qa-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
     .photo-preview-img {
       width: 100%;
       max-height: 72vh;
@@ -1323,7 +1403,7 @@
       </div>
 
       <h3 class="section-title">Timeline</h3>
-      <p class="hint">Append-only by default — open an event to edit comment, stage, photos, or delete the event.</p>
+      <p class="hint">Progress updates and photos are editable here. Rows marked <strong>QA job</strong> are created when a job is linked from Quality Assurance to this unit — open one to jump to QA or remove the link.</p>
       <div class="timeline" id="timeline-list"></div>
       <div class="doc-preview" id="doc-preview" style="display:none;">No snapshot generated yet.</div>
     </section>
@@ -1343,6 +1423,8 @@
             <div class="modal-field"><strong>Updated By</strong><span id="modal-user">-</span></div>
             <div class="modal-field"><strong>Reason</strong><span id="modal-reason">-</span></div>
           </div>
+          <div id="timeline-modal-qa-banner" class="timeline-modal-qa-banner hidden" aria-live="polite"></div>
+          <div id="timeline-modal-standard-edits">
           <div class="modal-field" style="margin-top:12px;">
             <label for="modal-edit-stage"><strong>Stage</strong></label>
             <select id="modal-edit-stage" class="modal-edit-select" aria-label="Stage"></select>
@@ -1359,6 +1441,7 @@
             <label for="modal-add-photos"><strong>Add photos</strong></label>
             <p class="hint" style="margin:4px 0 6px;">Up to 5 photos total per event (including existing).</p>
             <input id="modal-add-photos" type="file" accept="image/*" multiple class="modal-edit-select" style="padding:6px;">
+          </div>
           </div>
           <div id="timeline-modal-feedback" role="alert"></div>
           <div class="timeline-modal-actions">
@@ -1804,7 +1887,9 @@
       if (!entry.photos.length) {
         const empty = document.createElement("div");
         empty.className = "timeline-modal-photo-empty";
-        empty.textContent = "No photos yet.";
+        empty.textContent = timelineEntryIsQaJob(entry)
+          ? "No site photos — this row is only the QA job link."
+          : "No photos yet.";
         photosWrap.appendChild(empty);
         return;
       }
@@ -1817,10 +1902,16 @@
         removeBtn.className = "modal-photo-remove";
         removeBtn.setAttribute("aria-label", "Remove photo");
         removeBtn.innerHTML = "&times;";
-        removeBtn.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          removeTimelineModalPhoto(index);
-        });
+        if (!timelineEntryIsQaJob(entry)) {
+          removeBtn.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            removeTimelineModalPhoto(index);
+          });
+        } else {
+          removeBtn.classList.add("hidden");
+          removeBtn.setAttribute("aria-hidden", "true");
+          removeBtn.disabled = true;
+        }
         const photoBtn = document.createElement("button");
         photoBtn.type = "button";
         photoBtn.className = "modal-photo";
@@ -1840,7 +1931,7 @@
 
     function removeTimelineModalPhoto(photoIndex) {
       const pair = getTimelineEditEntry();
-      if (!pair || !Array.isArray(pair.entry.photos)) return;
+      if (!pair || timelineEntryIsQaJob(pair.entry) || !Array.isArray(pair.entry.photos)) return;
       pair.entry.photos.splice(photoIndex, 1);
       renderTimelineModalPhotos(pair.entry);
     }
@@ -1849,7 +1940,7 @@
       const files = Array.from(event.target.files || []);
       event.target.value = "";
       const pair = getTimelineEditEntry();
-      if (!pair || !files.length) return;
+      if (!pair || timelineEntryIsQaJob(pair.entry) || !files.length) return;
       const entry = pair.entry;
       if (!entry.photos) entry.photos = [];
       const room = 5 - entry.photos.length;
@@ -1875,6 +1966,16 @@
     async function saveTimelineEventEdits() {
       const pair = getTimelineEditEntry();
       if (!pair) return;
+      if (timelineEntryIsQaJob(pair.entry)) {
+        const fb = document.getElementById("timeline-modal-feedback");
+        if (fb) {
+          fb.style.display = "block";
+          fb.style.color = "#b91c1c";
+          fb.textContent =
+            "QA job rows are read-only here. Remove the link with “Remove link” if this unit should no longer show it.";
+        }
+        return;
+      }
       const { unit, entry } = pair;
       const ctx = timelineEventEditContext;
       const stageSel = document.getElementById("modal-edit-stage");
@@ -1923,7 +2024,13 @@
     async function deleteTimelineEvent() {
       const pair = getTimelineEditEntry();
       if (!pair || !timelineEventEditContext) return;
-      if (!window.confirm("Delete this timeline event permanently? This cannot be undone.")) return;
+      const qaDel = timelineEntryIsQaJob(pair.entry);
+      const proceed = window.confirm(
+        qaDel
+          ? "Remove this QA job link from the unit timeline?\n\nThe QA job in Quality Assurance is not deleted."
+          : "Delete this timeline event permanently? This cannot be undone.",
+      );
+      if (!proceed) return;
       const { unit } = pair;
       const ctx = timelineEventEditContext;
       const idx = ctx.entryIndex;
@@ -2422,6 +2529,112 @@
       if (status === "Done") return "dot-done";
       if (status === "Blocked") return "dot-blocked";
       return "dot-progress";
+    }
+
+    function createDotClassForTimelineEntry(entry) {
+      if (entry && entry.entryType === "qa_job") return "dot-qa";
+      return createDotClass(entry.status);
+    }
+
+    function createStatusClassForTimelineEntry(entry) {
+      if (entry && entry.entryType === "qa_job") return "qa-job-tag";
+      return createStatusClass(entry.status);
+    }
+
+    function sanitizeTimelinePlainText(value) {
+      return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/\"/g, "&quot;");
+    }
+
+    function qaTimelineJobSubtitle(entry) {
+      const num = entry && entry.qaJobNumber != null ? String(entry.qaJobNumber).trim() : "";
+      const title = entry && entry.qaJobTitle != null ? String(entry.qaJobTitle).trim() : "";
+      const parts = [];
+      if (num) parts.push(num);
+      if (title) parts.push(title);
+      return parts.length ? parts.join(" · ") : "QA inspection job";
+    }
+
+    function timelineEntryIsQaJob(entry) {
+      return !!(entry && entry.entryType === "qa_job");
+    }
+
+    function resetTimelineModalChrome() {
+      const titleEl = document.getElementById("timeline-modal-title");
+      if (titleEl) titleEl.textContent = "Timeline Event Details";
+      const banner = document.getElementById("timeline-modal-qa-banner");
+      if (banner) {
+        banner.classList.add("hidden");
+        banner.innerHTML = "";
+      }
+      const standard = document.getElementById("timeline-modal-standard-edits");
+      if (standard) standard.classList.remove("hidden");
+      const saveBtn = document.getElementById("timeline-modal-save");
+      if (saveBtn) saveBtn.classList.remove("hidden");
+      const delBtn = document.getElementById("timeline-modal-delete");
+      if (delBtn) {
+        delBtn.classList.remove("hidden");
+        delBtn.innerHTML = '<i class="bi bi-trash3"></i> Delete event';
+      }
+    }
+
+    function configureTimelineModalForEntry(entry) {
+      const isQa = timelineEntryIsQaJob(entry);
+      const banner = document.getElementById("timeline-modal-qa-banner");
+      const standard = document.getElementById("timeline-modal-standard-edits");
+      const saveBtn = document.getElementById("timeline-modal-save");
+      const delBtn = document.getElementById("timeline-modal-delete");
+      const titleEl = document.getElementById("timeline-modal-title");
+      if (!isQa) {
+        resetTimelineModalChrome();
+        return;
+      }
+      if (titleEl) titleEl.textContent = "QA job on this unit";
+      if (standard) standard.classList.add("hidden");
+      if (saveBtn) saveBtn.classList.add("hidden");
+      if (delBtn) {
+        delBtn.classList.remove("hidden");
+        delBtn.innerHTML = '<i class="bi bi-trash3"></i> Remove link';
+      }
+      if (!banner) return;
+      banner.classList.remove("hidden");
+      banner.innerHTML = "";
+      const kicker = document.createElement("p");
+      kicker.className = "timeline-modal-qa-kicker";
+      kicker.textContent = "Quality Assurance";
+      banner.appendChild(kicker);
+      const line = document.createElement("p");
+      line.className = "timeline-modal-qa-title";
+      line.textContent = qaTimelineJobSubtitle(entry);
+      banner.appendChild(line);
+      const meta = document.createElement("p");
+      meta.className = "timeline-modal-qa-meta";
+      meta.textContent =
+        "Created from Create QA Job when this unit was picked as the site location. It is an anchor in the timeline, not an on-site progress photo.";
+      banner.appendChild(meta);
+      const actionRow = document.createElement("div");
+      actionRow.className = "timeline-modal-qa-actions";
+      const openQa = document.createElement("a");
+      openQa.className = "btn btn-primary";
+      openQa.href = "/Quality_Assurance.html";
+      openQa.rel = "noopener noreferrer";
+      openQa.textContent = "Open Quality Assurance";
+      openQa.addEventListener("click", () => {
+        try {
+          const pid = entry && entry.qaProjectId != null ? String(entry.qaProjectId).trim() : "";
+          if (
+            pid
+            && window.ProconixDashboardProject
+            && typeof window.ProconixDashboardProject.setSelectedProjectId === "function"
+          ) {
+            window.ProconixDashboardProject.setSelectedProjectId(pid);
+          }
+        } catch (err) {}
+      });
+      actionRow.appendChild(openQa);
+      banner.appendChild(actionRow);
     }
 
     function formatDateTime(dateValue) {
@@ -3468,12 +3681,14 @@
         const timelineIndex = row.timelineIndex;
         const item = document.createElement("div");
         const sideClass = displayIndex % 2 === 0 ? "left" : "right";
-        item.className = `timeline-entry ${sideClass}`;
+        const qaJobCard = timelineEntryIsQaJob(entry);
+        item.className = `timeline-entry ${sideClass}${qaJobCard ? " timeline-entry--qa-job" : ""}`;
         const reasonLine = entry.status === "Blocked" && entry.reason
           ? `<div class="timeline-meta"><strong>Reason:</strong> ${entry.reason}</div>`
           : "";
+        const commentLabel = qaJobCard ? "Summary" : "Comment";
         const commentLine = entry.comment
-          ? `<div class="timeline-meta"><strong>Comment:</strong> ${entry.comment}</div>`
+          ? `<div class="timeline-meta"><strong>${commentLabel}:</strong> ${entry.comment}</div>`
           : "";
         const photoArr = Array.isArray(entry.photos) ? entry.photos : [];
         const photos = photoArr.length
@@ -3482,16 +3697,23 @@
               return `<button type="button" class="photo" data-photo-index="${photoIndex}"><img src="${photo.src}" alt="${photo.name}"><span>${photo.name}</span></button>`;
             }).join("")}</div>`
           : "";
+        const qaStripHtml = qaJobCard
+          ? `<div class="timeline-qa-strip" aria-hidden="false">
+              <span class="timeline-qa-badge">QA job</span>
+              <span class="timeline-qa-jobline">${sanitizeTimelinePlainText(qaTimelineJobSubtitle(entry))}</span>
+            </div>`
+          : "";
         item.innerHTML = `
           <div class="timeline-center">
-            <div class="timeline-dot ${createDotClass(entry.status)}" aria-hidden="true"></div>
+            <div class="timeline-dot ${createDotClassForTimelineEntry(entry)}" aria-hidden="true"></div>
           </div>
-          <div class="timeline-card">
+          <div class="timeline-card${qaJobCard ? " timeline-card--qa-job" : ""}">
             <div class="timeline-bar">${formatDateTime(entry.date)}</div>
             <div class="timeline-content">
+              ${qaStripHtml}
               <div class="timeline-head">
                 <strong>${entry.stage}</strong>
-                <span class="status ${createStatusClass(entry.status)}">${entry.status}</span>
+                <span class="status ${createStatusClassForTimelineEntry(entry)}">${entry.status}</span>
               </div>
               <div class="timeline-meta">By: ${entry.user} | Date: ${formatDateTime(entry.date)}</div>
               ${reasonLine}
@@ -3530,7 +3752,13 @@
 
       const entry = u.timeline[entryIndex];
       if (!entry) return;
-      timelineEventEditContext = { unitId: u.id, entryIndex };
+      timelineEventEditContext = {
+        unitId: u.id,
+        entryIndex,
+        isQaJob: timelineEntryIsQaJob(entry),
+      };
+
+      configureTimelineModalForEntry(entry);
 
       document.getElementById("modal-unit-name").textContent = `${u.name} (ID: ${u.id})`;
       document.getElementById("modal-date").textContent = formatDateTime(entry.date);
@@ -3561,6 +3789,7 @@
     }
 
     function closeTimelineEventModal() {
+      resetTimelineModalChrome();
       timelineEventEditContext = null;
       timelineModal.classList.remove("open");
       timelineModal.setAttribute("aria-hidden", "true");

@@ -130,6 +130,9 @@ function slimWorkspaceForList(workspace) {
 
 function timelineEntryKey(entry) {
   if (!entry || typeof entry !== 'object') return '';
+  if (entry.entryType === 'qa_job' && entry.qaJobId != null && String(entry.qaJobId).trim() !== '') {
+    return `qa_job:${String(entry.qaJobId)}`;
+  }
   const d = entry.date != null ? String(entry.date) : '';
   const st = entry.stage != null ? String(entry.stage) : '';
   const c = entry.comment != null ? String(entry.comment) : '';
@@ -362,6 +365,75 @@ function sanitizePublicTimelineEntry(entry) {
   };
 }
 
+/**
+ * Append a read-only QA job reference to this unit's private timeline (workspace JSON).
+ * Does not expose internal job ids on the public QR timeline (those entries are stripped there).
+ */
+async function appendQaJobLinkToUnitTimeline(opts) {
+  const {
+    companyId,
+    unitId: unitIdRaw,
+    projectId,
+    qaJobId,
+    qaJobNumber,
+    qaJobTitle,
+    actorKind,
+    actorId,
+    actorLabel,
+  } = opts || {};
+  const cid = companyId != null ? Number(companyId) : null;
+  if (!Number.isFinite(cid)) return { ok: false, reason: 'bad_company' };
+  const unitId = normalizeUnitId(unitIdRaw);
+  const jid = qaJobId != null ? Number(qaJobId) : NaN;
+  if (!unitId || !Number.isInteger(jid) || jid < 1) return { ok: false, reason: 'bad_args' };
+
+  let workspace = await getWorkspaceByCompanyId(cid);
+  const unit = getUnitFromWorkspace(workspace, unitId);
+  if (!unit) return { ok: false, reason: 'unit_not_found' };
+
+  const pid = parseInt(String(projectId), 10);
+  const unitPid = unit.project_id != null && String(unit.project_id).trim() !== '' ? Number(unit.project_id) : null;
+  if (
+    Number.isFinite(unitPid)
+    && Number.isFinite(pid)
+    && unitPid !== pid
+  ) {
+    return { ok: false, reason: 'project_mismatch' };
+  }
+
+  if (!Array.isArray(unit.timeline)) unit.timeline = [];
+
+  const num = qaJobNumber != null ? String(qaJobNumber).trim() : '';
+  const title = qaJobTitle != null ? String(qaJobTitle).trim() : '';
+  const parts = [];
+  if (num) parts.push(`Ref ${num}`);
+  if (title) parts.push(title);
+  const comment = parts.length ? parts.join(' · ') : `QA job #${jid}`;
+
+  unit.timeline.push({
+    entryType: 'qa_job',
+    qaJobId: jid,
+    qaJobNumber: num,
+    qaJobTitle: title,
+    qaProjectId: Number.isFinite(pid) ? pid : null,
+    stage: 'Quality Assurance',
+    status: 'QA job',
+    reason: '',
+    comment,
+    photos: [],
+    user: actorLabel && String(actorLabel).trim() ? String(actorLabel).trim() : 'Quality Assurance',
+    date: new Date().toISOString(),
+  });
+  workspace = sanitizeWorkspace(workspace);
+  await upsertWorkspace(
+    cid,
+    workspace,
+    actorKind === 'supervisor' ? 'supervisor' : 'manager',
+    actorId != null && Number.isFinite(Number(actorId)) ? Number(actorId) : null
+  );
+  return { ok: true };
+}
+
 async function getPublicTimeline(req, res) {
   const unitId = normalizeUnitId(req.params.unitId);
   if (!unitId) {
@@ -377,7 +449,10 @@ async function getPublicTimeline(req, res) {
       const unit = units.find((u) => normalizeUnitId(u && u.id) === unitId);
       if (!unit) continue;
       const timeline = Array.isArray(unit.timeline)
-        ? unit.timeline.map(sanitizePublicTimelineEntry).filter(Boolean)
+        ? unit.timeline
+            .filter((ent) => !ent || ent.entryType !== 'qa_job')
+            .map(sanitizePublicTimelineEntry)
+            .filter(Boolean)
         : [];
       return res.json({
         success: true,
@@ -1070,6 +1145,7 @@ async function confirmDeleteFloorSupervisor(req, res) {
 }
 
 module.exports = {
+  appendQaJobLinkToUnitTimeline,
   getWorkspace,
   putWorkspace,
   getWorkspaceSupervisor,
