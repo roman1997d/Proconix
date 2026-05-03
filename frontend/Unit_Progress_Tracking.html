@@ -1286,6 +1286,7 @@
     <section id="floorView" class="card hidden">
       <div class="view-actions">
         <button type="button" class="btn btn-soft" id="back-to-towers"><i class="bi bi-arrow-left"></i> Back to Towers</button>
+        <button type="button" class="btn btn-dark" id="add-floor-btn" style="margin-left:auto;"><i class="bi bi-plus-lg"></i> Add floor</button>
       </div>
       <h2 class="section-title">View 2 - Floor View</h2>
       <p class="hint">Select a floor from the active tower.</p>
@@ -2793,21 +2794,122 @@
       });
     }
 
+    function towerIdMatches(a, b) {
+      return String(a ?? "") === String(b ?? "");
+    }
+
+    function getNextFloorNumberForTower(towerId) {
+      const floors = DATA.floors.filter((f) => towerIdMatches(f.tower, towerId));
+      if (!floors.length) return 1;
+      const nums = floors.map((f) => Number(f.number)).filter((n) => Number.isFinite(n));
+      return nums.length ? Math.max(...nums) + 1 : 1;
+    }
+
+    async function addFloorForCurrentTower() {
+      const towerId = state.currentTower;
+      if (towerId == null || towerId === "") {
+        wizardStatus.textContent = "Open a tower first.";
+        return;
+      }
+      const n = getNextFloorNumberForTower(towerId);
+      const floorId = `${towerId}-${n}`;
+      if (DATA.floors.some((f) => f.id === floorId)) {
+        wizardStatus.textContent = "Floor id collision; refresh and try again.";
+        return;
+      }
+      DATA.floors.push({ id: floorId, tower: towerId, number: n });
+      beginUnitProgressWait("Saving…");
+      let saved = false;
+      try {
+        saved = await persistWorkspace("floor_add");
+      } finally {
+        endUnitProgressWait();
+      }
+      if (!saved) {
+        DATA.floors.pop();
+        wizardStatus.textContent = "Floor added locally; backend sync failed.";
+        return;
+      }
+      wizardStatus.textContent = "Floor added.";
+      loadFloors(towerId);
+    }
+
+    async function deleteFloorById(floorId) {
+      const floor = DATA.floors.find((f) => f.id === floorId);
+      if (!floor) return;
+      const towerId = floor.tower;
+      const unitsOnFloor = DATA.units.filter(
+        (u) => towerIdMatches(u.tower, towerId) && Number(u.floor) === Number(floor.number)
+      );
+      const msg = unitsOnFloor.length
+        ? `Delete floor ${floor.number} and ${unitsOnFloor.length} unit(s) on it? This cannot be undone.`
+        : `Delete floor ${floor.number}?`;
+      if (!confirm(msg)) return;
+
+      const floorsBefore = DATA.floors.slice();
+      const unitsBefore = DATA.units.slice();
+
+      DATA.units = DATA.units.filter(
+        (u) => !(towerIdMatches(u.tower, towerId) && Number(u.floor) === Number(floor.number))
+      );
+      DATA.floors = DATA.floors.filter((f) => f.id !== floorId);
+
+      if (state.currentFloor === floorId) {
+        state.currentFloor = null;
+        state.currentUnitId = null;
+      }
+
+      beginUnitProgressWait("Saving…");
+      let saved = false;
+      try {
+        saved = await persistWorkspace("floor_delete");
+      } finally {
+        endUnitProgressWait();
+      }
+
+      if (!saved) {
+        DATA.floors = floorsBefore;
+        DATA.units = unitsBefore;
+        wizardStatus.textContent = "Could not delete floor on server.";
+        return;
+      }
+
+      wizardStatus.textContent = "Floor deleted.";
+      if (state.currentTower != null && towerIdMatches(state.currentTower, towerId)) {
+        loadFloors(towerId);
+      } else {
+        renderTowers();
+      }
+    }
+
     function loadFloors(towerId) {
       floorList.innerHTML = "";
-      const floors = DATA.floors.filter((f) => f.tower === towerId);
+      const floors = DATA.floors
+        .filter((f) => towerIdMatches(f.tower, towerId))
+        .slice()
+        .sort((a, b) => Number(a.number) - Number(b.number));
       floors.forEach((floor) => {
-        const unitsCount = DATA.units.filter((u) => u.tower === towerId && u.floor === floor.number).length;
+        const unitsCount = DATA.units.filter(
+          (u) => towerIdMatches(u.tower, towerId) && Number(u.floor) === Number(floor.number)
+        ).length;
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "list-item";
         btn.innerHTML = `
           <div class="item-head">
             <p class="item-title">Floor ${floor.number}</p>
-            <span class="pill">${unitsCount} units</span>
+            <div class="pill-wrap">
+              <span class="pill">${unitsCount} units</span>
+              <button type="button" class="btn-qr btn-delete-floor" data-floor-id="${floor.id}">Delete</button>
+            </div>
           </div>
           <div class="meta">Tap to open units from this floor</div>
         `;
+        const delBtn = btn.querySelector(".btn-delete-floor");
+        delBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          deleteFloorById(floor.id);
+        });
         btn.addEventListener("click", () => openFloor(floor.id));
         floorList.appendChild(btn);
       });
@@ -3679,6 +3781,10 @@
       state.currentFloor = null;
       state.currentUnitId = null;
       renderTowers();
+    });
+
+    document.getElementById("add-floor-btn").addEventListener("click", () => {
+      addFloorForCurrentTower();
     });
 
     document.getElementById("back-to-floors").addEventListener("click", () => {
