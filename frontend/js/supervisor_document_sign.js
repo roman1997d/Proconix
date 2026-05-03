@@ -369,6 +369,17 @@
       });
   }
 
+  var SUBMIT_TYPE_ORDER = { text: 0, date: 1, signature: 2, initials: 3 };
+
+  function sortTasksForSubmit(tasks) {
+    return tasks.slice().sort(function (a, b) {
+      if (a.target_user_id !== b.target_user_id) {
+        return a.target_user_id - b.target_user_id;
+      }
+      return (SUBMIT_TYPE_ORDER[a.field.type] || 9) - (SUBMIT_TYPE_ORDER[b.field.type] || 9);
+    });
+  }
+
   function pendingTasks() {
     if (!docPayload) return [];
     var fields = Array.isArray(docPayload.fields_json) ? docPayload.fields_json : [];
@@ -445,65 +456,120 @@
     if (!mount) return;
     mount.innerHTML = '';
     canvasRefs = {};
-    var tasks = pendingTasks();
-    if (!tasks.length) {
-      mount.innerHTML = '<p class="svds-muted">All required fields are complete, or save a field layout first.</p>';
+
+    var all = pendingTasks();
+    var inkTasks = all.filter(function (t) {
+      var ty = t.field.type;
+      return ty === 'signature' || ty === 'initials';
+    });
+    var hasAuto = all.some(function (t) {
+      var ty = t.field.type;
+      return ty === 'text' || ty === 'date';
+    });
+
+    if (!all.length) {
+      mount.innerHTML =
+        '<p class="svds-muted svds-done-note">' +
+        (docPayload && Array.isArray(docPayload.fields_json) && docPayload.fields_json.length
+          ? 'Everything is complete.'
+          : 'Build the sheet above first.') +
+        '</p>';
       return;
     }
-    tasks.forEach(function (t) {
-      var f = t.field;
-      var wrap = document.createElement('div');
-      wrap.className = 'svds-field-block';
-      wrap.setAttribute('data-fid', f.id);
-      wrap.setAttribute('data-uid', String(t.target_user_id));
-      var subtitle =
-        '<div class="svds-label-strong">' +
-        esc(f.type) +
-        ' · ' +
-        esc(t.operative_name || 'Operative #' + t.target_user_id) +
-        '</div>';
-      wrap.innerHTML = subtitle;
 
-      if (f.type === 'signature' || f.type === 'initials') {
-        var sc = document.createElement('div');
-        sc.className = f.type === 'initials' ? 'svds-sig-wrap svds-small-canvas' : 'svds-sig-wrap';
-        var c = document.createElement('canvas');
-        c.width = f.type === 'initials' ? 280 : 400;
-        c.height = f.type === 'initials' ? 90 : 120;
-        sc.appendChild(c);
-        wrap.appendChild(sc);
-        canvasRefs[f.id + ':' + t.target_user_id] = { canvas: c, clear: bindSigCanvas(c) };
-        var clr = document.createElement('button');
-        clr.type = 'button';
-        clr.className = 'svds-btn svds-btn-secondary';
-        clr.textContent = 'Clear';
-        clr.addEventListener('click', function () {
-          canvasRefs[f.id + ':' + t.target_user_id].clear();
-        });
-        wrap.appendChild(clr);
-      } else if (f.type === 'date') {
-        var p = document.createElement('p');
-        p.className = 'svds-muted';
-        p.textContent = 'Date will be set automatically when you submit.';
-        wrap.appendChild(p);
-      } else if (f.type === 'text') {
-        var p2 = document.createElement('p');
-        p2.className = 'svds-muted';
-        p2.textContent = 'Name will be taken from the operative profile when you submit.';
-        wrap.appendChild(p2);
-      }
-      mount.appendChild(wrap);
+    if (hasAuto && inkTasks.length === 0) {
+      mount.innerHTML = '<p class="svds-mini-hint">Submit to finish (name &amp; date only).</p>';
+      return;
+    }
+
+    if (!inkTasks.length) return;
+
+    var byUser = {};
+    inkTasks.forEach(function (t) {
+      var k = String(t.target_user_id);
+      if (!byUser[k]) byUser[k] = [];
+      byUser[k].push(t);
     });
+
+    Object.keys(byUser).forEach(function (k) {
+      byUser[k].sort(function (a, b) {
+        var ra = SUBMIT_TYPE_ORDER[a.field.type];
+        var rb = SUBMIT_TYPE_ORDER[b.field.type];
+        return ra - rb;
+      });
+    });
+
+    Object.keys(byUser)
+      .sort(function (a, b) {
+        return parseInt(a, 10) - parseInt(b, 10);
+      })
+      .forEach(function (uidStr) {
+        var list = byUser[uidStr];
+        var displayName =
+          list[0] && list[0].operative_name ? list[0].operative_name.trim() || 'Operative' : 'Operative';
+
+        var card = document.createElement('div');
+        card.className = 'svds-sign-card';
+
+        var titleEl = document.createElement('div');
+        titleEl.className = 'svds-sign-name';
+        titleEl.textContent = displayName;
+        card.appendChild(titleEl);
+
+        list.forEach(function (t) {
+          var f = t.field;
+          var inkSlot = document.createElement('div');
+          inkSlot.className = 'svds-ink-slot';
+
+          var row = document.createElement('div');
+          row.className = 'svds-sign-row';
+
+          var lab = document.createElement('span');
+          lab.className = 'svds-mini-label';
+          lab.textContent = f.type === 'signature' ? 'Signature' : 'Initials';
+          row.appendChild(lab);
+
+          var clr = document.createElement('button');
+          clr.type = 'button';
+          clr.className = 'svds-clear';
+          clr.textContent = 'Clear';
+          var refKey = f.id + ':' + t.target_user_id;
+          clr.addEventListener(
+            'click',
+            function (key) {
+              return function () {
+                var r = canvasRefs[key];
+                if (r && r.clear) r.clear();
+              };
+            }(refKey)
+          );
+          row.appendChild(clr);
+          inkSlot.appendChild(row);
+
+          var sc = document.createElement('div');
+          sc.className = f.type === 'initials' ? 'svds-sig-wrap svds-small-canvas' : 'svds-sig-wrap';
+          var c = document.createElement('canvas');
+          c.width = f.type === 'initials' ? 280 : 400;
+          c.height = f.type === 'initials' ? 76 : 100;
+          sc.appendChild(c);
+          inkSlot.appendChild(sc);
+          canvasRefs[refKey] = { canvas: c, clear: bindSigCanvas(c) };
+
+          card.appendChild(inkSlot);
+        });
+
+        mount.appendChild(card);
+      });
   }
 
   function submitAllSignatures() {
     var cb = document.getElementById('svdsConfirmRead');
     if (!cb || !cb.checked) {
-      showErr('Confirm that operatives have read the document.');
+      showErr('Confirm read & understood before submit.');
       return;
     }
     showErr('');
-    var tasks = pendingTasks();
+    var tasks = sortTasksForSubmit(pendingTasks());
     if (!tasks.length) return;
 
     function submitOne(idx) {
@@ -522,7 +588,9 @@
       };
       if (f.type === 'signature' || f.type === 'initials') {
         var ref = canvasRefs[f.id + ':' + t.target_user_id];
-        if (!ref || !ref.canvas) return submitOne(idx + 1);
+        if (!ref || !ref.canvas) {
+          return Promise.reject(new Error('Missing signature pads — refresh the page.'));
+        }
         body.signatureImageBase64 = ref.canvas.toDataURL('image/png');
       } else if (f.type === 'date') {
         body.date_value = new Date().toISOString();

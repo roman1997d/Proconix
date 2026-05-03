@@ -37,8 +37,8 @@
     <div class="svds-pages" id="svdsPages"></div>
 
     <div class="svds-panel">
-      <div class="svds-label-strong">Collect signatures from (same project)</div>
-      <p class="svds-muted">Tick operatives, then build the appendix page with one row each (name, signature, initials, date).</p>
+      <div class="svds-label-strong">Operatives</div>
+      <p class="svds-muted">Select who signs, then tap the build button.</p>
       <div class="svds-op-grid" id="svdsOpList"></div>
       <div class="svds-toolbar">
         <button type="button" class="svds-btn" id="svdsBuildSheetBtn"><i class="bi bi-plus-square"></i> Build signature sheet &amp; assign</button>
@@ -46,13 +46,12 @@
     </div>
 
     <div class="svds-panel" id="svdsSignPanel">
-      <div class="svds-label-strong">Sign fields (on-site)</div>
-      <p class="svds-muted">Confirm read, then capture ink where needed. Name and date can be filled automatically.</p>
-      <label class="svds-muted" style="display:flex;align-items:center;gap:8px;margin:10px 0;">
-        <input type="checkbox" id="svdsConfirmRead"> Operatives have read the document (required)
+      <div class="svds-label-strong">Sign</div>
+      <label class="svds-read-confirm">
+        <input type="checkbox" id="svdsConfirmRead"> Read &amp; understood (required before submit)
       </label>
       <div id="svdsFieldsMount"></div>
-      <button type="button" class="svds-btn" id="svdsSubmitSignBtn"><i class="bi bi-check2-circle"></i> Submit filled fields</button>
+      <button type="button" class="svds-btn" id="svdsSubmitSignBtn"><i class="bi bi-check2-circle"></i> Submit</button>
     </div>
   </section>
 

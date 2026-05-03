@@ -163,20 +163,86 @@
   margin-bottom: 12px;
 }
 
-.svds-field-block {
-  margin-bottom: 16px;
-  padding-bottom: 16px;
+.svds-read-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+  color: rgba(60, 60, 67, 0.82);
+  margin: 8px 0 12px;
+}
+
+.svds-sign-card {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.svds-sign-name {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
 
-.svds-field-block:last-child {
-  border-bottom: none;
+.svds-sign-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.svds-mini-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(60, 60, 67, 0.75);
+}
+
+.svds-clear {
+  border: none;
+  background: none;
+  padding: 2px 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--blue);
+  cursor: pointer;
+}
+
+.svds-clear:active {
+  opacity: 0.6;
+}
+
+.svds-mini-hint {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  color: rgba(60, 60, 67, 0.65);
+}
+
+.svds-done-note {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.svds-ink-slot {
+  margin-bottom: 10px;
+}
+
+.svds-ink-slot:last-child {
+  margin-bottom: 0;
+}
+
+.svds-sig-wrap {
+  margin-top: 0;
 }
 
 .svds-sig-wrap canvas {
   width: 100%;
-  max-width: 400px;
-  height: 120px;
+  max-width: 100%;
+  height: 100px;
   border: 1px dashed var(--border);
   border-radius: 8px;
   touch-action: none;
@@ -184,8 +250,7 @@
 }
 
 .svds-small-canvas canvas {
-  max-width: 280px;
-  height: 90px;
+  height: 76px;
 }
 
 .svds-label-strong {
