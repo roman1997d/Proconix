@@ -116,6 +116,9 @@
   /** Latest full template from API while creating a job (includes stepMaterials for defaults). */
   var jobCreateActiveTemplateDetail = null;
 
+  /** Unit Progress workspace (slim) for QA job location picker; refetched per project on Create Job. */
+  var qaUpWorkspaceCache = null;
+
   var qaApiLocal = (function () {
     var _templates = [];
     var _jobs = [];
@@ -1333,6 +1336,8 @@
       refreshPersonnelUI();
       loadQACrews();
       updateCostPreview();
+      resetQaJobLocationForNewJob();
+      refreshQaUnitProgressForJobCreate();
     }
     if (name === 'jobs') {
       loadQACrews();
@@ -1381,6 +1386,369 @@
       var ok = Array.prototype.some.call(floorSel.options, function (opt) { return opt.value === prev; });
       floorSel.value = ok ? prev : '';
     }
+  }
+
+  function ensureQaFloorOption(floorSel, code, label) {
+    if (!floorSel || code == null || String(code).trim() === '') return;
+    var c = String(code);
+    var exists = Array.prototype.some.call(floorSel.options, function (opt) { return opt.value === c; });
+    if (!exists) {
+      var o = document.createElement('option');
+      o.value = c;
+      o.textContent = label || c;
+      floorSel.appendChild(o);
+    }
+    floorSel.value = c;
+  }
+
+  function fetchQaUnitProgressWorkspace() {
+    var h = getQASessionHeaders();
+    if (QA_SUPERVISOR_MODE && !h['X-Operative-Token']) return Promise.resolve(null);
+    if (!QA_SUPERVISOR_MODE && !h['X-Manager-Id']) return Promise.resolve(null);
+    var url = QA_SUPERVISOR_MODE
+      ? '/api/unit-progress/supervisor/workspace?slim=1'
+      : '/api/unit-progress/workspace?slim=1';
+    return fetch(url, { credentials: 'same-origin', headers: h })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.success && data.workspace) return data.workspace;
+        return null;
+      })
+      .catch(function () { return null; });
+  }
+
+  function qaUpFilterUnits(workspace, projectIdStr) {
+    var units = Array.isArray(workspace && workspace.units) ? workspace.units : [];
+    if (!projectIdStr || String(projectIdStr).trim() === '') return [];
+    var n = Number(projectIdStr);
+    if (!Number.isFinite(n)) return [];
+    return units.filter(function (u) {
+      var up = u.project_id;
+      if (up == null || String(up).trim() === '') return true;
+      return Number(up) === n;
+    });
+  }
+
+  function qaUpTowerChoices(ws, filteredUnits) {
+    var ids = {};
+    filteredUnits.forEach(function (u) {
+      if (u && u.tower != null && String(u.tower).trim() !== '') ids[String(u.tower)] = true;
+    });
+    var towers = Array.isArray(ws && ws.towers) ? ws.towers : [];
+    var byId = {};
+    towers.forEach(function (t) {
+      if (t && t.id != null) byId[String(t.id)] = t;
+    });
+    return Object.keys(ids).sort(function (a, b) {
+      var na = parseInt(a, 10);
+      var nb = parseInt(b, 10);
+      if (String(na) === a && String(nb) === b && Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+      return a.localeCompare(b);
+    }).map(function (tid) {
+      var t = byId[tid];
+      var label = t && t.name ? String(t.name) : 'Tower / building ' + tid;
+      return { id: tid, label: label };
+    });
+  }
+
+  function qaUpFloorsForTower(filteredUnits, towerId) {
+    var nums = {};
+    filteredUnits.forEach(function (u) {
+      if (String(u.tower) !== String(towerId)) return;
+      var f = Number(u.floor);
+      if (Number.isFinite(f)) nums[f] = true;
+    });
+    return Object.keys(nums)
+      .map(function (k) { return Number(k); })
+      .sort(function (a, b) { return a - b; });
+  }
+
+  function qaUpUnitsForTowerFloor(filteredUnits, towerId, floorNum) {
+    return filteredUnits
+      .filter(function (u) {
+        return String(u.tower) === String(towerId) && Number(u.floor) === Number(floorNum);
+      })
+      .sort(function (a, b) {
+        return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
+      });
+  }
+
+  function getQaJobLocationSrc() {
+    var r = document.querySelector('input[name="qa-job-location-src"]:checked');
+    return r && r.value === 'upt' ? 'upt' : 'custom';
+  }
+
+  function clearQaUpLocationValue() {
+    var locInput = document.getElementById('qa-job-location');
+    if (locInput) locInput.value = '';
+  }
+
+  function resetQaJobLocationUptUi() {
+    var tw = document.getElementById('qa-job-loc-tower');
+    var fl = document.getElementById('qa-job-loc-floor');
+    var un = document.getElementById('qa-job-loc-unit');
+    if (tw) {
+      tw.innerHTML = '';
+      var o0 = document.createElement('option');
+      o0.value = '';
+      o0.textContent = '— Select tower —';
+      tw.appendChild(o0);
+    }
+    if (fl) {
+      fl.innerHTML = '';
+      var f0 = document.createElement('option');
+      f0.value = '';
+      f0.textContent = '— Select floor —';
+      fl.appendChild(f0);
+      fl.disabled = true;
+    }
+    if (un) {
+      un.innerHTML = '';
+      var u0 = document.createElement('option');
+      u0.value = '';
+      u0.textContent = '— Select unit —';
+      un.appendChild(u0);
+      un.disabled = true;
+    }
+  }
+
+  function updateQaUptAvailabilityMessage(text) {
+    var el = document.getElementById('qa-job-location-upt-hint');
+    if (!el) return;
+    if (text) {
+      el.textContent = text;
+      el.classList.remove('d-none');
+    } else {
+      el.textContent = '';
+      el.classList.add('d-none');
+    }
+  }
+
+  function setQaUptRadioDisabled(disabled) {
+    var el = document.getElementById('qa-job-location-src-upt');
+    if (!el) return;
+    el.disabled = !!disabled;
+    if (disabled && getQaJobLocationSrc() === 'upt') {
+      var c = document.getElementById('qa-job-location-src-custom');
+      if (c) c.checked = true;
+      setQaJobLocationModeUi();
+    }
+  }
+
+  function setQaJobLocationModeUi() {
+    var custom = getQaJobLocationSrc() === 'custom';
+    var wrapU = document.getElementById('qa-job-location-upt-wrap');
+    var locInput = document.getElementById('qa-job-location');
+    var locLabel = document.getElementById('qa-job-location-field-label');
+    if (wrapU) wrapU.classList.toggle('d-none', custom);
+    if (locInput) {
+      if (custom) {
+        locInput.removeAttribute('readonly');
+        locInput.placeholder = 'e.g. Building A, core 2';
+      } else {
+        locInput.setAttribute('readonly', 'readonly');
+        locInput.placeholder = 'Select tower, floor, and unit…';
+      }
+    }
+    if (locLabel) {
+      locLabel.textContent = custom ? 'Location on the job' : 'Location on the job (from unit selection)';
+    }
+  }
+
+  function populateQaUptTowerSelect(ws, filtered) {
+    resetQaJobLocationUptUi();
+    var sel = document.getElementById('qa-job-loc-tower');
+    if (!sel) return;
+    var choices = qaUpTowerChoices(ws, filtered);
+    choices.forEach(function (t) {
+      var o = document.createElement('option');
+      o.value = t.id;
+      o.textContent = t.label;
+      sel.appendChild(o);
+    });
+  }
+
+  function applyQaUptPopulateFromCache() {
+    var ws = qaUpWorkspaceCache;
+    var pid = projectSelect && projectSelect.value;
+    if (!ws || !pid) {
+      resetQaJobLocationUptUi();
+      return;
+    }
+    var filtered = qaUpFilterUnits(ws, pid);
+    populateQaUptTowerSelect(ws, filtered);
+  }
+
+  function onQaUptTowerChange() {
+    var ws = qaUpWorkspaceCache;
+    var pid = projectSelect && projectSelect.value;
+    var filtered = ws ? qaUpFilterUnits(ws, pid) : [];
+    var towerId = (document.getElementById('qa-job-loc-tower') && document.getElementById('qa-job-loc-tower').value) || '';
+    var flSel = document.getElementById('qa-job-loc-floor');
+    var unSel = document.getElementById('qa-job-loc-unit');
+    clearQaUpLocationValue();
+    if (!flSel || !unSel) return;
+    flSel.innerHTML = '';
+    var f0 = document.createElement('option');
+    f0.value = '';
+    f0.textContent = '— Select floor —';
+    flSel.appendChild(f0);
+    unSel.innerHTML = '';
+    var u0 = document.createElement('option');
+    u0.value = '';
+    u0.textContent = '— Select unit —';
+    unSel.appendChild(u0);
+    unSel.disabled = true;
+    if (!towerId) {
+      flSel.disabled = true;
+      return;
+    }
+    var floors = qaUpFloorsForTower(filtered, towerId);
+    if (!floors.length) {
+      flSel.disabled = true;
+      return;
+    }
+    flSel.disabled = false;
+    floors.forEach(function (fn) {
+      var o = document.createElement('option');
+      o.value = String(fn);
+      o.textContent = 'Floor ' + fn;
+      flSel.appendChild(o);
+    });
+  }
+
+  function onQaUptFloorChange() {
+    var ws = qaUpWorkspaceCache;
+    var pid = projectSelect && projectSelect.value;
+    var filtered = ws ? qaUpFilterUnits(ws, pid) : [];
+    var towerId = (document.getElementById('qa-job-loc-tower') && document.getElementById('qa-job-loc-tower').value) || '';
+    var floorVal = (document.getElementById('qa-job-loc-floor') && document.getElementById('qa-job-loc-floor').value) || '';
+    var unSel = document.getElementById('qa-job-loc-unit');
+    clearQaUpLocationValue();
+    if (!unSel) return;
+    unSel.innerHTML = '';
+    var u0 = document.createElement('option');
+    u0.value = '';
+    u0.textContent = '— Select unit —';
+    unSel.appendChild(u0);
+    if (!towerId || floorVal === '') {
+      unSel.disabled = true;
+      return;
+    }
+    var floorNum = Number(floorVal);
+    var units = qaUpUnitsForTowerFloor(filtered, towerId, floorNum);
+    if (!units.length) {
+      unSel.disabled = true;
+      return;
+    }
+    unSel.disabled = false;
+    units.forEach(function (u) {
+      var o = document.createElement('option');
+      o.value = String(u.id);
+      o.textContent = u.name ? String(u.name) : 'Unit ' + u.id;
+      unSel.appendChild(o);
+    });
+  }
+
+  function applyQaUpLocationToJobFields(unit, towerLabel, floorNum) {
+    var locInput = document.getElementById('qa-job-location');
+    var parts = [];
+    if (towerLabel) parts.push(String(towerLabel));
+    if (floorNum !== '' && floorNum != null && Number.isFinite(Number(floorNum))) {
+      parts.push('Floor ' + Number(floorNum));
+    }
+    if (unit && unit.name) parts.push(String(unit.name));
+    if (locInput) locInput.value = parts.join(' · ');
+    var floorSel = document.getElementById('qa-job-floor');
+    if (!floorSel) return;
+    var code;
+    var optLabel;
+    if (Number(floorNum) === 0) {
+      code = 'ground';
+      optLabel = 'Ground';
+    } else if (Number.isFinite(Number(floorNum))) {
+      code = String(Number(floorNum));
+      optLabel = 'Floor ' + code;
+    } else {
+      return;
+    }
+    ensureQaFloorOption(floorSel, code, optLabel);
+  }
+
+  function onQaUptUnitChange() {
+    var ws = qaUpWorkspaceCache;
+    if (!ws) return;
+    var pid = projectSelect && projectSelect.value;
+    var filtered = qaUpFilterUnits(ws, pid);
+    var towerId = (document.getElementById('qa-job-loc-tower') && document.getElementById('qa-job-loc-tower').value) || '';
+    var floorVal = (document.getElementById('qa-job-loc-floor') && document.getElementById('qa-job-loc-floor').value) || '';
+    var unitId = (document.getElementById('qa-job-loc-unit') && document.getElementById('qa-job-loc-unit').value) || '';
+    if (!unitId || !towerId || floorVal === '') {
+      clearQaUpLocationValue();
+      return;
+    }
+    var unit = null;
+    for (var i = 0; i < filtered.length; i++) {
+      if (String(filtered[i].id) === String(unitId)) {
+        unit = filtered[i];
+        break;
+      }
+    }
+    if (!unit) {
+      clearQaUpLocationValue();
+      return;
+    }
+    var towerSel = document.getElementById('qa-job-loc-tower');
+    var towerLabel = '';
+    if (towerSel && towerSel.selectedIndex >= 0 && towerSel.options[towerSel.selectedIndex]) {
+      towerLabel = towerSel.options[towerSel.selectedIndex].textContent || '';
+    }
+    applyQaUpLocationToJobFields(unit, towerLabel, Number(floorVal));
+  }
+
+  function resetQaJobLocationForNewJob() {
+    var c = document.getElementById('qa-job-location-src-custom');
+    if (c) c.checked = true;
+    clearQaUpLocationValue();
+    resetQaJobLocationUptUi();
+    updateQaUptAvailabilityMessage('');
+    setQaJobLocationModeUi();
+  }
+
+  function refreshQaUnitProgressForJobCreate() {
+    if (!(window.QA_CONFIG && window.QA_CONFIG.useBackend)) {
+      qaUpWorkspaceCache = null;
+      setQaUptRadioDisabled(true);
+      updateQaUptAvailabilityMessage('Sign in with the server to link locations from Unit Progress Tracking.');
+      return Promise.resolve();
+    }
+    var pid = projectSelect && projectSelect.value;
+    if (!pid) {
+      qaUpWorkspaceCache = null;
+      resetQaJobLocationUptUi();
+      updateQaUptAvailabilityMessage('');
+      return Promise.resolve();
+    }
+    updateQaUptAvailabilityMessage('Loading Unit Progress locations…');
+    setQaUptRadioDisabled(true);
+    return fetchQaUnitProgressWorkspace().then(function (ws) {
+      qaUpWorkspaceCache = ws;
+      if (!ws) {
+        updateQaUptAvailabilityMessage('Could not load Unit Progress workspace. Describe the location in your own words, or try again later.');
+        return;
+      }
+      var filtered = qaUpFilterUnits(ws, pid);
+      if (!filtered.length) {
+        setQaUptRadioDisabled(true);
+        updateQaUptAvailabilityMessage('No Unit Progress units for this project yet. Add towers and units in Unit Progress Tracking, or use free text.');
+        return;
+      }
+      updateQaUptAvailabilityMessage('');
+      setQaUptRadioDisabled(false);
+      if (getQaJobLocationSrc() === 'upt') {
+        applyQaUptPopulateFromCache();
+      }
+    });
   }
 
   function refreshJobNumberPreview() {
@@ -1542,10 +1910,30 @@
     if (currentView === 'job-create') {
       refreshJobNumberPreview();
       refreshJobTemplatesList();
+      resetQaJobLocationForNewJob();
+      refreshQaUnitProgressForJobCreate();
     }
     if (currentView === 'jobs') renderJobsOverview(true);
     if (currentView === 'templates') renderTemplateLibrary();
   });
+
+  document.querySelectorAll('input[name="qa-job-location-src"]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      setQaJobLocationModeUi();
+      if (getQaJobLocationSrc() === 'upt') {
+        clearQaUpLocationValue();
+        applyQaUptPopulateFromCache();
+      } else {
+        updateQaUptAvailabilityMessage('');
+      }
+    });
+  });
+  var qaLocTower = document.getElementById('qa-job-loc-tower');
+  if (qaLocTower) qaLocTower.addEventListener('change', onQaUptTowerChange);
+  var qaLocFloor = document.getElementById('qa-job-loc-floor');
+  if (qaLocFloor) qaLocFloor.addEventListener('change', onQaUptFloorChange);
+  var qaLocUnit = document.getElementById('qa-job-loc-unit');
+  if (qaLocUnit) qaLocUnit.addEventListener('change', onQaUptUnitChange);
 
   /* ——— Home cards ——— */
   document.querySelectorAll('#qa-module-cards .qa-module-card').forEach(function (card) {
@@ -2470,11 +2858,24 @@
       showToast('Job title is required.', 'error');
       return;
     }
+    if (getQaJobLocationSrc() === 'upt') {
+      var uptUnitSel = document.getElementById('qa-job-loc-unit');
+      if (!uptUnitSel || !uptUnitSel.value) {
+        showToast('Select tower, floor, and unit for the Unit Progress location, or switch to free text.', 'error');
+        return;
+      }
+    }
+    var locationVal =
+      (document.getElementById('qa-job-location') && document.getElementById('qa-job-location').value || '').trim();
+    if (!locationVal) {
+      showToast('Enter a location (free text), or finish the tower → floor → unit selection.', 'error');
+      return;
+    }
     var job = {
       projectId: projectId,
       jobTitle: jobTitle,
       floor: (document.getElementById('qa-job-floor') && document.getElementById('qa-job-floor').value) || '',
-      location: (document.getElementById('qa-job-location') && document.getElementById('qa-job-location').value) || '',
+      location: locationVal,
       stepQuantities: stepQuantities,
       specification: (document.getElementById('qa-job-spec') && document.getElementById('qa-job-spec').value) || '',
       description: (document.getElementById('qa-job-description') && document.getElementById('qa-job-description').value) || '',

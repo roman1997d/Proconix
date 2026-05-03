@@ -167,9 +167,46 @@
                 <option value="">— Select —</option>
               </select>
             </div>
-            <div>
-              <label class="qa-label" for="qa-job-location">Location</label>
-              <input type="text" id="qa-job-location" class="qa-input" placeholder="e.g. Building A">
+            <div class="qa-job-location-block">
+              <span class="qa-label">Location</span>
+              <p class="qa-message" style="margin-top:0;margin-bottom:0.5rem;">Describe the place in your own words, or pick an existing path from <strong>Unit Progress Tracking</strong> (same tower → floor → unit flow as on site).</p>
+              <div class="qa-location-src" role="radiogroup" aria-label="How to set location" style="display:flex;flex-direction:column;gap:0.35rem;margin-bottom:0.75rem;">
+                <label class="qa-checkbox-label" style="margin:0;">
+                  <input type="radio" name="qa-job-location-src" id="qa-job-location-src-custom" value="custom" checked>
+                  Free text — type or paste the location
+                </label>
+                <label class="qa-checkbox-label" style="margin:0;">
+                  <input type="radio" name="qa-job-location-src" id="qa-job-location-src-upt" value="upt">
+                  Unit Progress — choose tower, then floor, then unit
+                </label>
+              </div>
+              <p class="qa-message d-none" id="qa-job-location-upt-hint" style="margin-top:0;margin-bottom:0.5rem;" aria-live="polite"></p>
+              <div id="qa-job-location-upt-wrap" class="d-none" aria-live="polite">
+                <div class="qa-form-grid" style="margin-top:0;">
+                  <div>
+                    <label class="qa-label" for="qa-job-loc-tower">View 1 — Tower</label>
+                    <select id="qa-job-loc-tower" class="qa-select" aria-label="Tower or building">
+                      <option value="">— Select tower —</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="qa-label" for="qa-job-loc-floor">View 2 — Floor</label>
+                    <select id="qa-job-loc-floor" class="qa-select" aria-label="Floor" disabled>
+                      <option value="">— Select floor —</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="qa-label" for="qa-job-loc-unit">Unit (Unit Progress Tracking)</label>
+                    <select id="qa-job-loc-unit" class="qa-select" aria-label="Unit" disabled>
+                      <option value="">— Select unit —</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div id="qa-job-location-custom-wrap" style="margin-top:0.75rem;">
+                <label class="qa-label" for="qa-job-location" id="qa-job-location-field-label">Location on the job</label>
+                <input type="text" id="qa-job-location" class="qa-input" placeholder="Type the location or pick a unit above…" maxlength="500" autocomplete="off">
+              </div>
             </div>
             <div>
               <label class="qa-label" for="qa-job-spec">Specification</label>
