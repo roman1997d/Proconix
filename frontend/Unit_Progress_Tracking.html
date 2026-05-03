@@ -994,6 +994,140 @@
       align-items: center;
     }
 
+    .timeline-modal-qa-evidence-root {
+      margin: 0 0 14px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #e9d5ff;
+      background: #faf5ff;
+      max-height: min(52vh, 420px);
+      overflow: auto;
+    }
+
+    .timeline-modal-qa-evidence-root .qa-ev-step-block {
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #ede9fe;
+    }
+
+    .timeline-modal-qa-evidence-root .qa-ev-step-block:last-child {
+      border-bottom: 0;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .timeline-modal-qa-evidence-root .qa-ev-step-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #5b21b6;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 6px;
+    }
+
+    .timeline-modal-qa-evidence-root .qa-ev-step-comment {
+      margin: 0 0 8px;
+      font-size: 0.88rem;
+      line-height: 1.45;
+      color: var(--text);
+      white-space: pre-wrap;
+    }
+
+    .timeline-modal-qa-evidence-root .qa-ev-step-photos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .qa-ev-modal-thumb {
+      padding: 0;
+      border: 1px solid #ddd6fe;
+      border-radius: 8px;
+      overflow: hidden;
+      cursor: pointer;
+      width: 88px;
+      height: 88px;
+      background: #fff;
+    }
+
+    .qa-ev-modal-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .timeline-qa-site-ev {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed rgba(91, 33, 182, 0.35);
+    }
+
+    .timeline-qa-site-ev-head {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #5b21b6;
+      margin-bottom: 4px;
+    }
+
+    .timeline-qa-site-ev-meta {
+      margin: 0 0 8px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .timeline-qa-site-ev-loading {
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .timeline-qa-site-ev-err {
+      font-size: 0.82rem;
+      color: #b91c1c;
+    }
+
+    .timeline-qa-ev-thumbs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .timeline-qa-ev-thumb {
+      padding: 0;
+      width: 56px;
+      height: 56px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #c4b5fd;
+      cursor: pointer;
+      background: #fff;
+      flex-shrink: 0;
+    }
+
+    .timeline-qa-ev-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .timeline-qa-ev-comments .timeline-qa-ev-comment {
+      font-size: 0.8rem;
+      line-height: 1.35;
+      color: var(--text);
+      margin: 4px 0 0;
+    }
+
+    .timeline-qa-ev-comments .timeline-qa-ev-comment strong {
+      display: block;
+      color: #6d28d9;
+      font-size: 0.72rem;
+      margin-bottom: 2px;
+    }
+
     .photo-preview-img {
       width: 100%;
       max-height: 72vh;
@@ -1427,6 +1561,7 @@
             <div class="modal-field"><strong>Reason</strong><span id="modal-reason">-</span></div>
           </div>
           <div id="timeline-modal-qa-banner" class="timeline-modal-qa-banner hidden" aria-live="polite"></div>
+          <div id="timeline-modal-qa-evidence-root" class="timeline-modal-qa-evidence-root hidden" aria-live="polite"></div>
           <div id="timeline-modal-standard-edits">
           <div class="modal-field" style="margin-top:12px;">
             <label for="modal-edit-stage"><strong>Stage</strong></label>
@@ -1713,6 +1848,7 @@
     const towerSearchResults = document.getElementById("tower-search-results");
     const floorList = document.getElementById("floor-list");
     const timelineList = document.getElementById("timeline-list");
+    let qaEvidenceHydrateGen = 0;
 
     const addFloorBtn = document.getElementById("add-floor-btn");
     const addUnitBtn = document.getElementById("add-unit-btn");
@@ -2132,6 +2268,301 @@
       return null;
     }
 
+    function escapeHtmlAttr(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;");
+    }
+
+    function stripTransientQaEvidenceFromWorkspace(workspace) {
+      const snap = cloneJson(workspace);
+      if (!snap || typeof snap !== "object") return null;
+      if (!Array.isArray(snap.units)) return snap;
+      snap.units.forEach((u) => {
+        if (!u || !Array.isArray(u.timeline)) return;
+        u.timeline.forEach((ent) => {
+          if (!ent || typeof ent !== "object") return;
+          delete ent.qaStepEvidence;
+          delete ent.qaStepEvidenceError;
+          delete ent.qaStepEvidenceLoading;
+        });
+      });
+      return snap;
+    }
+
+    function resolveQaMediaUrl(urlRaw) {
+      const raw = String(urlRaw || "").trim();
+      if (!raw) return "";
+      if (/^https?:\/\//i.test(raw) || raw.startsWith("/") || raw.startsWith("data:")) return raw;
+      try {
+        return new URL(raw, window.location.origin).href;
+      } catch (e) {
+        return raw;
+      }
+    }
+
+    async function fetchQaJobStepEvidence(jobId) {
+      const jid = Number(jobId);
+      if (!Number.isInteger(jid) || jid < 1) return { _error: "Invalid QA job id." };
+      const cfg = getWorkspaceApiConfig();
+      if (!cfg) return { _error: "Sign in to load QA evidence." };
+      const path =
+        cfg.kind === "manager"
+          ? `/api/jobs/${encodeURIComponent(jid)}/step-evidence`
+          : `/api/supervisor/qa/jobs/${encodeURIComponent(jid)}/step-evidence`;
+      try {
+        const response = await fetch(path, {
+          headers: { ...cfg.headers, Accept: "application/json" },
+          credentials: "same-origin",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          return { _error: (data && data.message) || `Request failed (${response.status})` };
+        }
+        return {
+          steps: Array.isArray(data.steps) ? data.steps : [],
+          operativePhotos: Array.isArray(data.operativePhotos) ? data.operativePhotos : [],
+        };
+      } catch (e) {
+        return { _error: "Could not load QA site evidence." };
+      }
+    }
+
+    function buildQaEvidencePreviewList(entry) {
+      const ev = entry && entry.qaStepEvidence;
+      const out = [];
+      if (!ev || ev._error) return out;
+      const steps = Array.isArray(ev.steps) ? ev.steps : [];
+      steps.forEach((st) => {
+        const label = `Template ${st.templateId} · step ${st.stepId}`;
+        (st.photos || []).forEach((p) => {
+          const src = resolveQaMediaUrl(p.file_url);
+          if (src) out.push({ name: label, src });
+        });
+      });
+      (Array.isArray(ev.operativePhotos) ? ev.operativePhotos : []).forEach((p) => {
+        const src = resolveQaMediaUrl(p.file_url);
+        if (src) out.push({ name: "Operative confirmation", src });
+      });
+      return out;
+    }
+
+    function buildQaTimelineEvidenceMarkup(entry) {
+      if (entry.qaStepEvidenceLoading) {
+        return `<div class="timeline-qa-site-ev"><p class="timeline-qa-site-ev-loading">Loading site evidence…</p></div>`;
+      }
+      if (entry.qaStepEvidenceError) {
+        return (
+          `<div class="timeline-qa-site-ev"><p class="timeline-qa-site-ev-err">${sanitizeTimelinePlainText(entry.qaStepEvidenceError)}</p></div>`
+        );
+      }
+      const ev = entry.qaStepEvidence;
+      if (!ev) {
+        if (getWorkspaceApiConfig()) {
+          return `<div class="timeline-qa-site-ev"><p class="timeline-qa-site-ev-loading">Fetching QA step photos…</p></div>`;
+        }
+        return `<div class="timeline-qa-site-ev"><p class="timeline-qa-site-ev-err">Sign in to load QA site evidence.</p></div>`;
+      }
+      const steps = Array.isArray(ev.steps) ? ev.steps : [];
+      const opPh = Array.isArray(ev.operativePhotos) ? ev.operativePhotos : [];
+      const withNotes = steps.filter((s) => (s.comment && String(s.comment).trim()) || (s.photos && s.photos.length));
+      const stepPhotoCount = steps.reduce((n, s) => n + (Array.isArray(s.photos) ? s.photos.length : 0), 0);
+      const parts = [];
+      if (withNotes.length) parts.push(`${withNotes.length} step note(s)`);
+      if (stepPhotoCount) parts.push(`${stepPhotoCount} step photo(s)`);
+      if (opPh.length) parts.push(`${opPh.length} operative photo(s)`);
+      const summary = parts.length ? parts.join(" · ") : "No step photos or comments yet in QA.";
+      const list = buildQaEvidencePreviewList(entry);
+      const thumbs = list
+        .slice(0, 8)
+        .map(
+          (p, idx) =>
+            `<button type="button" class="timeline-qa-ev-thumb" data-qa-evidence-preview-index="${idx}" aria-label="Open QA photo">`
+            + `<img src="${escapeHtmlAttr(p.src)}" alt="">`
+            + `</button>`
+        )
+        .join("");
+      const commentSnips = withNotes
+        .slice(0, 2)
+        .map((s) => {
+          const c = String(s.comment || "").trim();
+          const short = c.length > 160 ? `${c.slice(0, 157)}…` : c;
+          if (!short) return "";
+          const head = sanitizeTimelinePlainText(`T${s.templateId} · ${s.stepId}`);
+          return `<div class="timeline-qa-ev-comment"><strong>${head}</strong>${sanitizeTimelinePlainText(short)}</div>`;
+        })
+        .filter(Boolean)
+        .join("");
+      const thumbRow = thumbs ? `<div class="timeline-qa-ev-thumbs">${thumbs}</div>` : "";
+      return (
+        `<div class="timeline-qa-site-ev" role="group" aria-label="QA site evidence">`
+        + `<div class="timeline-qa-site-ev-head">Site evidence (QA)</div>`
+        + `<p class="timeline-qa-site-ev-meta">${sanitizeTimelinePlainText(summary)}</p>`
+        + thumbRow
+        + (commentSnips ? `<div class="timeline-qa-ev-comments">${commentSnips}</div>` : "")
+        + `</div>`
+      );
+    }
+
+    function renderQaEvidenceModalContent(root, entry) {
+      if (!root) return;
+      root.innerHTML = "";
+      const ev = entry.qaStepEvidence;
+      const err = entry.qaStepEvidenceError;
+      if (entry.qaStepEvidenceLoading || (!ev && !err)) {
+        root.innerHTML = getWorkspaceApiConfig()
+          ? "<p class=\"hint\">Loading QA step photos & comments…</p>"
+          : "<p class=\"hint\">Sign in to load QA step photos & comments.</p>";
+        return;
+      }
+      if (err) {
+        root.innerHTML = `<p class="timeline-qa-site-ev-err">${sanitizeTimelinePlainText(err)}</p>`;
+        return;
+      }
+      const steps = Array.isArray(ev.steps) ? ev.steps : [];
+      const opPh = Array.isArray(ev.operativePhotos) ? ev.operativePhotos : [];
+      const frag = document.createDocumentFragment();
+      if (!steps.some((s) => (s.comment && s.comment.trim()) || (s.photos && s.photos.length)) && !opPh.length) {
+        const p = document.createElement("p");
+        p.className = "hint";
+        p.textContent = "No step photos or comments recorded for this job in QA yet.";
+        frag.appendChild(p);
+        root.appendChild(frag);
+        return;
+      }
+      steps.forEach((st) => {
+        const has = (st.comment && String(st.comment).trim()) || (st.photos && st.photos.length);
+        if (!has) return;
+        const block = document.createElement("div");
+        block.className = "qa-ev-step-block";
+        const title = document.createElement("div");
+        title.className = "qa-ev-step-title";
+        title.textContent = `Template ${st.templateId} · Step ${st.stepId}`;
+        block.appendChild(title);
+        if (st.comment && String(st.comment).trim()) {
+          const cEl = document.createElement("p");
+          cEl.className = "qa-ev-step-comment";
+          cEl.textContent = String(st.comment).trim();
+          block.appendChild(cEl);
+        }
+        if (Array.isArray(st.photos) && st.photos.length) {
+          const row = document.createElement("div");
+          row.className = "qa-ev-step-photos";
+          const previewPairs = [];
+          st.photos.forEach((pk) => {
+            const src = resolveQaMediaUrl(pk.file_url);
+            if (src) previewPairs.push({ src });
+          });
+          const listForPreview = previewPairs.map((p) => ({ name: title.textContent, src: p.src }));
+          previewPairs.forEach((pair, idx) => {
+            const bt = document.createElement("button");
+            bt.type = "button";
+            bt.className = "qa-ev-modal-thumb";
+            const im = document.createElement("img");
+            im.src = pair.src;
+            im.alt = "";
+            bt.appendChild(im);
+            bt.addEventListener("click", (e) => {
+              e.stopPropagation();
+              openPhotoPreview(listForPreview, idx);
+            });
+            row.appendChild(bt);
+          });
+          block.appendChild(row);
+        }
+        frag.appendChild(block);
+      });
+      if (opPh.length) {
+        const block = document.createElement("div");
+        block.className = "qa-ev-step-block";
+        const title = document.createElement("div");
+        title.className = "qa-ev-step-title";
+        title.textContent = "Operative task photos";
+        block.appendChild(title);
+        const row = document.createElement("div");
+        row.className = "qa-ev-step-photos";
+        const opPairs = [];
+        opPh.forEach((pk) => {
+          const src = resolveQaMediaUrl(pk.file_url);
+          if (src) opPairs.push({ src });
+        });
+        const opPreviewList = opPairs.map((p) => ({
+          name: "Operative confirmation",
+          src: p.src,
+        }));
+        opPairs.forEach((pair, idx) => {
+          const bt = document.createElement("button");
+          bt.type = "button";
+          bt.className = "qa-ev-modal-thumb";
+          const im = document.createElement("img");
+          im.src = pair.src;
+          im.alt = "";
+          bt.appendChild(im);
+          bt.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openPhotoPreview(opPreviewList, idx);
+          });
+          row.appendChild(bt);
+        });
+        block.appendChild(row);
+        frag.appendChild(block);
+      }
+      root.appendChild(frag);
+    }
+
+    async function hydrateTimelineQaEvidence(unit, options) {
+      options = options || {};
+      if (!unit || !Array.isArray(unit.timeline)) return;
+
+      unit._qaEvidenceHydrateQueue = unit._qaEvidenceHydrateQueue || Promise.resolve();
+      unit._qaEvidenceHydrateQueue = unit._qaEvidenceHydrateQueue
+        .then(() => hydrateTimelineQaEvidenceRun(unit, options))
+        .catch(() => {})
+        .then(() => undefined);
+      return unit._qaEvidenceHydrateQueue;
+    }
+
+    async function hydrateTimelineQaEvidenceRun(unit, options) {
+      options = options || {};
+      const cfg = getWorkspaceApiConfig();
+      if (!cfg) return;
+      const need = unit.timeline.filter(
+        (e) =>
+          timelineEntryIsQaJob(e)
+          && e.qaJobId != null
+          && !e.qaStepEvidence
+          && !e.qaStepEvidenceLoading
+          && !e.qaStepEvidenceError
+      );
+      if (!need.length) return;
+      need.forEach((e) => {
+        e.qaStepEvidenceLoading = true;
+      });
+      if (!options.skipRender) renderTimeline(unit, { skipQaHydrate: true });
+      const gen = ++qaEvidenceHydrateGen;
+      try {
+        await Promise.all(
+          need.map(async (ent) => {
+            const data = await fetchQaJobStepEvidence(ent.qaJobId);
+            if (gen !== qaEvidenceHydrateGen) return;
+            delete ent.qaStepEvidenceLoading;
+            if (data && data._error) {
+              ent.qaStepEvidenceError = data._error;
+              ent.qaStepEvidence = { steps: [], operativePhotos: [] };
+            } else {
+              ent.qaStepEvidence = data;
+              delete ent.qaStepEvidenceError;
+            }
+          }),
+        );
+        if (gen !== qaEvidenceHydrateGen) return;
+        if (!options.skipRender) renderTimeline(unit, { skipQaHydrate: true });
+      } finally {
+        /* keep queue chaining on unit; callers await the queue tail */
+      }
+    }
+
     function mapWorkspaceData(workspace) {
       const safe = workspace && typeof workspace === "object" ? workspace : {};
       return {
@@ -2319,11 +2750,19 @@
       const cfg = getWorkspaceApiConfig();
       if (!cfg) return false;
       try {
+        const workspacePayload =
+          stripTransientQaEvidenceFromWorkspace(DATA);
         const response = await fetch(cfg.putUrl, {
           method: "PUT",
           headers: { ...cfg.headers, "Content-Type": "application/json" },
           credentials: "same-origin",
-          body: JSON.stringify({ workspace: DATA, reason: reason || "update" })
+          body: JSON.stringify({
+            workspace:
+              workspacePayload != null && typeof workspacePayload === "object"
+                ? workspacePayload
+                : DATA,
+            reason: reason || "update",
+          })
         });
         const payload = await response.json();
         return Boolean(response.ok && payload && payload.success);
@@ -2580,6 +3019,11 @@
         banner.classList.add("hidden");
         banner.innerHTML = "";
       }
+      const qaEvRoot = document.getElementById("timeline-modal-qa-evidence-root");
+      if (qaEvRoot) {
+        qaEvRoot.classList.add("hidden");
+        qaEvRoot.innerHTML = "";
+      }
       const standard = document.getElementById("timeline-modal-standard-edits");
       if (standard) standard.classList.remove("hidden");
       const saveBtn = document.getElementById("timeline-modal-save");
@@ -2646,6 +3090,12 @@
       });
       actionRow.appendChild(openQa);
       banner.appendChild(actionRow);
+
+      const qaEvRoot = document.getElementById("timeline-modal-qa-evidence-root");
+      if (qaEvRoot) {
+        qaEvRoot.classList.remove("hidden");
+        renderQaEvidenceModalContent(qaEvRoot, entry);
+      }
     }
 
     function formatDateTime(dateValue) {
@@ -3677,7 +4127,8 @@
       updateFloorViewToolbar("units");
     }
 
-    function renderTimeline(unit) {
+    function renderTimeline(unit, options) {
+      options = options || {};
       timelineList.innerHTML = "";
       if (!unit.timeline.length) {
         timelineList.innerHTML = "<div class='timeline-empty'>No updates yet. Add the first progress update.</div>";
@@ -3714,6 +4165,7 @@
               <span class="timeline-qa-jobline">${sanitizeTimelinePlainText(qaTimelineJobSubtitle(entry))}</span>
             </div>`
           : "";
+        const qaSiteEvHtml = qaJobCard ? buildQaTimelineEvidenceMarkup(entry) : "";
         item.innerHTML = `
           <div class="timeline-center">
             <div class="timeline-dot ${createDotClassForTimelineEntry(entry)}" aria-hidden="true"></div>
@@ -3729,6 +4181,7 @@
               <div class="timeline-meta">By: ${entry.user} | Date: ${formatDateTime(entry.date)}</div>
               ${reasonLine}
               ${commentLine}
+              ${qaSiteEvHtml}
               ${photos}
             </div>
           </div>
@@ -3741,9 +4194,23 @@
             openPhotoPreview(photosList, indexPhoto);
           });
         });
+        if (qaJobCard) {
+          const qaList = buildQaEvidencePreviewList(entry);
+          item.querySelectorAll(".timeline-qa-ev-thumb").forEach((thumbBtn) => {
+            thumbBtn.addEventListener("click", (event) => {
+              event.stopPropagation();
+              if (!qaList.length) return;
+              const i = Number(thumbBtn.dataset.qaEvidencePreviewIndex || "0") || 0;
+              openPhotoPreview(qaList, Math.min(Math.max(0, i), qaList.length - 1));
+            });
+          });
+        }
         item.addEventListener("click", () => openTimelineEventModal(unit, timelineIndex));
         timelineList.appendChild(item);
       });
+      if (!options.skipQaHydrate && getWorkspaceApiConfig()) {
+        void hydrateTimelineQaEvidence(unit, { skipRender: false }).catch(() => {});
+      }
     }
 
     async function openTimelineEventModal(unit, entryIndex) {
@@ -3797,6 +4264,24 @@
 
       timelineModal.classList.add("open");
       timelineModal.setAttribute("aria-hidden", "false");
+
+      const snapUnitId = timelineEventEditContext && timelineEventEditContext.unitId;
+      const snapEntryIndex = timelineEventEditContext ? timelineEventEditContext.entryIndex : -1;
+      if (timelineEntryIsQaJob(entry) && cfg) {
+        void (async () => {
+          await hydrateTimelineQaEvidence(u, { skipRender: true });
+          if (
+            !timelineEventEditContext
+            || timelineEventEditContext.unitId !== snapUnitId
+            || timelineEventEditContext.entryIndex !== snapEntryIndex
+          ) return;
+          const entNow = u.timeline[snapEntryIndex];
+          const qaEvRootModal = document.getElementById("timeline-modal-qa-evidence-root");
+          if (!qaEvRootModal || !entNow || !timelineEntryIsQaJob(entNow)) return;
+          renderQaEvidenceModalContent(qaEvRootModal, entNow);
+          renderTimeline(u, { skipQaHydrate: true });
+        })().catch(() => {});
+      }
     }
 
     function closeTimelineEventModal() {
