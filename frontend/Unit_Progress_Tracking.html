@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Unit Progress Tracking - Proconix</title>
+  <script src="js/dashboard_project_context.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -2079,6 +2080,21 @@
                 option.textContent = name;
                 wizardProjectNameSelect.appendChild(option);
               });
+              const dashId =
+                typeof window.ProconixDashboardProject !== "undefined"
+                  ? window.ProconixDashboardProject.getSelectedProjectId()
+                  : "";
+              if (dashId && wizardState.projectId == null) {
+                const matchDash = Array.from(wizardProjectNameSelect.options).find(
+                  (o) => String(o.value) === String(dashId)
+                );
+                if (matchDash) {
+                  wizardProjectNameSelect.value = String(dashId);
+                  const pn = Number(dashId);
+                  wizardState.projectId = Number.isFinite(pn) ? pn : null;
+                  wizardState.projectName = String(matchDash.textContent || "").trim();
+                }
+              }
               if (wizardState.projectId != null) {
                 wizardProjectNameSelect.value = String(wizardState.projectId);
               } else if (wizardState.projectName) {

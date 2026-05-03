@@ -1501,8 +1501,21 @@
           }
           sel.appendChild(opt);
         });
+        var appliedFromDashboard =
+          typeof window.ProconixDashboardProject !== 'undefined' &&
+          window.ProconixDashboardProject.applyToSelect(sel);
         enableModuleCards();
-        if (currentView === 'job-create') rebuildJobFloorSelect(false);
+        if (currentView === 'job-create') {
+          rebuildJobFloorSelect(false);
+          if (appliedFromDashboard) {
+            refreshJobNumberPreview();
+            refreshJobTemplatesList();
+          }
+        }
+        if (appliedFromDashboard) {
+          if (currentView === 'jobs') renderJobsOverview(true);
+          if (currentView === 'templates') renderTemplateLibrary();
+        }
       })
       .catch(function () {
         if (loadingEl) loadingEl.classList.add('d-none');

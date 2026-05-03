@@ -691,8 +691,6 @@
     return div.innerHTML;
   }
 
-  var DASHBOARD_TODAY_PROJECT_KEY = 'proconix_dashboard_today_project_id';
-
   /**
    * Dashboard / Project Overview — label + project dropdown; selection persisted for the day/session.
    */
@@ -723,9 +721,12 @@
           var nb = (b.project_name && String(b.project_name)) || '';
           return na.localeCompare(nb, undefined, { sensitivity: 'base' });
         });
-        var saved = null;
+        var saved =
+          typeof window.ProconixDashboardProject !== 'undefined'
+            ? window.ProconixDashboardProject.getSelectedProjectId()
+            : '';
         try {
-          saved = localStorage.getItem(DASHBOARD_TODAY_PROJECT_KEY);
+          if (!saved) saved = localStorage.getItem('proconix_dashboard_today_project_id') || '';
         } catch (e) {}
         var html = '<option value="">— Select a project —</option>';
         var i;
@@ -744,13 +745,17 @@
           selNow.value = String(saved);
         }
         selNow.addEventListener('change', function () {
-          try {
-            if (selNow.value) {
-              localStorage.setItem(DASHBOARD_TODAY_PROJECT_KEY, selNow.value);
-            } else {
-              localStorage.removeItem(DASHBOARD_TODAY_PROJECT_KEY);
-            }
-          } catch (err) {}
+          if (typeof window.ProconixDashboardProject !== 'undefined') {
+            window.ProconixDashboardProject.setSelectedProjectId(selNow.value);
+          } else {
+            try {
+              if (selNow.value) {
+                localStorage.setItem('proconix_dashboard_today_project_id', selNow.value);
+              } else {
+                localStorage.removeItem('proconix_dashboard_today_project_id');
+              }
+            } catch (err) {}
+          }
         });
       })
       .catch(function () {

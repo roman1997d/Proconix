@@ -184,6 +184,14 @@
     if (modalSel) {
       modalSel.innerHTML = '<option value="">— No project —</option>' + projectOpts;
     }
+    var dashApplied = false;
+    if (typeof window.ProconixDashboardProject !== 'undefined') {
+      dashApplied = Boolean(window.ProconixDashboardProject.applyToSelect(filterSel)) || dashApplied;
+      dashApplied = Boolean(window.ProconixDashboardProject.applyToSelect(modalSel)) || dashApplied;
+    }
+    if (dashApplied && typeof loadDocuments === 'function') {
+      loadDocuments();
+    }
   }
 
   function loadProjects() {

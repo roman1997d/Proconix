@@ -233,6 +233,35 @@
     return '—';
   }
 
+  /**
+   * Pre-fills the location / project text filter from Dashboard “today’s project” (by project name).
+   */
+  function applyDashboardProjectToWorklogsFilter(onDone) {
+    var locEl = document.getElementById('worklogs-filter-project');
+    var headers = getHeaders();
+    var pid =
+      typeof window.ProconixDashboardProject !== 'undefined'
+        ? window.ProconixDashboardProject.getSelectedProjectId()
+        : '';
+    if (!locEl || !pid || !headers) {
+      if (onDone) onDone();
+      return;
+    }
+    fetch('/api/projects/' + encodeURIComponent(pid), { headers: headers, credentials: 'same-origin' })
+      .then(function (res) {
+        return res.json();
+      })
+      .then(function (data) {
+        var proj = data && data.success && data.project;
+        var name = proj && (proj.project_name || proj.name);
+        if (name) locEl.value = String(name).trim();
+      })
+      .catch(function () {})
+      .finally(function () {
+        if (onDone) onDone();
+      });
+  }
+
   function getFilters() {
     var workerEl = document.getElementById('worklogs-filter-worker');
     var dateFromEl = document.getElementById('worklogs-filter-date-from');
@@ -703,7 +732,9 @@
           workerSelect.innerHTML = '<option value="">All</option>' + names.map(function (n) { return '<option value="' + n + '">' + n + '</option>'; }).join('');
         }
       });
-      refreshAllFromApi();
+      applyDashboardProjectToWorklogsFilter(function () {
+        refreshAllFromApi();
+      });
 
       // Filters
       ['worklogs-filter-worker', 'worklogs-filter-date-from', 'worklogs-filter-date-to', 'worklogs-filter-project', 'worklogs-filter-status', 'worklogs-search'].forEach(function (id) {
