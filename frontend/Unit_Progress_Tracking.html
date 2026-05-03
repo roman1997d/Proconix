@@ -2798,23 +2798,30 @@
       return String(a ?? "") === String(b ?? "");
     }
 
-    function getNextFloorNumberForTower(towerId) {
-      const floors = DATA.floors.filter((f) => towerIdMatches(f.tower, towerId));
-      if (!floors.length) return 1;
-      const nums = floors.map((f) => Number(f.number)).filter((n) => Number.isFinite(n));
-      return nums.length ? Math.max(...nums) + 1 : 1;
-    }
-
     async function addFloorForCurrentTower() {
       const towerId = state.currentTower;
       if (towerId == null || towerId === "") {
         wizardStatus.textContent = "Open a tower first.";
         return;
       }
-      const n = getNextFloorNumberForTower(towerId);
+      const raw = prompt("Enter floor number (digits only, max 2 characters — 0–99):", "");
+      if (raw == null) return;
+      const trimmed = String(raw).trim();
+      if (!/^\d{1,2}$/.test(trimmed)) {
+        wizardStatus.textContent = "Floor number must be 1 or 2 digits only (0–99).";
+        return;
+      }
+      const n = parseInt(trimmed, 10);
+      if (n < 0 || n > 99) {
+        wizardStatus.textContent = "Floor number must be between 0 and 99.";
+        return;
+      }
       const floorId = `${towerId}-${n}`;
-      if (DATA.floors.some((f) => f.id === floorId)) {
-        wizardStatus.textContent = "Floor id collision; refresh and try again.";
+      if (DATA.floors.some(
+        (f) => f.id === floorId
+          || (towerIdMatches(f.tower, towerId) && Number(f.number) === n)
+      )) {
+        wizardStatus.textContent = "A floor with this number already exists.";
         return;
       }
       DATA.floors.push({ id: floorId, tower: towerId, number: n });
