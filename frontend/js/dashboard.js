@@ -360,6 +360,7 @@
           window.initDashboardCharts();
         }
         if (module === 'project-overview') {
+          initProjectOverviewProjectPicker();
           loadProjectOverviewOperativesCount();
           loadProjectOverviewStats();
           loadProjectOverviewLists();
@@ -688,6 +689,74 @@
     var div = document.createElement('div');
     div.textContent = s;
     return div.innerHTML;
+  }
+
+  var DASHBOARD_TODAY_PROJECT_KEY = 'proconix_dashboard_today_project_id';
+
+  /**
+   * Dashboard / Project Overview — label + project dropdown; selection persisted for the day/session.
+   */
+  function initProjectOverviewProjectPicker() {
+    var sel = contentEl && contentEl.querySelector('#dashboard-overview-project-select');
+    if (!sel) return;
+    var headers = getSessionHeaders();
+    if (!headers['X-Manager-Id']) {
+      sel.innerHTML = '<option value="">— Sign in to load projects —</option>';
+      return;
+    }
+    fetch('/api/projects/list', { headers: headers, credentials: 'same-origin' })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { res: res, data: data };
+        });
+      })
+      .then(function (x) {
+        var data = x.data;
+        var selNow = contentEl && contentEl.querySelector('#dashboard-overview-project-select');
+        if (!selNow) return;
+        var projects = data && data.success && data.projects ? data.projects : [];
+        var list = projects.filter(function (p) {
+          return p && p.active !== false && p.active !== 'f' && p.active !== 0;
+        });
+        list.sort(function (a, b) {
+          var na = (a.project_name && String(a.project_name)) || '';
+          var nb = (b.project_name && String(b.project_name)) || '';
+          return na.localeCompare(nb, undefined, { sensitivity: 'base' });
+        });
+        var saved = null;
+        try {
+          saved = localStorage.getItem(DASHBOARD_TODAY_PROJECT_KEY);
+        } catch (e) {}
+        var html = '<option value="">— Select a project —</option>';
+        var i;
+        for (i = 0; i < list.length; i++) {
+          var p = list[i];
+          var id = p.id != null ? String(p.id) : '';
+          var name = (p.project_name && String(p.project_name).trim()) || ('Project #' + id);
+          var selected = saved && String(saved) === id ? ' selected' : '';
+          html += '<option value="' + escapeHtml(id) + '"' + selected + '>' + escapeHtml(name) + '</option>';
+        }
+        if (list.length === 0) {
+          html = '<option value="">No projects available</option>';
+        }
+        selNow.innerHTML = html;
+        if (saved && list.some(function (p) { return String(p.id) === String(saved); })) {
+          selNow.value = String(saved);
+        }
+        selNow.addEventListener('change', function () {
+          try {
+            if (selNow.value) {
+              localStorage.setItem(DASHBOARD_TODAY_PROJECT_KEY, selNow.value);
+            } else {
+              localStorage.removeItem(DASHBOARD_TODAY_PROJECT_KEY);
+            }
+          } catch (err) {}
+        });
+      })
+      .catch(function () {
+        var selErr = contentEl && contentEl.querySelector('#dashboard-overview-project-select');
+        if (selErr) selErr.innerHTML = '<option value="">Could not load projects</option>';
+      });
   }
 
   function formatWorkLogsTotalCost(amount) {

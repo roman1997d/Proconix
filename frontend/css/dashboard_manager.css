@@ -514,6 +514,48 @@ body.dashboard-manager {
   gap: var(--gap);
 }
 
+/* Project Overview — today’s project */
+.project-overview-today-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  padding: 16px 20px;
+  margin: 0;
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: var(--shadow);
+}
+
+.project-overview-today-label {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1 1 220px;
+}
+
+.project-overview-today-select {
+  flex: 1 1 240px;
+  max-width: 100%;
+  min-width: min(100%, 260px);
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--input-bg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.project-overview-today-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
 /* ===== Stat cards (3-col grid → 4 cards) ===== */
 .stat-cards {
   display: grid;

@@ -28,6 +28,12 @@ const modules = {
 
 function getProjectOverviewHtml() {
   return `
+    <section class="dashboard-card project-overview-today-pick" aria-label="Project for today">
+      <label class="project-overview-today-label" for="dashboard-overview-project-select">Select the project we will work on today:</label>
+      <select id="dashboard-overview-project-select" class="project-overview-today-select" autocomplete="off">
+        <option value="">Loading projects…</option>
+      </select>
+    </section>
     <section class="stat-cards">
       <div class="stat-card stat-card-patients">
         <div class="stat-card-content">
