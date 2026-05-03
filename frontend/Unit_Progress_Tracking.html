@@ -1099,9 +1099,74 @@
       .modal-photos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .space-grid { grid-template-columns: 1fr; }
     }
+
+    /* Full-module loader (Unit Progress Tracking) */
+    .up-global-loader {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 23, 42, 0.48);
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+    }
+
+    .up-global-loader.is-visible {
+      display: flex;
+    }
+
+    .up-global-loader-card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 26px 32px;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+      text-align: center;
+      max-width: min(340px, calc(100vw - 40px));
+      border: 1px solid var(--line);
+    }
+
+    .up-global-loader-dots {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .up-global-loader-dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--primary);
+      animation: upLoaderDot 1s infinite ease-in-out;
+    }
+
+    .up-global-loader-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .up-global-loader-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+    @keyframes upLoaderDot {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.45; }
+      40% { transform: translateY(-5px); opacity: 1; }
+    }
+
+    .up-global-loader-msg {
+      margin: 0;
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.45;
+    }
   </style>
 </head>
 <body>
+  <div id="up-global-loader" class="up-global-loader" aria-live="polite" aria-busy="false" aria-label="Loading">
+    <div class="up-global-loader-card">
+      <div class="up-global-loader-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      <p class="up-global-loader-msg" id="up-global-loader-message">Please wait…</p>
+    </div>
+  </div>
   <div class="wrap">
     <section id="towerView" class="card">
       <h2 class="section-title">View 1 - Tower View</h2>
@@ -1527,6 +1592,31 @@
       buildings: [{ id: "b-1", name: "Tower A", floorsCount: 1, floors: [{ number: 1, spaces: [] }] }]
     };
     let pendingQrUnitId = null;
+
+    let upGlobalLoaderDepth = 0;
+
+    function beginUnitProgressWait(message) {
+      upGlobalLoaderDepth += 1;
+      const wrap = document.getElementById("up-global-loader");
+      const msg = document.getElementById("up-global-loader-message");
+      if (msg) msg.textContent = message || "Please wait…";
+      if (wrap) {
+        wrap.classList.add("is-visible");
+        wrap.setAttribute("aria-busy", "true");
+      }
+      document.body.style.overflow = "hidden";
+    }
+
+    function endUnitProgressWait() {
+      upGlobalLoaderDepth = Math.max(0, upGlobalLoaderDepth - 1);
+      if (upGlobalLoaderDepth > 0) return;
+      const wrap = document.getElementById("up-global-loader");
+      if (wrap) {
+        wrap.classList.remove("is-visible");
+        wrap.setAttribute("aria-busy", "false");
+      }
+      document.body.style.overflow = "";
+    }
 
     function resetWizardState() {
       wizardState.step = 1;
@@ -2323,7 +2413,13 @@
       state.currentFloor = null;
       state.currentUnitId = null;
 
-      const saved = await persistWorkspace("wizard_create_project");
+      beginUnitProgressWait("Saving project structure…");
+      let saved = false;
+      try {
+        saved = await persistWorkspace("wizard_create_project");
+      } finally {
+        endUnitProgressWait();
+      }
       wizardStatus.textContent = saved
         ? "Project structure created and synced with backend."
         : "Project structure created locally. Backend sync failed.";
@@ -2442,7 +2538,13 @@
             return;
           }
           unit.name = safeName;
-          const saved = await persistWorkspace("unit_rename");
+          beginUnitProgressWait("Saving unit name…");
+          let saved = false;
+          try {
+            saved = await persistWorkspace("unit_rename");
+          } finally {
+            endUnitProgressWait();
+          }
           wizardStatus.textContent = saved
             ? "Unit name updated."
             : "Unit renamed locally, but backend sync failed.";
@@ -2591,8 +2693,12 @@
       if (!unit) return;
       const cfg = getWorkspaceApiConfig();
       if (cfg && !unit._timelineHydrated) {
-        unitTitle.textContent = `${unit.name} — loading…`;
-        await hydrateUnitTimelineFromServer(unit);
+        beginUnitProgressWait("Loading timeline and photos…");
+        try {
+          await hydrateUnitTimelineFromServer(unit);
+        } finally {
+          endUnitProgressWait();
+        }
       }
       unitTitle.textContent = `${unit.name} (Unit ID: ${toUnitId(unit.id) ?? unit.id})`;
       unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
@@ -2674,7 +2780,9 @@
       progressSubmitBtn.disabled = isSubmitting;
       progressSubmitBtn.style.opacity = isSubmitting ? "0.7" : "1";
       progressSubmitBtn.style.cursor = isSubmitting ? "not-allowed" : "pointer";
-      progressLoader.classList.toggle("hidden", !isSubmitting);
+      progressLoader.classList.add("hidden");
+      if (isSubmitting) beginUnitProgressWait("Saving progress…");
+      else endUnitProgressWait();
     }
 
     function hideDocFeedback() {
@@ -2736,7 +2844,9 @@
     function setDocGenerating(isGenerating) {
       docGenerateBtn.disabled = isGenerating;
       docGenerateBtn.style.opacity = isGenerating ? "0.7" : "1";
-      docLoader.classList.toggle("hidden", !isGenerating);
+      docLoader.classList.add("hidden");
+      if (isGenerating) beginUnitProgressWait("Generating documentation package…");
+      else endUnitProgressWait();
       if (docSaveCloudBtn && generatedDocPackageBlob) {
         docSaveCloudBtn.disabled = isGenerating || !docCloudFolder || !docCloudFolder.value;
       }
@@ -2746,6 +2856,7 @@
       if (!docCloudFolder) return;
       docCloudFolder.innerHTML = '<option value="">Loading folders…</option>';
       docCloudFolder.disabled = true;
+      beginUnitProgressWait("Loading Site Cloud folders…");
       try {
         const response = await fetch("/api/site-cloud/folders", {
           method: "GET",
@@ -2777,6 +2888,8 @@
         docCloudFolder.disabled = folders.length === 0;
       } catch (_) {
         docCloudFolder.innerHTML = '<option value="">Folder load failed</option>';
+      } finally {
+        endUnitProgressWait();
       }
     }
 
@@ -2803,6 +2916,7 @@
 
       docSaveCloudBtn.disabled = true;
       docSaveCloudBtn.style.opacity = "0.7";
+      beginUnitProgressWait("Uploading package to Site Cloud…");
       try {
         const response = await fetch("/api/site-cloud/upload", {
           method: "POST",
@@ -2819,6 +2933,7 @@
       } catch (_) {
         setDocFeedbackMessage("Network error while saving to cloud.", "error");
       } finally {
+        endUnitProgressWait();
         docSaveCloudBtn.disabled = !generatedDocPackageBlob || !docCloudFolder || !docCloudFolder.value;
         docSaveCloudBtn.style.opacity = docSaveCloudBtn.disabled ? "0.6" : "1";
       }
@@ -3545,7 +3660,12 @@
 
     async function bootstrapUnitProgressModule() {
       loadWizardState();
-      await Promise.all([fetchActorContext(), loadWorkspaceFromBackend(), loadWizardProjects()]);
+      beginUnitProgressWait("Loading workspace and projects…");
+      try {
+        await Promise.all([fetchActorContext(), loadWorkspaceFromBackend(), loadWizardProjects()]);
+      } finally {
+        endUnitProgressWait();
+      }
 
       renderTowers();
       show("towerView");
