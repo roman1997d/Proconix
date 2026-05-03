@@ -809,6 +809,101 @@
       text-overflow: ellipsis;
     }
 
+    .modal-photo-wrap {
+      position: relative;
+      aspect-ratio: 4 / 3;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .modal-photo-wrap .modal-photo {
+      width: 100%;
+      height: 100%;
+    }
+
+    .modal-photo-remove {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 28px;
+      height: 28px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(185, 28, 28, 0.92);
+      color: #fff;
+      cursor: pointer;
+      font-size: 1.1rem;
+      line-height: 1;
+      z-index: 3;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-photo-remove:hover {
+      background: #b91c1c;
+    }
+
+    .timeline-modal-photo-empty {
+      font-size: 0.84rem;
+      color: var(--muted);
+      padding: 8px 0;
+    }
+
+    .modal-edit-select,
+    .modal-edit-textarea {
+      width: 100%;
+      margin-top: 4px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font: inherit;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .modal-edit-textarea {
+      min-height: 88px;
+      resize: vertical;
+    }
+
+    .timeline-modal-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .timeline-modal-actions .btn-danger {
+      background: #b91c1c;
+      color: #fff;
+    }
+
+    .timeline-modal-actions .btn-danger:hover {
+      background: #991b1b;
+    }
+
+    #timeline-modal-feedback {
+      margin-top: 10px;
+      font-size: 0.84rem;
+      display: none;
+    }
+
+    #timeline-modal-delete {
+      background: #b91c1c;
+      color: #fff;
+      border: none;
+    }
+
+    #timeline-modal-delete:hover {
+      background: #991b1b;
+    }
+
     .photo-preview-img {
       width: 100%;
       max-height: 72vh;
@@ -1215,8 +1310,8 @@
         </div>
       </div>
 
-      <h3 class="section-title">Timeline (append-only history)</h3>
-      <p class="hint">No edit. No delete. Only add new progress entries.</p>
+      <h3 class="section-title">Timeline</h3>
+      <p class="hint">Append-only by default — open an event to edit comment, stage, photos, or delete the event.</p>
       <div class="timeline" id="timeline-list"></div>
       <div class="doc-preview" id="doc-preview" style="display:none;">No snapshot generated yet.</div>
     </section>
@@ -1232,18 +1327,33 @@
           <div class="modal-grid">
             <div class="modal-field"><strong>Unit</strong><span id="modal-unit-name">-</span></div>
             <div class="modal-field"><strong>Date</strong><span id="modal-date">-</span></div>
-            <div class="modal-field"><strong>Stage</strong><span id="modal-stage">-</span></div>
             <div class="modal-field"><strong>Status</strong><span id="modal-status">-</span></div>
             <div class="modal-field"><strong>Updated By</strong><span id="modal-user">-</span></div>
             <div class="modal-field"><strong>Reason</strong><span id="modal-reason">-</span></div>
           </div>
-          <div class="modal-text">
-            <strong style="display:block; margin-bottom:4px; font-size:0.78rem; text-transform:uppercase; color:#374151;">Comment</strong>
-            <span id="modal-comment">-</span>
+          <div class="modal-field" style="margin-top:12px;">
+            <label for="modal-edit-stage"><strong>Stage</strong></label>
+            <select id="modal-edit-stage" class="modal-edit-select" aria-label="Stage"></select>
           </div>
-          <div>
+          <div class="modal-field" style="margin-top:12px;">
+            <label for="modal-edit-comment"><strong>Comment</strong></label>
+            <textarea id="modal-edit-comment" class="modal-edit-textarea" maxlength="500" placeholder="Describe this update"></textarea>
+          </div>
+          <div style="margin-top:12px;">
             <strong style="display:block; margin-bottom:6px; font-size:0.78rem; text-transform:uppercase; color:#374151;">Photos</strong>
             <div id="modal-photos" class="modal-photos"></div>
+          </div>
+          <div class="modal-field" style="margin-top:12px;">
+            <label for="modal-add-photos"><strong>Add photos</strong></label>
+            <p class="hint" style="margin:4px 0 6px;">Up to 5 photos total per event (including existing).</p>
+            <input id="modal-add-photos" type="file" accept="image/*" multiple class="modal-edit-select" style="padding:6px;">
+          </div>
+          <div id="timeline-modal-feedback" role="alert"></div>
+          <div class="timeline-modal-actions">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button type="button" class="btn btn-primary" id="timeline-modal-save"><i class="bi bi-check2-circle"></i> Save changes</button>
+              <button type="button" class="btn" id="timeline-modal-delete"><i class="bi bi-trash3"></i> Delete event</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1616,6 +1726,215 @@
         wrap.setAttribute("aria-busy", "false");
       }
       document.body.style.overflow = "";
+    }
+
+    let timelineEventEditContext = null;
+
+    const TIMELINE_STAGE_OPTIONS = [
+      "Demolition",
+      "First Fix",
+      "Electrical",
+      "Insulation",
+      "Plasterboard",
+      "Second Fix",
+      "Decoration",
+      "Final Check"
+    ];
+
+    function cloneTimelineEntry(entry) {
+      try {
+        return JSON.parse(JSON.stringify(entry));
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function fillStageSelect(selectEl, currentStage) {
+      if (!selectEl) return;
+      selectEl.innerHTML = "";
+      const cur = String(currentStage || "").trim();
+      TIMELINE_STAGE_OPTIONS.forEach((name) => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        selectEl.appendChild(opt);
+      });
+      if (cur && !TIMELINE_STAGE_OPTIONS.includes(cur)) {
+        const opt = document.createElement("option");
+        opt.value = cur;
+        opt.textContent = cur;
+        selectEl.insertBefore(opt, selectEl.firstChild);
+      }
+      selectEl.value = cur && Array.from(selectEl.options).some((o) => o.value === cur)
+        ? cur
+        : TIMELINE_STAGE_OPTIONS[0];
+    }
+
+    function getTimelineEditEntry() {
+      const ctx = timelineEventEditContext;
+      if (!ctx) return null;
+      const unit = findUnitById(ctx.unitId);
+      if (!unit || !Array.isArray(unit.timeline)) return null;
+      const entry = unit.timeline[ctx.entryIndex];
+      return entry ? { unit, entry } : null;
+    }
+
+    function renderTimelineModalPhotos(entry) {
+      const photosWrap = document.getElementById("modal-photos");
+      if (!photosWrap) return;
+      if (!entry.photos) entry.photos = [];
+      photosWrap.innerHTML = "";
+      if (!entry.photos.length) {
+        const empty = document.createElement("div");
+        empty.className = "timeline-modal-photo-empty";
+        empty.textContent = "No photos yet.";
+        photosWrap.appendChild(empty);
+        return;
+      }
+      const photosList = entry.photos.map(normalizePhoto);
+      photosList.forEach((photoData, index) => {
+        const wrap = document.createElement("div");
+        wrap.className = "modal-photo-wrap";
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "modal-photo-remove";
+        removeBtn.setAttribute("aria-label", "Remove photo");
+        removeBtn.innerHTML = "&times;";
+        removeBtn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          removeTimelineModalPhoto(index);
+        });
+        const photoBtn = document.createElement("button");
+        photoBtn.type = "button";
+        photoBtn.className = "modal-photo";
+        const img = document.createElement("img");
+        img.src = photoData.src;
+        img.alt = photoData.name || "";
+        const cap = document.createElement("span");
+        cap.textContent = photoData.name || "";
+        photoBtn.appendChild(img);
+        photoBtn.appendChild(cap);
+        photoBtn.addEventListener("click", () => openPhotoPreview(photosList, index));
+        wrap.appendChild(removeBtn);
+        wrap.appendChild(photoBtn);
+        photosWrap.appendChild(wrap);
+      });
+    }
+
+    function removeTimelineModalPhoto(photoIndex) {
+      const pair = getTimelineEditEntry();
+      if (!pair || !Array.isArray(pair.entry.photos)) return;
+      pair.entry.photos.splice(photoIndex, 1);
+      renderTimelineModalPhotos(pair.entry);
+    }
+
+    async function handleTimelineModalAddPhotos(event) {
+      const files = Array.from(event.target.files || []);
+      event.target.value = "";
+      const pair = getTimelineEditEntry();
+      if (!pair || !files.length) return;
+      const entry = pair.entry;
+      if (!entry.photos) entry.photos = [];
+      const room = 5 - entry.photos.length;
+      const fb = document.getElementById("timeline-modal-feedback");
+      if (room <= 0) {
+        if (fb) {
+          fb.style.display = "block";
+          fb.style.color = "#b91c1c";
+          fb.textContent = "Maximum 5 photos per event.";
+        }
+        return;
+      }
+      const take = files.slice(0, room);
+      for (let i = 0; i < take.length; i += 1) {
+        const file = take[i];
+        const src = await fileToDataUrl(file);
+        entry.photos.push({ name: file.name, src });
+      }
+      if (fb) fb.style.display = "none";
+      renderTimelineModalPhotos(entry);
+    }
+
+    async function saveTimelineEventEdits() {
+      const pair = getTimelineEditEntry();
+      if (!pair) return;
+      const { unit, entry } = pair;
+      const ctx = timelineEventEditContext;
+      const stageSel = document.getElementById("modal-edit-stage");
+      const commentEl = document.getElementById("modal-edit-comment");
+      const stage = stageSel ? String(stageSel.value || "").trim() : "";
+      const comment = commentEl ? String(commentEl.value || "").trim() : "";
+      const fb = document.getElementById("timeline-modal-feedback");
+      if (!comment) {
+        if (fb) {
+          fb.style.display = "block";
+          fb.style.color = "#b91c1c";
+          fb.textContent = "Comment is required.";
+        }
+        return;
+      }
+      const snapshot = cloneTimelineEntry(entry);
+      entry.stage = stage || entry.stage;
+      entry.comment = comment;
+      beginUnitProgressWait("Saving timeline changes…");
+      try {
+        const saved = await persistWorkspace("timeline_edit_entry");
+        if (!saved) {
+          if (snapshot && ctx) {
+            unit.timeline[ctx.entryIndex] = snapshot;
+            const ent = unit.timeline[ctx.entryIndex];
+            renderTimelineModalPhotos(ent);
+            if (stageSel) fillStageSelect(stageSel, ent.stage);
+            if (commentEl) commentEl.value = ent.comment || "";
+          }
+          if (fb) {
+            fb.style.display = "block";
+            fb.style.color = "#b91c1c";
+            fb.textContent = "Could not save to server. Check your session and try again.";
+          }
+          return;
+        }
+        if (fb) fb.style.display = "none";
+        closeTimelineEventModal();
+        renderTimeline(unit);
+        unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
+      } finally {
+        endUnitProgressWait();
+      }
+    }
+
+    async function deleteTimelineEvent() {
+      const pair = getTimelineEditEntry();
+      if (!pair || !timelineEventEditContext) return;
+      if (!window.confirm("Delete this timeline event permanently? This cannot be undone.")) return;
+      const { unit } = pair;
+      const ctx = timelineEventEditContext;
+      const idx = ctx.entryIndex;
+      const backupTimeline = cloneJson(unit.timeline);
+      unit.timeline.splice(idx, 1);
+      beginUnitProgressWait("Deleting timeline event…");
+      try {
+        const saved = await persistWorkspace("timeline_delete_entry");
+        if (!saved) {
+          if (backupTimeline) unit.timeline = backupTimeline;
+          window.alert("Could not save deletion. Your list was reverted — try again when online.");
+          return;
+        }
+        timelineEventEditContext = null;
+        closeTimelineEventModal();
+        renderTimeline(unit);
+        unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
+      } finally {
+        endUnitProgressWait();
+      }
+    }
+
+    function cloneJson(x) {
+      try {
+        return JSON.parse(JSON.stringify(x));
+      } catch (e) {
+        return null;
+      }
     }
 
     function resetWizardState() {
@@ -2568,10 +2887,14 @@
         return;
       }
 
-      const sorted = [...unit.timeline].sort((a, b) => new Date(b.date) - new Date(a.date));
-      sorted.forEach((entry, index) => {
+      const sorted = unit.timeline
+        .map((entry, timelineIndex) => ({ entry, timelineIndex }))
+        .sort((a, b) => new Date(b.entry.date) - new Date(a.entry.date));
+      sorted.forEach((row, displayIndex) => {
+        const entry = row.entry;
+        const timelineIndex = row.timelineIndex;
         const item = document.createElement("div");
-        const sideClass = index % 2 === 0 ? "left" : "right";
+        const sideClass = displayIndex % 2 === 0 ? "left" : "right";
         item.className = `timeline-entry ${sideClass}`;
         const reasonLine = entry.status === "Blocked" && entry.reason
           ? `<div class="timeline-meta"><strong>Reason:</strong> ${entry.reason}</div>`
@@ -2579,8 +2902,9 @@
         const commentLine = entry.comment
           ? `<div class="timeline-meta"><strong>Comment:</strong> ${entry.comment}</div>`
           : "";
-        const photos = entry.photos.length
-          ? `<div class="photo-row">${entry.photos.map((p, photoIndex) => {
+        const photoArr = Array.isArray(entry.photos) ? entry.photos : [];
+        const photos = photoArr.length
+          ? `<div class="photo-row">${photoArr.map((p, photoIndex) => {
               const photo = normalizePhoto(p);
               return `<button type="button" class="photo" data-photo-index="${photoIndex}"><img src="${photo.src}" alt="${photo.name}"><span>${photo.name}</span></button>`;
             }).join("")}</div>`
@@ -2607,49 +2931,60 @@
           photoBtn.addEventListener("click", (event) => {
             event.stopPropagation();
             const indexPhoto = Number(photoBtn.dataset.photoIndex || 0);
-            const photosList = entry.photos.map(normalizePhoto);
+            const photosList = photoArr.map(normalizePhoto);
             openPhotoPreview(photosList, indexPhoto);
           });
         });
-        item.addEventListener("click", () => openTimelineEventModal(unit, entry));
+        item.addEventListener("click", () => openTimelineEventModal(unit, timelineIndex));
         timelineList.appendChild(item);
       });
     }
 
-    function openTimelineEventModal(unit, entry) {
-      document.getElementById("modal-unit-name").textContent = `${unit.name} (ID: ${unit.id})`;
+    function openTimelineEventModal(unit, entryIndex) {
+      const u = findUnitById(unit.id);
+      if (!u || !Array.isArray(u.timeline) || entryIndex < 0 || entryIndex >= u.timeline.length) return;
+      const entry = u.timeline[entryIndex];
+      timelineEventEditContext = { unitId: u.id, entryIndex };
+
+      document.getElementById("modal-unit-name").textContent = `${u.name} (ID: ${u.id})`;
       document.getElementById("modal-date").textContent = formatDateTime(entry.date);
-      document.getElementById("modal-stage").textContent = entry.stage || "-";
       document.getElementById("modal-status").textContent = entry.status || "-";
       document.getElementById("modal-user").textContent = entry.user || "-";
       document.getElementById("modal-reason").textContent = entry.status === "Blocked"
         ? (entry.reason || "Not provided")
-        : "Not required";
-      document.getElementById("modal-comment").textContent = entry.comment || "No comment";
+        : "—";
 
-      const photosWrap = document.getElementById("modal-photos");
-      photosWrap.innerHTML = "";
-      if (entry.photos && entry.photos.length) {
-        const photosList = entry.photos.map(normalizePhoto);
-        photosList.forEach((photoData, index) => {
-          const photo = document.createElement("button");
-          photo.type = "button";
-          photo.className = "modal-photo";
-          photo.innerHTML = `<img src="${photoData.src}" alt="${photoData.name}"><span>${photoData.name}</span>`;
-          photo.addEventListener("click", () => openPhotoPreview(photosList, index));
-          photosWrap.appendChild(photo);
-        });
-      } else {
-        photosWrap.innerHTML = "<div class='modal-photo'>No photos</div>";
+      const stageSel = document.getElementById("modal-edit-stage");
+      fillStageSelect(stageSel, entry.stage);
+
+      document.getElementById("modal-edit-comment").value = entry.comment || "";
+
+      const fb = document.getElementById("timeline-modal-feedback");
+      if (fb) {
+        fb.style.display = "none";
+        fb.textContent = "";
       }
+
+      renderTimelineModalPhotos(entry);
+
+      const fileInput = document.getElementById("modal-add-photos");
+      if (fileInput) fileInput.value = "";
 
       timelineModal.classList.add("open");
       timelineModal.setAttribute("aria-hidden", "false");
     }
 
     function closeTimelineEventModal() {
+      timelineEventEditContext = null;
       timelineModal.classList.remove("open");
       timelineModal.setAttribute("aria-hidden", "true");
+      const fb = document.getElementById("timeline-modal-feedback");
+      if (fb) {
+        fb.style.display = "none";
+        fb.textContent = "";
+      }
+      const fi = document.getElementById("modal-add-photos");
+      if (fi) fi.value = "";
     }
 
     function renderPhotoPreview() {
@@ -3578,6 +3913,12 @@
     docModalClose.addEventListener("click", closeDocModal);
     timelineModalBackdrop.addEventListener("click", closeTimelineEventModal);
     timelineModalClose.addEventListener("click", closeTimelineEventModal);
+    const timelineModalSave = document.getElementById("timeline-modal-save");
+    const timelineModalDelete = document.getElementById("timeline-modal-delete");
+    const modalAddPhotos = document.getElementById("modal-add-photos");
+    if (timelineModalSave) timelineModalSave.addEventListener("click", () => { saveTimelineEventEdits(); });
+    if (timelineModalDelete) timelineModalDelete.addEventListener("click", () => { deleteTimelineEvent(); });
+    if (modalAddPhotos) modalAddPhotos.addEventListener("change", handleTimelineModalAddPhotos);
     photoPreviewBackdrop.addEventListener("click", closePhotoPreview);
     photoPreviewClose.addEventListener("click", closePhotoPreview);
     photoPreviewClose2.addEventListener("click", closePhotoPreview);
