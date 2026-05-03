@@ -1390,6 +1390,45 @@ async function sendWorkLogInvoiceCopyEmail(p) {
   });
 }
 
+/**
+ * Unit Progress — manager receives a one-time code to confirm deleting a unit.
+ *
+ * @param {{ to: string, code: string, unitName?: string }} p
+ */
+async function sendUnitDeleteVerificationEmail(p) {
+  const to = String(p.to || '').trim();
+  const code = String(p.code || '').trim();
+  const unitName = String(p.unitName || '').trim() || 'Unknown unit';
+
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send verification email.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+
+  const subject = 'Proconix — Unit delete verification code';
+  const text = [
+    'Someone requested to delete a unit in Unit Progress Tracking.',
+    '',
+    `Unit: ${unitName}`,
+    '',
+    'Verification code:',
+    code,
+    '',
+    'This code expires in 10 minutes.',
+    'If you did not request this deletion, you can ignore this email.',
+  ].join('\n');
+
+  await transport.sendMail({
+    from,
+    to,
+    subject,
+    text,
+  });
+}
+
 module.exports = {
   sendCallbackRequestEmail,
   sendContactUsEmail,
@@ -1402,5 +1441,6 @@ module.exports = {
   sendDemoTenantWelcomeEmail,
   sendSignedDocumentEmail,
   sendWorkLogInvoiceCopyEmail,
+  sendUnitDeleteVerificationEmail,
   createTransport,
 };

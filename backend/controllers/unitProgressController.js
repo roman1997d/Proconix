@@ -4,6 +4,40 @@
  */
 
 const { pool } = require('../db/pool');
+const { sendUnitDeleteVerificationEmail } = require('../lib/sendCallbackRequestEmail');
+
+/** Pending delete confirmations: key `${companyId}|${unitId}` → challenge */
+const unitDeleteChallenges = new Map();
+
+const UNIT_DELETE_OTP_TTL_MS = 10 * 60 * 1000;
+const UNIT_DELETE_MAX_ATTEMPTS = 5;
+
+function unitDeleteChallengeKey(companyId, unitId) {
+  return `${companyId}|${normalizeUnitId(unitId)}`;
+}
+
+function parseDeleteUnitCode(body) {
+  const otpRaw = String((body && body.code) || (body && body.otp) || '').trim();
+  const sixDigitsMatch = otpRaw.match(/\d{6}/);
+  return sixDigitsMatch ? sixDigitsMatch[0] : String(otpRaw).replace(/\D/g, '');
+}
+
+async function getPrimaryManagerEmailForCompany(companyId) {
+  const r = await pool.query(
+    `SELECT email FROM manager WHERE company_id = $1 AND (active = true OR active IS NULL) ORDER BY id ASC LIMIT 1`,
+    [companyId]
+  );
+  const email = r.rows[0] && r.rows[0].email ? String(r.rows[0].email).trim() : '';
+  return email || null;
+}
+
+function supervisorHasUnitProjectAccess(req, unit) {
+  const supervisorProjectId = req.supervisor && req.supervisor.project_id != null
+    ? Number(req.supervisor.project_id)
+    : null;
+  const unitProjectId = unit && unit.project_id != null ? Number(unit.project_id) : null;
+  return supervisorProjectId != null && unitProjectId != null && supervisorProjectId === unitProjectId;
+}
 
 function getManagerCompanyId(req) {
   return req.manager && req.manager.company_id != null ? Number(req.manager.company_id) : null;
@@ -513,6 +547,243 @@ async function appendPrivateProgressSupervisor(req, res) {
   }
 }
 
+function removeUnitFromWorkspace(workspace, unitId) {
+  const target = normalizeUnitId(unitId);
+  if (!target || !workspace || typeof workspace !== 'object' || !Array.isArray(workspace.units)) {
+    return false;
+  }
+  const before = workspace.units.length;
+  workspace.units = workspace.units.filter((u) => normalizeUnitId(u && u.id) !== target);
+  return workspace.units.length < before;
+}
+
+async function requestDeleteUnitManager(req, res) {
+  const companyId = getManagerCompanyId(req);
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const unitId = normalizeUnitId(body.unitId);
+  if (companyId == null || !unitId) {
+    return res.status(400).json({ success: false, message: 'Valid unit id is required.' });
+  }
+  const toEmail = req.manager && req.manager.email ? String(req.manager.email).trim() : '';
+  if (!toEmail) {
+    return res.status(400).json({ success: false, message: 'Manager email is missing; cannot send verification code.' });
+  }
+  try {
+    const workspace = await getWorkspaceByCompanyId(companyId);
+    const unit = getUnitFromWorkspace(workspace, unitId);
+    if (!unit) {
+      return res.status(404).json({ success: false, message: 'Unit not found.' });
+    }
+    const now = Date.now();
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const key = unitDeleteChallengeKey(companyId, unitId);
+    unitDeleteChallenges.set(key, {
+      code,
+      expiresAt: now + UNIT_DELETE_OTP_TTL_MS,
+      attempts: 0,
+    });
+    const unitName = unit.name || `Unit ${unit.id}`;
+    await sendUnitDeleteVerificationEmail({ to: toEmail, code, unitName });
+    return res.json({
+      success: true,
+      message: 'Verification code sent to your manager email.',
+      otp_expires_in_sec: Math.floor(UNIT_DELETE_OTP_TTL_MS / 1000),
+    });
+  } catch (error) {
+    unitDeleteChallenges.delete(unitDeleteChallengeKey(companyId, unitId));
+    if (error.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({
+        success: false,
+        message: 'Email is not configured on the server; cannot send verification code.',
+      });
+    }
+    console.error('unitProgress requestDeleteUnitManager:', error);
+    return res.status(500).json({ success: false, message: 'Failed to send verification email.' });
+  }
+}
+
+async function confirmDeleteUnitManager(req, res) {
+  const companyId = getManagerCompanyId(req);
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const unitId = normalizeUnitId(body.unitId);
+  const otpInput = parseDeleteUnitCode(body);
+  if (companyId == null || !unitId) {
+    return res.status(400).json({ success: false, message: 'Valid unit id is required.' });
+  }
+  if (!otpInput) {
+    return res.status(400).json({ success: false, message: 'Verification code is required.' });
+  }
+  const key = unitDeleteChallengeKey(companyId, unitId);
+  const challenge = unitDeleteChallenges.get(key);
+  const now = Date.now();
+  if (!challenge || !challenge.expiresAt || challenge.expiresAt <= now) {
+    unitDeleteChallenges.delete(key);
+    return res.status(400).json({
+      success: false,
+      message: 'Code expired or missing. Request a new verification code.',
+    });
+  }
+  challenge.attempts += 1;
+  if (challenge.attempts > UNIT_DELETE_MAX_ATTEMPTS) {
+    unitDeleteChallenges.delete(key);
+    return res.status(429).json({
+      success: false,
+      message: 'Too many attempts. Request a new verification code.',
+    });
+  }
+  const expected = String(challenge.code || '').replace(/\D/g, '');
+  if (expected !== otpInput) {
+    return res.status(403).json({ success: false, message: 'Invalid verification code.' });
+  }
+  try {
+    const existing = await getWorkspaceByCompanyId(companyId);
+    const unit = getUnitFromWorkspace(existing, unitId);
+    if (!unit) {
+      unitDeleteChallenges.delete(key);
+      return res.status(404).json({ success: false, message: 'Unit not found.' });
+    }
+    removeUnitFromWorkspace(existing, unitId);
+    existing.updated_at = new Date().toISOString();
+    await upsertWorkspace(companyId, existing, 'manager', req.manager && req.manager.id ? req.manager.id : null);
+    unitDeleteChallenges.delete(key);
+    return res.json({ success: true, workspace: existing });
+  } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(503).json({
+        success: false,
+        code: 'unit_progress_tables_missing',
+        message: 'Unit Progress table missing. Run scripts/create_unit_progress_tables.sql',
+      });
+    }
+    console.error('unitProgress confirmDeleteUnitManager:', error);
+    return res.status(500).json({ success: false, message: 'Failed to delete unit.' });
+  }
+}
+
+async function requestDeleteUnitSupervisor(req, res) {
+  const companyId = getSupervisorCompanyId(req);
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const unitId = normalizeUnitId(body.unitId);
+  if (companyId == null || !unitId) {
+    return res.status(400).json({ success: false, message: 'Valid unit id is required.' });
+  }
+  try {
+    const workspace = await getWorkspaceByCompanyId(companyId);
+    const unit = getUnitFromWorkspace(workspace, unitId);
+    if (!unit) {
+      return res.status(404).json({ success: false, message: 'Unit not found.' });
+    }
+    if (!supervisorHasUnitProjectAccess(req, unit)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Supervisor does not have access to this project.',
+      });
+    }
+    const toEmail = await getPrimaryManagerEmailForCompany(companyId);
+    if (!toEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active manager email found for this company.',
+      });
+    }
+    const now = Date.now();
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const key = unitDeleteChallengeKey(companyId, unitId);
+    unitDeleteChallenges.set(key, {
+      code,
+      expiresAt: now + UNIT_DELETE_OTP_TTL_MS,
+      attempts: 0,
+    });
+    const unitName = unit.name || `Unit ${unit.id}`;
+    await sendUnitDeleteVerificationEmail({ to: toEmail, code, unitName });
+    return res.json({
+      success: true,
+      message: 'Verification code sent to the company manager email.',
+      otp_expires_in_sec: Math.floor(UNIT_DELETE_OTP_TTL_MS / 1000),
+    });
+  } catch (error) {
+    unitDeleteChallenges.delete(unitDeleteChallengeKey(companyId, unitId));
+    if (error.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({
+        success: false,
+        message: 'Email is not configured on the server; cannot send verification code.',
+      });
+    }
+    console.error('unitProgress requestDeleteUnitSupervisor:', error);
+    return res.status(500).json({ success: false, message: 'Failed to send verification email.' });
+  }
+}
+
+async function confirmDeleteUnitSupervisor(req, res) {
+  const companyId = getSupervisorCompanyId(req);
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const unitId = normalizeUnitId(body.unitId);
+  const otpInput = parseDeleteUnitCode(body);
+  if (companyId == null || !unitId) {
+    return res.status(400).json({ success: false, message: 'Valid unit id is required.' });
+  }
+  if (!otpInput) {
+    return res.status(400).json({ success: false, message: 'Verification code is required.' });
+  }
+  const key = unitDeleteChallengeKey(companyId, unitId);
+  const challenge = unitDeleteChallenges.get(key);
+  const now = Date.now();
+  if (!challenge || !challenge.expiresAt || challenge.expiresAt <= now) {
+    unitDeleteChallenges.delete(key);
+    return res.status(400).json({
+      success: false,
+      message: 'Code expired or missing. Request a new verification code.',
+    });
+  }
+  challenge.attempts += 1;
+  if (challenge.attempts > UNIT_DELETE_MAX_ATTEMPTS) {
+    unitDeleteChallenges.delete(key);
+    return res.status(429).json({
+      success: false,
+      message: 'Too many attempts. Request a new verification code.',
+    });
+  }
+  const expected = String(challenge.code || '').replace(/\D/g, '');
+  if (expected !== otpInput) {
+    return res.status(403).json({ success: false, message: 'Invalid verification code.' });
+  }
+  try {
+    const existing = await getWorkspaceByCompanyId(companyId);
+    const unit = getUnitFromWorkspace(existing, unitId);
+    if (!unit) {
+      unitDeleteChallenges.delete(key);
+      return res.status(404).json({ success: false, message: 'Unit not found.' });
+    }
+    if (!supervisorHasUnitProjectAccess(req, unit)) {
+      unitDeleteChallenges.delete(key);
+      return res.status(403).json({
+        success: false,
+        message: 'Supervisor does not have access to this project.',
+      });
+    }
+    removeUnitFromWorkspace(existing, unitId);
+    existing.updated_at = new Date().toISOString();
+    await upsertWorkspace(
+      companyId,
+      existing,
+      'supervisor',
+      req.supervisor && req.supervisor.id ? req.supervisor.id : null
+    );
+    unitDeleteChallenges.delete(key);
+    return res.json({ success: true, workspace: existing });
+  } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(503).json({
+        success: false,
+        code: 'unit_progress_tables_missing',
+        message: 'Unit Progress table missing. Run scripts/create_unit_progress_tables.sql',
+      });
+    }
+    console.error('unitProgress confirmDeleteUnitSupervisor:', error);
+    return res.status(500).json({ success: false, message: 'Failed to delete unit.' });
+  }
+}
+
 module.exports = {
   getWorkspace,
   putWorkspace,
@@ -523,4 +794,8 @@ module.exports = {
   getPrivateTimelineSupervisor,
   appendPrivateProgressManager,
   appendPrivateProgressSupervisor,
+  requestDeleteUnitManager,
+  confirmDeleteUnitManager,
+  requestDeleteUnitSupervisor,
+  confirmDeleteUnitSupervisor,
 };

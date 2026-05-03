@@ -151,6 +151,12 @@
       cursor: pointer;
     }
 
+    .btn-qr.btn-unit-delete {
+      border-color: #fecaca;
+      background: #fef2f2;
+      color: var(--danger);
+    }
+
     .meta {
       margin-top: 5px;
       color: var(--muted);
@@ -2170,6 +2176,69 @@
       }
     }
 
+    async function requestUnitDeleteVerification(unit) {
+      const cfg = getWorkspaceApiConfig();
+      if (!cfg) {
+        wizardStatus.textContent = "Not signed in.";
+        return false;
+      }
+      const requestUrl =
+        cfg.kind === "manager"
+          ? "/api/unit-progress/manager/delete-unit/request"
+          : "/api/unit-progress/supervisor/delete-unit/request";
+      try {
+        const response = await fetch(requestUrl, {
+          method: "POST",
+          headers: { ...cfg.headers, "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ unitId: unit.id })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload || !payload.success) {
+          wizardStatus.textContent = (payload && payload.message) || "Could not send verification code.";
+          return false;
+        }
+        wizardStatus.textContent = payload.message || "Verification code sent.";
+        return true;
+      } catch (e) {
+        wizardStatus.textContent = "Network error while requesting code.";
+        return false;
+      }
+    }
+
+    async function confirmUnitDeleteWithCode(unit, codeRaw) {
+      const cfg = getWorkspaceApiConfig();
+      if (!cfg) return false;
+      const confirmUrl =
+        cfg.kind === "manager"
+          ? "/api/unit-progress/manager/delete-unit/confirm"
+          : "/api/unit-progress/supervisor/delete-unit/confirm";
+      try {
+        const response = await fetch(confirmUrl, {
+          method: "POST",
+          headers: { ...cfg.headers, "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ unitId: unit.id, code: String(codeRaw || "").trim() })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload || !payload.success) {
+          wizardStatus.textContent = (payload && payload.message) || "Could not delete unit.";
+          return false;
+        }
+        if (payload.workspace) {
+          DATA = mapWorkspaceData(payload.workspace);
+        }
+        const uid = toUnitId(unit.id);
+        if (uid != null && toUnitId(state.currentUnitId) === uid) {
+          state.currentUnitId = null;
+        }
+        return true;
+      } catch (e) {
+        wizardStatus.textContent = "Network error while deleting unit.";
+        return false;
+      }
+    }
+
     /**
      * Prefer POST append — sends only this progress row (with photos), not the entire workspace.
      * Full PUT can exceed body limits when many units/timelines contain base64 images.
@@ -3029,12 +3098,46 @@
               <span class="pill">${computeProgress(unit)}%</span>
               <button type="button" class="btn-qr btn-edit-unit" data-unit-id="${unit.id}">Edit</button>
               <button type="button" class="btn-qr btn-show-qr" data-unit-id="${unit.id}">Show QR Code</button>
+              <button type="button" class="btn-qr btn-unit-delete" data-unit-id="${unit.id}">Delete</button>
             </div>
           </div>
           <div class="meta">Open unit timeline and actions</div>
         `;
         const editBtn = btn.querySelector(".btn-edit-unit");
         const qrBtn = btn.querySelector(".btn-show-qr");
+        const deleteBtn = btn.querySelector(".btn-unit-delete");
+        deleteBtn.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          if (!confirm("Are you sure you want to delete this unit?")) return;
+          beginUnitProgressWait("Sending verification code…");
+          let sent = false;
+          try {
+            sent = await requestUnitDeleteVerification(unit);
+          } finally {
+            endUnitProgressWait();
+          }
+          if (!sent) return;
+          const codeInput = prompt(
+            "Enter the 6-digit verification code sent to the manager email:",
+            ""
+          );
+          if (codeInput == null) return;
+          const codeTrim = String(codeInput).trim();
+          if (!codeTrim) {
+            wizardStatus.textContent = "Verification code is required to delete.";
+            return;
+          }
+          beginUnitProgressWait("Deleting unit…");
+          let ok = false;
+          try {
+            ok = await confirmUnitDeleteWithCode(unit, codeTrim);
+          } finally {
+            endUnitProgressWait();
+          }
+          if (!ok) return;
+          wizardStatus.textContent = "Unit deleted.";
+          loadUnits(floorId);
+        });
         editBtn.addEventListener("click", async (event) => {
           event.stopPropagation();
           const currentName = String(unit.name || "").trim();
