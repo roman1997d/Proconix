@@ -2152,8 +2152,30 @@
       }
     }
 
-    async function hydrateUnitTimelineFromServer(unit) {
-      if (!unit || unit._timelineHydrated) return;
+    /** True when any event has photos stored in “slim” form (no image bytes / URL yet). */
+    function timelineNeedsFullPhotoHydration(unit) {
+      if (!unit || !Array.isArray(unit.timeline)) return false;
+      return unit.timeline.some((entry) => {
+        const photos = Array.isArray(entry?.photos) ? entry.photos : [];
+        return photos.some((p) => {
+          if (typeof p === "string") {
+            const s = String(p).trim();
+            if (!s) return false;
+            return !s.startsWith("/") && !/^https?:\/\//i.test(s) && !s.startsWith("data:");
+          }
+          if (p && typeof p === "object") {
+            return !String(p.src || p.url || "").trim();
+          }
+          return false;
+        });
+      });
+    }
+
+    /** Load full timeline (incl. base64 photos). Only sets _timelineHydrated when the GET succeeds. */
+    async function hydrateUnitTimelineFromServer(unit, opts) {
+      if (!unit) return;
+      const force = !!(opts && opts.force);
+      if (unit._timelineHydrated && !force) return;
       const cfg = getWorkspaceApiConfig();
       if (!cfg) {
         unit._timelineHydrated = true;
@@ -2166,14 +2188,14 @@
           : `/api/unit-progress/supervisor/private-timeline/${uid}`;
       try {
         const response = await fetch(path, { headers: cfg.headers, credentials: "same-origin" });
-        const payload = await response.json();
+        const payload = await response.json().catch(() => ({}));
         if (response.ok && payload && payload.success && Array.isArray(payload.timeline)) {
           unit.timeline = payload.timeline;
+          unit._timelineHydrated = true;
         }
       } catch (e) {
-        /* keep slim rows; photos may show as placeholders */
+        /* keep slim timeline; modal / next open can retry without locking hydration */
       }
-      unit._timelineHydrated = true;
     }
 
     async function persistWorkspace(reason) {
@@ -2419,14 +2441,35 @@
       return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
     }
 
+    function resolveTimelinePhotoSrc(photo) {
+      const o = photo && typeof photo === "object" ? photo : {};
+      let raw = String(o.src || o.url || o.href || "").trim();
+      if (!raw) return "";
+      if (raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
+      if (/^https?:\/\//i.test(raw)) return raw;
+      if (raw.startsWith("/")) return raw;
+      try {
+        return new URL(raw, window.location.origin).href;
+      } catch (e) {
+        return raw;
+      }
+    }
+
     function normalizePhoto(photo) {
       if (typeof photo === "string") {
-        return { name: photo, src: createPlaceholderDataUri(photo) };
+        const s = String(photo).trim();
+        if (s.startsWith("/") || /^https?:\/\//i.test(s) || s.startsWith("data:")) {
+          const name = s.split("/").pop() || "photo";
+          return { name, src: s };
+        }
+        return { name: s || "photo", src: createPlaceholderDataUri(s || "photo") };
       }
       if (photo && typeof photo === "object") {
+        const name = photo.name || "photo";
+        const src = resolveTimelinePhotoSrc(photo);
         return {
-          name: photo.name || "photo",
-          src: photo.src || createPlaceholderDataUri(photo.name || "photo")
+          name,
+          src: src || createPlaceholderDataUri(name)
         };
       }
       return { name: "photo", src: createPlaceholderDataUri("photo") };
@@ -3470,10 +3513,23 @@
       });
     }
 
-    function openTimelineEventModal(unit, entryIndex) {
+    async function openTimelineEventModal(unit, entryIndex) {
       const u = findUnitById(unit.id);
       if (!u || !Array.isArray(u.timeline) || entryIndex < 0 || entryIndex >= u.timeline.length) return;
+      const cfg = getWorkspaceApiConfig();
+      if (cfg && (!u._timelineHydrated || timelineNeedsFullPhotoHydration(u))) {
+        beginUnitProgressWait("Loading photos…");
+        try {
+          await hydrateUnitTimelineFromServer(u, {
+            force: timelineNeedsFullPhotoHydration(u),
+          });
+        } finally {
+          endUnitProgressWait();
+        }
+      }
+
       const entry = u.timeline[entryIndex];
+      if (!entry) return;
       timelineEventEditContext = { unitId: u.id, entryIndex };
 
       document.getElementById("modal-unit-name").textContent = `${u.name} (ID: ${u.id})`;
@@ -3561,6 +3617,14 @@
         beginUnitProgressWait("Loading timeline and photos…");
         try {
           await hydrateUnitTimelineFromServer(unit);
+        } finally {
+          endUnitProgressWait();
+        }
+      }
+      if (cfg && timelineNeedsFullPhotoHydration(unit)) {
+        beginUnitProgressWait("Loading timeline photos…");
+        try {
+          await hydrateUnitTimelineFromServer(unit, { force: true });
         } finally {
           endUnitProgressWait();
         }
