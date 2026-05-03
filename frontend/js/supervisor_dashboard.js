@@ -27,6 +27,7 @@
     'drawing-gallery': 'Drawing Gallery',
     'site-snags': 'Site Snags',
     'unit-progress': 'Unit Progress',
+    'document-sign': 'Document sign-in',
     'quality-assurance': 'Quality Assurance',
   };
 
@@ -160,6 +161,20 @@
         '<iframe src="' +
         iframeModuleSrc('tasks_supervizor_view.html') +
         '" class="dashboard-qa-iframe" title="Task &amp; Planning"></iframe>';
+      contentEl.classList.remove('dashboard-content-fade-out');
+      contentEl.classList.add('dashboard-content-fade-in');
+      if (pushState !== false) history.pushState({ module: module }, '', '#');
+      return;
+    }
+
+    if (module === 'document-sign') {
+      contentEl.classList.add('dashboard-content-fade-out');
+      setActiveItem(module);
+      updateHeaderTitle(module);
+      contentEl.innerHTML =
+        '<iframe src="' +
+        iframeModuleSrc('supervisor_document_sign.html') +
+        '" class="dashboard-qa-iframe" title="Document sign-in"></iframe>';
       contentEl.classList.remove('dashboard-content-fade-out');
       contentEl.classList.add('dashboard-content-fade-in');
       if (pushState !== false) history.pushState({ module: module }, '', '#');

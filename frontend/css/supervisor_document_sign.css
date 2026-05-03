@@ -1,0 +1,195 @@
+/* Supervisor on-site document sign-in — project PDFs + appendix signature sheet */
+
+.svds-root {
+  --bg: #f2f2f7;
+  --card: #ffffff;
+  --border: rgba(60, 60, 67, 0.18);
+  --blue: #007aff;
+  --text: #1c1c1e;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 12px 12px 24px;
+  box-sizing: border-box;
+}
+
+.svds-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.svds-head h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.svds-muted {
+  color: rgba(60, 60, 67, 0.72);
+  font-size: 0.875rem;
+  margin: 0 0 8px;
+}
+
+.svds-error {
+  background: #ffe8e8;
+  color: #8b0000;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  font-size: 0.875rem;
+}
+
+.svds-error.svds-hidden {
+  display: none;
+}
+
+.svds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.svds-doc-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.svds-doc-row:active {
+  opacity: 0.85;
+}
+
+.svds-doc-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.svds-doc-meta {
+  font-size: 0.75rem;
+  color: rgba(60, 60, 67, 0.65);
+}
+
+.svds-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.svds-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--blue);
+  color: #fff;
+}
+
+.svds-btn-secondary {
+  background: rgba(60, 60, 67, 0.12);
+  color: var(--text);
+}
+
+.svds-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.svds-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.svds-page-wrap {
+  background: var(--card);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.svds-page-label {
+  padding: 6px 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(60, 60, 67, 0.75);
+  background: rgba(60, 60, 67, 0.06);
+}
+
+.svds-page-inner {
+  position: relative;
+}
+
+.svds-op-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.svds-op-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--card);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.svds-op-row input {
+  width: 18px;
+  height: 18px;
+}
+
+.svds-panel {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.svds-field-block {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.svds-field-block:last-child {
+  border-bottom: none;
+}
+
+.svds-sig-wrap canvas {
+  width: 100%;
+  max-width: 400px;
+  height: 120px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  touch-action: none;
+  background: #fafafa;
+}
+
+.svds-small-canvas canvas {
+  max-width: 280px;
+  height: 90px;
+}
+
+.svds-label-strong {
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}

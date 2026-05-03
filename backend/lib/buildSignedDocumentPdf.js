@@ -122,9 +122,15 @@ async function buildSignedDocumentPdf(documentRow, signatureRows) {
     byField[fid].push(s);
   });
 
-  const originalPageCount = pdfDoc.getPageCount();
-  /** After insertPage(), map each original 0-based page index to its current index in the growing document. */
-  const origToCurrent = Array.from({ length: originalPageCount }, (_, i) => i);
+  const basePageCount = pdfDoc.getPageCount();
+  const maxFieldPage = fields.reduce((mx, f) => Math.max(mx, parseInt(f.page, 10) || 1), 1);
+  const refPage = pdfDoc.getPage(basePageCount - 1);
+  const { width: refW, height: refH } = refPage.getSize();
+  while (pdfDoc.getPageCount() < maxFieldPage) {
+    pdfDoc.addPage([refW, refH]);
+  }
+  /** Logical page index → physical page index (updates when insertPage splits overflow). */
+  let logicalToPhysical = Array.from({ length: pdfDoc.getPageCount() }, (_, i) => i);
 
   for (let fi = 0; fi < fields.length; fi++) {
     const field = fields[fi];
@@ -132,9 +138,9 @@ async function buildSignedDocumentPdf(documentRow, signatureRows) {
     if (!FIELD_TYPES.includes(field.type)) continue;
 
     const pageIndex0 = (parseInt(field.page, 10) || 1) - 1;
-    if (pageIndex0 < 0 || pageIndex0 >= originalPageCount) continue;
+    if (pageIndex0 < 0 || pageIndex0 >= logicalToPhysical.length) continue;
 
-    const curIdx = origToCurrent[pageIndex0];
+    const curIdx = logicalToPhysical[pageIndex0];
     const page0 = pdfDoc.getPage(curIdx);
     const { width: PW, height: PH } = page0.getSize();
     const fx = Number(field.x) || 0;
@@ -153,12 +159,12 @@ async function buildSignedDocumentPdf(documentRow, signatureRows) {
 
     if (isInkField) {
       const chunks = chunkListForVerticalSlots(list, boxH, MIN_SIGNATURE_SLOT_PT);
-      let drawPage = origToCurrent[pageIndex0];
+      let drawPage = logicalToPhysical[pageIndex0];
       for (let c = 0; c < chunks.length; c++) {
         if (c > 0) {
           pdfDoc.insertPage(drawPage + 1, [PW, PH]);
-          for (let o = 0; o < originalPageCount; o++) {
-            if (origToCurrent[o] > drawPage) origToCurrent[o] += 1;
+          for (let o = 0; o < logicalToPhysical.length; o++) {
+            if (logicalToPhysical[o] > drawPage) logicalToPhysical[o] += 1;
           }
           drawPage += 1;
         }
@@ -181,12 +187,12 @@ async function buildSignedDocumentPdf(documentRow, signatureRows) {
 
     /* Text / checkbox / date — stack without overlap; extra pages if needed */
     const chunks = chunkListForVerticalSlots(list, boxH, MIN_TEXT_SLOT_PT);
-    let drawPageText = origToCurrent[pageIndex0];
+    let drawPageText = logicalToPhysical[pageIndex0];
     for (let c = 0; c < chunks.length; c++) {
       if (c > 0) {
         pdfDoc.insertPage(drawPageText + 1, [PW, PH]);
-        for (let o = 0; o < originalPageCount; o++) {
-          if (origToCurrent[o] > drawPageText) origToCurrent[o] += 1;
+        for (let o = 0; o < logicalToPhysical.length; o++) {
+          if (logicalToPhysical[o] > drawPageText) logicalToPhysical[o] += 1;
         }
         drawPageText += 1;
       }

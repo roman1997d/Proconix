@@ -8,6 +8,7 @@ const express = require('express');
 const router = express.Router();
 const { requireManagerAuth } = require('../middleware/requireManagerAuth');
 const { requireOperativeAuth } = require('../middleware/requireOperativeAuth');
+const { requireSupervisorAuth } = require('../middleware/requireSupervisorAuth');
 const { resolveCompanyDocsDir, resolveCompanyDocsDirForDocument } = require('../middleware/resolveCompanyDocsDir');
 const { uploadPdf } = require('../utils/digitalDocumentsUpload');
 const ctrl = require('../controllers/digitalDocumentsController');
@@ -27,6 +28,14 @@ router.get('/operative/inbox', requireOperativeAuth, ctrl.operativeInbox);
 router.get('/operative/document/:id', requireOperativeAuth, ctrl.getOneOperative);
 router.post('/:id/sign', requireOperativeAuth, resolveCompanyDocsDirForDocument, ctrl.sign);
 router.post('/:id/manager-sign', requireManagerAuth, resolveCompanyDocsDir, ctrl.managerInPersonSign);
+
+router.get('/supervisor/list', requireSupervisorAuth, ctrl.supervisorListDocuments);
+router.get('/supervisor/operatives', requireSupervisorAuth, ctrl.supervisorOperativesForProject);
+router.get('/supervisor/:id/signed-pdf', requireSupervisorAuth, ctrl.supervisorDownloadSignedPdf);
+router.patch('/supervisor/:id/fields', requireSupervisorAuth, ctrl.supervisorPatchFields);
+router.post('/supervisor/:id/assign', requireSupervisorAuth, ctrl.supervisorAssign);
+router.post('/supervisor/:id/collect-sign', requireSupervisorAuth, resolveCompanyDocsDirForDocument, ctrl.supervisorCollectSign);
+router.get('/supervisor/:id', requireSupervisorAuth, ctrl.supervisorGetOne);
 
 router.get('/', requireManagerAuth, ctrl.list);
 router.post(

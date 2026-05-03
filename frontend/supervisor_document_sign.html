@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <link rel="icon" href="/favicon_io/favicon.ico" sizes="any">
+  <title>Document sign-in – Supervisor</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/supervisor_document_sign.css" rel="stylesheet">
+</head>
+<body class="svds-root">
+  <div class="svds-head">
+    <div>
+      <h1><i class="bi bi-file-earmark-medical"></i> Document sign-in</h1>
+      <p class="svds-muted">PDFs from your project: add a signature appendix, assign operatives, collect signatures on-site.</p>
+    </div>
+    <button type="button" class="svds-btn svds-btn-secondary" id="svdsBackBtn" hidden><i class="bi bi-arrow-left"></i> Documents</button>
+  </div>
+
+  <div id="svdsError" class="svds-error svds-hidden" role="alert"></div>
+
+  <section id="svdsListSection">
+    <p class="svds-muted" id="svdsListHint">Loading documents…</p>
+    <div class="svds-list" id="svdsListMount"></div>
+  </section>
+
+  <section id="svdsDetailSection" hidden>
+    <div class="svds-toolbar">
+      <button type="button" class="svds-btn svds-btn-secondary" id="svdsBackDetailBtn"><i class="bi bi-arrow-left"></i> Back</button>
+      <button type="button" class="svds-btn svds-btn-secondary" id="svdsDownloadPdf">
+        <i class="bi bi-download"></i> Download merged PDF
+      </button>
+    </div>
+    <h2 class="svds-label-strong" id="svdsDocTitle">Document</h2>
+    <p class="svds-muted" id="svdsDocMeta"></p>
+
+    <div class="svds-pages" id="svdsPages"></div>
+
+    <div class="svds-panel">
+      <div class="svds-label-strong">Collect signatures from (same project)</div>
+      <p class="svds-muted">Tick operatives, then build the appendix page with one row each (name, signature, initials, date).</p>
+      <div class="svds-op-grid" id="svdsOpList"></div>
+      <div class="svds-toolbar">
+        <button type="button" class="svds-btn" id="svdsBuildSheetBtn"><i class="bi bi-plus-square"></i> Build signature sheet &amp; assign</button>
+      </div>
+    </div>
+
+    <div class="svds-panel" id="svdsSignPanel">
+      <div class="svds-label-strong">Sign fields (on-site)</div>
+      <p class="svds-muted">Confirm read, then capture ink where needed. Name and date can be filled automatically.</p>
+      <label class="svds-muted" style="display:flex;align-items:center;gap:8px;margin:10px 0;">
+        <input type="checkbox" id="svdsConfirmRead"> Operatives have read the document (required)
+      </label>
+      <div id="svdsFieldsMount"></div>
+      <button type="button" class="svds-btn" id="svdsSubmitSignBtn"><i class="bi bi-check2-circle"></i> Submit filled fields</button>
+    </div>
+  </section>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="js/supervisor_document_sign.js"></script>
+</body>
+</html>
