@@ -1429,6 +1429,45 @@ async function sendUnitDeleteVerificationEmail(p) {
   });
 }
 
+/**
+ * Unit Progress — delete floor confirmation code (same SMTP as unit delete).
+ *
+ * @param {{ to: string, code: string, floorDescription?: string }} p
+ */
+async function sendFloorDeleteVerificationEmail(p) {
+  const to = String(p.to || '').trim();
+  const code = String(p.code || '').trim();
+  const floorDescription = String(p.floorDescription || '').trim() || 'Unknown floor';
+
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send verification email.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+
+  const subject = 'Proconix — Floor delete verification code';
+  const text = [
+    'Someone requested to delete a floor in Unit Progress Tracking.',
+    '',
+    `Floor: ${floorDescription}`,
+    '',
+    'Verification code:',
+    code,
+    '',
+    'This code expires in 10 minutes.',
+    'If you did not request this deletion, you can ignore this email.',
+  ].join('\n');
+
+  await transport.sendMail({
+    from,
+    to,
+    subject,
+    text,
+  });
+}
+
 module.exports = {
   sendCallbackRequestEmail,
   sendContactUsEmail,
@@ -1442,5 +1481,6 @@ module.exports = {
   sendSignedDocumentEmail,
   sendWorkLogInvoiceCopyEmail,
   sendUnitDeleteVerificationEmail,
+  sendFloorDeleteVerificationEmail,
   createTransport,
 };

@@ -2239,6 +2239,69 @@
       }
     }
 
+    async function requestFloorDeleteVerification(floorId) {
+      const cfg = getWorkspaceApiConfig();
+      if (!cfg) {
+        wizardStatus.textContent = "Not signed in.";
+        return false;
+      }
+      const requestUrl =
+        cfg.kind === "manager"
+          ? "/api/unit-progress/manager/delete-floor/request"
+          : "/api/unit-progress/supervisor/delete-floor/request";
+      try {
+        const response = await fetch(requestUrl, {
+          method: "POST",
+          headers: { ...cfg.headers, "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ floorId })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload || !payload.success) {
+          wizardStatus.textContent = (payload && payload.message) || "Could not send verification code.";
+          return false;
+        }
+        wizardStatus.textContent = payload.message || "Verification code sent.";
+        return true;
+      } catch (e) {
+        wizardStatus.textContent = "Network error while requesting code.";
+        return false;
+      }
+    }
+
+    async function confirmFloorDeleteWithCode(floorId, codeRaw) {
+      const cfg = getWorkspaceApiConfig();
+      if (!cfg) return false;
+      const confirmUrl =
+        cfg.kind === "manager"
+          ? "/api/unit-progress/manager/delete-floor/confirm"
+          : "/api/unit-progress/supervisor/delete-floor/confirm";
+      try {
+        const response = await fetch(confirmUrl, {
+          method: "POST",
+          headers: { ...cfg.headers, "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ floorId, code: String(codeRaw || "").trim() })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload || !payload.success) {
+          wizardStatus.textContent = (payload && payload.message) || "Could not delete floor.";
+          return false;
+        }
+        if (payload.workspace) {
+          DATA = mapWorkspaceData(payload.workspace);
+        }
+        if (state.currentFloor === floorId) {
+          state.currentFloor = null;
+          state.currentUnitId = null;
+        }
+        return true;
+      } catch (e) {
+        wizardStatus.textContent = "Network error while deleting floor.";
+        return false;
+      }
+    }
+
     /**
      * Prefer POST append — sends only this progress row (with photos), not the entire workspace.
      * Full PUT can exceed body limits when many units/timelines contain base64 images.
@@ -3008,33 +3071,34 @@
         : `Delete floor ${floor.number}?`;
       if (!confirm(msg)) return;
 
-      const floorsBefore = DATA.floors.slice();
-      const unitsBefore = DATA.units.slice();
-
-      DATA.units = DATA.units.filter(
-        (u) => !(towerIdMatches(u.tower, towerId) && Number(u.floor) === Number(floor.number))
-      );
-      DATA.floors = DATA.floors.filter((f) => f.id !== floorId);
-
-      if (state.currentFloor === floorId) {
-        state.currentFloor = null;
-        state.currentUnitId = null;
-      }
-
-      beginUnitProgressWait("Saving…");
-      let saved = false;
+      beginUnitProgressWait("Sending verification code…");
+      let sent = false;
       try {
-        saved = await persistWorkspace("floor_delete");
+        sent = await requestFloorDeleteVerification(floorId);
       } finally {
         endUnitProgressWait();
       }
+      if (!sent) return;
 
-      if (!saved) {
-        DATA.floors = floorsBefore;
-        DATA.units = unitsBefore;
-        wizardStatus.textContent = "Could not delete floor on server.";
+      const codeInput = prompt(
+        "Enter the 6-digit verification code sent to the manager email:",
+        ""
+      );
+      if (codeInput == null) return;
+      const codeTrim = String(codeInput).trim();
+      if (!codeTrim) {
+        wizardStatus.textContent = "Verification code is required to delete.";
         return;
       }
+
+      beginUnitProgressWait("Deleting floor…");
+      let ok = false;
+      try {
+        ok = await confirmFloorDeleteWithCode(floorId, codeTrim);
+      } finally {
+        endUnitProgressWait();
+      }
+      if (!ok) return;
 
       wizardStatus.textContent = "Floor deleted.";
       if (state.currentTower != null && towerIdMatches(state.currentTower, towerId)) {

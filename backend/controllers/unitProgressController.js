@@ -4,13 +4,25 @@
  */
 
 const { pool } = require('../db/pool');
-const { sendUnitDeleteVerificationEmail } = require('../lib/sendCallbackRequestEmail');
+const { sendUnitDeleteVerificationEmail, sendFloorDeleteVerificationEmail } = require('../lib/sendCallbackRequestEmail');
 
 /** Pending delete confirmations: key `${companyId}|${unitId}` → challenge */
 const unitDeleteChallenges = new Map();
 
+/** Pending floor delete confirmations */
+const floorDeleteChallenges = new Map();
+
 const UNIT_DELETE_OTP_TTL_MS = 10 * 60 * 1000;
 const UNIT_DELETE_MAX_ATTEMPTS = 5;
+
+function normalizeFloorId(value) {
+  if (value == null) return '';
+  return String(value).trim();
+}
+
+function floorDeleteChallengeKey(companyId, floorId) {
+  return `${companyId}|fl:${normalizeFloorId(floorId)}`;
+}
 
 function unitDeleteChallengeKey(companyId, unitId) {
   return `${companyId}|${normalizeUnitId(unitId)}`;
@@ -37,6 +49,23 @@ function supervisorHasUnitProjectAccess(req, unit) {
     : null;
   const unitProjectId = unit && unit.project_id != null ? Number(unit.project_id) : null;
   return supervisorProjectId != null && unitProjectId != null && supervisorProjectId === unitProjectId;
+}
+
+/** Every unit on this floor must belong to the supervisor's project (or floor empty). */
+function supervisorCanDeleteFloor(req, workspace, floor) {
+  const supervisorProjectId = req.supervisor && req.supervisor.project_id != null
+    ? Number(req.supervisor.project_id)
+    : null;
+  if (supervisorProjectId == null) return false;
+  const tower = floor.tower;
+  const floorNum = Number(floor.number);
+  const units = (Array.isArray(workspace.units) ? workspace.units : []).filter(
+    (u) => String(u.tower) === String(tower) && Number(u.floor) === floorNum
+  );
+  return units.every((u) => {
+    const pid = u.project_id != null ? Number(u.project_id) : null;
+    return pid === supervisorProjectId;
+  });
 }
 
 function getManagerCompanyId(req) {
@@ -557,6 +586,28 @@ function removeUnitFromWorkspace(workspace, unitId) {
   return workspace.units.length < before;
 }
 
+function getFloorFromWorkspace(workspace, floorId) {
+  const id = normalizeFloorId(floorId);
+  if (!id) return null;
+  const floors = Array.isArray(workspace.floors) ? workspace.floors : [];
+  return floors.find((f) => normalizeFloorId(f && f.id) === id) || null;
+}
+
+function removeFloorFromWorkspace(workspace, floorId) {
+  const floor = getFloorFromWorkspace(workspace, floorId);
+  if (!floor) return false;
+  const tower = floor.tower;
+  const floorNum = Number(floor.number);
+  workspace.units = (Array.isArray(workspace.units) ? workspace.units : []).filter(
+    (u) => !(String(u.tower) === String(tower) && Number(u.floor) === floorNum)
+  );
+  const fid = normalizeFloorId(floorId);
+  workspace.floors = (Array.isArray(workspace.floors) ? workspace.floors : []).filter(
+    (f) => normalizeFloorId(f && f.id) !== fid
+  );
+  return true;
+}
+
 async function requestDeleteUnitManager(req, res) {
   const companyId = getManagerCompanyId(req);
   const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -784,6 +835,240 @@ async function confirmDeleteUnitSupervisor(req, res) {
   }
 }
 
+function floorDescriptionFromFloor(floor) {
+  if (!floor || typeof floor !== 'object') return 'Unknown floor';
+  const t = floor.tower != null ? String(floor.tower) : '?';
+  const n = floor.number != null ? String(floor.number) : '?';
+  return `Tower ${t}, floor ${n}`;
+}
+
+async function requestDeleteFloorManager(req, res) {
+  const companyId = getManagerCompanyId(req);
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const floorId = normalizeFloorId(body.floorId);
+  if (companyId == null || !floorId) {
+    return res.status(400).json({ success: false, message: 'Valid floor id is required.' });
+  }
+  const toEmail = req.manager && req.manager.email ? String(req.manager.email).trim() : '';
+  if (!toEmail) {
+    return res.status(400).json({ success: false, message: 'Manager email is missing; cannot send verification code.' });
+  }
+  try {
+    const workspace = await getWorkspaceByCompanyId(companyId);
+    const floor = getFloorFromWorkspace(workspace, floorId);
+    if (!floor) {
+      return res.status(404).json({ success: false, message: 'Floor not found.' });
+    }
+    const now = Date.now();
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const key = floorDeleteChallengeKey(companyId, floorId);
+    floorDeleteChallenges.set(key, {
+      code,
+      expiresAt: now + UNIT_DELETE_OTP_TTL_MS,
+      attempts: 0,
+    });
+    const floorDescription = floorDescriptionFromFloor(floor);
+    await sendFloorDeleteVerificationEmail({ to: toEmail, code, floorDescription });
+    return res.json({
+      success: true,
+      message: 'Verification code sent to your manager email.',
+      otp_expires_in_sec: Math.floor(UNIT_DELETE_OTP_TTL_MS / 1000),
+    });
+  } catch (error) {
+    floorDeleteChallenges.delete(floorDeleteChallengeKey(companyId, floorId));
+    if (error.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({
+        success: false,
+        message: 'Email is not configured on the server; cannot send verification code.',
+      });
+    }
+    console.error('unitProgress requestDeleteFloorManager:', error);
+    return res.status(500).json({ success: false, message: 'Failed to send verification email.' });
+  }
+}
+
+async function confirmDeleteFloorManager(req, res) {
+  const companyId = getManagerCompanyId(req);
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const floorId = normalizeFloorId(body.floorId);
+  const otpInput = parseDeleteUnitCode(body);
+  if (companyId == null || !floorId) {
+    return res.status(400).json({ success: false, message: 'Valid floor id is required.' });
+  }
+  if (!otpInput) {
+    return res.status(400).json({ success: false, message: 'Verification code is required.' });
+  }
+  const key = floorDeleteChallengeKey(companyId, floorId);
+  const challenge = floorDeleteChallenges.get(key);
+  const now = Date.now();
+  if (!challenge || !challenge.expiresAt || challenge.expiresAt <= now) {
+    floorDeleteChallenges.delete(key);
+    return res.status(400).json({
+      success: false,
+      message: 'Code expired or missing. Request a new verification code.',
+    });
+  }
+  challenge.attempts += 1;
+  if (challenge.attempts > UNIT_DELETE_MAX_ATTEMPTS) {
+    floorDeleteChallenges.delete(key);
+    return res.status(429).json({
+      success: false,
+      message: 'Too many attempts. Request a new verification code.',
+    });
+  }
+  const expected = String(challenge.code || '').replace(/\D/g, '');
+  if (expected !== otpInput) {
+    return res.status(403).json({ success: false, message: 'Invalid verification code.' });
+  }
+  try {
+    const existing = await getWorkspaceByCompanyId(companyId);
+    const floor = getFloorFromWorkspace(existing, floorId);
+    if (!floor) {
+      floorDeleteChallenges.delete(key);
+      return res.status(404).json({ success: false, message: 'Floor not found.' });
+    }
+    removeFloorFromWorkspace(existing, floorId);
+    existing.updated_at = new Date().toISOString();
+    await upsertWorkspace(companyId, existing, 'manager', req.manager && req.manager.id ? req.manager.id : null);
+    floorDeleteChallenges.delete(key);
+    return res.json({ success: true, workspace: existing });
+  } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(503).json({
+        success: false,
+        code: 'unit_progress_tables_missing',
+        message: 'Unit Progress table missing. Run scripts/create_unit_progress_tables.sql',
+      });
+    }
+    console.error('unitProgress confirmDeleteFloorManager:', error);
+    return res.status(500).json({ success: false, message: 'Failed to delete floor.' });
+  }
+}
+
+async function requestDeleteFloorSupervisor(req, res) {
+  const companyId = getSupervisorCompanyId(req);
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const floorId = normalizeFloorId(body.floorId);
+  if (companyId == null || !floorId) {
+    return res.status(400).json({ success: false, message: 'Valid floor id is required.' });
+  }
+  try {
+    const workspace = await getWorkspaceByCompanyId(companyId);
+    const floor = getFloorFromWorkspace(workspace, floorId);
+    if (!floor) {
+      return res.status(404).json({ success: false, message: 'Floor not found.' });
+    }
+    if (!supervisorCanDeleteFloor(req, workspace, floor)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Supervisor cannot delete this floor (units from another project may be on this floor).',
+      });
+    }
+    const toEmail = await getPrimaryManagerEmailForCompany(companyId);
+    if (!toEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'No active manager email found for this company.',
+      });
+    }
+    const now = Date.now();
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const key = floorDeleteChallengeKey(companyId, floorId);
+    floorDeleteChallenges.set(key, {
+      code,
+      expiresAt: now + UNIT_DELETE_OTP_TTL_MS,
+      attempts: 0,
+    });
+    const floorDescription = floorDescriptionFromFloor(floor);
+    await sendFloorDeleteVerificationEmail({ to: toEmail, code, floorDescription });
+    return res.json({
+      success: true,
+      message: 'Verification code sent to the company manager email.',
+      otp_expires_in_sec: Math.floor(UNIT_DELETE_OTP_TTL_MS / 1000),
+    });
+  } catch (error) {
+    floorDeleteChallenges.delete(floorDeleteChallengeKey(companyId, floorId));
+    if (error.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({
+        success: false,
+        message: 'Email is not configured on the server; cannot send verification code.',
+      });
+    }
+    console.error('unitProgress requestDeleteFloorSupervisor:', error);
+    return res.status(500).json({ success: false, message: 'Failed to send verification email.' });
+  }
+}
+
+async function confirmDeleteFloorSupervisor(req, res) {
+  const companyId = getSupervisorCompanyId(req);
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const floorId = normalizeFloorId(body.floorId);
+  const otpInput = parseDeleteUnitCode(body);
+  if (companyId == null || !floorId) {
+    return res.status(400).json({ success: false, message: 'Valid floor id is required.' });
+  }
+  if (!otpInput) {
+    return res.status(400).json({ success: false, message: 'Verification code is required.' });
+  }
+  const key = floorDeleteChallengeKey(companyId, floorId);
+  const challenge = floorDeleteChallenges.get(key);
+  const now = Date.now();
+  if (!challenge || !challenge.expiresAt || challenge.expiresAt <= now) {
+    floorDeleteChallenges.delete(key);
+    return res.status(400).json({
+      success: false,
+      message: 'Code expired or missing. Request a new verification code.',
+    });
+  }
+  challenge.attempts += 1;
+  if (challenge.attempts > UNIT_DELETE_MAX_ATTEMPTS) {
+    floorDeleteChallenges.delete(key);
+    return res.status(429).json({
+      success: false,
+      message: 'Too many attempts. Request a new verification code.',
+    });
+  }
+  const expected = String(challenge.code || '').replace(/\D/g, '');
+  if (expected !== otpInput) {
+    return res.status(403).json({ success: false, message: 'Invalid verification code.' });
+  }
+  try {
+    const existing = await getWorkspaceByCompanyId(companyId);
+    const floor = getFloorFromWorkspace(existing, floorId);
+    if (!floor) {
+      floorDeleteChallenges.delete(key);
+      return res.status(404).json({ success: false, message: 'Floor not found.' });
+    }
+    if (!supervisorCanDeleteFloor(req, existing, floor)) {
+      floorDeleteChallenges.delete(key);
+      return res.status(403).json({
+        success: false,
+        message: 'Supervisor cannot delete this floor (units from another project may be on this floor).',
+      });
+    }
+    removeFloorFromWorkspace(existing, floorId);
+    existing.updated_at = new Date().toISOString();
+    await upsertWorkspace(
+      companyId,
+      existing,
+      'supervisor',
+      req.supervisor && req.supervisor.id ? req.supervisor.id : null
+    );
+    floorDeleteChallenges.delete(key);
+    return res.json({ success: true, workspace: existing });
+  } catch (error) {
+    if (error.code === '42P01') {
+      return res.status(503).json({
+        success: false,
+        code: 'unit_progress_tables_missing',
+        message: 'Unit Progress table missing. Run scripts/create_unit_progress_tables.sql',
+      });
+    }
+    console.error('unitProgress confirmDeleteFloorSupervisor:', error);
+    return res.status(500).json({ success: false, message: 'Failed to delete floor.' });
+  }
+}
+
 module.exports = {
   getWorkspace,
   putWorkspace,
@@ -798,4 +1083,8 @@ module.exports = {
   confirmDeleteUnitManager,
   requestDeleteUnitSupervisor,
   confirmDeleteUnitSupervisor,
+  requestDeleteFloorManager,
+  confirmDeleteFloorManager,
+  requestDeleteFloorSupervisor,
+  confirmDeleteFloorSupervisor,
 };

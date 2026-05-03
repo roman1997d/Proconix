@@ -20,6 +20,10 @@ const {
   confirmDeleteUnitManager,
   requestDeleteUnitSupervisor,
   confirmDeleteUnitSupervisor,
+  requestDeleteFloorManager,
+  confirmDeleteFloorManager,
+  requestDeleteFloorSupervisor,
+  confirmDeleteFloorSupervisor,
 } = require('../controllers/unitProgressController');
 
 router.get('/public-timeline/:unitId', getPublicTimeline);
@@ -32,10 +36,14 @@ router.get('/workspace', requireManagerAuth, getWorkspace);
 router.put('/workspace', requireManagerAuth, putWorkspace);
 router.post('/manager/delete-unit/request', requireManagerAuth, requestDeleteUnitManager);
 router.post('/manager/delete-unit/confirm', requireManagerAuth, confirmDeleteUnitManager);
+router.post('/manager/delete-floor/request', requireManagerAuth, requestDeleteFloorManager);
+router.post('/manager/delete-floor/confirm', requireManagerAuth, confirmDeleteFloorManager);
 
 router.get('/supervisor/workspace', requireSupervisorAuth, getWorkspaceSupervisor);
 router.put('/supervisor/workspace', requireSupervisorAuth, putWorkspaceSupervisor);
 router.post('/supervisor/delete-unit/request', requireSupervisorAuth, requestDeleteUnitSupervisor);
 router.post('/supervisor/delete-unit/confirm', requireSupervisorAuth, confirmDeleteUnitSupervisor);
+router.post('/supervisor/delete-floor/request', requireSupervisorAuth, requestDeleteFloorSupervisor);
+router.post('/supervisor/delete-floor/confirm', requireSupervisorAuth, confirmDeleteFloorSupervisor);
 
 module.exports = router;
