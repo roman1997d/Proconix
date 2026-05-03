@@ -381,6 +381,39 @@ body.supervisor-dashboard-ios .dashboard-qa-iframe {
   }
 }
 
+/* ----- Embedded module gates (e.g. Unit Progress — project required) ----- */
+body.supervisor-dashboard-ios .sv-embed-gate {
+  margin: 24px auto 16px;
+  max-width: 420px;
+  padding: 28px 22px;
+  text-align: center;
+  background: var(--ios-bg-elevated);
+  border-radius: var(--ios-radius-lg);
+  box-shadow: var(--ios-shadow);
+}
+
+body.supervisor-dashboard-ios .sv-embed-gate-icon {
+  font-size: 2.5rem;
+  color: var(--ios-secondary-label);
+  opacity: 0.85;
+  display: block;
+  margin-bottom: 12px;
+}
+
+body.supervisor-dashboard-ios .sv-embed-gate-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: var(--ios-label);
+}
+
+body.supervisor-dashboard-ios .sv-embed-gate-text {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  color: var(--ios-secondary-label);
+}
+
 /* ----- Reduced motion ----- */
 @media (prefers-reduced-motion: reduce) {
   body.supervisor-dashboard-ios * {

@@ -2976,12 +2976,19 @@
     }
 
     /**
-     * Dashboard “today” project first, then wizard selection.
-     * No id → managers see nothing until they pick a project; supervisors still see the full workspace.
+     * Query embed_project_id (supervisor dashboard iframe) wins over localStorage so the assigned project is used.
+     * Then Dashboard “today”, then wizard.
+     * No id → managers see nothing until they pick a project; supervisors without embed still see the full workspace.
      */
     function getUnitProgressProjectFilterId() {
       let raw = "";
-      if (typeof window.ProconixDashboardProject !== "undefined") {
+      try {
+        const qs = new URLSearchParams(window.location.search || "");
+        raw = (qs.get("embed_project_id") || "").trim();
+      } catch (e) {
+        /* ignore */
+      }
+      if (!raw && typeof window.ProconixDashboardProject !== "undefined") {
         raw = window.ProconixDashboardProject.getSelectedProjectId() || "";
       }
       if (!raw && wizardState && wizardState.projectId != null && String(wizardState.projectId).trim() !== "") {
@@ -3047,8 +3054,13 @@
         return;
       }
       el.hidden = false;
-      el.textContent =
-        "Showing towers, floors, and units for this project (including units without a project tag). Change project under Dashboard → Project Overview if needed.";
+      if (runtimeContext.actorKind === "supervisor") {
+        el.textContent =
+          "Showing units for your assigned project (and any units without a project tag).";
+      } else {
+        el.textContent =
+          "Showing towers, floors, and units for this project (including units without a project tag). Change project under Dashboard → Project Overview if needed.";
+      }
     }
 
     function onDashboardProjectContextChanged() {

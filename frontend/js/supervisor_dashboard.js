@@ -1,6 +1,6 @@
 /**
  * Supervisor dashboard – operative token + role Supervisor only.
- * Embeds: Material Management, Task & Planning, Site Snags, QA (project-scoped on server).
+ * Embeds: Material Management, Task & Planning, Drawings, Site Snags, Unit Progress (assigned project), QA.
  */
 (function () {
   'use strict';
@@ -26,6 +26,7 @@
     'task-planning': 'Tasks',
     'drawing-gallery': 'Drawing Gallery',
     'site-snags': 'Site Snags',
+    'unit-progress': 'Unit Progress',
     'quality-assurance': 'Quality Assurance',
   };
 
@@ -227,6 +228,57 @@
           }, 150);
         });
       }
+      if (pushState !== false) history.pushState({ module: module }, '', '#');
+      return;
+    }
+
+    if (module === 'unit-progress') {
+      contentEl.classList.add('dashboard-content-fade-out');
+      setActiveItem(module);
+      updateHeaderTitle(module);
+      contentEl.innerHTML =
+        '<p class="text-muted sv-embed-loading" style="padding:24px;text-align:center;">Loading…</p>';
+      contentEl.classList.remove('dashboard-content-fade-out');
+      contentEl.classList.add('dashboard-content-fade-in');
+
+      fetch('/api/operatives/project/current', {
+        headers: getAuthHeaders(),
+        credentials: 'same-origin',
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { ok: res.ok, data: data };
+          });
+        })
+        .then(function (out) {
+          if (!out.ok) {
+            throw new Error('project lookup failed');
+          }
+          var data = out.data;
+          var proj =
+            data && data.success && data.project && data.project.id != null ? data.project : null;
+          if (!proj) {
+            contentEl.innerHTML =
+              '<div class="sv-embed-gate">' +
+              '<i class="bi bi-folder-x sv-embed-gate-icon" aria-hidden="true"></i>' +
+              '<h2 class="sv-embed-gate-title">No project assigned</h2>' +
+              '<p class="sv-embed-gate-text">Unit Progress is available after your supervisor account is linked to a project. Ask your manager to assign you in the team / project settings.</p>' +
+              '</div>';
+            return;
+          }
+          var qs = 'embed_project_id=' + encodeURIComponent(String(proj.id));
+          contentEl.innerHTML =
+            '<iframe src="' +
+            iframeModuleSrc('Unit_Progress_Tracking.html?' + qs) +
+            '" class="dashboard-qa-iframe" title="Unit Progress Tracking"></iframe>';
+        })
+        .catch(function () {
+          contentEl.innerHTML =
+            '<div class="sv-embed-gate">' +
+            '<p class="sv-embed-gate-text">Could not verify your project assignment. Check your connection and try again.</p>' +
+            '</div>';
+        });
+
       if (pushState !== false) history.pushState({ module: module }, '', '#');
       return;
     }
