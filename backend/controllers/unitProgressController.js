@@ -38,6 +38,107 @@ function sanitizeWorkspace(input) {
   };
 }
 
+/** GET ?slim=1 — strip photo base64 so initial load is fast (client hydrates per unit). */
+function slimWorkspaceForList(workspace) {
+  if (!workspace || typeof workspace !== 'object') return workspace;
+  const units = Array.isArray(workspace.units)
+    ? workspace.units.map((u) => {
+        if (!u || typeof u !== 'object') return u;
+        const timeline = Array.isArray(u.timeline)
+          ? u.timeline.map((entry) => {
+              if (!entry || typeof entry !== 'object') return entry;
+              const photos = Array.isArray(entry.photos)
+                ? entry.photos.map((p) => {
+                    if (typeof p === 'string') return p;
+                    if (p && typeof p === 'object') {
+                      return { name: p.name || 'photo', src: '' };
+                    }
+                    return p;
+                  })
+                : [];
+              return { ...entry, photos };
+            })
+          : [];
+        return { ...u, timeline };
+      })
+    : [];
+  return { ...workspace, units };
+}
+
+function timelineEntryKey(entry) {
+  if (!entry || typeof entry !== 'object') return '';
+  const d = entry.date != null ? String(entry.date) : '';
+  const st = entry.stage != null ? String(entry.stage) : '';
+  const c = entry.comment != null ? String(entry.comment) : '';
+  const u = entry.user != null ? String(entry.user) : '';
+  return `${d}|${st}|${c}|${u}`;
+}
+
+function mergePhotosPreserveSrc(prevPhotos, incPhotos) {
+  const prev = Array.isArray(prevPhotos) ? prevPhotos : [];
+  const inc = Array.isArray(incPhotos) ? incPhotos : [];
+  if (!inc.length && prev.length) {
+    return prev.map((p) => (typeof p === 'object' && p ? { ...p } : p));
+  }
+  return inc.map((p, i) => {
+    if (p && typeof p === 'object') {
+      const src = String(p.src || '').trim();
+      if (src) return p;
+      const pp = prev[i];
+      if (pp && typeof pp === 'object' && String(pp.src || '').trim()) {
+        return { name: p.name || pp.name || 'photo', src: pp.src };
+      }
+      const byName = prev.find((x) => x && typeof x === 'object' && x.name === p.name);
+      if (byName && String(byName.src || '').trim()) {
+        return { name: p.name || byName.name, src: byName.src };
+      }
+    }
+    return p;
+  });
+}
+
+function mergeTimelineEntries(prevTl, incTl) {
+  const prev = Array.isArray(prevTl) ? prevTl : [];
+  const inc = Array.isArray(incTl) ? incTl : [];
+  const prevByKey = new Map();
+  prev.forEach((e) => {
+    const k = timelineEntryKey(e);
+    if (k && !prevByKey.has(k)) prevByKey.set(k, e);
+  });
+  return inc.map((entry) => {
+    if (!entry || typeof entry !== 'object') return entry;
+    const prevEntry = prevByKey.get(timelineEntryKey(entry));
+    if (!prevEntry) return entry;
+    return {
+      ...entry,
+      photos: mergePhotosPreserveSrc(prevEntry.photos, entry.photos),
+    };
+  });
+}
+
+/**
+ * PUT after slim GET may send empty photo src; merge from DB copy so images are not wiped.
+ */
+function mergeWorkspacePreserveTimelinePhotos(existing, incoming) {
+  const sanitized = sanitizeWorkspace(incoming);
+  const exUnits = Array.isArray(existing.units) ? existing.units : [];
+  const byId = new Map();
+  exUnits.forEach((u) => {
+    const id = normalizeUnitId(u && u.id);
+    if (id) byId.set(id, u);
+  });
+  sanitized.units = sanitized.units.map((u) => {
+    const id = normalizeUnitId(u && u.id);
+    const prev = byId.get(id);
+    if (!prev || !Array.isArray(prev.timeline)) return u;
+    return {
+      ...u,
+      timeline: mergeTimelineEntries(prev.timeline, u.timeline),
+    };
+  });
+  return sanitized;
+}
+
 async function getWorkspaceByCompanyId(companyId) {
   const result = await pool.query(
     'SELECT workspace FROM unit_progress_state WHERE company_id = $1',
@@ -72,7 +173,11 @@ async function getWorkspace(req, res) {
   }
   try {
     const workspace = await getWorkspaceByCompanyId(companyId);
-    return res.json({ success: true, workspace });
+    const slim =
+      String(req.query.slim || '').trim() === '1' ||
+      String(req.query.slim || '').toLowerCase() === 'true';
+    const payload = slim ? slimWorkspaceForList(workspace) : workspace;
+    return res.json({ success: true, workspace: payload });
   } catch (error) {
     if (error.code === '42P01') {
       return res.status(503).json({
@@ -92,7 +197,9 @@ async function putWorkspace(req, res) {
     return res.status(400).json({ success: false, message: 'Manager has no company_id.' });
   }
   try {
-    const workspace = sanitizeWorkspace(req.body && req.body.workspace ? req.body.workspace : req.body);
+    const existing = await getWorkspaceByCompanyId(companyId);
+    const incoming = sanitizeWorkspace(req.body && req.body.workspace ? req.body.workspace : req.body);
+    const workspace = mergeWorkspacePreserveTimelinePhotos(existing, incoming);
     await upsertWorkspace(companyId, workspace, 'manager', req.manager && req.manager.id ? req.manager.id : null);
     return res.json({ success: true, workspace });
   } catch (error) {
@@ -118,7 +225,11 @@ async function getWorkspaceSupervisor(req, res) {
   }
   try {
     const workspace = await getWorkspaceByCompanyId(companyId);
-    return res.json({ success: true, workspace });
+    const slim =
+      String(req.query.slim || '').trim() === '1' ||
+      String(req.query.slim || '').toLowerCase() === 'true';
+    const payload = slim ? slimWorkspaceForList(workspace) : workspace;
+    return res.json({ success: true, workspace: payload });
   } catch (error) {
     if (error.code === '42P01') {
       return res.status(503).json({
@@ -138,7 +249,9 @@ async function putWorkspaceSupervisor(req, res) {
     return res.status(400).json({ success: false, message: 'Supervisor has no company_id.' });
   }
   try {
-    const workspace = sanitizeWorkspace(req.body && req.body.workspace ? req.body.workspace : req.body);
+    const existing = await getWorkspaceByCompanyId(companyId);
+    const incoming = sanitizeWorkspace(req.body && req.body.workspace ? req.body.workspace : req.body);
+    const workspace = mergeWorkspacePreserveTimelinePhotos(existing, incoming);
     await upsertWorkspace(
       companyId,
       workspace,

@@ -1700,13 +1700,39 @@
       const cfg = getWorkspaceApiConfig();
       if (!cfg) return;
       try {
-        const response = await fetch(cfg.getUrl, { headers: cfg.headers, credentials: "same-origin" });
+        const base = cfg.getUrl;
+        const url = base.includes("?") ? `${base}&slim=1` : `${base}?slim=1`;
+        const response = await fetch(url, { headers: cfg.headers, credentials: "same-origin" });
         const payload = await response.json();
         if (!response.ok || !payload || !payload.success) return;
         DATA = mapWorkspaceData(payload.workspace);
       } catch (error) {
         // Keep in-memory default workspace.
       }
+    }
+
+    async function hydrateUnitTimelineFromServer(unit) {
+      if (!unit || unit._timelineHydrated) return;
+      const cfg = getWorkspaceApiConfig();
+      if (!cfg) {
+        unit._timelineHydrated = true;
+        return;
+      }
+      const uid = encodeURIComponent(unit.id);
+      const path =
+        cfg.kind === "manager"
+          ? `/api/unit-progress/manager/private-timeline/${uid}`
+          : `/api/unit-progress/supervisor/private-timeline/${uid}`;
+      try {
+        const response = await fetch(path, { headers: cfg.headers, credentials: "same-origin" });
+        const payload = await response.json();
+        if (response.ok && payload && payload.success && Array.isArray(payload.timeline)) {
+          unit.timeline = payload.timeline;
+        }
+      } catch (e) {
+        /* keep slim rows; photos may show as placeholders */
+      }
+      unit._timelineHydrated = true;
     }
 
     async function persistWorkspace(reason) {
@@ -2560,9 +2586,14 @@
       renderPhotoPreview();
     }
 
-    function loadUnitTimeline(unitId) {
+    async function loadUnitTimeline(unitId) {
       const unit = findUnitById(unitId);
       if (!unit) return;
+      const cfg = getWorkspaceApiConfig();
+      if (cfg && !unit._timelineHydrated) {
+        unitTitle.textContent = `${unit.name} — loading…`;
+        await hydrateUnitTimelineFromServer(unit);
+      }
       unitTitle.textContent = `${unit.name} (Unit ID: ${toUnitId(unit.id) ?? unit.id})`;
       unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
       unitBreadcrumb.textContent = `Tower ${unit.tower} -> Floor ${unit.floor} -> ${unit.name}`;
@@ -3022,12 +3053,12 @@
       loadUnits(floorId);
     }
 
-    function openUnit(unitId) {
+    async function openUnit(unitId) {
       const normalizedId = toUnitId(unitId);
       if (normalizedId == null) return;
       state.currentUnitId = normalizedId;
       show("unitView");
-      loadUnitTimeline(normalizedId);
+      await loadUnitTimeline(normalizedId);
     }
 
     function openUnitQrModal(unit) {
@@ -3265,6 +3296,7 @@
         const appendResult = await appendProgressEntryToBackend(unit, progressPayload);
         if (appendResult.ok) {
           unit.timeline = appendResult.timeline;
+          unit._timelineHydrated = true;
         } else {
           const newEntry = {
             stage,
@@ -3293,6 +3325,7 @@
             feedback.textContent = msg;
             return;
           }
+          unit._timelineHydrated = true;
         }
 
         renderTimeline(unit);
@@ -3512,11 +3545,7 @@
 
     async function bootstrapUnitProgressModule() {
       loadWizardState();
-      await fetchActorContext();
-      await Promise.all([
-        loadWorkspaceFromBackend(),
-        loadWizardProjects()
-      ]);
+      await Promise.all([fetchActorContext(), loadWorkspaceFromBackend(), loadWizardProjects()]);
 
       renderTowers();
       show("towerView");
