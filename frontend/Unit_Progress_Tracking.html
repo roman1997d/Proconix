@@ -1726,6 +1726,42 @@
       }
     }
 
+    /**
+     * Prefer POST append — sends only this progress row (with photos), not the entire workspace.
+     * Full PUT can exceed body limits when many units/timelines contain base64 images.
+     */
+    async function appendProgressEntryToBackend(unit, progressPayload) {
+      const cfg = getWorkspaceApiConfig();
+      if (!cfg || !unit) return { ok: false, error: "no_api" };
+      const uid = encodeURIComponent(unit.id);
+      const url =
+        cfg.kind === "manager"
+          ? `/api/unit-progress/manager/private-timeline/${uid}/progress`
+          : `/api/unit-progress/supervisor/private-timeline/${uid}/progress`;
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { ...cfg.headers, "Content-Type": "application/json" },
+          body: JSON.stringify(progressPayload)
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload || !payload.success) {
+          return {
+            ok: false,
+            error: "http",
+            message: (payload && payload.message) || `Server error (${response.status})`
+          };
+        }
+        if (!Array.isArray(payload.timeline)) {
+          return { ok: false, error: "bad_response" };
+        }
+        return { ok: true, timeline: payload.timeline };
+      } catch (err) {
+        return { ok: false, error: "network" };
+      }
+    }
+
     function show(viewId) {
       towerView.classList.add("hidden");
       floorView.classList.add("hidden");
@@ -3211,9 +3247,6 @@
       setProgressSubmitting(true);
       feedback.style.display = "none";
       try {
-        const simulatedUploadMs = Math.min(3000, 700 + files.length * 350);
-        await new Promise((resolve) => setTimeout(resolve, simulatedUploadMs));
-
         const photoPayload = await Promise.all(
           Array.from(files).map(async (file) => ({
             name: file.name,
@@ -3221,23 +3254,52 @@
           }))
         );
 
-        const newEntry = {
+        const progressPayload = {
           stage,
           status,
           reason: status === "Blocked" ? reason : "",
-          photos: photoPayload,
-          user: resolveGeneratedByName(unit.timeline),
-          date: new Date().toISOString(),
-          comment
+          comment,
+          photos: photoPayload
         };
 
-        unit.timeline.push(newEntry);
+        const appendResult = await appendProgressEntryToBackend(unit, progressPayload);
+        if (appendResult.ok) {
+          unit.timeline = appendResult.timeline;
+        } else {
+          const newEntry = {
+            stage,
+            status,
+            reason: status === "Blocked" ? reason : "",
+            photos: photoPayload,
+            user: resolveGeneratedByName(unit.timeline),
+            date: new Date().toISOString(),
+            comment
+          };
+          unit.timeline.push(newEntry);
+          const saved = await persistWorkspace("timeline_add_progress");
+          if (!saved) {
+            unit.timeline.pop();
+            renderTimeline(unit);
+            unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
+            feedback.style.display = "block";
+            let msg =
+              "Could not save to the server — this entry was removed so it matches what will appear after refresh.";
+            if (appendResult.error === "no_api" || !getWorkspaceApiConfig()) {
+              msg =
+                "Not saved: open Unit Progress from the Manager Dashboard (or supervisor login) while logged in. Enable “Keep me signed in” so your session survives a page refresh.";
+            } else if (appendResult.message) {
+              msg = `Could not save: ${appendResult.message}. Try smaller photos or fewer per entry.`;
+            }
+            feedback.textContent = msg;
+            return;
+          }
+        }
+
         renderTimeline(unit);
         unitProgress.textContent = `Progress: ${computeProgress(unit)}%`;
-        await persistWorkspace("timeline_add_progress");
 
         feedback.style.display = "block";
-        feedback.textContent = "Progress updated";
+        feedback.textContent = "Progress updated (saved to server)";
 
         form.reset();
         reasonField.classList.add("hidden");
