@@ -2906,6 +2906,13 @@
 
     function renderTowers() {
       towerList.innerHTML = "";
+      if (managerMustSelectProjectBeforeBrowse()) {
+        towerList.innerHTML =
+          "<div class='timeline-empty'>Select the project you work on today under Dashboard → Project Overview, or pick a project in the wizard.</div>";
+        updateProjectFilterNote();
+        renderTowerUnitSearchResults("");
+        return;
+      }
       const pid = getUnitProgressProjectFilterId();
       const filteredUnits = getFilteredUnitsForDisplay();
       let towers = DATA.towers;
@@ -2969,8 +2976,8 @@
     }
 
     /**
-     * Dashboard “today” project first, then wizard selection. Empty = no filter (show all).
-     * Display-only filter; full workspace stays in DATA for saves.
+     * Dashboard “today” project first, then wizard selection.
+     * No id → managers see nothing until they pick a project; supervisors still see the full workspace.
      */
     function getUnitProgressProjectFilterId() {
       let raw = "";
@@ -2985,12 +2992,30 @@
       return Number.isFinite(n) && n > 0 ? String(Math.trunc(n)) : null;
     }
 
+    /** Managers must choose Dashboard / wizard project; supervisors (and unknown actor) keep “show all” when no id. */
+    function unitProgressShowUnfilteredWhenNoProjectSelected() {
+      return runtimeContext.actorKind !== "manager";
+    }
+
+    function managerMustSelectProjectBeforeBrowse() {
+      return runtimeContext.actorKind === "manager" && !getUnitProgressProjectFilterId();
+    }
+
     function getFilteredUnitsForDisplay() {
-      const pid = getUnitProgressProjectFilterId();
       const units = DATA.units || [];
-      if (!pid) return units;
+      const pid = getUnitProgressProjectFilterId();
+      if (!pid) {
+        if (unitProgressShowUnfilteredWhenNoProjectSelected()) {
+          return units;
+        }
+        return [];
+      }
       const n = Number(pid);
-      return units.filter((u) => u.project_id != null && Number(u.project_id) === n);
+      return units.filter((u) => {
+        const up = u.project_id;
+        if (up == null || String(up).trim() === "") return true;
+        return Number(up) === n;
+      });
     }
 
     function towerVisibleForProjectFilter(towerId, pid, filteredUnits) {
@@ -3009,6 +3034,12 @@
     function updateProjectFilterNote() {
       const el = document.getElementById("up-project-filter-note");
       if (!el) return;
+      if (managerMustSelectProjectBeforeBrowse()) {
+        el.hidden = false;
+        el.textContent =
+          "Choose the project you work on today under Dashboard → Project Overview, or select a project in the wizard.";
+        return;
+      }
       const pid = getUnitProgressProjectFilterId();
       if (!pid) {
         el.hidden = true;
@@ -3017,7 +3048,7 @@
       }
       el.hidden = false;
       el.textContent =
-        "Showing towers, floors, and units for the selected dashboard project only. Change it under Dashboard → Project Overview if needed.";
+        "Showing towers, floors, and units for this project (including units without a project tag). Change project under Dashboard → Project Overview if needed.";
     }
 
     function onDashboardProjectContextChanged() {
@@ -3206,6 +3237,9 @@
 
     function loadFloors(towerId) {
       floorList.innerHTML = "";
+      if (managerMustSelectProjectBeforeBrowse()) {
+        return;
+      }
       const pid = getUnitProgressProjectFilterId();
       const filteredUnits = getFilteredUnitsForDisplay();
       const floors = DATA.floors
@@ -3257,6 +3291,10 @@
     function loadUnits(floorId) {
       const floor = DATA.floors.find((f) => f.id === floorId);
       if (!floor) return;
+      if (managerMustSelectProjectBeforeBrowse()) {
+        floorList.innerHTML = "";
+        return;
+      }
 
       const units = getFilteredUnitsForDisplay().filter(
         (u) => towerIdMatches(u.tower, floor.tower) && Number(u.floor) === Number(floor.number)
