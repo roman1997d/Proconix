@@ -1974,6 +1974,41 @@ function buildDailyRecordsFullPdf(records, meta) {
   });
 }
 
+function buildUnitReportPdf(unitName, records, meta) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 36, size: 'A4' });
+    const chunks = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    doc.fontSize(16).text('Unit Report');
+    doc.moveDown(0.5);
+    doc.fontSize(11).text(`Unit: ${unitName}`);
+    doc.text(`Operative: ${meta.workerName}`);
+    doc.text(`Project: ${meta.projectName}`);
+    doc.text(`Period: ${meta.fromDate} to ${meta.toDate}`);
+    doc.moveDown(0.8);
+    doc.fontSize(12).text('Jobs details');
+    doc.moveDown(0.4);
+
+    const sorted = Array.isArray(records)
+      ? records.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      : [];
+    if (!sorted.length) {
+      doc.fontSize(10).text('- No records in selected period.');
+    } else {
+      sorted.forEach((r) => {
+        const d = new Date(r.date);
+        const dateLabel = isNaN(d.getTime()) ? String(r.date || '-') : d.toLocaleString();
+        doc.fontSize(10).text(`${dateLabel} -> ${r.comment || '-'}`);
+      });
+    }
+
+    doc.end();
+  });
+}
+
 async function generateDailyRecordInvoiceFromPeriod(req, res) {
   const op = getOperative(req);
   if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
@@ -2090,16 +2125,38 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
     const fullPdf = await buildDailyRecordsFullPdf(records, { workerName, projectName, fromDate, toDate });
     const JSZip = getJSZipCtor();
     const zip = new JSZip();
-    records.forEach((r, i) => {
-      const folder = zip.folder(`${sanitizeNamePart(r.unitName)}_${i + 1}`);
+    const unitFolderCounters = new Map();
+    const recordsByUnit = new Map();
+    records.forEach((r) => {
+      const unitKey = sanitizeNamePart(r.unitName);
+      const folder = zip.folder(unitKey);
       if (!folder) return;
+      if (!recordsByUnit.has(unitKey)) recordsByUnit.set(unitKey, []);
+      recordsByUnit.get(unitKey).push(r);
+      const baseDate = new Date(r.date);
+      const dateStamp = isNaN(baseDate.getTime()) ? 'unknown_date' : baseDate.toISOString().replace(/[:.]/g, '-');
+      const current = Number(unitFolderCounters.get(unitKey) || 0);
       r.photos.forEach((p, pi) => {
         const data = bufferFromPhotoSource(p.src);
         if (!data) return;
         const ext = extensionFromMime(data.mime);
-        folder.file(`${sanitizeNamePart(p.name)}_${pi + 1}.${ext}`, data.buffer);
+        const seq = current + pi + 1;
+        folder.file(`${dateStamp}_${sanitizeNamePart(p.name)}_${seq}.${ext}`, data.buffer);
       });
+      unitFolderCounters.set(unitKey, current + r.photos.length);
     });
+    for (const [unitKey, unitRecords] of recordsByUnit.entries()) {
+      const folder = zip.folder(unitKey);
+      if (!folder) continue;
+      const unitDisplayName = unitRecords[0] && unitRecords[0].unitName ? unitRecords[0].unitName : unitKey;
+      const unitPdf = await buildUnitReportPdf(unitDisplayName, unitRecords, {
+        workerName,
+        projectName,
+        fromDate,
+        toDate,
+      });
+      folder.file('Unit_Report.pdf', unitPdf);
+    }
     const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
     const reportAbs = path.join(GENERATED_WORKLOG_DIR, reportName);
