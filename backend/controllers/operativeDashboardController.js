@@ -2079,25 +2079,52 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
     }
 
     const jobDisplayId = await nextJobDisplayId(companyId);
-    const ins = await pool.query(
-      `INSERT INTO work_logs (
-        company_id, submitted_by_user_id, project_id, job_display_id, worker_name, project,
-        work_type, status, description, photo_urls, invoice_file_path
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10)
-      RETURNING id`,
-      [
-        companyId,
-        op.id,
-        projectId,
-        jobDisplayId,
-        workerName,
-        projectName,
-        'Daily Records Invoice',
-        `Generated from Daily Records period ${fromDate} -> ${toDate}`,
-        JSON.stringify([]),
-        zipPath,
-      ]
-    );
+    let ins;
+    try {
+      ins = await pool.query(
+        `INSERT INTO work_logs (
+          company_id, submitted_by_user_id, project_id, job_display_id, worker_name, project,
+          work_type, status, description, photo_urls, invoice_file_path
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10)
+        RETURNING id`,
+        [
+          companyId,
+          op.id,
+          projectId,
+          jobDisplayId,
+          workerName,
+          projectName,
+          'Daily Records Invoice',
+          `Generated from Daily Records period ${fromDate} -> ${toDate}`,
+          JSON.stringify([]),
+          zipPath,
+        ]
+      );
+    } catch (err) {
+      // Backward-compat for older DB schemas where project_id is missing on work_logs.
+      if (err && err.code === '42703' && /project_id/i.test(err.message || '')) {
+        ins = await pool.query(
+          `INSERT INTO work_logs (
+            company_id, submitted_by_user_id, job_display_id, worker_name, project,
+            work_type, status, description, photo_urls, invoice_file_path
+          ) VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9)
+          RETURNING id`,
+          [
+            companyId,
+            op.id,
+            jobDisplayId,
+            workerName,
+            projectName,
+            'Daily Records Invoice',
+            `Generated from Daily Records period ${fromDate} -> ${toDate}`,
+            JSON.stringify([]),
+            zipPath,
+          ]
+        );
+      } else {
+        throw err;
+      }
+    }
 
     await sendDailyRecordWorklogEmail({
       to: toEmail,
