@@ -4,12 +4,16 @@
  */
 
 const fs = require('fs');
+const path = require('path');
+const PDFDocument = require('pdfkit');
+const JSZip = require('jszip');
 const { pool } = require('../db/pool');
 const { enrichJobsWithQaPriceTotals } = require('./worklogsController');
-const { sendWorkLogInvoiceCopyEmail } = require('../lib/sendCallbackRequestEmail');
+const { sendWorkLogInvoiceCopyEmail, sendDailyRecordWorklogEmail } = require('../lib/sendCallbackRequestEmail');
 const { loadStepsByTemplateForQaJob, computeEntryMoneyForTemplates } = require('../lib/qaPriceWorkMoney');
 
 const MAX_TASK_CONFIRMATION_PHOTOS = 10;
+const GENERATED_WORKLOG_DIR = path.resolve(__dirname, '../uploads/worklogs/generated');
 
 function haversineMiles(lat1, lon1, lat2, lon2) {
   const toRad = (deg) => (deg * Math.PI) / 180;
@@ -1852,6 +1856,267 @@ async function createWorkLog(req, res) {
   }
 }
 
+function parseDateOnlyStart(v) {
+  const s = String(v || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  return new Date(s + 'T00:00:00.000Z');
+}
+
+function parseDateOnlyEnd(v) {
+  const s = String(v || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  return new Date(s + 'T23:59:59.999Z');
+}
+
+function sanitizeNamePart(v) {
+  return String(v || '').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'item';
+}
+
+function bufferFromDataUrl(src) {
+  const m = String(src || '').match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!m) return null;
+  return { mime: m[1], buffer: Buffer.from(m[2], 'base64') };
+}
+
+function extensionFromMime(mime) {
+  if (mime === 'image/png') return 'png';
+  if (mime === 'image/webp') return 'webp';
+  return 'jpg';
+}
+
+function bufferFromPhotoSource(src) {
+  const s = String(src || '').trim();
+  if (!s) return null;
+  const data = bufferFromDataUrl(s);
+  if (data) return data;
+  if (s.startsWith('/uploads/')) {
+    const abs = path.resolve(__dirname, '..', s.replace(/^\//, ''));
+    if (fs.existsSync(abs)) {
+      const ext = path.extname(abs).toLowerCase();
+      const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+      return { mime, buffer: fs.readFileSync(abs) };
+    }
+  }
+  return null;
+}
+
+function buildDailyRecordsSummaryPdf(records, meta) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 36, size: 'A4' });
+    const chunks = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+    doc.fontSize(18).text('Daily Records Report');
+    doc.moveDown(0.5);
+    doc.fontSize(11).text(`Operative: ${meta.workerName}`);
+    doc.text(`Project: ${meta.projectName}`);
+    doc.text(`Period: ${meta.fromDate} to ${meta.toDate}`);
+    doc.text(`Generated: ${new Date().toLocaleString()}`);
+    doc.moveDown(0.8);
+    records.forEach((r, idx) => {
+      doc.fontSize(12).text(`${idx + 1}. ${r.stage} - ${r.unitName}`, { underline: false });
+      doc.fontSize(10).text(`Status: ${r.status} | Date: ${new Date(r.date).toLocaleString()}`);
+      if (r.reason) doc.text(`Reason: ${r.reason}`);
+      doc.text(`Comment: ${r.comment || '-'}`);
+      doc.text(`Photos: ${r.photos.length}`);
+      doc.moveDown(0.6);
+    });
+    doc.end();
+  });
+}
+
+function buildDailyRecordsFullPdf(records, meta) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 36, size: 'A4' });
+    const chunks = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+    doc.fontSize(18).text('Daily Records Full Report');
+    doc.moveDown(0.5);
+    doc.fontSize(11).text(`Operative: ${meta.workerName}`);
+    doc.text(`Project: ${meta.projectName}`);
+    doc.text(`Period: ${meta.fromDate} to ${meta.toDate}`);
+    doc.moveDown(0.8);
+    records.forEach((r, idx) => {
+      if (idx > 0) doc.addPage();
+      doc.fontSize(14).text(`${r.stage} - ${r.unitName}`);
+      doc.fontSize(10).text(`Status: ${r.status}`);
+      doc.text(`Date: ${new Date(r.date).toLocaleString()}`);
+      if (r.reason) doc.text(`Reason: ${r.reason}`);
+      doc.moveDown(0.3);
+      doc.fontSize(11).text(`Comment: ${r.comment || '-'}`);
+      doc.moveDown(0.5);
+      r.photos.forEach((p, i) => {
+        const data = bufferFromPhotoSource(p.src);
+        if (!data) return;
+        try {
+          doc.fontSize(9).text(`Photo ${i + 1}: ${p.name || 'photo'}`);
+          doc.image(data.buffer, { fit: [500, 260], align: 'left' });
+          doc.moveDown(0.5);
+        } catch (_) {
+          // Skip unreadable image content.
+        }
+      });
+    });
+    doc.end();
+  });
+}
+
+async function generateDailyRecordInvoiceFromPeriod(req, res) {
+  const op = getOperative(req);
+  if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+  try {
+    const fromDate = (req.body && req.body.fromDate) || '';
+    const toDate = (req.body && req.body.toDate) || '';
+    const startAt = parseDateOnlyStart(fromDate);
+    const endAt = parseDateOnlyEnd(toDate);
+    if (!startAt || !endAt || startAt > endAt) {
+      return res.status(400).json({ success: false, message: 'Choose a valid date interval.' });
+    }
+
+    const userRow = await pool.query(
+      'SELECT id, name, email, company_id, project_id FROM users WHERE id = $1',
+      [op.id]
+    );
+    if (!userRow.rows.length) return res.status(404).json({ success: false, message: 'User not found.' });
+    const user = userRow.rows[0];
+    const companyId = user.company_id;
+    const projectId = user.project_id;
+    if (companyId == null || projectId == null) {
+      return res.status(400).json({ success: false, message: 'Operative is not assigned to a project.' });
+    }
+    const projectRow = await pool.query(
+      'SELECT COALESCE(project_name, name) AS name FROM projects WHERE id = $1',
+      [projectId]
+    );
+    const projectName = projectRow.rows[0] ? String(projectRow.rows[0].name || '').trim() : 'Project';
+    const workerName = String(user.name || user.email || 'Operative').trim();
+
+    const workspaceRes = await pool.query(
+      'SELECT workspace FROM unit_progress_state WHERE company_id = $1 AND project_id = $2',
+      [companyId, projectId]
+    );
+    const workspace = workspaceRes.rows[0] && workspaceRes.rows[0].workspace ? workspaceRes.rows[0].workspace : null;
+    const units = workspace && Array.isArray(workspace.units) ? workspace.units : [];
+    const records = [];
+    units.forEach((u) => {
+      const unitName = String((u && u.name) || 'Unit').trim();
+      const timeline = Array.isArray(u && u.timeline) ? u.timeline : [];
+      timeline.forEach((entry) => {
+        const authorKind = String((entry && entry.author_kind) || '').trim();
+        const authorId = entry && entry.author_id != null ? Number(entry.author_id) : null;
+        if (authorKind !== 'operative' || authorId !== Number(op.id)) return;
+        const d = new Date(entry.date || 0);
+        if (!(d >= startAt && d <= endAt)) return;
+        const photosRaw = Array.isArray(entry.photos) ? entry.photos : [];
+        const photos = photosRaw.map((p, idx) => {
+          if (typeof p === 'string') return { name: `photo_${idx + 1}`, src: p };
+          return { name: String((p && p.name) || `photo_${idx + 1}`), src: String((p && p.src) || '') };
+        }).filter((p) => !!p.src);
+        records.push({
+          unitName,
+          stage: String(entry.stage || ''),
+          status: String(entry.status || ''),
+          reason: String(entry.reason || ''),
+          comment: String(entry.comment || ''),
+          date: d.toISOString(),
+          photos,
+        });
+      });
+    });
+
+    if (!records.length) {
+      return res.status(400).json({ success: false, message: 'No Daily Records found in selected period.' });
+    }
+
+    fs.mkdirSync(GENERATED_WORKLOG_DIR, { recursive: true });
+    const stamp = `${fromDate}_${toDate}_${Date.now()}`;
+    const reportName = `Raport_Data_${sanitizeNamePart(stamp)}.pdf`;
+    const fullName = `Full_data_raport_${sanitizeNamePart(stamp)}.pdf`;
+    const zipName = `Daily_Records_${sanitizeNamePart(stamp)}.zip`;
+
+    const summaryPdf = await buildDailyRecordsSummaryPdf(records, { workerName, projectName, fromDate, toDate });
+    const fullPdf = await buildDailyRecordsFullPdf(records, { workerName, projectName, fromDate, toDate });
+    const zip = new JSZip();
+    records.forEach((r, i) => {
+      const folder = zip.folder(`${sanitizeNamePart(r.unitName)}_${i + 1}`);
+      if (!folder) return;
+      r.photos.forEach((p, pi) => {
+        const data = bufferFromPhotoSource(p.src);
+        if (!data) return;
+        const ext = extensionFromMime(data.mime);
+        folder.file(`${sanitizeNamePart(p.name)}_${pi + 1}.${ext}`, data.buffer);
+      });
+    });
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+    const reportAbs = path.join(GENERATED_WORKLOG_DIR, reportName);
+    const fullAbs = path.join(GENERATED_WORKLOG_DIR, fullName);
+    const zipAbs = path.join(GENERATED_WORKLOG_DIR, zipName);
+    fs.writeFileSync(reportAbs, summaryPdf);
+    fs.writeFileSync(fullAbs, fullPdf);
+    fs.writeFileSync(zipAbs, zipBuffer);
+    const reportPath = `/uploads/worklogs/generated/${reportName}`;
+    const fullPath = `/uploads/worklogs/generated/${fullName}`;
+    const zipPath = `/uploads/worklogs/generated/${zipName}`;
+
+    const toEmail = await resolveCompanyInvoiceEmail(companyId);
+    if (!toEmail) {
+      return res.status(400).json({ success: false, message: 'No manager email found to send report.' });
+    }
+
+    const jobDisplayId = await nextJobDisplayId(companyId);
+    const ins = await pool.query(
+      `INSERT INTO work_logs (
+        company_id, submitted_by_user_id, project_id, job_display_id, worker_name, project,
+        work_type, status, description, photo_urls, invoice_file_path
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10)
+      RETURNING id`,
+      [
+        companyId,
+        op.id,
+        projectId,
+        jobDisplayId,
+        workerName,
+        projectName,
+        'Daily Records Invoice',
+        `Generated from Daily Records period ${fromDate} -> ${toDate}`,
+        JSON.stringify([]),
+        zipPath,
+      ]
+    );
+
+    await sendDailyRecordWorklogEmail({
+      to: toEmail,
+      workerName,
+      workerEmail: String(user.email || '').trim(),
+      projectName,
+      fromDate,
+      toDate,
+      attachments: [
+        { filename: reportName, content: summaryPdf, contentType: 'application/pdf' },
+        { filename: fullName, content: fullPdf, contentType: 'application/pdf' },
+        { filename: zipName, content: zipBuffer, contentType: 'application/zip' },
+      ],
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Invoice package generated and sent to manager.',
+      workLogId: ins.rows[0] ? ins.rows[0].id : null,
+      files: { zipPath, reportPath, fullPath },
+    });
+  } catch (err) {
+    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({ success: false, message: 'SMTP not configured on server.' });
+    }
+    console.error('generateDailyRecordInvoiceFromPeriod:', err);
+    return res.status(500).json({ success: false, message: 'Failed to generate Daily Records invoice.' });
+  }
+}
+
 module.exports = {
   getMe,
   clockIn,
@@ -1869,6 +2134,7 @@ module.exports = {
   workLogUpload,
   createWorkLog,
   sendWorkLogInvoiceCopy,
+  generateDailyRecordInvoiceFromPeriod,
   archiveMyWorkLog,
   listQaAssignedJobsForOperative,
 };

@@ -505,6 +505,11 @@
                 <button type="button" class="op-btn op-btn-secondary op-wl-flow-btn" id="op-btn-flow-time-sheet">Time Sheet</button>
               </div>
             </div>
+            <div class="op-field">
+              <button type="button" class="op-btn op-btn-secondary op-wl-flow-btn" id="op-btn-daily-record-invoice">
+                Generate invoice based on my daily record
+              </button>
+            </div>
             <div class="op-field" id="op-wl-price-upload-wrap">
               <label for="op-wl-document">Price Work file (PDF / Excel / image)</label>
               <input type="file" id="op-wl-document" accept=".pdf,.xlsx,.xls,image/*">
@@ -580,6 +585,32 @@
             <button type="button" class="op-btn op-btn-primary" id="op-wl-inv-yes">Yes, email a copy</button>
             <button type="button" class="op-btn op-btn-secondary" id="op-wl-inv-no">No thanks</button>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="op-modal op-modal-worklog" id="op-modal-daily-record-invoice" aria-hidden="true" role="dialog" aria-labelledby="op-dr-inv-title">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog op-modal-dialog-worklog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3 id="op-dr-inv-title">Generate invoice from Daily Records</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <div class="op-field-row">
+            <div class="op-field">
+              <label for="op-dr-inv-from">From</label>
+              <input type="date" id="op-dr-inv-from">
+            </div>
+            <div class="op-field">
+              <label for="op-dr-inv-to">To</label>
+              <input type="date" id="op-dr-inv-to">
+            </div>
+          </div>
+          <div id="op-dr-inv-feedback" class="op-feedback d-none" role="alert"></div>
+          <button type="button" class="op-btn op-btn-primary" id="op-dr-inv-generate">Generate and send to manager</button>
         </div>
       </div>
     </div>

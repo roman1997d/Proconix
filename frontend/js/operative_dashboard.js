@@ -2732,6 +2732,7 @@
   var formWorkReport = document.getElementById('op-form-work-report');
   var modalWorklogOverview = document.getElementById('op-modal-worklog-overview');
   var worklogOverviewBodyEl = document.getElementById('op-worklog-overview-body');
+  var modalDailyRecordInvoice = document.getElementById('op-modal-daily-record-invoice');
   /** @type {Array<object>} last loaded entries for overview modal */
   var opWorklogEntriesCache = [];
 
@@ -4590,6 +4591,58 @@
   if (btnFlowTimesheet) {
     btnFlowTimesheet.addEventListener('click', function () {
       setWorklogFlow('timesheet');
+    });
+  }
+  var btnDailyRecordInvoice = document.getElementById('op-btn-daily-record-invoice');
+  if (btnDailyRecordInvoice) {
+    btnDailyRecordInvoice.addEventListener('click', function () {
+      var fromEl = document.getElementById('op-dr-inv-from');
+      var toEl = document.getElementById('op-dr-inv-to');
+      var now = new Date();
+      var yyyy = now.getFullYear();
+      var mm = String(now.getMonth() + 1).padStart(2, '0');
+      var dd = String(now.getDate()).padStart(2, '0');
+      var today = yyyy + '-' + mm + '-' + dd;
+      if (fromEl && !fromEl.value) fromEl.value = today;
+      if (toEl && !toEl.value) toEl.value = today;
+      hideFeedback(document.getElementById('op-dr-inv-feedback'));
+      openModal(modalDailyRecordInvoice);
+    });
+  }
+  var btnDailyRecordInvoiceGenerate = document.getElementById('op-dr-inv-generate');
+  if (btnDailyRecordInvoiceGenerate) {
+    btnDailyRecordInvoiceGenerate.addEventListener('click', function () {
+      var fromEl = document.getElementById('op-dr-inv-from');
+      var toEl = document.getElementById('op-dr-inv-to');
+      var fb = document.getElementById('op-dr-inv-feedback');
+      var fromDate = fromEl ? String(fromEl.value || '').trim() : '';
+      var toDate = toEl ? String(toEl.value || '').trim() : '';
+      if (!fromDate || !toDate) {
+        showFeedback(fb, 'Select interval From -> To.', true);
+        return;
+      }
+      btnDailyRecordInvoiceGenerate.disabled = true;
+      showFeedback(fb, 'Generating package and sending…', false);
+      api('/work-log/daily-record-invoice', {
+        method: 'POST',
+        body: JSON.stringify({ fromDate: fromDate, toDate: toDate }),
+      })
+        .then(function (r) {
+          btnDailyRecordInvoiceGenerate.disabled = false;
+          if (!r.data || !r.data.success) {
+            showFeedback(fb, (r.data && r.data.message) || 'Failed to generate invoice.', true);
+            return;
+          }
+          showFeedback(fb, r.data.message || 'Generated and sent.', false);
+          loadWorklogList();
+          setTimeout(function () {
+            closeModal(modalDailyRecordInvoice);
+          }, 1200);
+        })
+        .catch(function (err) {
+          btnDailyRecordInvoiceGenerate.disabled = false;
+          showFeedback(fb, err.message || 'Failed to generate invoice.', true);
+        });
     });
   }
   if (formWorkReport) {

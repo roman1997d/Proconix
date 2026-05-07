@@ -1391,6 +1391,49 @@ async function sendWorkLogInvoiceCopyEmail(p) {
 }
 
 /**
+ * Send generated Daily Records invoice package to manager.
+ * @param {{ to: string, workerName: string, workerEmail: string, projectName: string, fromDate: string, toDate: string, attachments: Array<{filename:string,content:Buffer,contentType:string}> }} p
+ */
+async function sendDailyRecordWorklogEmail(p) {
+  const toAddr = String(p.to || '').trim();
+  if (!toAddr) {
+    const err = new Error('Recipient email not available.');
+    err.code = 'NO_EMAIL';
+    throw err;
+  }
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send Daily Records invoice.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const subject = `Daily Records invoice package — ${p.workerName} — ${p.fromDate} to ${p.toDate}`;
+  const text = [
+    'Daily Records invoice package generated from operative updates.',
+    `Worker: ${p.workerName}${p.workerEmail ? ` <${p.workerEmail}>` : ''}`,
+    `Project: ${p.projectName}`,
+    `Period: ${p.fromDate} -> ${p.toDate}`,
+    '',
+    'Attachments:',
+    '- Raport_Data.pdf',
+    '- Full_data_raport.pdf',
+    '- ZIP with grouped photos by Location / Unit',
+    '',
+    '— Proconix',
+  ].join('\n');
+
+  await transport.sendMail({
+    from,
+    to: toAddr,
+    replyTo: p.workerEmail || from,
+    subject,
+    text,
+    attachments: Array.isArray(p.attachments) ? p.attachments : [],
+  });
+}
+
+/**
  * Unit Progress — manager receives a one-time code to confirm deleting a unit.
  *
  * @param {{ to: string, code: string, unitName?: string }} p
@@ -1480,6 +1523,7 @@ module.exports = {
   sendDemoTenantWelcomeEmail,
   sendSignedDocumentEmail,
   sendWorkLogInvoiceCopyEmail,
+  sendDailyRecordWorklogEmail,
   sendUnitDeleteVerificationEmail,
   sendFloorDeleteVerificationEmail,
   createTransport,
