@@ -1913,17 +1913,6 @@ function attachPdfFooter(doc) {
   drawFooter();
 }
 
-function resolvePublicBaseUrl(req) {
-  const envBase = String(
-    process.env.PUBLIC_APP_URL ||
-    process.env.SITE_URL ||
-    process.env.PROCONIX_PUBLIC_URL ||
-    ''
-  ).trim();
-  if (envBase) return envBase.replace(/\/$/, '');
-  return `${req.protocol}://${req.get('host')}`.replace(/\/$/, '');
-}
-
 function sanitizeNamePart(v) {
   return String(v || '').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'item';
 }
@@ -2356,13 +2345,6 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
     const fullPath = `/uploads/worklogs/generated/${fullName}`;
     const fullHtmlPath = `/uploads/worklogs/generated/${fullHtmlName}`;
     const zipPath = `/uploads/worklogs/generated/${zipName}`;
-    const publicBase = resolvePublicBaseUrl(req);
-    const downloadLinks = {
-      reportPdf: `${publicBase}${reportPath}`,
-      fullPdf: `${publicBase}${fullPath}`,
-      fullHtml: `${publicBase}${fullHtmlPath}`,
-      zip: `${publicBase}${zipPath}`,
-    };
 
     const toEmail = await resolveCompanyInvoiceEmail(companyId);
     if (!toEmail) {
@@ -2417,19 +2399,6 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
       }
     }
 
-    const mailSizeLimitBytes = Number(process.env.SMTP_MAX_ATTACHMENT_BYTES || 18 * 1024 * 1024);
-    const fullAttachments = [
-      { filename: reportName, content: summaryPdf, contentType: 'application/pdf' },
-      { filename: fullName, content: fullPdf, contentType: 'application/pdf' },
-      { filename: fullHtmlName, content: Buffer.from(fullHtml, 'utf8'), contentType: 'text/html; charset=utf-8' },
-      { filename: zipName, content: zipBuffer, contentType: 'application/zip' },
-    ];
-    const totalAttachmentBytes = fullAttachments.reduce((acc, a) => acc + (a.content ? a.content.length : 0), 0);
-    const useLightAttachments = totalAttachmentBytes > mailSizeLimitBytes;
-    const mailAttachments = useLightAttachments
-      ? [{ filename: reportName, content: summaryPdf, contentType: 'application/pdf' }]
-      : fullAttachments;
-
     await sendDailyRecordWorklogEmail({
       to: toEmail,
       workerName,
@@ -2437,11 +2406,9 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
       projectName,
       fromDate,
       toDate,
-      attachments: mailAttachments,
-      downloadLinks,
-      attachmentNotice: useLightAttachments
-        ? `Large files were not attached because total package size (${Math.round(totalAttachmentBytes / (1024 * 1024))}MB) exceeds email limit. Use download links below.`
-        : '',
+      attachments: [
+        { filename: fullHtmlName, content: Buffer.from(fullHtml, 'utf8'), contentType: 'text/html; charset=utf-8' },
+      ],
     });
 
     return res.status(200).json({
@@ -2449,7 +2416,6 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
       message: 'Invoice package generated and sent to manager.',
       workLogId: ins.rows[0] ? ins.rows[0].id : null,
       files: { zipPath, reportPath, fullPath, fullHtmlPath },
-      emailMode: useLightAttachments ? 'light-with-links' : 'full-attachments',
     });
   } catch (err) {
     if (err && err.code === 'SMTP_NOT_CONFIGURED') {
