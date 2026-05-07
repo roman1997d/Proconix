@@ -1527,6 +1527,32 @@
       <div id="floor-list" class="list-grid"></div>
     </section>
 
+    <div class="modal" id="add-unit-modal" aria-hidden="true">
+      <div class="modal-backdrop" id="add-unit-modal-backdrop"></div>
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="add-unit-modal-title">
+        <div class="modal-head">
+          <h4 id="add-unit-modal-title">Add unit</h4>
+          <button type="button" class="modal-close" id="add-unit-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <label for="add-unit-type"><strong>Type</strong></label>
+            <select id="add-unit-type" class="modal-edit-select" aria-label="Unit type"></select>
+          </div>
+          <div class="field" style="margin-top:12px;">
+            <label for="add-unit-name-input"><strong>Label / number</strong></label>
+            <input id="add-unit-name-input" type="text" maxlength="120" class="modal-edit-select" placeholder="e.g. 101" autocomplete="off">
+          </div>
+          <p class="hint" style="margin-top:8px;">The unit name will be <strong>type + label</strong> (e.g. Room 101).</p>
+          <div id="add-unit-modal-feedback" class="feedback" style="display:none;" role="alert"></div>
+          <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary" id="add-unit-modal-submit"><i class="bi bi-check2-circle"></i> Add unit</button>
+            <button type="button" class="btn btn-soft" id="add-unit-modal-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <section id="unitView" class="card hidden">
       <div class="view-actions">
         <button type="button" class="btn btn-soft" id="back-to-floors"><i class="bi bi-arrow-left"></i> Back to Floors</button>
@@ -1656,32 +1682,6 @@
             <span>Uploading photos and updating progress...</span>
           </div>
           <div class="feedback" id="form-feedback"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal" id="add-unit-modal" aria-hidden="true">
-      <div class="modal-backdrop" id="add-unit-modal-backdrop"></div>
-      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="add-unit-modal-title">
-        <div class="modal-head">
-          <h4 id="add-unit-modal-title">Add unit</h4>
-          <button type="button" class="modal-close" id="add-unit-modal-close" aria-label="Close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="field">
-            <label for="add-unit-type">Type</label>
-            <select id="add-unit-type" class="modal-edit-select"></select>
-          </div>
-          <div class="field">
-            <label for="add-unit-name">Name / label</label>
-            <input id="add-unit-name" type="text" maxlength="120" class="modal-edit-select" placeholder="e.g. 101">
-            <p class="hint" style="margin:4px 0 0;">The list will show: Type followed by label (example: Kitchen 101).</p>
-          </div>
-          <div class="feedback" id="add-unit-feedback" style="display:none;"></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-            <button type="button" class="btn btn-primary" id="add-unit-submit"><i class="bi bi-plus-lg"></i> Add unit</button>
-            <button type="button" class="btn btn-soft" id="add-unit-cancel">Cancel</button>
-          </div>
         </div>
       </div>
     </div>
@@ -1919,12 +1919,14 @@
     const docSaveCloudBtn = document.getElementById("doc-save-cloud-btn");
     const docSaveCloudWrap = document.getElementById("doc-save-cloud-wrap");
     const docFeedback = document.getElementById("doc-feedback");
-    const progressModal = document.getElementById("progress-modal");
-    const progressModalBackdrop = document.getElementById("progress-modal-backdrop");
-    const progressModalClose = document.getElementById("progress-modal-close");
     const addUnitModal = document.getElementById("add-unit-modal");
     const addUnitModalBackdrop = document.getElementById("add-unit-modal-backdrop");
     const addUnitModalClose = document.getElementById("add-unit-modal-close");
+    const addUnitModalCancel = document.getElementById("add-unit-modal-cancel");
+    const addUnitModalSubmit = document.getElementById("add-unit-modal-submit");
+    const addUnitTypeSelect = document.getElementById("add-unit-type");
+    const addUnitNameInput = document.getElementById("add-unit-name-input");
+    const addUnitModalFeedback = document.getElementById("add-unit-modal-feedback");
     const timelineModal = document.getElementById("timeline-modal");
     const timelineModalBackdrop = document.getElementById("timeline-modal-backdrop");
     const timelineModalClose = document.getElementById("timeline-modal-close");
@@ -2018,40 +2020,6 @@
       "Final check",
       "Hand over"
     ];
-
-    /** Unit / wizard space kinds (wizard step 4 + Add unit). */
-    const UNIT_PROGRESS_SPACE_TYPES = ["Room", "Bathroom", "Kitchen", "Living"];
-
-    function escapeHtmlMinimal(s) {
-      return String(s || "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-    }
-
-    /** Options for wizard space row: canonical types plus one legacy option if needed. */
-    function htmlOptionsForWizardSpaceType(space) {
-      const canonical = UNIT_PROGRESS_SPACE_TYPES;
-      const current = String(space && space.type != null ? space.type : "").trim();
-      let html = "";
-      if (current && !canonical.includes(current)) {
-        const e = escapeHtmlMinimal(current);
-        html += `<option value="${e}" selected>${e}</option>`;
-      }
-      canonical.forEach((t) => {
-        const sel = canonical.includes(current) ? t === current : !current && t === "Room";
-        html += `<option value="${t}"${sel ? " selected" : ""}>${t}</option>`;
-      });
-      return html;
-    }
-
-    function composeUnitDisplayName(typeLabel, rawLabel) {
-      const tp = String(typeLabel || "").trim();
-      const lab = String(rawLabel || "").trim();
-      if (tp && lab) return `${tp} ${lab}`.trim();
-      return (tp || lab || "").trim();
-    }
 
     function cloneTimelineEntry(entry) {
       try {
@@ -2383,6 +2351,51 @@
         .replace(/&/g, "&amp;")
         .replace(/"/g, "&quot;")
         .replace(/</g, "&lt;");
+    }
+
+    const UNIT_SPACE_TYPES = [
+      "Room",
+      "Bathroom",
+      "Kitchen",
+      "Living room",
+      "Utility room",
+      "Stairs",
+      "Riser",
+      "Cupboard",
+      "Corridor",
+      "Hall",
+    ];
+    const DEFAULT_UNIT_SPACE_TYPE = "Room";
+
+    function unitSpaceTypeSelectOptionsHtml(currentType) {
+      const cur = String(currentType || "").trim();
+      const inList = UNIT_SPACE_TYPES.includes(cur);
+      let opts = UNIT_SPACE_TYPES.map(
+        (t) =>
+          `<option value="${escapeHtmlAttr(t)}"${cur === t ? " selected" : ""}>${escapeHtmlAttr(t)}</option>`,
+      ).join("");
+      if (cur && !inList) {
+        opts =
+          `<option value="${escapeHtmlAttr(cur)}" selected>${escapeHtmlAttr(cur)} (legacy)</option>` +
+          opts;
+      }
+      return opts;
+    }
+
+    function formatUnitNameFromTypeAndBase(type, baseName) {
+      const t = String(type || DEFAULT_UNIT_SPACE_TYPE).trim() || DEFAULT_UNIT_SPACE_TYPE;
+      const b = String(baseName || "").trim();
+      return `${t} ${b}`.trim();
+    }
+
+    function populateAddUnitTypeSelect() {
+      const sel = document.getElementById("add-unit-type");
+      if (!sel) return;
+      sel.innerHTML = UNIT_SPACE_TYPES.map(
+        (t) =>
+          `<option value="${escapeHtmlAttr(t)}">${escapeHtmlAttr(t)}</option>`,
+      ).join("");
+      sel.value = DEFAULT_UNIT_SPACE_TYPE;
     }
 
     function stripTransientQaEvidenceFromWorkspace(workspace) {
@@ -3292,7 +3305,7 @@
               floors: Array.isArray(building.floors) ? building.floors.map((floor, floorIndex) => ({
                 number: Math.max(1, Number(floor?.number || floorIndex + 1)),
                 spaces: Array.isArray(floor?.spaces) ? floor.spaces.filter((space) => space && typeof space === "object").map((space) => ({
-                  type: typeof space.type === "string" ? space.type : "Room",
+                  type: typeof space.type === "string" ? space.type : DEFAULT_UNIT_SPACE_TYPE,
                   name: typeof space.name === "string" ? space.name : ""
                 })) : []
               })) : [{ number: 1, spaces: [] }]
@@ -3425,7 +3438,7 @@
       }
 
       const sourceSpaces = floor.spaces.map((space, idx) => ({
-        type: String(space && space.type ? space.type : "Room"),
+        type: String(space && space.type ? space.type : DEFAULT_UNIT_SPACE_TYPE),
         name: String(space && space.name ? space.name : "").trim() || `Space-${idx + 1}`,
       }));
 
@@ -3494,12 +3507,12 @@
                   <div>
                     <label for="${spaceTypeId}">Type</label>
                     <select id="${spaceTypeId}" name="space-type-${building.id || "b"}-${floor.number}-${idx}">
-                      ${htmlOptionsForWizardSpaceType(space)}
+                      ${unitSpaceTypeSelectOptionsHtml(space.type)}
                     </select>
                   </div>
                   <div>
                     <label for="${spaceNameId}">Name</label>
-                    <input id="${spaceNameId}" type="text" name="space-name-${building.id || "b"}-${floor.number}-${idx}" value="${space.name || ""}" placeholder="e.g. 101">
+                    <input id="${spaceNameId}" type="text" name="space-name-${building.id || "b"}-${floor.number}-${idx}" value="${space.name || ""}" placeholder="Ex: 101">
                     <div class="field-error name-error"></div>
                   </div>
                   <button type="button" class="small-btn remove-space-btn">Delete</button>
@@ -3535,7 +3548,7 @@
 
           addBtn.addEventListener("click", () => {
             const autoName = makeUniqueName(floor, `${floor.number}${String(floor.spaces.length + 1).padStart(2, "0")}`);
-            floor.spaces.push({ type: "Room", name: autoName });
+            floor.spaces.push({ type: DEFAULT_UNIT_SPACE_TYPE, name: autoName });
             renderSpaces();
             saveWizardState();
           });
@@ -3727,14 +3740,13 @@
 
           floor.spaces.forEach((space, spaceIndex) => {
             const baseName = String(space.name || "").trim() || `${floorNumber}${String(spaceIndex + 1).padStart(2, "0")}`;
-            const type = String(space.type || "Room").trim();
-            const unitName = composeUnitDisplayName(type, baseName);
+            const type = String(space.type || DEFAULT_UNIT_SPACE_TYPE).trim();
+            const unitName = formatUnitNameFromTypeAndBase(type, baseName);
             const key = `${towerId}|${floorNumber}|${unitName}`;
             const parsedId = Number(String(baseName).replace(/[^\d]/g, ""));
             units.push({
               id: reserveUnitId(parsedId),
               name: unitName,
-              unit_type: type,
               tower: towerId,
               floor: floorNumber,
               project_id: wizardState.projectId != null ? Number(wizardState.projectId) : null,
@@ -3982,55 +3994,63 @@
       return maxId + 1;
     }
 
-    async function submitAddUnitFromModal() {
+    function openAddUnitModal() {
       const floorId = state.currentFloor;
-      const fb = document.getElementById("add-unit-feedback");
-      if (fb) {
-        fb.style.display = "none";
-        fb.textContent = "";
-      }
-
-      const typeEl = document.getElementById("add-unit-type");
-      const nameEl = document.getElementById("add-unit-name");
-      const typeChosen = typeEl ? String(typeEl.value || "").trim() : "";
-      if (!UNIT_PROGRESS_SPACE_TYPES.includes(typeChosen)) {
-        if (fb) {
-          fb.style.display = "block";
-          fb.style.color = "#b91c1c";
-          fb.textContent = "Please choose a unit type.";
-        }
-        return;
-      }
-
       if (!floorId) {
         wizardStatus.textContent = "Open a floor first.";
-        closeAddUnitModal();
         return;
       }
       const floor = DATA.floors.find((f) => f.id === floorId);
+      if (!floor || !addUnitModal) return;
+      populateAddUnitTypeSelect();
+      if (addUnitNameInput) addUnitNameInput.value = "";
+      if (addUnitModalFeedback) {
+        addUnitModalFeedback.style.display = "none";
+        addUnitModalFeedback.textContent = "";
+      }
+      addUnitModal.classList.add("open");
+      addUnitModal.setAttribute("aria-hidden", "false");
+      try {
+        addUnitNameInput.focus();
+      } catch (e) {
+        /* ignore */
+      }
+    }
+
+    function closeAddUnitModal() {
+      if (!addUnitModal) return;
+      addUnitModal.classList.remove("open");
+      addUnitModal.setAttribute("aria-hidden", "true");
+      if (addUnitModalFeedback) addUnitModalFeedback.style.display = "none";
+    }
+
+    async function submitAddUnitModal() {
+      const floorId = state.currentFloor;
+      if (!floorId) return;
+      const floor = DATA.floors.find((f) => f.id === floorId);
       if (!floor) return;
 
-      const rawLabel = nameEl ? String(nameEl.value || "").trim() : "";
-      if (!rawLabel) {
-        if (fb) {
-          fb.style.display = "block";
-          fb.style.color = "#b91c1c";
-          fb.textContent = "Name / label cannot be empty.";
+      const typeRaw = addUnitTypeSelect ? String(addUnitTypeSelect.value || "").trim() : "";
+      const type = UNIT_SPACE_TYPES.includes(typeRaw) ? typeRaw : DEFAULT_UNIT_SPACE_TYPE;
+      const label = addUnitNameInput ? String(addUnitNameInput.value || "").trim() : "";
+      if (!label) {
+        if (addUnitModalFeedback) {
+          addUnitModalFeedback.style.display = "block";
+          addUnitModalFeedback.textContent = "Please enter a label or number (e.g. 101).";
         }
         return;
       }
 
-      const safeName = composeUnitDisplayName(typeChosen, rawLabel);
+      const safeName = formatUnitNameFromTypeAndBase(type, label);
       const duplicate = DATA.units.some((candidate) => (
         towerIdMatches(candidate.tower, floor.tower)
         && Number(candidate.floor) === Number(floor.number)
         && String(candidate.name || "").trim().toLowerCase() === safeName.toLowerCase()
       ));
       if (duplicate) {
-        if (fb) {
-          fb.style.display = "block";
-          fb.style.color = "#b91c1c";
-          fb.textContent = "A unit with this name already exists on the same floor.";
+        if (addUnitModalFeedback) {
+          addUnitModalFeedback.style.display = "block";
+          addUnitModalFeedback.textContent = "A unit with this name already exists on the same floor.";
         }
         return;
       }
@@ -4045,7 +4065,6 @@
       DATA.units.push({
         id: allocateNextUnitId(),
         name: safeName,
-        unit_type: typeChosen,
         tower: floor.tower,
         floor: floor.number,
         project_id: projectId,
@@ -4061,63 +4080,16 @@
       }
       if (!saved) {
         DATA.units.pop();
-        if (fb) {
-          fb.style.display = "block";
-          fb.style.color = "#b91c1c";
-          fb.textContent = "Could not sync with server.";
+        if (addUnitModalFeedback) {
+          addUnitModalFeedback.style.display = "block";
+          addUnitModalFeedback.textContent = "Backend sync failed. Unit was not saved.";
         }
+        wizardStatus.textContent = "Unit added locally; backend sync failed.";
         return;
       }
       wizardStatus.textContent = "Unit added.";
       closeAddUnitModal();
       loadUnits(floorId);
-    }
-
-    function openAddUnitModal() {
-      ensureAddUnitModal();
-      const floorId = state.currentFloor;
-      if (!floorId) {
-        wizardStatus.textContent = "Open a floor first.";
-        return;
-      }
-      const modal = document.getElementById("add-unit-modal");
-      const fb = document.getElementById("add-unit-feedback");
-      const nameEl = document.getElementById("add-unit-name");
-      if (fb) {
-        fb.style.display = "none";
-        fb.textContent = "";
-      }
-      if (nameEl) nameEl.value = "";
-      if (modal) {
-        modal.classList.add("open");
-        modal.setAttribute("aria-hidden", "false");
-      }
-      if (nameEl) nameEl.focus();
-    }
-
-    function closeAddUnitModal() {
-      const modal = document.getElementById("add-unit-modal");
-      if (modal) {
-        modal.classList.remove("open");
-        modal.setAttribute("aria-hidden", "true");
-      }
-    }
-
-    function ensureAddUnitModal() {
-      const sel = document.getElementById("add-unit-type");
-      if (!sel || sel.getAttribute("data-up-filled") === "1") return;
-      sel.innerHTML = "";
-      UNIT_PROGRESS_SPACE_TYPES.forEach((t) => {
-        const o = document.createElement("option");
-        o.value = t;
-        o.textContent = t;
-        sel.appendChild(o);
-      });
-      sel.setAttribute("data-up-filled", "1");
-    }
-
-    async function addUnitForCurrentFloor() {
-      openAddUnitModal();
     }
 
     async function addFloorForCurrentTower() {
@@ -4292,7 +4264,7 @@
               <button type="button" class="btn-qr btn-unit-delete" data-unit-id="${unit.id}">Delete</button>
             </div>
           </div>
-          <div class="meta">${unit.unit_type ? `${escapeHtmlMinimal(unit.unit_type)} · ` : ""}Open unit timeline and actions</div>
+          <div class="meta">Open unit timeline and actions</div>
         `;
         const editBtn = btn.querySelector(".btn-edit-unit");
         const qrBtn = btn.querySelector(".btn-show-qr");
@@ -5130,7 +5102,7 @@
       doc.setFont("helvetica", "normal");
       doc.setFontSize(13);
       doc.text(`Floor: ${currentQrUnit.floor}`, centerX, 36, { align: "center" });
-      doc.text(`Unit / Reference: ${unitNumber}`, centerX, 44, { align: "center" });
+      doc.text(`Apartment / Object Number: ${unitNumber}`, centerX, 44, { align: "center" });
 
       if (qrDataUrl) {
         doc.addImage(qrDataUrl, "PNG", centerX - 32, 52, 64, 64);
@@ -5250,7 +5222,7 @@
       addFloorForCurrentTower();
     });
     addUnitBtn.addEventListener("click", () => {
-      addUnitForCurrentFloor();
+      openAddUnitModal();
     });
 
     document.getElementById("back-to-floors").addEventListener("click", () => {
@@ -5485,16 +5457,13 @@
     progressModalClose.addEventListener("click", closeProgressModal);
     if (addUnitModalBackdrop) addUnitModalBackdrop.addEventListener("click", closeAddUnitModal);
     if (addUnitModalClose) addUnitModalClose.addEventListener("click", closeAddUnitModal);
-    const addUnitSubmitBtn = document.getElementById("add-unit-submit");
-    const addUnitCancelBtn = document.getElementById("add-unit-cancel");
-    const addUnitNameInputEl = document.getElementById("add-unit-name");
-    if (addUnitSubmitBtn) addUnitSubmitBtn.addEventListener("click", () => { submitAddUnitFromModal(); });
-    if (addUnitCancelBtn) addUnitCancelBtn.addEventListener("click", closeAddUnitModal);
-    if (addUnitNameInputEl) {
-      addUnitNameInputEl.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          submitAddUnitFromModal();
+    if (addUnitModalCancel) addUnitModalCancel.addEventListener("click", closeAddUnitModal);
+    if (addUnitModalSubmit) addUnitModalSubmit.addEventListener("click", () => submitAddUnitModal());
+    if (addUnitNameInput) {
+      addUnitNameInput.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          submitAddUnitModal();
         }
       });
     }
@@ -5568,11 +5537,11 @@
       else wizardBack();
     }, { passive: true });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && progressModal.classList.contains("open")) {
-        closeProgressModal();
-      }
       if (event.key === "Escape" && addUnitModal && addUnitModal.classList.contains("open")) {
         closeAddUnitModal();
+      }
+      if (event.key === "Escape" && progressModal.classList.contains("open")) {
+        closeProgressModal();
       }
       if (event.key === "Escape" && docModal.classList.contains("open")) {
         closeDocModal();
