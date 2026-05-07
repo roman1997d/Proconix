@@ -2123,6 +2123,9 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
     if (err && err.code === 'SMTP_NOT_CONFIGURED') {
       return res.status(503).json({ success: false, message: 'SMTP not configured on server.' });
     }
+    if (err && err.code === 'NO_EMAIL') {
+      return res.status(400).json({ success: false, message: 'No manager email found to send report.' });
+    }
     if (err && err.code === 'MISSING_JSZIP') {
       return res.status(503).json({
         success: false,
@@ -2130,7 +2133,10 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
       });
     }
     console.error('generateDailyRecordInvoiceFromPeriod:', err);
-    return res.status(500).json({ success: false, message: 'Failed to generate Daily Records invoice.' });
+    return res.status(500).json({
+      success: false,
+      message: (err && err.message) ? `Failed to generate Daily Records invoice: ${err.message}` : 'Failed to generate Daily Records invoice.',
+    });
   }
 }
 
