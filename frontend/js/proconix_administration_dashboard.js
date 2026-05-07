@@ -752,6 +752,70 @@
     if (content) content.classList.add('d-none');
     if (auditContent) auditContent.classList.add('d-none');
 
+    function formatBytesSmart(n) {
+      var b = Number(n || 0);
+      if (b < 1024) return b + ' B';
+      if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+      if (b < 1024 * 1024 * 1024) return (b / (1024 * 1024)).toFixed(1) + ' MB';
+      return (b / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
+    function renderUploadsAudit(sessForReq) {
+      var body = document.getElementById('pxAdminAuditUploadsBody');
+      var meta = document.getElementById('pxAdminAuditUploadsMeta');
+      if (!body) return;
+      body.innerHTML = '<tr><td colspan="3" class="text-white-50">Loading backend/uploads files…</td></tr>';
+      fetch('/api/platform-admin/uploads-files', {
+        method: 'GET',
+        headers: sessionHeaders(sessForReq),
+        credentials: 'same-origin',
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          body.innerHTML = '';
+          if (out.status !== 200 || !out.data || !out.data.success) {
+            var trE = document.createElement('tr');
+            trE.innerHTML = '<td colspan="3" class="text-warning">Could not load backend/uploads listing.</td>';
+            body.appendChild(trE);
+            if (meta) meta.textContent = (out.data && out.data.message) || '—';
+            return;
+          }
+          var files = Array.isArray(out.data.files) ? out.data.files : [];
+          if (meta) {
+            var m = out.data.root_path || 'backend/uploads';
+            m += ' · ' + String(out.data.total_files || files.length) + ' file(s)';
+            if (out.data.truncated) m += ' · truncated at ' + String(out.data.max_files || files.length);
+            meta.textContent = m;
+          }
+          if (!files.length) {
+            var tr0 = document.createElement('tr');
+            tr0.innerHTML = '<td colspan="3" class="text-white-50">No files found.</td>';
+            body.appendChild(tr0);
+            return;
+          }
+          files.forEach(function (f) {
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+              '<td class="font-monospace small">' +
+              cellText(f.path || '—') +
+              '</td><td class="text-end text-nowrap">' +
+              cellText(formatBytesSmart(f.size_bytes)) +
+              '</td><td class="small text-white-50">' +
+              cellText(f.modified_at ? new Date(f.modified_at).toLocaleString() : '—') +
+              '</td>';
+            body.appendChild(tr);
+          });
+        })
+        .catch(function () {
+          body.innerHTML = '<tr><td colspan="3" class="text-warning">Network error while loading backend/uploads files.</td></tr>';
+          if (meta) meta.textContent = '—';
+        });
+    }
+
     fetch('/api/platform-admin/system-health', {
       method: 'GET',
       headers: sessionHeaders(sess),
@@ -1102,6 +1166,7 @@
 
         if (content) content.classList.remove('d-none');
         if (auditContent) auditContent.classList.remove('d-none');
+        renderUploadsAudit(sess);
       })
       .catch(function () {
         if (loading) loading.classList.add('d-none');

@@ -30,6 +30,7 @@ const BACKUP_STORAGE_DIR = path.resolve(__dirname, '../backups/platform');
 const BACKUP_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
 let autoBackupSchedulerStarted = false;
 const dataSystemOtpChallenges = new Map();
+const UPLOADS_AUDIT_MAX_FILES = parseInt(process.env.PLATFORM_UPLOADS_AUDIT_MAX_FILES || '10000', 10);
 
 /**
  * SQL ORDER BY fragment: one "primary" manager per company (manager.company_id = company).
@@ -1859,6 +1860,74 @@ async function purgeSiteChatOlderThan(req, res) {
   }
 }
 
+/**
+ * GET /api/platform-admin/uploads-files
+ * Recursive listing for backend/uploads/* (path, bytes, mtime).
+ */
+async function listBackendUploadsFiles(req, res) {
+  try {
+    const root = path.resolve(__dirname, '../uploads');
+    if (!fs.existsSync(root)) {
+      return res.status(200).json({
+        success: true,
+        root_path: root,
+        files: [],
+        total_files: 0,
+        truncated: false,
+      });
+    }
+
+    /** @type {Array<{path:string,size_bytes:number,modified_at:string}>} */
+    const out = [];
+    const q = [root];
+    while (q.length && out.length < UPLOADS_AUDIT_MAX_FILES) {
+      const dir = q.shift();
+      let entries = [];
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch (_) {
+        continue;
+      }
+      for (let i = 0; i < entries.length; i += 1) {
+        const e = entries[i];
+        const abs = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          q.push(abs);
+          continue;
+        }
+        if (!e.isFile()) continue;
+        try {
+          const st = fs.statSync(abs);
+          out.push({
+            path: path.relative(root, abs).split(path.sep).join('/'),
+            size_bytes: Number(st.size) || 0,
+            modified_at: st.mtime ? st.mtime.toISOString() : '',
+          });
+        } catch (_) {}
+        if (out.length >= UPLOADS_AUDIT_MAX_FILES) break;
+      }
+    }
+
+    out.sort((a, b) => {
+      const ta = new Date(a.modified_at || 0).getTime();
+      const tb = new Date(b.modified_at || 0).getTime();
+      return tb - ta;
+    });
+
+    return res.status(200).json({
+      success: true,
+      root_path: root,
+      files: out,
+      total_files: out.length,
+      truncated: out.length >= UPLOADS_AUDIT_MAX_FILES,
+      max_files: UPLOADS_AUDIT_MAX_FILES,
+    });
+  } catch (err) {
+    console.error('platformAdmin listBackendUploadsFiles error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to list backend/uploads files.' });
+  }
+}
+
 module.exports = {
   login,
   me,
@@ -1881,4 +1950,5 @@ module.exports = {
   restoreBackupFromServer,
   startPlatformAutoBackupScheduler,
   purgeSiteChatOlderThan,
+  listBackendUploadsFiles,
 };
