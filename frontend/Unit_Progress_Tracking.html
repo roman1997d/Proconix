@@ -1505,7 +1505,7 @@
           <a href="#project-wizard-modal" class="btn btn-primary" id="open-project-wizard" onclick="return window.forceOpenProjectWizard(event);" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
             <i class="bi bi-magic"></i> Start Guided Setup
           </a>
-          <button type="button" class="btn btn-dark" id="open-project-wizard-add-building" style="display:inline-flex; align-items:center; gap:6px;">
+          <button type="button" class="btn btn-dark" id="open-project-wizard-add-building" title="Append a new tower to the saved workspace (does not open the guided wizard)" style="display:inline-flex; align-items:center; gap:6px;">
             <i class="bi bi-building"></i> Add Building
           </button>
         </div>
@@ -1548,6 +1548,28 @@
           <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
             <button type="button" class="btn btn-primary" id="add-unit-modal-submit"><i class="bi bi-check2-circle"></i> Add unit</button>
             <button type="button" class="btn btn-soft" id="add-unit-modal-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="add-building-modal" aria-hidden="true">
+      <div class="modal-backdrop" id="add-building-modal-backdrop"></div>
+      <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="add-building-modal-title">
+        <div class="modal-head">
+          <h4 id="add-building-modal-title">Add building (tower)</h4>
+          <button type="button" class="modal-close" id="add-building-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="hint" style="margin-top:0;">Adds one tower to your <strong>current saved structure</strong> (same as in the database). Existing towers, floors, and units are kept. You can add floors and units afterwards.</p>
+          <div class="field">
+            <label for="add-building-name-input"><strong>Building name</strong></label>
+            <input id="add-building-name-input" type="text" maxlength="200" class="modal-edit-select" placeholder="e.g. Tower B" autocomplete="off">
+          </div>
+          <div id="add-building-modal-feedback" class="feedback" style="display:none;" role="alert"></div>
+          <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary" id="add-building-modal-submit"><i class="bi bi-check2-circle"></i> Add building</button>
+            <button type="button" class="btn btn-soft" id="add-building-modal-cancel">Cancel</button>
           </div>
         </div>
       </div>
@@ -1930,6 +1952,13 @@
     const addUnitTypeSelect = document.getElementById("add-unit-type");
     const addUnitNameInput = document.getElementById("add-unit-name-input");
     const addUnitModalFeedback = document.getElementById("add-unit-modal-feedback");
+    const addBuildingModal = document.getElementById("add-building-modal");
+    const addBuildingModalBackdrop = document.getElementById("add-building-modal-backdrop");
+    const addBuildingModalClose = document.getElementById("add-building-modal-close");
+    const addBuildingModalCancel = document.getElementById("add-building-modal-cancel");
+    const addBuildingModalSubmit = document.getElementById("add-building-modal-submit");
+    const addBuildingNameInput = document.getElementById("add-building-name-input");
+    const addBuildingModalFeedback = document.getElementById("add-building-modal-feedback");
     const timelineModal = document.getElementById("timeline-modal");
     const timelineModalBackdrop = document.getElementById("timeline-modal-backdrop");
     const timelineModalClose = document.getElementById("timeline-modal-close");
@@ -3653,6 +3682,102 @@
       }
     }
 
+    function allocateUniqueTowerId() {
+      const taken = new Set((DATA.towers || []).map((t) => String(t && t.id)));
+      let id = "";
+      for (let attempt = 0; attempt < 80; attempt += 1) {
+        id = `t-${Date.now()}-${attempt}-${Math.random().toString(36).slice(2, 8)}`;
+        if (!taken.has(id)) return id;
+      }
+      id = `t-${Date.now()}-x-${Math.floor(Math.random() * 100000)}`;
+      return id;
+    }
+
+    function openAddBuildingModalTowerView() {
+      if (!addBuildingModal) return;
+      if (managerMustSelectProjectBeforeBrowse()) {
+        updateProjectFilterNote();
+        return;
+      }
+      if (!getWorkspaceApiConfig()) {
+        window.alert("You must be signed in to edit the unit progress workspace.");
+        return;
+      }
+      if (addBuildingNameInput) addBuildingNameInput.value = "";
+      if (addBuildingModalFeedback) {
+        addBuildingModalFeedback.style.display = "none";
+        addBuildingModalFeedback.textContent = "";
+      }
+      addBuildingModal.classList.add("open");
+      addBuildingModal.setAttribute("aria-hidden", "false");
+      try {
+        addBuildingNameInput.focus();
+      } catch (e) {
+        /* ignore */
+      }
+    }
+
+    function closeAddBuildingModalTowerView() {
+      if (!addBuildingModal) return;
+      addBuildingModal.classList.remove("open");
+      addBuildingModal.setAttribute("aria-hidden", "true");
+      if (addBuildingModalFeedback) addBuildingModalFeedback.style.display = "none";
+    }
+
+    async function submitAddBuildingModalTowerView() {
+      const cfg = getWorkspaceApiConfig();
+      if (!cfg) {
+        if (addBuildingModalFeedback) {
+          addBuildingModalFeedback.style.display = "block";
+          addBuildingModalFeedback.textContent = "You must be signed in to save changes.";
+        }
+        return;
+      }
+      const nameTrim = addBuildingNameInput ? String(addBuildingNameInput.value || "").trim() : "";
+      if (!nameTrim) {
+        if (addBuildingModalFeedback) {
+          addBuildingModalFeedback.style.display = "block";
+          addBuildingModalFeedback.textContent = "Please enter a building name.";
+        }
+        return;
+      }
+      const dup = DATA.towers.some((t) => String(t && t.name || "").trim().toLowerCase() === nameTrim.toLowerCase());
+      if (dup) {
+        if (addBuildingModalFeedback) {
+          addBuildingModalFeedback.style.display = "block";
+          addBuildingModalFeedback.textContent = "A building with this name already exists.";
+        }
+        return;
+      }
+      const towerId = allocateUniqueTowerId();
+      if (!DATA.towers) DATA.towers = [];
+      if (!DATA.floors) DATA.floors = [];
+      DATA.towers.push({ id: towerId, name: nameTrim });
+      const defaultFloorNum = 1;
+      DATA.floors.push({ id: `${towerId}-${defaultFloorNum}`, tower: towerId, number: defaultFloorNum });
+
+      beginUnitProgressWait("Saving building…");
+      let saved = false;
+      try {
+        saved = await persistWorkspace("tower_add");
+      } finally {
+        endUnitProgressWait();
+      }
+      if (!saved) {
+        DATA.floors.pop();
+        DATA.towers.pop();
+        if (addBuildingModalFeedback) {
+          addBuildingModalFeedback.style.display = "block";
+          addBuildingModalFeedback.textContent = "Could not save. Check your session and network.";
+        }
+        return;
+      }
+      closeAddBuildingModalTowerView();
+      renderTowers();
+      updateProjectFilterNote();
+      if (wizardStatus) wizardStatus.textContent = `Tower “${nameTrim}” added to workspace.`;
+    }
+
     function openWizard() {
       try {
         resetWizardState();
@@ -3667,28 +3792,6 @@
       }
       wizardModal.classList.add("open");
       wizardModal.setAttribute("aria-hidden", "false");
-    }
-
-    function openWizardToBuildingsStep() {
-      try {
-        syncWizardProjectContext();
-        loadWizardState();
-        syncWizardProjectContext();
-        wizardState.step = 2;
-        renderWizardStep();
-      } catch (error) {
-        wizardState.step = 2;
-        syncWizardProjectContext();
-        renderWizardStep();
-      }
-      if (typeof window.forceOpenProjectWizard === "function") {
-        window.forceOpenProjectWizard();
-      } else {
-        wizardModal.classList.add("open");
-        wizardModal.setAttribute("aria-hidden", "false");
-      }
-      wizardStatus.textContent = "Add or rename buildings — use Back to change project, Next when names are filled.";
-      saveWizardState();
     }
 
     function wizardAddBuildingFromToolbar() {
@@ -5470,6 +5573,22 @@
         }
       });
     }
+    if (addBuildingModalBackdrop) {
+      addBuildingModalBackdrop.addEventListener("click", closeAddBuildingModalTowerView);
+    }
+    if (addBuildingModalClose) addBuildingModalClose.addEventListener("click", closeAddBuildingModalTowerView);
+    if (addBuildingModalCancel) addBuildingModalCancel.addEventListener("click", closeAddBuildingModalTowerView);
+    if (addBuildingModalSubmit) {
+      addBuildingModalSubmit.addEventListener("click", () => submitAddBuildingModalTowerView());
+    }
+    if (addBuildingNameInput) {
+      addBuildingNameInput.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          submitAddBuildingModalTowerView();
+        }
+      });
+    }
     docModalBackdrop.addEventListener("click", closeDocModal);
     docModalClose.addEventListener("click", closeDocModal);
     timelineModalBackdrop.addEventListener("click", closeTimelineEventModal);
@@ -5495,7 +5614,7 @@
     }
     const openWizardAddBuildingBtn = document.getElementById("open-project-wizard-add-building");
     if (openWizardAddBuildingBtn) {
-      openWizardAddBuildingBtn.addEventListener("click", openWizardToBuildingsStep);
+      openWizardAddBuildingBtn.addEventListener("click", () => openAddBuildingModalTowerView());
     }
     closeWizardBtn.addEventListener("click", closeWizard);
     wizardBackBtn.addEventListener("click", wizardBack);
@@ -5542,6 +5661,9 @@
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && addUnitModal && addUnitModal.classList.contains("open")) {
         closeAddUnitModal();
+      }
+      if (event.key === "Escape" && addBuildingModal && addBuildingModal.classList.contains("open")) {
+        closeAddBuildingModalTowerView();
       }
       if (event.key === "Escape" && progressModal.classList.contains("open")) {
         closeProgressModal();
