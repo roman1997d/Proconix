@@ -268,16 +268,94 @@
       updateHeaderTitle(module);
       contentEl.innerHTML =
         '<div class="dashboard-iframe-loader-wrap" id="unit-progress-loader-wrap">' +
-        '<div class="dashboard-iframe-loader" id="unit-progress-loader">' +
-        '<div class="dashboard-loading-spinner" aria-hidden="true"></div>' +
-        '<p>Loading data, please wait...</p>' +
+        '<div class="dashboard-iframe-loader" id="unit-progress-picker">' +
+        '<h3 style="margin:0 0 8px 0;">Select project first</h3>' +
+        '<p style="margin:0 0 12px 0; color:#6b7280;">Choose the project context, then open View 1 (Tower View).</p>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;">' +
+        '<select id="unit-progress-project-select" style="min-width:260px;max-width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;">' +
+        '<option value="">Loading projects…</option>' +
+        '</select>' +
+        '<button type="button" class="btn btn-primary" id="unit-progress-open-btn">Open View 1</button>' +
         '</div>' +
-        '<iframe id="iframe-unit-progress" src="' +
+        '<p id="unit-progress-picker-feedback" style="margin:10px 0 0 0;color:#6b7280;font-size:.9rem;"></p>' +
+        '</div>' +
+        '<div class="dashboard-iframe-loader d-none" id="unit-progress-loader">' +
+        '<div class="dashboard-loading-spinner" aria-hidden="true"></div>' +
+        '<p>Loading View 1, please wait...</p>' +
+        '</div>' +
+        '<iframe id="iframe-unit-progress" src="about:blank" data-base-src="' +
         iframeModuleSrc('Unit_Progress_Tracking.html') +
         '" class="dashboard-qa-iframe d-none" title="Unit Progress Tracking"></iframe>' +
         '</div>';
       var upIframe = document.getElementById('iframe-unit-progress');
+      var upPicker = document.getElementById('unit-progress-picker');
       var upLoader = document.getElementById('unit-progress-loader');
+      var upProjectSelect = document.getElementById('unit-progress-project-select');
+      var upOpenBtn = document.getElementById('unit-progress-open-btn');
+      var upFeedback = document.getElementById('unit-progress-picker-feedback');
+      var upBaseSrc = upIframe ? (upIframe.getAttribute('data-base-src') || iframeModuleSrc('Unit_Progress_Tracking.html')) : iframeModuleSrc('Unit_Progress_Tracking.html');
+      var savedProjectId = '';
+      try {
+        savedProjectId = localStorage.getItem('proconix_dashboard_today_project_id') || '';
+      } catch (_) {
+        savedProjectId = '';
+      }
+
+      var headersForProjects = getSessionHeaders();
+      if (upProjectSelect && headersForProjects['X-Manager-Id']) {
+        fetch('/api/projects/list', { headers: headersForProjects, credentials: 'same-origin' })
+          .then(function (res) {
+            if (!res.ok) throw new Error('Failed to load projects');
+            return res.json();
+          })
+          .then(function (data) {
+            var projects = data && data.success && Array.isArray(data.projects) ? data.projects : [];
+            if (!projects.length) {
+              upProjectSelect.innerHTML = '<option value="">No projects available</option>';
+              if (upFeedback) upFeedback.textContent = 'Create a project first, then open Unit Progress.';
+              return;
+            }
+            projects.sort(function (a, b) {
+              var na = (a.project_name && String(a.project_name)) || '';
+              var nb = (b.project_name && String(b.project_name)) || '';
+              return na.localeCompare(nb);
+            });
+            var opts = '<option value="">— Select a project —</option>';
+            projects.forEach(function (p) {
+              var id = p && p.id != null ? String(p.id) : '';
+              if (!id) return;
+              var name = (p.project_name && String(p.project_name).trim()) || ('Project #' + id);
+              opts += '<option value="' + escapeHtml(id) + '"' + (savedProjectId === id ? ' selected' : '') + '>' + escapeHtml(name) + '</option>';
+            });
+            upProjectSelect.innerHTML = opts;
+            if (savedProjectId && upFeedback) {
+              upFeedback.textContent = 'Previously selected project is prefilled. Click Open View 1.';
+            }
+          })
+          .catch(function () {
+            upProjectSelect.innerHTML = '<option value="">Could not load projects</option>';
+            if (upFeedback) upFeedback.textContent = 'Could not load projects right now.';
+          });
+      }
+
+      if (upOpenBtn && upProjectSelect && upIframe) {
+        upOpenBtn.addEventListener('click', function () {
+          var projectId = String(upProjectSelect.value || '').trim();
+          if (!projectId) {
+            if (upFeedback) upFeedback.textContent = 'Please select a project first.';
+            return;
+          }
+          try {
+            localStorage.setItem('proconix_dashboard_today_project_id', projectId);
+          } catch (_) {}
+          if (upFeedback) upFeedback.textContent = '';
+          if (upPicker) upPicker.classList.add('d-none');
+          if (upLoader) upLoader.classList.remove('d-none');
+          var sep = upBaseSrc.indexOf('?') >= 0 ? '&' : '?';
+          upIframe.src = upBaseSrc + sep + 'embed_project_id=' + encodeURIComponent(projectId);
+        });
+      }
+
       if (upIframe) {
         upIframe.addEventListener('load', function onUnitProgressFrameLoad() {
           upIframe.removeEventListener('load', onUnitProgressFrameLoad);
