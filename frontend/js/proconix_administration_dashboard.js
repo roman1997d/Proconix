@@ -2116,6 +2116,50 @@
     });
   }
 
+  var btnServerMemoryPurgeTrash = document.getElementById('pxAdminServerMemoryPurgeTrashBtn');
+  if (btnServerMemoryPurgeTrash) {
+    btnServerMemoryPurgeTrash.addEventListener('click', function () {
+      var ok = window.confirm(
+        'Delete ALL files from cloud_trash across all tenants?\n\nThis action cannot be undone.'
+      );
+      if (!ok) return;
+      btnServerMemoryPurgeTrash.disabled = true;
+      fetch('/api/platform-admin/uploads-cloud-trash/purge-all', {
+        method: 'POST',
+        headers: sessionHeaders(session),
+        credentials: 'same-origin',
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          btnServerMemoryPurgeTrash.disabled = false;
+          if (out.status !== 200 || !out.data || !out.data.success) {
+            var errMsg = (out.data && out.data.message) || 'Could not purge cloud_trash.';
+            if (window.pxAdminShowToast) window.pxAdminShowToast(errMsg, 'danger');
+            else window.alert(errMsg);
+            return;
+          }
+          loadSystemHealthPanel(session);
+          var msg =
+            'cloud_trash purged. Deleted files: ' +
+            String(out.data.deleted_files || 0) +
+            ' · Tenants affected: ' +
+            String(out.data.affected_tenants || 0);
+          if (window.pxAdminShowToast) window.pxAdminShowToast(msg, 'success');
+          else window.alert(msg);
+        })
+        .catch(function () {
+          btnServerMemoryPurgeTrash.disabled = false;
+          var msg = 'Network error while purging cloud_trash.';
+          if (window.pxAdminShowToast) window.pxAdminShowToast(msg, 'danger');
+          else window.alert(msg);
+        });
+    });
+  }
+
   var btnAuditLogTest = document.getElementById('pxAdminAuditLogTest');
   if (btnAuditLogTest) {
     btnAuditLogTest.addEventListener('click', function () {

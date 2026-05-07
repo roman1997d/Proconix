@@ -1961,6 +1961,80 @@ async function deleteBackendUploadsFile(req, res) {
   }
 }
 
+/**
+ * POST /api/platform-admin/uploads-cloud-trash/purge-all
+ * Deletes all files under backend/uploads/*_docs/cloud_trash and clears trash indexes.
+ */
+async function purgeAllCloudTrashFiles(req, res) {
+  try {
+    if (!fs.existsSync(UPLOADS_ROOT)) {
+      return res.status(200).json({
+        success: true,
+        message: 'No uploads root found.',
+        deleted_files: 0,
+        affected_tenants: 0,
+      });
+    }
+    const entries = fs.readdirSync(UPLOADS_ROOT, { withFileTypes: true });
+    let deletedFiles = 0;
+    let affectedTenants = 0;
+    for (let i = 0; i < entries.length; i += 1) {
+      const e = entries[i];
+      if (!e || !e.isDirectory() || !/_\d+_docs$/.test(e.name)) continue;
+      const docsDir = path.join(UPLOADS_ROOT, e.name);
+      const trashDir = path.join(docsDir, 'cloud_trash');
+      const trashIdxPath = path.join(docsDir, 'cloud_trash_index.json');
+      let tenantTouched = false;
+
+      if (fs.existsSync(trashDir)) {
+        const stack = [trashDir];
+        while (stack.length) {
+          const dir = stack.pop();
+          let dirEntries = [];
+          try {
+            dirEntries = fs.readdirSync(dir, { withFileTypes: true });
+          } catch (_) {
+            continue;
+          }
+          for (let j = 0; j < dirEntries.length; j += 1) {
+            const de = dirEntries[j];
+            const full = path.join(dir, de.name);
+            if (de.isDirectory()) {
+              stack.push(full);
+              continue;
+            }
+            if (!de.isFile()) continue;
+            try {
+              fs.unlinkSync(full);
+              deletedFiles += 1;
+              tenantTouched = true;
+            } catch (_) {}
+          }
+        }
+      }
+
+      if (fs.existsSync(trashIdxPath)) {
+        try {
+          fs.writeFileSync(trashIdxPath, JSON.stringify([], null, 2), 'utf8');
+          tenantTouched = true;
+        } catch (_) {}
+      }
+
+      if (tenantTouched) affectedTenants += 1;
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'cloud_trash has been purged.',
+      deleted_files: deletedFiles,
+      affected_tenants: affectedTenants,
+    });
+  } catch (err) {
+    console.error('platformAdmin purgeAllCloudTrashFiles error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to purge cloud_trash files.' });
+  }
+}
+
 module.exports = {
   login,
   me,
@@ -1985,4 +2059,5 @@ module.exports = {
   purgeSiteChatOlderThan,
   listBackendUploadsFiles,
   deleteBackendUploadsFile,
+  purgeAllCloudTrashFiles,
 };
