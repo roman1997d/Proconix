@@ -288,13 +288,6 @@ async function getWorkspaceByCompanyId(companyId, projectId) {
       [companyId, pid]
     );
     if (scoped.rows.length) rowWorkspace = scoped.rows[0].workspace;
-    if (!rowWorkspace && pid > 0) {
-      const legacyScoped = await pool.query(
-        'SELECT workspace FROM unit_progress_state WHERE company_id = $1 AND project_id = 0',
-        [companyId]
-      );
-      if (legacyScoped.rows.length) rowWorkspace = legacyScoped.rows[0].workspace;
-    }
   } catch (error) {
     if (error && error.code !== '42703') throw error;
     const legacy = await pool.query(

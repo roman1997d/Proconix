@@ -3450,7 +3450,14 @@
 
     function reviewSummary() {
       const lines = [];
-      lines.push(`Project -> ${wizardState.projectName}`);
+      let projectLabel = String(wizardState.projectName || "").trim();
+      if (wizardProjectNameSelect && wizardProjectNameSelect.value) {
+        const opt = wizardProjectNameSelect.options[wizardProjectNameSelect.selectedIndex];
+        if (opt && String(opt.textContent || "").trim()) {
+          projectLabel = String(opt.textContent || "").trim();
+        }
+      }
+      lines.push(`Project -> ${projectLabel || "(not selected)"}`);
       wizardState.buildings.forEach((building) => {
         lines.push(`  -> Building: ${building.name}`);
         building.floors.forEach((floor) => {
@@ -3748,7 +3755,7 @@
       const n = Number(pid);
       return units.filter((u) => {
         const up = u.project_id;
-        if (up == null || String(up).trim() === "") return true;
+        if (up == null || String(up).trim() === "") return false;
         return Number(up) === n;
       });
     }
@@ -3784,14 +3791,27 @@
       el.hidden = false;
       if (runtimeContext.actorKind === "supervisor") {
         el.textContent =
-          "Showing units for your assigned project (and any units without a project tag).";
+          "Showing units for your assigned project.";
       } else {
         el.textContent =
-          "Showing towers, floors, and units for this project (including units without a project tag). Change project under Dashboard → Project Overview if needed.";
+          "Showing towers, floors, and units for this project only. Change project under Dashboard → Project Overview if needed.";
       }
     }
 
     function onDashboardProjectContextChanged() {
+      const pid = getUnitProgressProjectFilterId();
+      if (pid) {
+        const pNum = Number(pid);
+        wizardState.projectId = Number.isFinite(pNum) ? pNum : wizardState.projectId;
+        if (wizardProjectNameSelect) {
+          const match = Array.from(wizardProjectNameSelect.options || []).find(
+            (o) => String(o.value) === String(pid)
+          );
+          if (match && String(match.textContent || "").trim()) {
+            wizardState.projectName = String(match.textContent || "").trim();
+          }
+        }
+      }
       state.currentTower = null;
       state.currentFloor = null;
       state.currentUnitId = null;
