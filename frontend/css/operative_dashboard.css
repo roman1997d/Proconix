@@ -1012,6 +1012,33 @@ a.op-doc-row:active {
 .op-feedback.success { background: rgba(73, 230, 126, 0.2); color: var(--op-success); }
 .op-feedback.error { background: rgba(255, 101, 101, 0.2); color: var(--op-danger); }
 
+.op-inline-loader {
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--op-card-border);
+  background: rgba(0, 0, 0, 0.16);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--op-text-muted);
+  font-size: 0.92rem;
+}
+
+.op-inline-loader-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--op-accent);
+  animation: op-spin 0.8s linear infinite;
+}
+
+@keyframes op-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Vizibil ca alert pentru erori Clock In/Out (ex: not on site) */
 #op-clock-feedback.error {
   border: 1px solid var(--op-danger);

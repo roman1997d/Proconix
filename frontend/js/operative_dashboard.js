@@ -4610,6 +4610,11 @@
     });
   }
   var btnDailyRecordInvoiceGenerate = document.getElementById('op-dr-inv-generate');
+  var dailyRecordInvoiceLoader = document.getElementById('op-dr-inv-loader');
+  function setDailyRecordInvoiceLoading(isLoading) {
+    if (btnDailyRecordInvoiceGenerate) btnDailyRecordInvoiceGenerate.disabled = !!isLoading;
+    if (dailyRecordInvoiceLoader) dailyRecordInvoiceLoader.classList.toggle('d-none', !isLoading);
+  }
   if (btnDailyRecordInvoiceGenerate) {
     btnDailyRecordInvoiceGenerate.addEventListener('click', function () {
       var fromEl = document.getElementById('op-dr-inv-from');
@@ -4621,14 +4626,14 @@
         showFeedback(fb, 'Select interval From -> To.', true);
         return;
       }
-      btnDailyRecordInvoiceGenerate.disabled = true;
+      setDailyRecordInvoiceLoading(true);
       showFeedback(fb, 'Generating package and sending…', false);
       api('/work-log/daily-record-invoice', {
         method: 'POST',
         body: JSON.stringify({ fromDate: fromDate, toDate: toDate }),
       })
         .then(function (r) {
-          btnDailyRecordInvoiceGenerate.disabled = false;
+          setDailyRecordInvoiceLoading(false);
           if (!r.data || !r.data.success) {
             showFeedback(fb, (r.data && r.data.message) || 'Failed to generate invoice.', true);
             return;
@@ -4640,7 +4645,7 @@
           }, 1200);
         })
         .catch(function (err) {
-          btnDailyRecordInvoiceGenerate.disabled = false;
+          setDailyRecordInvoiceLoading(false);
           showFeedback(fb, err.message || 'Failed to generate invoice.', true);
         });
     });
