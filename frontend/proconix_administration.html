@@ -576,6 +576,27 @@
               <p class="small text-white-50 mt-2 mb-0">Delete all files from all <code class="text-info">cloud_trash</code> folders.</p>
             </div>
 
+            <div class="mb-4">
+              <h3 class="h6 text-white mb-2">Memory usage split</h3>
+              <p class="small text-white-50 mb-2">System files vs business files usage.</p>
+              <div id="pxAdminMemoryBars" class="px-admin-memory-bars">
+                <div class="px-admin-memory-row">
+                  <div class="px-admin-memory-label">System files</div>
+                  <div class="px-admin-memory-track">
+                    <span id="pxAdminMemorySystemBar" class="px-admin-memory-fill bg-info" style="width:0%"></span>
+                  </div>
+                  <div id="pxAdminMemorySystemText" class="px-admin-memory-value">—</div>
+                </div>
+                <div class="px-admin-memory-row">
+                  <div class="px-admin-memory-label">Business files</div>
+                  <div class="px-admin-memory-track">
+                    <span id="pxAdminMemoryBusinessBar" class="px-admin-memory-fill bg-success" style="width:0%"></span>
+                  </div>
+                  <div id="pxAdminMemoryBusinessText" class="px-admin-memory-value">—</div>
+                </div>
+              </div>
+            </div>
+
             <h3 class="h6 text-white mb-2">Proconix project on disk</h3>
             <p class="small text-white-50 mb-3" id="pxAdminAuditDiskIntro">
               All files under the project root (backend, frontend, <code class="text-info">uploads</code>, images, <code class="text-info">node_modules</code>, etc.). Sizes are per top-level folder; total is the sum. Scan is cached ~90s per server process.

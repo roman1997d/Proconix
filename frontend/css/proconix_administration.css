@@ -325,6 +325,44 @@
   word-break: break-word;
 }
 
+.px-admin-memory-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.px-admin-memory-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 160px;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.px-admin-memory-label {
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 0.86rem;
+}
+
+.px-admin-memory-track {
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+}
+
+.px-admin-memory-fill {
+  display: block;
+  height: 100%;
+  min-width: 1px;
+}
+
+.px-admin-memory-value {
+  text-align: right;
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .px-admin-companies-table .px-admin-company-row {
   cursor: pointer;
 }

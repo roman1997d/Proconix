@@ -754,12 +754,35 @@
     if (content) content.classList.add('d-none');
     if (auditContent) auditContent.classList.add('d-none');
 
+    var memoryProjectTotalBytes = 0;
+    var memoryBusinessBytes = 0;
+
     function formatBytesSmart(n) {
       var b = Number(n || 0);
       if (b < 1024) return b + ' B';
       if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
       if (b < 1024 * 1024 * 1024) return (b / (1024 * 1024)).toFixed(1) + ' MB';
       return (b / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
+    function renderMemoryBars() {
+      var sysBar = document.getElementById('pxAdminMemorySystemBar');
+      var busBar = document.getElementById('pxAdminMemoryBusinessBar');
+      var sysText = document.getElementById('pxAdminMemorySystemText');
+      var busText = document.getElementById('pxAdminMemoryBusinessText');
+      if (!sysBar || !busBar || !sysText || !busText) return;
+      var total = Number(memoryProjectTotalBytes || 0);
+      var business = Number(memoryBusinessBytes || 0);
+      if (business < 0) business = 0;
+      var system = total - business;
+      if (system < 0) system = 0;
+      var denom = total > 0 ? total : (business > 0 ? business : 1);
+      var sysPct = Math.max(0, Math.min(100, (system / denom) * 100));
+      var busPct = Math.max(0, Math.min(100, (business / denom) * 100));
+      sysBar.style.width = sysPct.toFixed(1) + '%';
+      busBar.style.width = busPct.toFixed(1) + '%';
+      sysText.textContent = formatBytesSmart(system) + ' (' + sysPct.toFixed(1) + '%)';
+      busText.textContent = formatBytesSmart(business) + ' (' + busPct.toFixed(1) + '%)';
     }
 
     function renderUploadsAudit(sessForReq) {
@@ -793,6 +816,10 @@
             if (out.data.truncated) m += ' · truncated at ' + String(out.data.max_files || files.length);
             meta.textContent = m;
           }
+          memoryBusinessBytes = files.reduce(function (sum, f) {
+            return sum + (Number(f && f.size_bytes) || 0);
+          }, 0);
+          renderMemoryBars();
           if (!files.length) {
             var tr0 = document.createElement('tr');
             tr0.innerHTML = '<td colspan="3" class="text-white-50">No files found.</td>';
@@ -819,6 +846,8 @@
         .catch(function () {
           body.innerHTML = '<tr><td colspan="3" class="text-warning">Network error while loading backend/uploads files.</td></tr>';
           if (meta) meta.textContent = '—';
+          memoryBusinessBytes = 0;
+          renderMemoryBars();
         });
     }
 
@@ -1031,6 +1060,10 @@
               projDisk.total_mb != null
                 ? Number(projDisk.total_mb)
                 : Number(projDisk.total_bytes) / (1024 * 1024);
+            memoryProjectTotalBytes =
+              projDisk.total_bytes != null
+                ? Number(projDisk.total_bytes || 0)
+                : Math.max(0, tmb) * 1024 * 1024;
             diskTotal.textContent = formatSizeMb(tmb);
             diskTotal.className = 'px-admin-stat-value text-info';
             if (diskMeta) {
@@ -1057,6 +1090,7 @@
             if (diskDocuments) diskDocuments.textContent = formatSizeMb(documentsMb);
             if (diskOthers) diskOthers.textContent = formatSizeMb(othersMb);
           } else if (diskMeta && !diskMissingApi) {
+            memoryProjectTotalBytes = 0;
             diskMeta.textContent = '—';
             if (diskImages) diskImages.textContent = '—';
             if (diskDocuments) diskDocuments.textContent = '—';
@@ -1202,6 +1236,7 @@
 
         if (content) content.classList.remove('d-none');
         if (auditContent) auditContent.classList.remove('d-none');
+        renderMemoryBars();
         renderUploadsAudit(sess);
         var uploadsBody = document.getElementById('pxAdminAuditUploadsBody');
         if (uploadsBody && !uploadsBody.__pxBoundDelete) {
