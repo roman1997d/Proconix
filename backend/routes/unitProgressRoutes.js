@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 const { requireManagerAuth } = require('../middleware/requireManagerAuth');
 const { requireSupervisorAuth } = require('../middleware/requireSupervisorAuth');
+const { requireOperativeAuth } = require('../middleware/requireOperativeAuth');
 const {
   getWorkspace,
   putWorkspace,
@@ -14,8 +15,12 @@ const {
   getPublicTimeline,
   getPrivateTimelineManager,
   getPrivateTimelineSupervisor,
+  getPrivateTimelineOperative,
   appendPrivateProgressManager,
   appendPrivateProgressSupervisor,
+  appendPrivateProgressOperative,
+  deletePrivateProgressOperative,
+  getOperativeDailyRecordUnits,
   requestDeleteUnitManager,
   confirmDeleteUnitManager,
   requestDeleteUnitSupervisor,
@@ -31,6 +36,10 @@ router.get('/manager/private-timeline/:unitId', requireManagerAuth, getPrivateTi
 router.post('/manager/private-timeline/:unitId/progress', requireManagerAuth, appendPrivateProgressManager);
 router.get('/supervisor/private-timeline/:unitId', requireSupervisorAuth, getPrivateTimelineSupervisor);
 router.post('/supervisor/private-timeline/:unitId/progress', requireSupervisorAuth, appendPrivateProgressSupervisor);
+router.get('/operative/daily-records/units', requireOperativeAuth, getOperativeDailyRecordUnits);
+router.get('/operative/private-timeline/:unitId', requireOperativeAuth, getPrivateTimelineOperative);
+router.post('/operative/private-timeline/:unitId/progress', requireOperativeAuth, appendPrivateProgressOperative);
+router.delete('/operative/private-timeline/:unitId/progress', requireOperativeAuth, deletePrivateProgressOperative);
 
 router.get('/workspace', requireManagerAuth, getWorkspace);
 router.put('/workspace', requireManagerAuth, putWorkspace);

@@ -94,6 +94,38 @@
     });
   }
 
+  function apiUnitProgress(path, options) {
+    var token = getToken();
+    if (!token) return Promise.reject(new Error('No token'));
+    var opts = options || {};
+    var headers = opts.headers || {};
+    headers['X-Operative-Token'] = token;
+    if (opts.body && !(opts.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+    opts.headers = headers;
+    opts.credentials = 'same-origin';
+    return fetch('/api/unit-progress' + path, opts).then(function (res) {
+      var contentType = res.headers.get('Content-Type') || '';
+      if (contentType.indexOf('application/json') !== -1) {
+        return res.json().then(function (data) {
+          if (res.status === 401) {
+            clearSession();
+            return Promise.reject(new Error(data.message || 'Session expired'));
+          }
+          if (res.status === 403 && (data.code === 'account_deactivated' || (data.message && /deactivated|dezactivat/i.test(data.message)))) {
+            showDeactivatedBlock();
+            return Promise.reject(new Error(data.message || 'Account deactivated'));
+          }
+          return { status: res.status, data: data };
+        });
+      }
+      return res.text().then(function (text) {
+        return { status: res.status, data: { message: text } };
+      });
+    });
+  }
+
   function showDeactivatedBlock() {
     var block = document.getElementById('op-deactivated-block');
     var main = document.querySelector('.op-main');
@@ -1602,6 +1634,15 @@
   var modalDrawing = document.getElementById('op-modal-dg');
   var formIssue = document.getElementById('op-form-issue');
   var formUpload = document.getElementById('op-form-upload');
+  var modalDailyRecord = document.getElementById('op-modal-daily-record');
+  var formDailyRecord = document.getElementById('op-form-daily-record');
+  var dailyRecordAddBtn = document.getElementById('op-dr-btn-add');
+  var dailyRecordListEl = document.getElementById('op-dr-list');
+  var dailyRecordFeedbackEl = document.getElementById('op-dr-feedback');
+  var dailyRecordUnitSelect = document.getElementById('op-dr-unit');
+  var dailyRecordStatusSelect = document.getElementById('op-dr-status');
+  var dailyRecordReasonWrap = document.getElementById('op-dr-reason-wrap');
+  var dailyRecordState = { units: [], selectedUnitId: '' };
 
   function openModal(modal) {
     if (modal) {
@@ -1705,6 +1746,228 @@
     if (formUpload) formUpload.reset();
     hideFeedback(document.getElementById('op-upload-feedback'));
   });
+
+  function readFileAsDataUrl(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(String(reader.result || '')); };
+      reader.onerror = function () { reject(new Error('Failed to read selected image.')); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function setDailyRecordReasonVisibility() {
+    if (!dailyRecordStatusSelect || !dailyRecordReasonWrap) return;
+    if (String(dailyRecordStatusSelect.value || '') === 'Blocked') {
+      dailyRecordReasonWrap.classList.remove('d-none');
+    } else {
+      dailyRecordReasonWrap.classList.add('d-none');
+      var reasonEl = document.getElementById('op-dr-reason');
+      if (reasonEl) reasonEl.value = '';
+    }
+  }
+
+  function renderDailyRecordUnitSelect() {
+    if (!dailyRecordUnitSelect) return;
+    var units = Array.isArray(dailyRecordState.units) ? dailyRecordState.units : [];
+    dailyRecordUnitSelect.innerHTML = units.length
+      ? units.map(function (u) {
+          return '<option value="' + escapeHtml(String(u.id || '')) + '">' + escapeHtml(String(u.label || u.name || ('Unit ' + u.id))) + '</option>';
+        }).join('')
+      : '<option value="">No units available</option>';
+    dailyRecordState.selectedUnitId = units.length ? String(units[0].id) : '';
+  }
+
+  function formatDailyRecordDate(iso) {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleString();
+    } catch (e) {
+      return '—';
+    }
+  }
+
+  function renderDailyRecords(list) {
+    if (!dailyRecordListEl) return;
+    var entries = Array.isArray(list) ? list : [];
+    if (!entries.length) {
+      dailyRecordListEl.innerHTML = '<p class="op-text-muted" style="margin:0">No records yet. Add your first Daily Record.</p>';
+      return;
+    }
+    dailyRecordListEl.innerHTML = entries
+      .slice()
+      .reverse()
+      .map(function (entry) {
+        var status = String(entry.status || '—');
+        var photos = Array.isArray(entry.photos) ? entry.photos : [];
+        var reason = String(entry.reason || '').trim();
+        return (
+          '<article class="op-dr-item">' +
+            '<div class="op-dr-item-head">' +
+              '<div><strong>' + escapeHtml(String(entry.stage || 'Stage')) + '</strong> · <span>' + escapeHtml(status) + '</span></div>' +
+              '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-dr-delete" data-entry-id="' + escapeHtml(String(entry.entry_id || '')) + '">Delete</button>' +
+            '</div>' +
+            '<div class="op-dr-meta">' + escapeHtml(formatDailyRecordDate(entry.date)) + '</div>' +
+            '<div class="op-dr-comment">' + escapeHtml(String(entry.comment || '')) + '</div>' +
+            (reason ? '<div class="op-dr-reason">Blocked reason: ' + escapeHtml(reason) + '</div>' : '') +
+            (photos.length ? '<div class="op-dr-photos">' + photos.map(function (p) {
+              var src = typeof p === 'string' ? p : String((p && p.src) || '');
+              return src ? '<img src="' + escapeHtml(src) + '" alt="Daily record photo">' : '';
+            }).join('') + '</div>' : '') +
+          '</article>'
+        );
+      }).join('');
+  }
+
+  function loadDailyRecordsTimeline(unitId) {
+    if (!unitId) {
+      renderDailyRecords([]);
+      return Promise.resolve();
+    }
+    if (dailyRecordListEl) dailyRecordListEl.textContent = 'Loading…';
+    return apiUnitProgress('/operative/private-timeline/' + encodeURIComponent(String(unitId)))
+      .then(function (r) {
+        if (!r.data || !r.data.success) {
+          renderDailyRecords([]);
+          showFeedback(dailyRecordFeedbackEl, (r.data && r.data.message) || 'Failed to load timeline.', true);
+          return;
+        }
+        hideFeedback(dailyRecordFeedbackEl);
+        renderDailyRecords(r.data.timeline || []);
+      })
+      .catch(function (err) {
+        renderDailyRecords([]);
+        showFeedback(dailyRecordFeedbackEl, err.message || 'Failed to load timeline.', true);
+      });
+  }
+
+  function loadDailyRecordUnits() {
+    if (!dailyRecordListEl) return Promise.resolve();
+    dailyRecordListEl.textContent = 'Loading…';
+    return apiUnitProgress('/operative/daily-records/units')
+      .then(function (r) {
+        if (!r.data || !r.data.success) {
+          showFeedback(dailyRecordFeedbackEl, (r.data && r.data.message) || 'Could not load unit list.', true);
+          renderDailyRecords([]);
+          return;
+        }
+        dailyRecordState.units = Array.isArray(r.data.units) ? r.data.units : [];
+        renderDailyRecordUnitSelect();
+        if (!dailyRecordState.units.length) {
+          renderDailyRecords([]);
+          showFeedback(dailyRecordFeedbackEl, 'No assigned units found in Unit Progress for your project.', true);
+          return;
+        }
+        dailyRecordState.selectedUnitId = String(dailyRecordState.units[0].id || '');
+        return loadDailyRecordsTimeline(dailyRecordState.selectedUnitId);
+      })
+      .catch(function (err) {
+        renderDailyRecords([]);
+        showFeedback(dailyRecordFeedbackEl, err.message || 'Could not load unit list.', true);
+      });
+  }
+
+  if (dailyRecordAddBtn) {
+    dailyRecordAddBtn.addEventListener('click', function () {
+      if (!dailyRecordState.units.length) {
+        showFeedback(dailyRecordFeedbackEl, 'No Unit Progress units are available for your project.', true);
+        return;
+      }
+      if (formDailyRecord) formDailyRecord.reset();
+      renderDailyRecordUnitSelect();
+      if (dailyRecordUnitSelect && dailyRecordState.selectedUnitId) {
+        dailyRecordUnitSelect.value = dailyRecordState.selectedUnitId;
+      }
+      hideFeedback(document.getElementById('op-dr-modal-feedback'));
+      setDailyRecordReasonVisibility();
+      openModal(modalDailyRecord);
+    });
+  }
+
+  if (dailyRecordStatusSelect) {
+    dailyRecordStatusSelect.addEventListener('change', setDailyRecordReasonVisibility);
+  }
+
+  if (formDailyRecord) {
+    formDailyRecord.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var feedback = document.getElementById('op-dr-modal-feedback');
+      var unitId = dailyRecordUnitSelect ? String(dailyRecordUnitSelect.value || '').trim() : '';
+      var stage = String((document.getElementById('op-dr-stage') || {}).value || '').trim();
+      var status = String((dailyRecordStatusSelect || {}).value || '').trim();
+      var reason = String((document.getElementById('op-dr-reason') || {}).value || '').trim();
+      var comment = String((document.getElementById('op-dr-comment') || {}).value || '').trim();
+      var photosInput = document.getElementById('op-dr-photos');
+      var photoFiles = photosInput && photosInput.files ? Array.prototype.slice.call(photosInput.files).slice(0, 3) : [];
+      if (!unitId || !stage || !status || !comment) {
+        showFeedback(feedback, 'Please complete all required fields.', true);
+        return;
+      }
+      if (status === 'Blocked' && !reason) {
+        showFeedback(feedback, 'Blocked status requires a reason.', true);
+        return;
+      }
+      showFeedback(feedback, 'Saving…', false);
+      Promise.all(photoFiles.map(readFileAsDataUrl))
+        .then(function (photoSrcList) {
+          var photos = photoSrcList.map(function (src, idx) {
+            return { name: 'photo-' + String(idx + 1), src: src };
+          });
+          return apiUnitProgress('/operative/private-timeline/' + encodeURIComponent(unitId) + '/progress', {
+            method: 'POST',
+            body: JSON.stringify({
+              stage: stage,
+              status: status,
+              reason: reason,
+              comment: comment,
+              photos: photos,
+            }),
+          });
+        })
+        .then(function (r) {
+          if (!r.data || !r.data.success) {
+            showFeedback(feedback, (r.data && r.data.message) || 'Failed to save record.', true);
+            return;
+          }
+          dailyRecordState.selectedUnitId = unitId;
+          closeModal(modalDailyRecord);
+          hideFeedback(feedback);
+          showFeedback(dailyRecordFeedbackEl, 'Daily Record saved.', false);
+          renderDailyRecords(r.data.timeline || []);
+        })
+        .catch(function (err) {
+          showFeedback(feedback, err.message || 'Failed to save record.', true);
+        });
+    });
+  }
+
+  if (dailyRecordListEl) {
+    dailyRecordListEl.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('.op-dr-delete') : null;
+      if (!btn) return;
+      var entryId = String(btn.getAttribute('data-entry-id') || '').trim();
+      var unitId = String(dailyRecordState.selectedUnitId || '').trim();
+      if (!entryId || !unitId) return;
+      btn.disabled = true;
+      apiUnitProgress('/operative/private-timeline/' + encodeURIComponent(unitId) + '/progress', {
+        method: 'DELETE',
+        body: JSON.stringify({ entryId: entryId }),
+      })
+        .then(function (r) {
+          if (!r.data || !r.data.success) {
+            showFeedback(dailyRecordFeedbackEl, (r.data && r.data.message) || 'Could not delete entry.', true);
+            btn.disabled = false;
+            return;
+          }
+          showFeedback(dailyRecordFeedbackEl, 'Entry deleted.', false);
+          renderDailyRecords(r.data.timeline || []);
+        })
+        .catch(function (err) {
+          showFeedback(dailyRecordFeedbackEl, err.message || 'Could not delete entry.', true);
+          btn.disabled = false;
+        });
+    });
+  }
 
   // ----- Drawing View Module (operatives, read-only) -----
   var dgSummaryEl = document.getElementById('op-dg-summary');
@@ -4367,6 +4630,7 @@
       loadClockStatus();
       loadWeekly();
       loadProject();
+      loadDailyRecordUnits();
       loadDocumentsInbox();
       chatStartRealtime();
     })
@@ -4375,6 +4639,7 @@
       loadClockStatus();
       loadWeekly();
       loadProject();
+      loadDailyRecordUnits();
       loadDocumentsInbox();
       chatStartRealtime();
     });

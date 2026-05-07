@@ -76,6 +76,35 @@ function getSupervisorCompanyId(req) {
   return req.supervisor && req.supervisor.company_id != null ? Number(req.supervisor.company_id) : null;
 }
 
+function getOperativeCompanyId(req) {
+  return req.operative && req.operative.company_id != null ? Number(req.operative.company_id) : null;
+}
+
+async function getOperativeAccessProfile(req) {
+  const opId = req && req.operative && req.operative.id != null ? Number(req.operative.id) : null;
+  if (!Number.isInteger(opId) || opId < 1) {
+    return { ok: false, message: 'Operative session is invalid.' };
+  }
+  const result = await pool.query(
+    'SELECT id, company_id, project_id, name, email FROM users WHERE id = $1',
+    [opId]
+  );
+  if (!result.rows.length) {
+    return { ok: false, message: 'Operative user not found.' };
+  }
+  const row = result.rows[0];
+  const companyId = row.company_id != null ? Number(row.company_id) : null;
+  const projectId = row.project_id != null ? Number(row.project_id) : null;
+  const displayName = String(row.name || '').trim() || String(row.email || '').trim() || 'Operative';
+  if (companyId == null) {
+    return { ok: false, message: 'Operative has no company assigned.' };
+  }
+  if (projectId == null) {
+    return { ok: false, message: 'Operative has no project assigned.' };
+  }
+  return { ok: true, opId, companyId, projectId, displayName };
+}
+
 function defaultWorkspace() {
   return {
     towers: [],
@@ -685,6 +714,154 @@ async function appendPrivateProgressSupervisor(req, res) {
   }
 }
 
+function buildOperativeUnitLabel(unit) {
+  const tower = unit && unit.tower != null ? String(unit.tower).trim() : '';
+  const floor = unit && unit.floor != null ? String(unit.floor).trim() : '';
+  const unitName = unit && unit.name != null ? String(unit.name).trim() : '';
+  const parts = [tower ? `Tower ${tower}` : '', floor ? `Floor ${floor}` : '', unitName || 'Unit'];
+  return parts.filter(Boolean).join(' • ');
+}
+
+async function getOperativeDailyRecordUnits(req, res) {
+  const fallbackCompanyId = getOperativeCompanyId(req);
+  if (fallbackCompanyId == null) {
+    return res.status(400).json({ success: false, message: 'Operative has no company_id.' });
+  }
+  try {
+    const profile = await getOperativeAccessProfile(req);
+    if (!profile.ok) return res.status(403).json({ success: false, message: profile.message });
+    const workspace = await getWorkspaceByCompanyId(profile.companyId);
+    const units = (Array.isArray(workspace.units) ? workspace.units : [])
+      .filter((u) => {
+        const unitProjectId = u && u.project_id != null ? Number(u.project_id) : null;
+        return unitProjectId != null && unitProjectId === profile.projectId;
+      })
+      .map((u) => ({
+        id: normalizeUnitId(u && u.id),
+        name: String((u && u.name) || '').trim() || `Unit ${normalizeUnitId(u && u.id)}`,
+        tower: u && u.tower != null ? u.tower : '',
+        floor: u && u.floor != null ? u.floor : '',
+        label: buildOperativeUnitLabel(u),
+      }))
+      .filter((u) => !!u.id);
+    return res.json({ success: true, units });
+  } catch (error) {
+    console.error('unitProgress getOperativeDailyRecordUnits:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load units for daily records.' });
+  }
+}
+
+async function getPrivateTimelineOperative(req, res) {
+  const unitId = normalizeUnitId(req.params.unitId);
+  if (!unitId) return res.status(400).json({ success: false, message: 'Invalid request.' });
+  try {
+    const profile = await getOperativeAccessProfile(req);
+    if (!profile.ok) return res.status(403).json({ success: false, message: profile.message });
+    const workspace = await getWorkspaceByCompanyId(profile.companyId);
+    const unit = getUnitFromWorkspace(workspace, unitId);
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
+    const unitProjectId = unit && unit.project_id != null ? Number(unit.project_id) : null;
+    if (unitProjectId == null || unitProjectId !== profile.projectId) {
+      return res.status(403).json({ success: false, message: 'Operative does not have access to this unit.' });
+    }
+    const timeline = (Array.isArray(unit.timeline) ? unit.timeline : []).filter((entry) => {
+      const authorKind = String((entry && entry.author_kind) || '').trim();
+      const authorId = entry && entry.author_id != null ? Number(entry.author_id) : null;
+      return authorKind === 'operative' && authorId === profile.opId;
+    });
+    return res.json({
+      success: true,
+      unit: { id: normalizeUnitId(unit.id), name: unit.name || `Unit ${unit.id}` },
+      timeline,
+    });
+  } catch (error) {
+    console.error('unitProgress getPrivateTimelineOperative:', error);
+    return res.status(500).json({ success: false, message: 'Failed to load private timeline.' });
+  }
+}
+
+async function appendPrivateProgressOperative(req, res) {
+  const unitId = normalizeUnitId(req.params.unitId);
+  if (!unitId) return res.status(400).json({ success: false, message: 'Invalid request.' });
+  try {
+    const profile = await getOperativeAccessProfile(req);
+    if (!profile.ok) return res.status(403).json({ success: false, message: profile.message });
+    const progress = sanitizeIncomingProgress(req.body);
+    const workspace = await getWorkspaceByCompanyId(profile.companyId);
+    const unit = getUnitFromWorkspace(workspace, unitId);
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
+    const unitProjectId = unit && unit.project_id != null ? Number(unit.project_id) : null;
+    if (unitProjectId == null || unitProjectId !== profile.projectId) {
+      return res.status(403).json({ success: false, message: 'Operative does not have access to this unit.' });
+    }
+    if (!Array.isArray(unit.timeline)) unit.timeline = [];
+    const entryId = `opr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    unit.timeline.push({
+      ...progress,
+      entry_id: entryId,
+      author_kind: 'operative',
+      author_id: profile.opId,
+      user: profile.displayName,
+      date: new Date().toISOString(),
+    });
+    workspace.updated_at = new Date().toISOString();
+    await upsertWorkspace(profile.companyId, workspace, 'operative', profile.opId);
+    const ownTimeline = unit.timeline.filter((entry) => {
+      const authorKind = String((entry && entry.author_kind) || '').trim();
+      const authorId = entry && entry.author_id != null ? Number(entry.author_id) : null;
+      return authorKind === 'operative' && authorId === profile.opId;
+    });
+    return res.json({ success: true, timeline: ownTimeline });
+  } catch (error) {
+    if (error.message && error.message.endsWith('required.')) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    console.error('unitProgress appendPrivateProgressOperative:', error);
+    return res.status(500).json({ success: false, message: 'Failed to append progress.' });
+  }
+}
+
+async function deletePrivateProgressOperative(req, res) {
+  const unitId = normalizeUnitId(req.params.unitId);
+  const entryId = String((req.body && req.body.entryId) || '').trim();
+  if (!unitId || !entryId) {
+    return res.status(400).json({ success: false, message: 'Valid unit id and entry id are required.' });
+  }
+  try {
+    const profile = await getOperativeAccessProfile(req);
+    if (!profile.ok) return res.status(403).json({ success: false, message: profile.message });
+    const workspace = await getWorkspaceByCompanyId(profile.companyId);
+    const unit = getUnitFromWorkspace(workspace, unitId);
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
+    const unitProjectId = unit && unit.project_id != null ? Number(unit.project_id) : null;
+    if (unitProjectId == null || unitProjectId !== profile.projectId) {
+      return res.status(403).json({ success: false, message: 'Operative does not have access to this unit.' });
+    }
+    const before = Array.isArray(unit.timeline) ? unit.timeline.length : 0;
+    unit.timeline = (Array.isArray(unit.timeline) ? unit.timeline : []).filter((entry) => {
+      const isTarget = String((entry && entry.entry_id) || '').trim() === entryId;
+      if (!isTarget) return true;
+      const authorKind = String((entry && entry.author_kind) || '').trim();
+      const authorId = entry && entry.author_id != null ? Number(entry.author_id) : null;
+      return !(authorKind === 'operative' && authorId === profile.opId);
+    });
+    if (unit.timeline.length === before) {
+      return res.status(404).json({ success: false, message: 'Timeline entry not found.' });
+    }
+    workspace.updated_at = new Date().toISOString();
+    await upsertWorkspace(profile.companyId, workspace, 'operative', profile.opId);
+    const ownTimeline = unit.timeline.filter((entry) => {
+      const authorKind = String((entry && entry.author_kind) || '').trim();
+      const authorId = entry && entry.author_id != null ? Number(entry.author_id) : null;
+      return authorKind === 'operative' && authorId === profile.opId;
+    });
+    return res.json({ success: true, timeline: ownTimeline });
+  } catch (error) {
+    console.error('unitProgress deletePrivateProgressOperative:', error);
+    return res.status(500).json({ success: false, message: 'Failed to delete progress entry.' });
+  }
+}
+
 function removeUnitFromWorkspace(workspace, unitId) {
   const target = normalizeUnitId(unitId);
   if (!target || !workspace || typeof workspace !== 'object' || !Array.isArray(workspace.units)) {
@@ -1187,8 +1364,12 @@ module.exports = {
   getPublicTimeline,
   getPrivateTimelineManager,
   getPrivateTimelineSupervisor,
+  getPrivateTimelineOperative,
   appendPrivateProgressManager,
   appendPrivateProgressSupervisor,
+  appendPrivateProgressOperative,
+  deletePrivateProgressOperative,
+  getOperativeDailyRecordUnits,
   requestDeleteUnitManager,
   confirmDeleteUnitManager,
   requestDeleteUnitSupervisor,

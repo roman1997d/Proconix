@@ -2253,3 +2253,50 @@ a.op-doc-row,
 .op-nav-item:focus {
   color: #10957c;
 }
+
+.op-dr-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.op-dr-item {
+  border: 1px solid var(--op-card-border);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.op-dr-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.op-dr-meta {
+  font-size: 0.8rem;
+  color: var(--op-text-muted);
+  margin-bottom: 6px;
+}
+
+.op-dr-comment,
+.op-dr-reason {
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+.op-dr-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 8px;
+}
+
+.op-dr-photos img {
+  width: 100%;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--op-card-border);
+}
