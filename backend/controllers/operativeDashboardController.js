@@ -1986,14 +1986,39 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
       return res.status(400).json({ success: false, message: 'Choose a valid date interval.' });
     }
 
-    const userRow = await pool.query(
-      'SELECT id, name, email, company_id, project_id FROM users WHERE id = $1',
-      [op.id]
-    );
+    let userRow;
+    try {
+      userRow = await pool.query(
+        'SELECT id, name, email, company_id, project_id FROM users WHERE id = $1',
+        [op.id]
+      );
+    } catch (err) {
+      if (err && err.code === '42703' && /project_id/i.test(err.message || '')) {
+        userRow = await pool.query(
+          'SELECT id, name, email, company_id FROM users WHERE id = $1',
+          [op.id]
+        );
+      } else {
+        throw err;
+      }
+    }
     if (!userRow.rows.length) return res.status(404).json({ success: false, message: 'User not found.' });
     const user = userRow.rows[0];
     const companyId = user.company_id;
-    const projectId = user.project_id;
+    let projectId = user.project_id;
+    if (projectId == null) {
+      try {
+        const paRow = await pool.query(
+          'SELECT project_id FROM project_assignments WHERE user_id = $1 ORDER BY assigned_at DESC LIMIT 1',
+          [op.id]
+        );
+        if (paRow.rows.length && paRow.rows[0].project_id != null) {
+          projectId = paRow.rows[0].project_id;
+        }
+      } catch (paErr) {
+        if (paErr && paErr.code !== '42P01') throw paErr;
+      }
+    }
     if (companyId == null || projectId == null) {
       return res.status(400).json({ success: false, message: 'Operative is not assigned to a project.' });
     }
