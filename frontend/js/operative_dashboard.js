@@ -1635,6 +1635,7 @@
   var formIssue = document.getElementById('op-form-issue');
   var formUpload = document.getElementById('op-form-upload');
   var modalDailyRecord = document.getElementById('op-modal-daily-record');
+  var modalDailyRecordView = document.getElementById('op-modal-daily-record-view');
   var formDailyRecord = document.getElementById('op-form-daily-record');
   var dailyRecordAddBtn = document.getElementById('op-dr-btn-add');
   var dailyRecordListEl = document.getElementById('op-dr-list');
@@ -1642,7 +1643,7 @@
   var dailyRecordUnitSelect = document.getElementById('op-dr-unit');
   var dailyRecordStatusSelect = document.getElementById('op-dr-status');
   var dailyRecordReasonWrap = document.getElementById('op-dr-reason-wrap');
-  var dailyRecordState = { units: [], selectedUnitId: '' };
+  var dailyRecordState = { units: [], selectedUnitId: '', timeline: [] };
 
   function openModal(modal) {
     if (modal) {
@@ -1790,6 +1791,7 @@
   function renderDailyRecords(list) {
     if (!dailyRecordListEl) return;
     var entries = Array.isArray(list) ? list : [];
+    dailyRecordState.timeline = entries.slice();
     if (!entries.length) {
       dailyRecordListEl.innerHTML = '<p class="op-text-muted" style="margin:0">No records yet. Add your first Daily Record.</p>';
       return;
@@ -1802,21 +1804,45 @@
         var photos = Array.isArray(entry.photos) ? entry.photos : [];
         var reason = String(entry.reason || '').trim();
         return (
-          '<article class="op-dr-item">' +
+          '<article class="op-dr-item" data-entry-id="' + escapeHtml(String(entry.entry_id || '')) + '">' +
             '<div class="op-dr-item-head">' +
-              '<div><strong>' + escapeHtml(String(entry.stage || 'Stage')) + '</strong> · <span>' + escapeHtml(status) + '</span></div>' +
+              '<div><strong>' + escapeHtml(String(entry.stage || 'Stage')) + '</strong></div>' +
               '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-dr-delete" data-entry-id="' + escapeHtml(String(entry.entry_id || '')) + '">Delete</button>' +
             '</div>' +
-            '<div class="op-dr-meta">' + escapeHtml(formatDailyRecordDate(entry.date)) + '</div>' +
             '<div class="op-dr-comment">' + escapeHtml(String(entry.comment || '')) + '</div>' +
-            (reason ? '<div class="op-dr-reason">Blocked reason: ' + escapeHtml(reason) + '</div>' : '') +
-            (photos.length ? '<div class="op-dr-photos">' + photos.map(function (p) {
-              var src = typeof p === 'string' ? p : String((p && p.src) || '');
-              return src ? '<img src="' + escapeHtml(src) + '" alt="Daily record photo">' : '';
-            }).join('') + '</div>' : '') +
           '</article>'
         );
       }).join('');
+  }
+
+  function openDailyRecordDetails(entryId) {
+    if (!modalDailyRecordView) return;
+    var entry = (dailyRecordState.timeline || []).find(function (it) {
+      return String((it && it.entry_id) || '') === String(entryId || '');
+    });
+    if (!entry) return;
+    var stageEl = document.getElementById('op-dr-view-stage');
+    var statusEl = document.getElementById('op-dr-view-status');
+    var dateEl = document.getElementById('op-dr-view-date');
+    var reasonWrap = document.getElementById('op-dr-view-reason-wrap');
+    var reasonEl = document.getElementById('op-dr-view-reason');
+    var commentEl = document.getElementById('op-dr-view-comment');
+    var photosEl = document.getElementById('op-dr-view-photos');
+    if (stageEl) stageEl.value = String(entry.stage || '');
+    if (statusEl) statusEl.value = String(entry.status || '');
+    if (dateEl) dateEl.value = formatDailyRecordDate(entry.date);
+    var reason = String(entry.reason || '').trim();
+    if (reasonWrap) reasonWrap.classList.toggle('d-none', !reason);
+    if (reasonEl) reasonEl.value = reason;
+    if (commentEl) commentEl.value = String(entry.comment || '');
+    if (photosEl) {
+      var photos = Array.isArray(entry.photos) ? entry.photos : [];
+      photosEl.innerHTML = photos.length ? photos.map(function (p) {
+        var src = typeof p === 'string' ? p : String((p && p.src) || '');
+        return src ? '<img src="' + escapeHtml(src) + '" alt="Daily record photo">' : '';
+      }).join('') : '<p class="op-text-muted" style="margin:0">No photos.</p>';
+    }
+    openModal(modalDailyRecordView);
   }
 
   function loadDailyRecordsTimeline(unitId) {
@@ -1944,7 +1970,12 @@
   if (dailyRecordListEl) {
     dailyRecordListEl.addEventListener('click', function (e) {
       var btn = e.target && e.target.closest ? e.target.closest('.op-dr-delete') : null;
-      if (!btn) return;
+      if (!btn) {
+        var card = e.target && e.target.closest ? e.target.closest('.op-dr-item') : null;
+        if (!card) return;
+        openDailyRecordDetails(String(card.getAttribute('data-entry-id') || ''));
+        return;
+      }
       var entryId = String(btn.getAttribute('data-entry-id') || '').trim();
       var unitId = String(dailyRecordState.selectedUnitId || '').trim();
       if (!entryId || !unitId) return;

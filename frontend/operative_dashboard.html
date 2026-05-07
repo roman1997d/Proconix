@@ -348,6 +348,31 @@
     </div>
   </div>
 
+  <div class="op-modal" id="op-modal-daily-record-view" aria-hidden="true" role="dialog" aria-labelledby="op-dr-view-title">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3 id="op-dr-view-title">Daily Record Details</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <div class="op-field"><label>Stage</label><input type="text" id="op-dr-view-stage" readonly></div>
+          <div class="op-field-row">
+            <div class="op-field"><label>Status</label><input type="text" id="op-dr-view-status" readonly></div>
+            <div class="op-field"><label>Date</label><input type="text" id="op-dr-view-date" readonly></div>
+          </div>
+          <div class="op-field d-none" id="op-dr-view-reason-wrap"><label>Blocked reason</label><textarea id="op-dr-view-reason" rows="2" readonly></textarea></div>
+          <div class="op-field"><label>Comment</label><textarea id="op-dr-view-comment" rows="3" readonly></textarea></div>
+          <div class="op-field">
+            <label>Photos</label>
+            <div id="op-dr-view-photos" class="op-dr-photos"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="op-modal op-modal-dg" id="op-modal-dg" aria-hidden="true" role="dialog" aria-labelledby="op-dg-title">
     <div class="op-modal-backdrop" data-dismiss="modal"></div>
     <div class="op-modal-dialog op-modal-dialog-dg">
