@@ -556,6 +556,8 @@
   }
 
   var sysPollTimer = null;
+  /** When true, the 30s system/audit/server-memory poll is not scheduled. */
+  var sysPollPaused = false;
   var serverLogAbort = null;
 
   function stopServerLogStream() {
@@ -641,17 +643,41 @@
       });
   }
 
-  function clearSysPoll() {
-    stopServerLogStream();
+  function clearSysPollTimer() {
     if (sysPollTimer) {
       clearInterval(sysPollTimer);
       sysPollTimer = null;
     }
   }
+
+  function clearSysPoll() {
+    stopServerLogStream();
+    clearSysPollTimer();
+  }
+
+  function updateSysPollToggleUi() {
+    document.querySelectorAll('.px-admin-auto-refresh-toggle').forEach(function (btn) {
+      var paused = sysPollPaused;
+      btn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+      var icon = btn.querySelector('.px-admin-auto-refresh-icon');
+      var label = btn.querySelector('.px-admin-auto-refresh-label');
+      if (icon) {
+        icon.className = 'bi px-admin-auto-refresh-icon ' + (paused ? 'bi-play-fill' : 'bi-pause-fill');
+        icon.setAttribute('aria-hidden', 'true');
+      }
+      if (label) {
+        label.textContent = paused ? 'Resume auto' : 'Pause auto';
+      }
+      btn.title = paused
+        ? 'Resume automatic refresh every 30 seconds (System, Audit, Server Memory)'
+        : 'Pause automatic refresh; use Refresh to update manually';
+    });
+  }
+
   function scheduleSysPoll(sess) {
-    if (sysPollTimer) {
-      clearInterval(sysPollTimer);
-      sysPollTimer = null;
+    clearSysPollTimer();
+    if (sysPollPaused) {
+      return;
     }
     sysPollTimer = setInterval(function () {
       var sys = document.querySelector('[data-px-admin-panel="system"]');
@@ -2209,6 +2235,28 @@
       loadSystemHealthPanel(session);
     });
   }
+
+  document.querySelectorAll('.px-admin-auto-refresh-toggle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      sysPollPaused = !sysPollPaused;
+      if (sysPollPaused) {
+        clearSysPollTimer();
+      } else {
+        scheduleSysPoll(session);
+        var sys = document.querySelector('[data-px-admin-panel="system"]');
+        var aud = document.querySelector('[data-px-admin-panel="audit"]');
+        var mem = document.querySelector('[data-px-admin-panel="server-memory"]');
+        var sysVis = sys && !sys.classList.contains('d-none');
+        var audVis = aud && !aud.classList.contains('d-none');
+        var memVis = mem && !mem.classList.contains('d-none');
+        if (sysVis || audVis || memVis) {
+          loadSystemHealthPanel(session);
+        }
+      }
+      updateSysPollToggleUi();
+    });
+  });
+  updateSysPollToggleUi();
 
   var btnServerMemoryPurgeTrash = document.getElementById('pxAdminServerMemoryPurgeTrashBtn');
   if (btnServerMemoryPurgeTrash) {

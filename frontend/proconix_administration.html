@@ -372,9 +372,15 @@
           <div class="px-admin-panel-card">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
               <h2 class="h5 text-white mb-0">System &amp; health</h2>
-              <button type="button" class="btn btn-sm btn-outline-light" id="pxAdminSysRefresh" title="Reload metrics">
-                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
-              </button>
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary px-admin-auto-refresh-toggle" id="pxAdminSysAutoRefresh" aria-pressed="false" title="Pause automatic refresh; use Refresh to update manually">
+                  <i class="bi bi-pause-fill px-admin-auto-refresh-icon" aria-hidden="true"></i>
+                  <span class="px-admin-auto-refresh-label">Pause auto</span>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-light" id="pxAdminSysRefresh" title="Reload metrics">
+                  <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
+                </button>
+              </div>
             </div>
             <p class="text-white-50 small mb-3">
               <strong class="text-white-50">Operational</strong> view: API and database reachability, process uptime, host load, Node memory/CPU, request latency chart, and connection pool. For logs, disk usage, slow-query hints, and <code class="text-info">FEATURE_*</code> flags, open <strong>Audit &amp; logs</strong>.
@@ -480,6 +486,10 @@
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
               <h2 class="h5 text-white mb-0">Audit &amp; logs</h2>
               <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary px-admin-auto-refresh-toggle" id="pxAdminAuditAutoRefresh" aria-pressed="false" title="Pause automatic refresh; use Refresh to update manually">
+                  <i class="bi bi-pause-fill px-admin-auto-refresh-icon" aria-hidden="true"></i>
+                  <span class="px-admin-auto-refresh-label">Pause auto</span>
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-light" id="pxAdminAuditRefresh" title="Reload metrics and log context">
                   <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
                 </button>
@@ -559,9 +569,15 @@
           <div class="px-admin-panel-card">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
               <h2 class="h5 text-white mb-0">Server Memory</h2>
-              <button type="button" class="btn btn-sm btn-outline-light" id="pxAdminServerMemoryRefresh" title="Reload disk and uploads usage">
-                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
-              </button>
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary px-admin-auto-refresh-toggle" id="pxAdminServerMemoryAutoRefresh" aria-pressed="false" title="Pause automatic refresh; use Refresh to update manually">
+                  <i class="bi bi-pause-fill px-admin-auto-refresh-icon" aria-hidden="true"></i>
+                  <span class="px-admin-auto-refresh-label">Pause auto</span>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-light" id="pxAdminServerMemoryRefresh" title="Reload disk and uploads usage">
+                  <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
+                </button>
+              </div>
             </div>
             <p class="text-white-50 small mb-3">
               Deployment footprint on disk and recursive listing of files from <code class="text-info">backend/uploads</code>.
