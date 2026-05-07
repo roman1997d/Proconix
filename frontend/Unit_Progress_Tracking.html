@@ -1932,7 +1932,7 @@
       companyName: "",
       managerName: ""
     };
-    const WIZARD_KEY = "proconix_project_wizard_state_v1";
+    const WIZARD_KEY_BASE = "proconix_project_wizard_state_v2";
     const wizardState = {
       step: 1,
       projectId: null,
@@ -2212,6 +2212,33 @@
       wizardState.projectId = null;
       wizardState.projectName = "";
       wizardState.buildings = [{ id: "b-1", name: "Tower A", floorsCount: 1, floors: [{ number: 1, spaces: [] }] }];
+    }
+
+    function getWizardScopeProjectId() {
+      const pid = getUnitProgressProjectFilterId();
+      return pid ? String(pid) : "none";
+    }
+
+    function getWizardStorageKey(projectId) {
+      return `${WIZARD_KEY_BASE}:${projectId || "none"}`;
+    }
+
+    function syncWizardProjectContext() {
+      let selectedId = "";
+      let selectedName = "";
+      if (wizardProjectNameSelect && wizardProjectNameSelect.value) {
+        selectedId = String(wizardProjectNameSelect.value || "").trim();
+        const opt = wizardProjectNameSelect.options[wizardProjectNameSelect.selectedIndex];
+        selectedName = opt && opt.textContent ? String(opt.textContent).trim() : "";
+      } else {
+        selectedId = getUnitProgressProjectFilterId() || "";
+      }
+      if (!selectedId && wizardState.projectId != null) {
+        selectedId = String(wizardState.projectId);
+      }
+      const parsed = Number(selectedId);
+      wizardState.projectId = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+      if (selectedName) wizardState.projectName = selectedName;
     }
 
     function getManagerSession() {
@@ -3162,7 +3189,9 @@
 
     function saveWizardState() {
       try {
-        localStorage.setItem(WIZARD_KEY, JSON.stringify(wizardState));
+        syncWizardProjectContext();
+        const scopedKey = getWizardStorageKey(getWizardScopeProjectId());
+        localStorage.setItem(scopedKey, JSON.stringify(wizardState));
       } catch (error) {
         // Continue without persistence when storage is unavailable.
       }
@@ -3170,7 +3199,8 @@
 
     function loadWizardState() {
       try {
-        const raw = localStorage.getItem(WIZARD_KEY);
+        const scopedKey = getWizardStorageKey(getWizardScopeProjectId());
+        const raw = localStorage.getItem(scopedKey);
         if (!raw) return;
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== "object") return;
@@ -3540,10 +3570,14 @@
 
     function openWizard() {
       try {
+        resetWizardState();
+        syncWizardProjectContext();
         loadWizardState();
+        syncWizardProjectContext();
         renderWizardStep();
       } catch (error) {
         resetWizardState();
+        syncWizardProjectContext();
         renderWizardStep();
       }
       wizardModal.classList.add("open");
@@ -3798,7 +3832,7 @@
       }
     }
 
-    function onDashboardProjectContextChanged() {
+    async function onDashboardProjectContextChanged() {
       const pid = getUnitProgressProjectFilterId();
       if (pid) {
         const pNum = Number(pid);
@@ -3812,6 +3846,7 @@
           }
         }
       }
+      await loadWorkspaceFromBackend();
       state.currentTower = null;
       state.currentFloor = null;
       state.currentUnitId = null;
@@ -5297,11 +5332,20 @@
       wizardStatus.textContent = "Draft saved. You can close now and continue later.";
     });
     document.getElementById("wizard-project-name").addEventListener("change", (event) => {
+      const prevProjectId = wizardState.projectId != null ? String(wizardState.projectId) : "";
       const selected = event.target.options[event.target.selectedIndex];
       wizardState.projectName = selected ? String(selected.textContent || "").trim() : "";
       const parsedId = Number(event.target.value);
       wizardState.projectId = Number.isFinite(parsedId) && parsedId > 0 ? parsedId : null;
+      const nextProjectId = wizardState.projectId != null ? String(wizardState.projectId) : "";
+      if (nextProjectId !== prevProjectId) {
+        resetWizardState();
+        wizardState.projectId = Number.isFinite(parsedId) && parsedId > 0 ? parsedId : null;
+        wizardState.projectName = selected ? String(selected.textContent || "").trim() : "";
+        loadWizardState();
+      }
       saveWizardState();
+      renderWizardStep();
     });
     towerUnitSearchInput.addEventListener("input", () => {
       renderTowerUnitSearchResults(towerUnitSearchInput.value);
@@ -5357,10 +5401,11 @@
     });
 
     async function bootstrapUnitProgressModule() {
-      loadWizardState();
       beginUnitProgressWait("Loading workspace and projects…");
       try {
-        await Promise.all([fetchActorContext(), loadWorkspaceFromBackend(), loadWizardProjects()]);
+        await Promise.all([fetchActorContext(), loadWizardProjects()]);
+        syncWizardProjectContext();
+        await loadWorkspaceFromBackend();
       } finally {
         endUnitProgressWait();
       }
@@ -5388,11 +5433,11 @@
           : "proconix_dashboard_today_project_id";
       window.addEventListener("storage", function (e) {
         if (e.key === dashKey) {
-          onDashboardProjectContextChanged();
+          onDashboardProjectContextChanged().catch(function () {});
         }
       });
       window.addEventListener("proconix-dashboard-project-changed", function () {
-        onDashboardProjectContextChanged();
+        onDashboardProjectContextChanged().catch(function () {});
       });
     }
 
