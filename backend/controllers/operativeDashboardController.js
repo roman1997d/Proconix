@@ -2016,7 +2016,8 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
           projectId = paRow.rows[0].project_id;
         }
       } catch (paErr) {
-        if (paErr && paErr.code !== '42P01') throw paErr;
+        // Older schemas may miss project_assignments table or project_id column.
+        if (paErr && paErr.code !== '42P01' && paErr.code !== '42703') throw paErr;
       }
     }
     if (companyId == null || projectId == null) {
@@ -2029,10 +2030,23 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
     const projectName = projectRow.rows[0] ? String(projectRow.rows[0].name || '').trim() : 'Project';
     const workerName = String(user.name || user.email || 'Operative').trim();
 
-    const workspaceRes = await pool.query(
-      'SELECT workspace FROM unit_progress_state WHERE company_id = $1 AND project_id = $2',
-      [companyId, projectId]
-    );
+    let workspaceRes;
+    try {
+      workspaceRes = await pool.query(
+        'SELECT workspace FROM unit_progress_state WHERE company_id = $1 AND project_id = $2',
+        [companyId, projectId]
+      );
+    } catch (err) {
+      // Backward-compat for older DB schemas where unit_progress_state.project_id is missing.
+      if (err && err.code === '42703' && /project_id/i.test(err.message || '')) {
+        workspaceRes = await pool.query(
+          'SELECT workspace FROM unit_progress_state WHERE company_id = $1 LIMIT 1',
+          [companyId]
+        );
+      } else {
+        throw err;
+      }
+    }
     const workspace = workspaceRes.rows[0] && workspaceRes.rows[0].workspace ? workspaceRes.rows[0].workspace : null;
     const units = workspace && Array.isArray(workspace.units) ? workspace.units : [];
     const records = [];
