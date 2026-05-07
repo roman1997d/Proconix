@@ -19,6 +19,7 @@ const {
   appendPrivateProgressManager,
   appendPrivateProgressSupervisor,
   appendPrivateProgressOperative,
+  updatePrivateProgressOperative,
   deletePrivateProgressOperative,
   getOperativeDailyRecordUnits,
   requestDeleteUnitManager,
@@ -39,6 +40,7 @@ router.post('/supervisor/private-timeline/:unitId/progress', requireSupervisorAu
 router.get('/operative/daily-records/units', requireOperativeAuth, getOperativeDailyRecordUnits);
 router.get('/operative/private-timeline/:unitId', requireOperativeAuth, getPrivateTimelineOperative);
 router.post('/operative/private-timeline/:unitId/progress', requireOperativeAuth, appendPrivateProgressOperative);
+router.patch('/operative/private-timeline/:unitId/progress', requireOperativeAuth, updatePrivateProgressOperative);
 router.delete('/operative/private-timeline/:unitId/progress', requireOperativeAuth, deletePrivateProgressOperative);
 
 router.get('/workspace', requireManagerAuth, getWorkspace);

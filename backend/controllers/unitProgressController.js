@@ -912,6 +912,61 @@ async function deletePrivateProgressOperative(req, res) {
   }
 }
 
+async function updatePrivateProgressOperative(req, res) {
+  const unitId = normalizeUnitId(req.params.unitId);
+  const entryId = String((req.body && req.body.entryId) || '').trim();
+  if (!unitId || !entryId) {
+    return res.status(400).json({ success: false, message: 'Valid unit id and entry id are required.' });
+  }
+  try {
+    const profile = await getOperativeAccessProfile(req);
+    if (!profile.ok) return res.status(403).json({ success: false, message: profile.message });
+    const progress = sanitizeIncomingProgress(req.body);
+    const workspace = await getWorkspaceByCompanyId(profile.companyId, profile.projectId);
+    const unit = getUnitFromWorkspace(workspace, unitId);
+    if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
+    const unitProjectId = unit && unit.project_id != null ? Number(unit.project_id) : null;
+    if (unitProjectId == null || unitProjectId !== profile.projectId) {
+      return res.status(403).json({ success: false, message: 'Operative does not have access to this unit.' });
+    }
+    let updated = false;
+    unit.timeline = (Array.isArray(unit.timeline) ? unit.timeline : []).map((entry) => {
+      const isTarget = String((entry && entry.entry_id) || '').trim() === entryId;
+      if (!isTarget) return entry;
+      const authorKind = String((entry && entry.author_kind) || '').trim();
+      const authorId = entry && entry.author_id != null ? Number(entry.author_id) : null;
+      if (!(authorKind === 'operative' && authorId === profile.opId)) return entry;
+      updated = true;
+      const nextPhotos =
+        Array.isArray(progress.photos) && progress.photos.length
+          ? progress.photos
+          : (Array.isArray(entry.photos) ? entry.photos : []);
+      return {
+        ...entry,
+        ...progress,
+        photos: nextPhotos,
+      };
+    });
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Timeline entry not found.' });
+    }
+    workspace.updated_at = new Date().toISOString();
+    await upsertWorkspace(profile.companyId, profile.projectId, workspace, 'operative', profile.opId);
+    const ownTimeline = unit.timeline.filter((entry) => {
+      const authorKind = String((entry && entry.author_kind) || '').trim();
+      const authorId = entry && entry.author_id != null ? Number(entry.author_id) : null;
+      return authorKind === 'operative' && authorId === profile.opId;
+    });
+    return res.json({ success: true, timeline: ownTimeline });
+  } catch (error) {
+    if (error.message && error.message.endsWith('required.')) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    console.error('unitProgress updatePrivateProgressOperative:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update progress entry.' });
+  }
+}
+
 function removeUnitFromWorkspace(workspace, unitId) {
   const target = normalizeUnitId(unitId);
   if (!target || !workspace || typeof workspace !== 'object' || !Array.isArray(workspace.units)) {
@@ -1428,6 +1483,7 @@ module.exports = {
   appendPrivateProgressManager,
   appendPrivateProgressSupervisor,
   appendPrivateProgressOperative,
+  updatePrivateProgressOperative,
   deletePrivateProgressOperative,
   getOperativeDailyRecordUnits,
   requestDeleteUnitManager,

@@ -357,16 +357,28 @@
           <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
         </div>
         <div class="op-modal-body">
-          <div class="op-field"><label>Stage</label><input type="text" id="op-dr-view-stage" readonly></div>
+          <div class="op-field"><label for="op-dr-view-stage">Stage</label><input type="text" id="op-dr-view-stage" maxlength="120"></div>
           <div class="op-field-row">
-            <div class="op-field"><label>Status</label><input type="text" id="op-dr-view-status" readonly></div>
+            <div class="op-field">
+              <label for="op-dr-view-status">Status</label>
+              <select id="op-dr-view-status">
+                <option value="In progress">In progress</option>
+                <option value="Done">Done</option>
+                <option value="Blocked">Blocked</option>
+              </select>
+            </div>
             <div class="op-field"><label>Date</label><input type="text" id="op-dr-view-date" readonly></div>
           </div>
-          <div class="op-field d-none" id="op-dr-view-reason-wrap"><label>Blocked reason</label><textarea id="op-dr-view-reason" rows="2" readonly></textarea></div>
-          <div class="op-field"><label>Comment</label><textarea id="op-dr-view-comment" rows="3" readonly></textarea></div>
+          <div class="op-field d-none" id="op-dr-view-reason-wrap"><label for="op-dr-view-reason">Blocked reason</label><textarea id="op-dr-view-reason" rows="2" maxlength="180"></textarea></div>
+          <div class="op-field"><label for="op-dr-view-comment">Comment</label><textarea id="op-dr-view-comment" rows="3" maxlength="1200"></textarea></div>
           <div class="op-field">
             <label>Photos</label>
             <div id="op-dr-view-photos" class="op-dr-photos"></div>
+          </div>
+          <div id="op-dr-view-feedback" class="op-feedback d-none" role="alert"></div>
+          <div class="op-field-row">
+            <button type="button" class="op-btn op-btn-secondary" id="op-dr-view-update">Update</button>
+            <button type="button" class="op-btn op-btn-danger-outline" id="op-dr-view-delete">Delete</button>
           </div>
         </div>
       </div>

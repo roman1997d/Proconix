@@ -1643,7 +1643,7 @@
   var dailyRecordUnitSelect = document.getElementById('op-dr-unit');
   var dailyRecordStatusSelect = document.getElementById('op-dr-status');
   var dailyRecordReasonWrap = document.getElementById('op-dr-reason-wrap');
-  var dailyRecordState = { units: [], selectedUnitId: '', timeline: [] };
+  var dailyRecordState = { units: [], selectedUnitId: '', timeline: [], selectedEntryId: '' };
 
   function openModal(modal) {
     if (modal) {
@@ -1807,12 +1807,23 @@
           '<article class="op-dr-item" data-entry-id="' + escapeHtml(String(entry.entry_id || '')) + '">' +
             '<div class="op-dr-item-head">' +
               '<div><strong>' + escapeHtml(String(entry.stage || 'Stage')) + '</strong></div>' +
-              '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-dr-delete" data-entry-id="' + escapeHtml(String(entry.entry_id || '')) + '">Delete</button>' +
             '</div>' +
             '<div class="op-dr-comment">' + escapeHtml(String(entry.comment || '')) + '</div>' +
           '</article>'
         );
       }).join('');
+  }
+
+  function setDailyRecordDetailsReasonVisibility() {
+    var statusEl = document.getElementById('op-dr-view-status');
+    var reasonWrap = document.getElementById('op-dr-view-reason-wrap');
+    if (!statusEl || !reasonWrap) return;
+    var blocked = String(statusEl.value || '') === 'Blocked';
+    reasonWrap.classList.toggle('d-none', !blocked);
+    if (!blocked) {
+      var reasonEl = document.getElementById('op-dr-view-reason');
+      if (reasonEl) reasonEl.value = '';
+    }
   }
 
   function openDailyRecordDetails(entryId) {
@@ -1828,6 +1839,7 @@
     var reasonEl = document.getElementById('op-dr-view-reason');
     var commentEl = document.getElementById('op-dr-view-comment');
     var photosEl = document.getElementById('op-dr-view-photos');
+    dailyRecordState.selectedEntryId = String(entry.entry_id || '');
     if (stageEl) stageEl.value = String(entry.stage || '');
     if (statusEl) statusEl.value = String(entry.status || '');
     if (dateEl) dateEl.value = formatDailyRecordDate(entry.date);
@@ -1842,6 +1854,7 @@
         return src ? '<img src="' + escapeHtml(src) + '" alt="Daily record photo">' : '';
       }).join('') : '<p class="op-text-muted" style="margin:0">No photos.</p>';
     }
+    hideFeedback(document.getElementById('op-dr-view-feedback'));
     openModal(modalDailyRecordView);
   }
 
@@ -1969,33 +1982,89 @@
 
   if (dailyRecordListEl) {
     dailyRecordListEl.addEventListener('click', function (e) {
-      var btn = e.target && e.target.closest ? e.target.closest('.op-dr-delete') : null;
-      if (!btn) {
-        var card = e.target && e.target.closest ? e.target.closest('.op-dr-item') : null;
-        if (!card) return;
-        openDailyRecordDetails(String(card.getAttribute('data-entry-id') || ''));
+      var card = e.target && e.target.closest ? e.target.closest('.op-dr-item') : null;
+      if (!card) return;
+      openDailyRecordDetails(String(card.getAttribute('data-entry-id') || ''));
+    });
+  }
+
+  var drViewStatus = document.getElementById('op-dr-view-status');
+  if (drViewStatus) drViewStatus.addEventListener('change', setDailyRecordDetailsReasonVisibility);
+
+  var drViewUpdate = document.getElementById('op-dr-view-update');
+  if (drViewUpdate) {
+    drViewUpdate.addEventListener('click', function () {
+      var unitId = String(dailyRecordState.selectedUnitId || '').trim();
+      var entryId = String(dailyRecordState.selectedEntryId || '').trim();
+      var stage = String((document.getElementById('op-dr-view-stage') || {}).value || '').trim();
+      var status = String((document.getElementById('op-dr-view-status') || {}).value || '').trim();
+      var reason = String((document.getElementById('op-dr-view-reason') || {}).value || '').trim();
+      var comment = String((document.getElementById('op-dr-view-comment') || {}).value || '').trim();
+      var fb = document.getElementById('op-dr-view-feedback');
+      if (!unitId || !entryId || !stage || !status || !comment) {
+        showFeedback(fb, 'Stage, status and comment are required.', true);
         return;
       }
-      var entryId = String(btn.getAttribute('data-entry-id') || '').trim();
+      if (status === 'Blocked' && !reason) {
+        showFeedback(fb, 'Blocked status requires a reason.', true);
+        return;
+      }
+      drViewUpdate.disabled = true;
+      showFeedback(fb, 'Updating…', false);
+      apiUnitProgress('/operative/private-timeline/' + encodeURIComponent(unitId) + '/progress', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          entryId: entryId,
+          stage: stage,
+          status: status,
+          reason: reason,
+          comment: comment,
+          photos: [],
+        }),
+      })
+        .then(function (r) {
+          drViewUpdate.disabled = false;
+          if (!r.data || !r.data.success) {
+            showFeedback(fb, (r.data && r.data.message) || 'Could not update entry.', true);
+            return;
+          }
+          showFeedback(dailyRecordFeedbackEl, 'Entry updated.', false);
+          renderDailyRecords(r.data.timeline || []);
+          closeModal(modalDailyRecordView);
+        })
+        .catch(function (err) {
+          drViewUpdate.disabled = false;
+          showFeedback(fb, err.message || 'Could not update entry.', true);
+        });
+    });
+  }
+
+  var drViewDelete = document.getElementById('op-dr-view-delete');
+  if (drViewDelete) {
+    drViewDelete.addEventListener('click', function () {
       var unitId = String(dailyRecordState.selectedUnitId || '').trim();
-      if (!entryId || !unitId) return;
-      btn.disabled = true;
+      var entryId = String(dailyRecordState.selectedEntryId || '').trim();
+      var fb = document.getElementById('op-dr-view-feedback');
+      if (!unitId || !entryId) return;
+      drViewDelete.disabled = true;
+      showFeedback(fb, 'Deleting…', false);
       apiUnitProgress('/operative/private-timeline/' + encodeURIComponent(unitId) + '/progress', {
         method: 'DELETE',
         body: JSON.stringify({ entryId: entryId }),
       })
         .then(function (r) {
+          drViewDelete.disabled = false;
           if (!r.data || !r.data.success) {
-            showFeedback(dailyRecordFeedbackEl, (r.data && r.data.message) || 'Could not delete entry.', true);
-            btn.disabled = false;
+            showFeedback(fb, (r.data && r.data.message) || 'Could not delete entry.', true);
             return;
           }
           showFeedback(dailyRecordFeedbackEl, 'Entry deleted.', false);
           renderDailyRecords(r.data.timeline || []);
+          closeModal(modalDailyRecordView);
         })
         .catch(function (err) {
-          showFeedback(dailyRecordFeedbackEl, err.message || 'Could not delete entry.', true);
-          btn.disabled = false;
+          drViewDelete.disabled = false;
+          showFeedback(fb, err.message || 'Could not delete entry.', true);
         });
     });
   }
