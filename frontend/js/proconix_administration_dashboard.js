@@ -825,11 +825,17 @@
       if (pctEl) pctEl.textContent = pct.toFixed(1) + '%';
     }
 
+    function uploadsPublicHref(relPath) {
+      var p = String(relPath || '').replace(/^\/+/, '');
+      if (!p) return '/uploads/';
+      return '/uploads/' + p.split('/').map(function (seg) { return encodeURIComponent(seg); }).join('/');
+    }
+
     function renderUploadsAudit(sessForReq) {
       var body = document.getElementById('pxAdminAuditUploadsBody');
       var meta = document.getElementById('pxAdminAuditUploadsMeta');
       if (!body) return;
-      body.innerHTML = '<tr><td colspan="3" class="text-white-50">Loading backend/uploads files…</td></tr>';
+      body.innerHTML = '<tr><td colspan="4" class="text-white-50">Loading backend/uploads files…</td></tr>';
       fetch('/api/platform-admin/uploads-files', {
         method: 'GET',
         headers: sessionHeaders(sessForReq),
@@ -844,7 +850,7 @@
           body.innerHTML = '';
           if (out.status !== 200 || !out.data || !out.data.success) {
             var trE = document.createElement('tr');
-            trE.innerHTML = '<td colspan="3" class="text-warning">Could not load backend/uploads listing.</td>';
+            trE.innerHTML = '<td colspan="4" class="text-warning">Could not load backend/uploads listing.</td>';
             body.appendChild(trE);
             if (meta) meta.textContent = (out.data && out.data.message) || '—';
             return;
@@ -863,15 +869,25 @@
           renderMemoryDonut();
           if (!files.length) {
             var tr0 = document.createElement('tr');
-            tr0.innerHTML = '<td colspan="3" class="text-white-50">No files found.</td>';
+            tr0.innerHTML = '<td colspan="4" class="text-white-50">No files found.</td>';
             body.appendChild(tr0);
             return;
           }
           files.forEach(function (f) {
+            var pathStr = String(f.path || '');
+            var disp = cellText(pathStr || '—');
+            var pathCell =
+              pathStr ?
+                '<a class="link-info link-underline-opacity-50 link-underline-opacity-50-hover text-break" href="' +
+                  uploadsPublicHref(pathStr) +
+                  '" target="_blank" rel="noopener noreferrer">' +
+                  disp +
+                  '</a>'
+                : disp;
             var tr = document.createElement('tr');
             tr.innerHTML =
               '<td class="font-monospace small">' +
-              cellText(f.path || '—') +
+              pathCell +
               '</td><td class="text-end text-nowrap">' +
               cellText(formatBytesSmart(f.size_bytes)) +
               '</td><td class="small text-white-50">' +
@@ -885,7 +901,7 @@
           });
         })
         .catch(function () {
-          body.innerHTML = '<tr><td colspan="3" class="text-warning">Network error while loading backend/uploads files.</td></tr>';
+          body.innerHTML = '<tr><td colspan="4" class="text-warning">Network error while loading backend/uploads files.</td></tr>';
           if (meta) meta.textContent = '—';
           memoryBusinessBytes = 0;
           renderMemoryBars();
