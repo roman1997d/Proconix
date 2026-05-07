@@ -2901,9 +2901,17 @@
       }
     }
 
+    /** On failure, `persistWorkspace.lastError` is { status, message } — callers may show message in UI. */
     async function persistWorkspace(reason) {
+      persistWorkspace.lastError = null;
       const cfg = getWorkspaceApiConfig();
-      if (!cfg) return false;
+      if (!cfg) {
+        persistWorkspace.lastError = {
+          status: 0,
+          message: "Sign in required (manager dashboard or supervisor session).",
+        };
+        return false;
+      }
       try {
         const workspacePayload =
           stripTransientQaEvidenceFromWorkspace(DATA);
@@ -2920,9 +2928,43 @@
             reason: reason || "update",
           })
         });
-        const payload = await response.json();
-        return Boolean(response.ok && payload && payload.success);
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok && payload && payload.success) return true;
+        const serverMsg =
+          payload && typeof payload.message === "string" && payload.message.trim()
+            ? payload.message.trim()
+            : "";
+        let message = serverMsg;
+        if (payload && payload.code === "unit_progress_tables_missing" && !message) {
+          message = "Unit Progress database tables are missing on the server.";
+        }
+        if (!message) {
+          if (response.status === 401) {
+            message = "Session expired or invalid — sign in again.";
+          } else if (response.status === 403) {
+            message = "Access denied.";
+          } else if (response.status === 413) {
+            message =
+              "Workspace JSON is too large for the server limit (photos in timelines). Reduce size or raise JSON_BODY_LIMIT / proxy limits.";
+          } else if (response.status >= 500) {
+            message = "Server error while saving workspace.";
+          } else {
+            message = `Save failed (HTTP ${response.status}).`;
+          }
+        }
+        persistWorkspace.lastError = { status: response.status, message };
+        return false;
       } catch (error) {
+        const raw = error && typeof error.message === "string" ? error.message : "";
+        const parseHint =
+          /JSON|unexpected token/i.test(raw) ? "Unexpected response — body may exceed server limits." : "";
+        persistWorkspace.lastError = {
+          status: 0,
+          message:
+            raw === "Failed to fetch"
+              ? "Network error — check connection, server, or HTTPS/certificate issues."
+              : parseHint || raw || "Unexpected error during save.",
+        };
         return false;
       }
     }
@@ -3768,7 +3810,10 @@
         DATA.towers.pop();
         if (addBuildingModalFeedback) {
           addBuildingModalFeedback.style.display = "block";
-          addBuildingModalFeedback.textContent = "Could not save. Check your session and network.";
+          const le = persistWorkspace.lastError;
+          addBuildingModalFeedback.textContent =
+            (le && le.message) ||
+            "Could not save. Check your session and network.";
         }
         return;
       }
