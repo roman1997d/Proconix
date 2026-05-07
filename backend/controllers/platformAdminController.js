@@ -31,6 +31,7 @@ const BACKUP_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
 let autoBackupSchedulerStarted = false;
 const dataSystemOtpChallenges = new Map();
 const UPLOADS_AUDIT_MAX_FILES = parseInt(process.env.PLATFORM_UPLOADS_AUDIT_MAX_FILES || '10000', 10);
+const GENERATED_REPORTS_DIR = path.resolve(__dirname, '../uploads/worklogs/generated');
 
 /**
  * SQL ORDER BY fragment: one "primary" manager per company (manager.company_id = company).
@@ -2035,6 +2036,94 @@ async function purgeAllCloudTrashFiles(req, res) {
   }
 }
 
+/**
+ * POST /api/platform-admin/uploads-generated/purge-by-age
+ * Body: { target: 'full_data_html'|'full_data_pdf'|'raport_data_pdf'|'daily_records_zip'|'share_links_json', older_than_days: number }
+ */
+async function purgeGeneratedArtifactsByAge(req, res) {
+  try {
+    const b = req.body || {};
+    const target = String(b.target || '').trim();
+    const olderThanDays = Number.parseInt(String(b.older_than_days == null ? '' : b.older_than_days), 10);
+    if (!Number.isInteger(olderThanDays) || olderThanDays < 0) {
+      return res.status(400).json({ success: false, message: 'older_than_days must be an integer >= 0.' });
+    }
+    const cutoffMs = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
+
+    const targetMap = {
+      full_data_html: { regex: /^Full_data_raport.*\.html$/i },
+      full_data_pdf: { regex: /^Full_data_raport.*\.pdf$/i },
+      raport_data_pdf: { regex: /^Raport_Data.*\.pdf$/i },
+      daily_records_zip: { regex: /^Daily_Records.*\.zip$/i },
+      share_links_json: { regex: null },
+    };
+    if (!Object.prototype.hasOwnProperty.call(targetMap, target)) {
+      return res.status(400).json({ success: false, message: 'Invalid target.' });
+    }
+
+    if (target === 'share_links_json') {
+      const sharePath = path.join(UPLOADS_ROOT, 'site_cloud_share_links.json');
+      if (!fs.existsSync(sharePath)) {
+        return res.status(200).json({ success: true, deleted_count: 0, message: 'Share links file not found.' });
+      }
+      let entries = [];
+      try {
+        const parsed = JSON.parse(fs.readFileSync(sharePath, 'utf8'));
+        entries = Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        entries = [];
+      }
+      const keep = [];
+      let removed = 0;
+      for (let i = 0; i < entries.length; i += 1) {
+        const it = entries[i];
+        const ts = new Date((it && it.created_at) || (it && it.expires_at) || 0).getTime();
+        if (!ts || ts >= cutoffMs) keep.push(it);
+        else removed += 1;
+      }
+      fs.writeFileSync(sharePath, JSON.stringify(keep, null, 2), 'utf8');
+      return res.status(200).json({
+        success: true,
+        deleted_count: removed,
+        remaining_count: keep.length,
+        message: 'site_cloud_share_links.json entries cleaned.',
+      });
+    }
+
+    if (!fs.existsSync(GENERATED_REPORTS_DIR)) {
+      return res.status(200).json({ success: true, deleted_count: 0, message: 'Generated reports folder not found.' });
+    }
+    const re = targetMap[target].regex;
+    const names = fs.readdirSync(GENERATED_REPORTS_DIR);
+    let deleted = 0;
+    for (let i = 0; i < names.length; i += 1) {
+      const name = names[i];
+      if (!re.test(name)) continue;
+      const full = path.join(GENERATED_REPORTS_DIR, name);
+      let st = null;
+      try {
+        st = fs.statSync(full);
+      } catch (_) {
+        continue;
+      }
+      if (!st.isFile()) continue;
+      if (st.mtimeMs >= cutoffMs) continue;
+      try {
+        fs.unlinkSync(full);
+        deleted += 1;
+      } catch (_) {}
+    }
+    return res.status(200).json({
+      success: true,
+      deleted_count: deleted,
+      message: 'Cleanup completed.',
+    });
+  } catch (err) {
+    console.error('platformAdmin purgeGeneratedArtifactsByAge error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to purge generated artifacts.' });
+  }
+}
+
 module.exports = {
   login,
   me,
@@ -2060,4 +2149,5 @@ module.exports = {
   listBackendUploadsFiles,
   deleteBackendUploadsFile,
   purgeAllCloudTrashFiles,
+  purgeGeneratedArtifactsByAge,
 };

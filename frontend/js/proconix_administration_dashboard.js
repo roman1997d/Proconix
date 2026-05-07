@@ -2238,6 +2238,80 @@
     });
   }
 
+  var cleanupModalEl = document.getElementById('pxAdminCleanupModal');
+  var cleanupTargetLabelEl = document.getElementById('pxAdminCleanupTargetLabel');
+  var cleanupDaysEl = document.getElementById('pxAdminCleanupDays');
+  var cleanupConfirmBtn = document.getElementById('pxAdminCleanupConfirmBtn');
+  var cleanupOpenBtns = document.querySelectorAll('.px-admin-cleanup-open');
+  var cleanupSelectedTarget = '';
+  var cleanupSelectedLabel = '';
+
+  function getCleanupModalInstance() {
+    if (!cleanupModalEl || !window.bootstrap) return null;
+    return window.bootstrap.Modal.getOrCreateInstance(cleanupModalEl);
+  }
+
+  cleanupOpenBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      cleanupSelectedTarget = String(btn.getAttribute('data-cleanup-target') || '');
+      cleanupSelectedLabel = String(btn.getAttribute('data-cleanup-label') || cleanupSelectedTarget);
+      if (cleanupTargetLabelEl) cleanupTargetLabelEl.textContent = cleanupSelectedLabel || '—';
+      if (cleanupDaysEl && !cleanupDaysEl.value) cleanupDaysEl.value = '3';
+      var inst = getCleanupModalInstance();
+      if (inst) inst.show();
+    });
+  });
+
+  if (cleanupConfirmBtn) {
+    cleanupConfirmBtn.addEventListener('click', function () {
+      var days = cleanupDaysEl ? parseInt(String(cleanupDaysEl.value || ''), 10) : NaN;
+      if (!cleanupSelectedTarget) {
+        window.alert('Select a cleanup target first.');
+        return;
+      }
+      if (!Number.isInteger(days) || days < 0) {
+        window.alert('Please enter a valid number of days (0 or more).');
+        return;
+      }
+      cleanupConfirmBtn.disabled = true;
+      fetch('/api/platform-admin/uploads-generated/purge-by-age', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          target: cleanupSelectedTarget,
+          older_than_days: days,
+        }),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          cleanupConfirmBtn.disabled = false;
+          if (out.status !== 200 || !out.data || !out.data.success) {
+            var errMsg = (out.data && out.data.message) || 'Cleanup failed.';
+            if (window.pxAdminShowToast) window.pxAdminShowToast(errMsg, 'danger');
+            else window.alert(errMsg);
+            return;
+          }
+          var inst = getCleanupModalInstance();
+          if (inst) inst.hide();
+          var msg = 'Deleted: ' + String(out.data.deleted_count || 0) + ' from ' + cleanupSelectedLabel + '.';
+          if (window.pxAdminShowToast) window.pxAdminShowToast(msg, 'success');
+          else window.alert(msg);
+          loadSystemHealthPanel(session);
+        })
+        .catch(function () {
+          cleanupConfirmBtn.disabled = false;
+          var msg = 'Network error while deleting files.';
+          if (window.pxAdminShowToast) window.pxAdminShowToast(msg, 'danger');
+          else window.alert(msg);
+        });
+    });
+  }
+
   var btnAuditLogTest = document.getElementById('pxAdminAuditLogTest');
   if (btnAuditLogTest) {
     btnAuditLogTest.addEventListener('click', function () {

@@ -32,6 +32,7 @@ const {
   listBackendUploadsFiles,
   deleteBackendUploadsFile,
   purgeAllCloudTrashFiles,
+  purgeGeneratedArtifactsByAge,
 } = require('../controllers/platformAdminController');
 const {
   listPlatformUsers,
@@ -78,5 +79,6 @@ router.post('/site-chat/purge-older-than', requirePlatformAdminAuth, purgeSiteCh
 router.get('/uploads-files', requirePlatformAdminAuth, listBackendUploadsFiles);
 router.delete('/uploads-files', requirePlatformAdminAuth, deleteBackendUploadsFile);
 router.post('/uploads-cloud-trash/purge-all', requirePlatformAdminAuth, purgeAllCloudTrashFiles);
+router.post('/uploads-generated/purge-by-age', requirePlatformAdminAuth, purgeGeneratedArtifactsByAge);
 
 module.exports = router;
