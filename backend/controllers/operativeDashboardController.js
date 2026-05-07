@@ -1913,6 +1913,17 @@ function attachPdfFooter(doc) {
   drawFooter();
 }
 
+function resolvePublicBaseUrl(req) {
+  const envBase = String(
+    process.env.PUBLIC_APP_URL ||
+    process.env.SITE_URL ||
+    process.env.PROCONIX_PUBLIC_URL ||
+    ''
+  ).trim();
+  if (envBase) return envBase.replace(/\/$/, '');
+  return `${req.protocol}://${req.get('host')}`.replace(/\/$/, '');
+}
+
 function sanitizeNamePart(v) {
   return String(v || '').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'item';
 }
@@ -2345,6 +2356,9 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
     const fullPath = `/uploads/worklogs/generated/${fullName}`;
     const fullHtmlPath = `/uploads/worklogs/generated/${fullHtmlName}`;
     const zipPath = `/uploads/worklogs/generated/${zipName}`;
+    const publicBase = resolvePublicBaseUrl(req);
+    const fullHtmlUrl = `${publicBase}${fullHtmlPath}`;
+    const zipUrl = `${publicBase}${zipPath}`;
 
     const toEmail = await resolveCompanyInvoiceEmail(companyId);
     if (!toEmail) {
@@ -2406,9 +2420,8 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
       projectName,
       fromDate,
       toDate,
-      attachments: [
-        { filename: fullHtmlName, content: Buffer.from(fullHtml, 'utf8'), contentType: 'text/html; charset=utf-8' },
-      ],
+      links: { html: fullHtmlUrl, zip: zipUrl },
+      attachments: [],
     });
 
     return res.status(200).json({

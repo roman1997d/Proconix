@@ -1392,7 +1392,7 @@ async function sendWorkLogInvoiceCopyEmail(p) {
 
 /**
  * Send generated Daily Records invoice package to manager.
- * @param {{ to: string, workerName: string, workerEmail: string, projectName: string, fromDate: string, toDate: string, attachments: Array<{filename:string,content:Buffer,contentType:string}> }} p
+ * @param {{ to: string, workerName: string, workerEmail: string, projectName: string, fromDate: string, toDate: string, attachments: Array<{filename:string,content:Buffer,contentType:string}>, links?: { html?: string, zip?: string } }} p
  */
 async function sendDailyRecordWorklogEmail(p) {
   const toAddr = String(p.to || '').trim();
@@ -1409,18 +1409,23 @@ async function sendDailyRecordWorklogEmail(p) {
   }
   const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
   const subject = `Daily Records invoice package — ${p.workerName} — ${p.fromDate} to ${p.toDate}`;
+  const htmlLink = p.links && p.links.html ? String(p.links.html).trim() : '';
+  const zipLink = p.links && p.links.zip ? String(p.links.zip).trim() : '';
   const text = [
     'Daily Records invoice package generated from operative updates.',
     `Worker: ${p.workerName}${p.workerEmail ? ` (${p.workerEmail})` : ''}`,
     `Project: ${p.projectName}`,
     `Period: ${p.fromDate} -> ${p.toDate}`,
     '',
+    htmlLink ? `HTML report: ${htmlLink}` : null,
+    zipLink ? `ZIP download: ${zipLink}` : null,
+    '',
     'For more details, access proconix.uk and open the Work Logs section.',
     '',
     'Best regards,',
     'Proconix.uk - Construction workflow management',
     '',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   await transport.sendMail({
     from,
