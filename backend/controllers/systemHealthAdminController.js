@@ -104,12 +104,25 @@ async function getSystemHealth(req, res) {
   let dbOk = false;
   let dbLatencyMs = null;
   let dbError = null;
+  let dbLiveName = null;
+  let dbSizeBytes = null;
+  let dbSizePretty = null;
   const dbName = process.env.PGDATABASE || process.env.DB_NAME || 'ProconixDB';
   try {
     const t0 = Date.now();
-    await pool.query('SELECT 1');
+    const r = await pool.query(
+      `SELECT
+        current_database() AS live_name,
+        pg_database_size(current_database())::bigint AS size_bytes,
+        pg_size_pretty(pg_database_size(current_database())) AS size_pretty`
+    );
     dbLatencyMs = Date.now() - t0;
     dbOk = true;
+    if (r.rows[0]) {
+      if (r.rows[0].live_name != null) dbLiveName = String(r.rows[0].live_name);
+      if (r.rows[0].size_bytes != null) dbSizeBytes = Number(r.rows[0].size_bytes);
+      if (r.rows[0].size_pretty != null) dbSizePretty = String(r.rows[0].size_pretty);
+    }
   } catch (e) {
     dbOk = false;
     dbError = e.message || String(e);
@@ -225,6 +238,9 @@ async function getSystemHealth(req, res) {
     database: {
       ok: dbOk,
       latency_ms: dbLatencyMs,
+      name: dbLiveName || dbName,
+      size_bytes: dbSizeBytes,
+      size_pretty: dbSizePretty,
     },
     console_banner: {
       lines: consoleBannerLines,

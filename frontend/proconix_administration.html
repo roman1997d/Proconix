@@ -401,6 +401,7 @@
                     <div class="text-white-50 small">Database</div>
                     <div class="px-admin-stat-value" id="pxAdminSysDbStatus">—</div>
                     <div class="small text-white-50" id="pxAdminSysDbLatency">Ping latency</div>
+                    <div class="small text-white-50 mt-1" id="pxAdminSysDbSize">Database size</div>
                   </div>
                 </div>
                 <div class="col-sm-6 col-xl-3">
@@ -579,8 +580,9 @@
                 </button>
               </div>
             </div>
-            <p class="text-white-50 small mb-3">
+            <p class="text-white-50 small mb-2">
               Deployment footprint on disk and recursive listing of files from <code class="text-info">backend/uploads</code>.
+              <span class="d-block mt-2"><strong class="text-white-50">PostgreSQL disk size:</strong> <span class="text-info" id="pxAdminServerMemoryDbSize">—</span></span>
             </p>
             <div class="mb-3">
               <h3 class="h6 text-white mb-2">Control buttons</h3>

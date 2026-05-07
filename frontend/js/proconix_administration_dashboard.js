@@ -1223,6 +1223,8 @@
         }
         var dbEl = document.getElementById('pxAdminSysDbStatus');
         var dbLat = document.getElementById('pxAdminSysDbLatency');
+        var dbSz = document.getElementById('pxAdminSysDbSize');
+        var srvMemDb = document.getElementById('pxAdminServerMemoryDbSize');
         if (dbEl) {
           dbEl.textContent = d.database && d.database.ok ? 'OK' : 'Down';
           dbEl.className =
@@ -1233,6 +1235,36 @@
             d.database && d.database.latency_ms != null
               ? 'Ping ~' + String(d.database.latency_ms) + ' ms'
               : 'Ping latency';
+        }
+        if (dbSz) {
+          var dbmeta = (d.database && d.database.name) ? String(d.database.name) : '';
+          var szPretty = (d.database && d.database.size_pretty) ? String(d.database.size_pretty) : '';
+          if (d.database && d.database.ok && szPretty) {
+            dbSz.textContent = szPretty + (dbmeta ? ' · ' + dbmeta : '');
+            dbSz.className = 'small text-info mt-1';
+          } else if (d.database && d.database.ok && d.database.size_bytes != null) {
+            dbSz.textContent = formatStorageBytes(Number(d.database.size_bytes)) + (dbmeta ? ' · ' + dbmeta : '');
+            dbSz.className = 'small text-info mt-1';
+          } else if (d.database && d.database.ok) {
+            dbSz.textContent = 'Size unavailable';
+            dbSz.className = 'small text-white-50 mt-1';
+          } else {
+            dbSz.textContent = 'Database size —';
+            dbSz.className = 'small text-white-50 mt-1';
+          }
+        }
+        if (srvMemDb) {
+          if (d.database && d.database.ok && d.database.size_pretty) {
+            srvMemDb.textContent =
+              String(d.database.size_pretty) +
+              (d.database.name ? ' (' + String(d.database.name) + ')' : '');
+          } else if (d.database && d.database.ok && d.database.size_bytes != null) {
+            srvMemDb.textContent =
+              formatStorageBytes(Number(d.database.size_bytes)) +
+              (d.database.name ? ' (' + String(d.database.name) + ')' : '');
+          } else {
+            srvMemDb.textContent = d.database && d.database.ok ? '—' : 'DB unreachable';
+          }
         }
         var up = document.getElementById('pxAdminSysUptime');
         if (up && d.uptime_seconds != null) {
