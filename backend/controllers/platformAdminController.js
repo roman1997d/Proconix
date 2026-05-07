@@ -1928,6 +1928,39 @@ async function listBackendUploadsFiles(req, res) {
   }
 }
 
+/**
+ * DELETE /api/platform-admin/uploads-files
+ * Body: { path: "relative/path/in/backend/uploads.ext" }
+ */
+async function deleteBackendUploadsFile(req, res) {
+  try {
+    const relPath = String((req.body && req.body.path) || '').trim();
+    if (!relPath) {
+      return res.status(400).json({ success: false, message: 'File path is required.' });
+    }
+    if (relPath.includes('..') || relPath.startsWith('/') || relPath.startsWith('\\')) {
+      return res.status(400).json({ success: false, message: 'Invalid file path.' });
+    }
+    const root = path.resolve(__dirname, '../uploads');
+    const full = path.resolve(root, relPath);
+    if (!full.startsWith(root + path.sep) && full !== root) {
+      return res.status(400).json({ success: false, message: 'Path is outside backend/uploads.' });
+    }
+    if (!fs.existsSync(full)) {
+      return res.status(404).json({ success: false, message: 'File not found.' });
+    }
+    const st = fs.statSync(full);
+    if (!st.isFile()) {
+      return res.status(400).json({ success: false, message: 'Only files can be deleted.' });
+    }
+    fs.unlinkSync(full);
+    return res.status(200).json({ success: true, message: 'File deleted.' });
+  } catch (err) {
+    console.error('platformAdmin deleteBackendUploadsFile error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to delete file.' });
+  }
+}
+
 module.exports = {
   login,
   me,
@@ -1951,4 +1984,5 @@ module.exports = {
   startPlatformAutoBackupScheduler,
   purgeSiteChatOlderThan,
   listBackendUploadsFiles,
+  deleteBackendUploadsFile,
 };

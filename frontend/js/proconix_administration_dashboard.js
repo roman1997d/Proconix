@@ -808,6 +808,10 @@
               cellText(formatBytesSmart(f.size_bytes)) +
               '</td><td class="small text-white-50">' +
               cellText(f.modified_at ? new Date(f.modified_at).toLocaleString() : '—') +
+              '</td><td class="text-end">' +
+              '<button type="button" class="btn btn-sm btn-outline-danger px-admin-upload-delete" data-upload-path="' +
+              encodeURIComponent(String(f.path || '')) +
+              '">Delete</button>' +
               '</td>';
             body.appendChild(tr);
           });
@@ -815,6 +819,36 @@
         .catch(function () {
           body.innerHTML = '<tr><td colspan="3" class="text-warning">Network error while loading backend/uploads files.</td></tr>';
           if (meta) meta.textContent = '—';
+        });
+    }
+
+    function deleteUploadsAuditFile(sessForReq, relPath) {
+      if (!relPath) return;
+      if (!window.confirm('Delete this file from backend/uploads?\n\n' + relPath)) return;
+      fetch('/api/platform-admin/uploads-files', {
+        method: 'DELETE',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(sessForReq)),
+        credentials: 'same-origin',
+        body: JSON.stringify({ path: relPath }),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          if (out.status !== 200 || !out.data || !out.data.success) {
+            var errMsg = (out.data && out.data.message) || 'Could not delete file.';
+            if (window.pxAdminShowToast) window.pxAdminShowToast(errMsg, 'danger');
+            else window.alert(errMsg);
+            return;
+          }
+          renderUploadsAudit(sessForReq);
+        })
+        .catch(function () {
+          var msg = 'Network error while deleting file.';
+          if (window.pxAdminShowToast) window.pxAdminShowToast(msg, 'danger');
+          else window.alert(msg);
         });
     }
 
@@ -1169,6 +1203,15 @@
         if (content) content.classList.remove('d-none');
         if (auditContent) auditContent.classList.remove('d-none');
         renderUploadsAudit(sess);
+        var uploadsBody = document.getElementById('pxAdminAuditUploadsBody');
+        if (uploadsBody && !uploadsBody.__pxBoundDelete) {
+          uploadsBody.__pxBoundDelete = true;
+          uploadsBody.addEventListener('click', function (ev) {
+            var btn = ev.target.closest('.px-admin-upload-delete');
+            if (!btn) return;
+            deleteUploadsAuditFile(sess, decodeURIComponent(btn.getAttribute('data-upload-path') || ''));
+          });
+        }
       })
       .catch(function () {
         if (loading) loading.classList.add('d-none');

@@ -30,6 +30,7 @@ const {
   restoreBackupFromServer,
   purgeSiteChatOlderThan,
   listBackendUploadsFiles,
+  deleteBackendUploadsFile,
 } = require('../controllers/platformAdminController');
 const {
   listPlatformUsers,
@@ -74,5 +75,6 @@ router.patch('/companies/:id', requirePlatformAdminAuth, updateCompany);
 router.delete('/companies/:id', requirePlatformAdminAuth, deleteCompany);
 router.post('/site-chat/purge-older-than', requirePlatformAdminAuth, purgeSiteChatOlderThan);
 router.get('/uploads-files', requirePlatformAdminAuth, listBackendUploadsFiles);
+router.delete('/uploads-files', requirePlatformAdminAuth, deleteBackendUploadsFile);
 
 module.exports = router;
