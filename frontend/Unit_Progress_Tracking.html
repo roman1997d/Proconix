@@ -1501,9 +1501,14 @@
           <h3 class="section-title" style="margin:0;">Project Structure Wizard</h3>
           <p class="hint" style="margin:4px 0 0;">Assistant-like guided flow: Buildings -> Floors -> Spaces.</p>
         </div>
-        <a href="#project-wizard-modal" class="btn btn-primary" id="open-project-wizard" onclick="return window.forceOpenProjectWizard(event);" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
-          <i class="bi bi-magic"></i> Start Guided Setup
-        </a>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+          <a href="#project-wizard-modal" class="btn btn-primary" id="open-project-wizard" onclick="return window.forceOpenProjectWizard(event);" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+            <i class="bi bi-magic"></i> Start Guided Setup
+          </a>
+          <button type="button" class="btn btn-dark" id="open-project-wizard-add-building" style="display:inline-flex; align-items:center; gap:6px;">
+            <i class="bi bi-building"></i> Add Building
+          </button>
+        </div>
       </section>
       <div id="tower-list" class="list-grid"></div>
     </section>
@@ -1783,6 +1788,11 @@
               <button type="button" class="counter-btn" id="building-minus">-</button>
               <div class="counter-value" id="building-count-value">1</div>
               <button type="button" class="counter-btn" id="building-plus">+</button>
+            </div>
+            <div style="margin-top:10px;">
+              <button type="button" class="btn btn-dark" id="wizard-add-building-btn" style="display:inline-flex; align-items:center; gap:6px;">
+                <i class="bi bi-building"></i> Add Building
+              </button>
             </div>
             <p class="assistant-tone">Great. Now name each building.</p>
             <div class="wizard-cards" id="wizard-buildings-list"></div>
@@ -3584,6 +3594,38 @@
       wizardModal.setAttribute("aria-hidden", "false");
     }
 
+    function openWizardToBuildingsStep() {
+      try {
+        syncWizardProjectContext();
+        loadWizardState();
+        syncWizardProjectContext();
+        wizardState.step = 2;
+        renderWizardStep();
+      } catch (error) {
+        wizardState.step = 2;
+        syncWizardProjectContext();
+        renderWizardStep();
+      }
+      if (typeof window.forceOpenProjectWizard === "function") {
+        window.forceOpenProjectWizard();
+      } else {
+        wizardModal.classList.add("open");
+        wizardModal.setAttribute("aria-hidden", "false");
+      }
+      wizardStatus.textContent = "Add or rename buildings — use Back to change project, Next when names are filled.";
+      saveWizardState();
+    }
+
+    function wizardAddBuildingFromToolbar() {
+      if (wizardState.buildings.length >= 20) {
+        wizardStatus.textContent = "Maximum 20 buildings in this wizard.";
+        return;
+      }
+      const nextTotal = wizardState.buildings.length + 1;
+      setBuildingCount(nextTotal);
+      wizardStatus.textContent = `Building ${nextTotal} added — set its name below.`;
+    }
+
     function closeWizard() {
       wizardModal.classList.remove("open");
       wizardModal.setAttribute("aria-hidden", "true");
@@ -5324,6 +5366,10 @@
     if (openWizardBtn) {
       openWizardBtn.addEventListener("click", openWizard);
     }
+    const openWizardAddBuildingBtn = document.getElementById("open-project-wizard-add-building");
+    if (openWizardAddBuildingBtn) {
+      openWizardAddBuildingBtn.addEventListener("click", openWizardToBuildingsStep);
+    }
     closeWizardBtn.addEventListener("click", closeWizard);
     wizardBackBtn.addEventListener("click", wizardBack);
     wizardNextBtn.addEventListener("click", wizardNext);
@@ -5352,6 +5398,8 @@
     });
     document.getElementById("building-plus").addEventListener("click", () => setBuildingCount(wizardState.buildings.length + 1));
     document.getElementById("building-minus").addEventListener("click", () => setBuildingCount(wizardState.buildings.length - 1));
+    const wizardAddBuildingBtn = document.getElementById("wizard-add-building-btn");
+    if (wizardAddBuildingBtn) wizardAddBuildingBtn.addEventListener("click", wizardAddBuildingFromToolbar);
     document.getElementById("wizard-create-project").addEventListener("click", createProjectFromWizard);
 
     let touchStartX = 0;
