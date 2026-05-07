@@ -6,7 +6,6 @@
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
-const JSZip = require('jszip');
 const { pool } = require('../db/pool');
 const { enrichJobsWithQaPriceTotals } = require('./worklogsController');
 const { sendWorkLogInvoiceCopyEmail, sendDailyRecordWorklogEmail } = require('../lib/sendCallbackRequestEmail');
@@ -1884,6 +1883,17 @@ function extensionFromMime(mime) {
   return 'jpg';
 }
 
+function getJSZipCtor() {
+  try {
+    // Lazy-load so backend still boots if deploy missed npm install.
+    return require('jszip');
+  } catch (_) {
+    const err = new Error('JSZip dependency is missing on server.');
+    err.code = 'MISSING_JSZIP';
+    throw err;
+  }
+}
+
 function bufferFromPhotoSource(src) {
   const s = String(src || '').trim();
   if (!s) return null;
@@ -2039,6 +2049,7 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
 
     const summaryPdf = await buildDailyRecordsSummaryPdf(records, { workerName, projectName, fromDate, toDate });
     const fullPdf = await buildDailyRecordsFullPdf(records, { workerName, projectName, fromDate, toDate });
+    const JSZip = getJSZipCtor();
     const zip = new JSZip();
     records.forEach((r, i) => {
       const folder = zip.folder(`${sanitizeNamePart(r.unitName)}_${i + 1}`);
@@ -2111,6 +2122,12 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
   } catch (err) {
     if (err && err.code === 'SMTP_NOT_CONFIGURED') {
       return res.status(503).json({ success: false, message: 'SMTP not configured on server.' });
+    }
+    if (err && err.code === 'MISSING_JSZIP') {
+      return res.status(503).json({
+        success: false,
+        message: 'Server dependency missing (jszip). Run npm install and restart backend.',
+      });
     }
     console.error('generateDailyRecordInvoiceFromPeriod:', err);
     return res.status(500).json({ success: false, message: 'Failed to generate Daily Records invoice.' });
