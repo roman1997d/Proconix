@@ -819,6 +819,33 @@
               </div>
               <div id="pxSettingsChatPurgeAlert" class="alert d-none mt-3 mb-0 py-2 small" role="alert"></div>
             </div>
+
+            <div class="border border-secondary rounded p-3 bg-dark bg-opacity-25 mt-4">
+              <h3 class="h6 text-white mb-2">Server panic alerts (email)</h3>
+              <p class="text-white-50 small mb-3">
+                Emails when disk or memory thresholds are exceeded, PostgreSQL fails, or <code class="text-info">/api/health</code> is bad.
+                Uses the same SMTP settings as the rest of Proconix. Recipients and thresholds come from environment variables (see <code class="text-info">.env.example</code>).
+                Add a <strong class="text-white">cron</strong> job to run <code class="text-info">node scripts/run-panic-alert-check.js</code> every 10–15 minutes so you are notified even when nobody opens this console.
+              </p>
+              <div id="pxSettingsPanicAlert" class="alert d-none mb-3 py-2 small" role="alert"></div>
+              <div class="small text-white-50 mb-2" id="pxSettingsPanicSummary">Loading…</div>
+              <div class="small text-white-50 mb-3 font-monospace" id="pxSettingsPanicPreview" style="white-space: pre-wrap; max-height: 140px; overflow-y: auto;"></div>
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <button type="button" class="btn btn-outline-info btn-sm" id="pxSettingsPanicRefreshBtn">
+                  <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i> Refresh status
+                </button>
+                <button type="button" class="btn btn-outline-light btn-sm" id="pxSettingsPanicTestBtn">
+                  <i class="bi bi-envelope-check me-1" aria-hidden="true"></i> Send test email
+                </button>
+                <button type="button" class="btn btn-warning btn-sm" id="pxSettingsPanicRunBtn">
+                  <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i> Run check now
+                </button>
+                <div class="form-check form-check-inline ms-2 mb-0">
+                  <input class="form-check-input" type="checkbox" id="pxSettingsPanicForce" />
+                  <label class="form-check-label text-white-50 small" for="pxSettingsPanicForce">Bypass cooldown (force send)</label>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

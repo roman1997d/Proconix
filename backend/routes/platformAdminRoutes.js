@@ -44,6 +44,7 @@ const {
   deletePlatformUser,
 } = require('../controllers/platformUsersAdminController');
 const { getSystemHealth, getServerLogStream, postLogTest } = require('../controllers/systemHealthAdminController');
+const { getPanicAlert, postPanicAlertTest, postPanicAlertRun } = require('../controllers/panicAlertAdminController');
 const { requirePlatformAdminAuth } = require('../middleware/requirePlatformAdminAuth');
 const restoreUploadDir = path.join(os.tmpdir(), 'proconix-restore-upload');
 fs.mkdirSync(restoreUploadDir, { recursive: true });
@@ -57,6 +58,9 @@ router.get('/me', requirePlatformAdminAuth, me);
 router.get('/system-health', requirePlatformAdminAuth, getSystemHealth);
 router.get('/server-log-stream', requirePlatformAdminAuth, getServerLogStream);
 router.post('/log-test', requirePlatformAdminAuth, postLogTest);
+router.get('/panic-alert', requirePlatformAdminAuth, getPanicAlert);
+router.post('/panic-alert/test', requirePlatformAdminAuth, postPanicAlertTest);
+router.post('/panic-alert/run', requirePlatformAdminAuth, postPanicAlertRun);
 router.post('/send-client-email', requirePlatformAdminAuth, sendClientEmail);
 router.post('/create-demo-records', requirePlatformAdminAuth, createDemoRecords);
 router.post('/send-demo-login-email', requirePlatformAdminAuth, sendDemoLoginEmail);

@@ -11,6 +11,9 @@ npm-debug.log*
 *.log
 logs/
 
+# Runtime state (panic alert cooldown timestamps)
+backend/data/panic-alert-state.json
+
 # Uploads (user files; keep folder)
 backend/uploads/*
 !backend/uploads/.gitkeep

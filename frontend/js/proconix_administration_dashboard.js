@@ -2208,6 +2208,189 @@
     });
   }
 
+  var panicRefreshBtn = document.getElementById('pxSettingsPanicRefreshBtn');
+  var panicTestBtn = document.getElementById('pxSettingsPanicTestBtn');
+  var panicRunBtn = document.getElementById('pxSettingsPanicRunBtn');
+  var panicForceEl = document.getElementById('pxSettingsPanicForce');
+
+  function loadPanicAlertPanel(sess) {
+    var summary = document.getElementById('pxSettingsPanicSummary');
+    var previewEl = document.getElementById('pxSettingsPanicPreview');
+    if (summary) summary.textContent = 'Loading…';
+    if (previewEl) previewEl.textContent = '';
+    fetch('/api/platform-admin/panic-alert', {
+      credentials: 'same-origin',
+      headers: sessionHeaders(sess),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (out.status === 401) {
+          clearSession();
+          window.location.replace(LOGIN_URL);
+          return;
+        }
+        if (out.status !== 200 || !out.data || !out.data.success) {
+          if (summary) summary.textContent = 'Could not load panic alert status.';
+          return;
+        }
+        var cfg = out.data.config || {};
+        var prev = out.data.preview || {};
+        var lines = [];
+        lines.push('Recipients: ' + (cfg.recipients && cfg.recipients.length ? cfg.recipients.join(', ') : '(none)'));
+        lines.push('Alerts enabled: ' + (cfg.enabled ? 'yes' : 'no'));
+        lines.push('SMTP: ' + (cfg.smtp_configured ? 'configured' : 'NOT SET — emails will fail'));
+        lines.push('Disk alert if ≥ ' + cfg.disk_threshold_pct + '% on /');
+        lines.push('Memory alert if ≥ ' + cfg.mem_threshold_pct + '% host memory used');
+        lines.push('Cooldown: ' + cfg.cooldown_minutes + ' min per alert type');
+        lines.push('Health URL: ' + (cfg.health_url || '—') + (cfg.skip_http ? ' (HTTP check skipped)' : ''));
+        lines.push('State file: ' + (cfg.state_path || '—'));
+        lines.push('Last run: ' + (cfg.last_run || 'never'));
+        if (cfg.last_sent && typeof cfg.last_sent === 'object') {
+          var ks = Object.keys(cfg.last_sent);
+          if (ks.length) {
+            lines.push(
+              'Last sent per key: ' +
+                ks
+                  .map(function (k) {
+                    return k + '=' + cfg.last_sent[k];
+                  })
+                  .join('; ')
+            );
+          }
+        }
+        if (summary) summary.textContent = lines.join('\n');
+
+        var pvLines = [];
+        if (prev.error) {
+          pvLines.push('Preview error: ' + prev.error);
+        } else if (prev.issues && prev.issues.length) {
+          pvLines.push('Current issues (' + prev.issues.length + '):');
+          prev.issues.forEach(function (i) {
+            pvLines.push('• ' + i.title);
+          });
+        } else {
+          pvLines.push('Current snapshot: no threshold breaches.');
+        }
+        if (prev.metrics) {
+          var m = prev.metrics;
+          pvLines.push('');
+          pvLines.push(
+            'Disk %: ' +
+              (m.disk_pct != null ? m.disk_pct : 'n/a') +
+              ' | Mem used %: ' +
+              (m.mem_used_pct != null ? m.mem_used_pct : 'n/a') +
+              ' | DB pool: ' +
+              (m.pool_ok ? 'OK' : 'FAIL')
+          );
+          if (m.health && m.health.skipped) pvLines.push('HTTP health check: skipped (PROCONIX_PANIC_SKIP_HTTP)');
+          else if (m.health && m.health.ok === false) pvLines.push('HTTP health check: FAIL');
+          else if (m.health) pvLines.push('HTTP health check: OK');
+        }
+        if (previewEl) previewEl.textContent = pvLines.join('\n');
+      })
+      .catch(function () {
+        if (summary) summary.textContent = 'Network error loading panic alerts.';
+      });
+  }
+
+  function showPanicSettingsAlert(text, kind) {
+    var el = document.getElementById('pxSettingsPanicAlert');
+    if (!el) return;
+    el.textContent = text || '';
+    el.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-warning');
+    if (kind === 'success') el.classList.add('alert-success');
+    else if (kind === 'error') el.classList.add('alert-danger');
+    else el.classList.add('alert-warning');
+  }
+
+  function hidePanicSettingsAlert() {
+    var el = document.getElementById('pxSettingsPanicAlert');
+    if (!el) return;
+    el.classList.add('d-none');
+    el.textContent = '';
+  }
+
+  if (panicRefreshBtn) {
+    panicRefreshBtn.addEventListener('click', function () {
+      hidePanicSettingsAlert();
+      loadPanicAlertPanel(session);
+    });
+  }
+  if (panicTestBtn) {
+    panicTestBtn.addEventListener('click', function () {
+      hidePanicSettingsAlert();
+      panicTestBtn.disabled = true;
+      fetch('/api/platform-admin/panic-alert/test', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+        credentials: 'same-origin',
+        body: JSON.stringify({}),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          panicTestBtn.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status === 200 && out.data && out.data.success) {
+            showPanicSettingsAlert(out.data.message || 'Test email sent.', 'success');
+            loadPanicAlertPanel(session);
+            return;
+          }
+          showPanicSettingsAlert((out.data && out.data.message) || 'Test failed.', 'error');
+        })
+        .catch(function () {
+          panicTestBtn.disabled = false;
+          showPanicSettingsAlert('Network error.', 'error');
+        });
+    });
+  }
+  if (panicRunBtn && panicForceEl) {
+    panicRunBtn.addEventListener('click', function () {
+      hidePanicSettingsAlert();
+      panicRunBtn.disabled = true;
+      fetch('/api/platform-admin/panic-alert/run', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+        credentials: 'same-origin',
+        body: JSON.stringify({ force: !!panicForceEl.checked }),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          panicRunBtn.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status === 200 && out.data && out.data.success) {
+            showPanicSettingsAlert(out.data.message || 'Done.', out.data.alerted ? 'warning' : 'success');
+            loadPanicAlertPanel(session);
+            return;
+          }
+          showPanicSettingsAlert((out.data && out.data.message) || 'Run failed.', 'error');
+        })
+        .catch(function () {
+          panicRunBtn.disabled = false;
+          showPanicSettingsAlert('Network error.', 'error');
+        });
+    });
+  }
+
   var demoForm = document.getElementById('pxDemoCreateForm');
   var demoAlert = document.getElementById('pxDemoCreateAlert');
   var demoSuccess = document.getElementById('pxDemoCreateSuccess');
@@ -2440,6 +2623,9 @@
       if (id === 'server-memory') {
         loadSystemHealthPanel(session);
         scheduleSysPoll(session);
+      }
+      if (id === 'settings') {
+        loadPanicAlertPanel(session);
       }
       if (offcanvasEl && window.bootstrap) {
         var inst = window.bootstrap.Offcanvas.getInstance(offcanvasEl);
