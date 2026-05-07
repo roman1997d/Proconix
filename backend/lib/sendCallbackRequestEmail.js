@@ -1409,22 +1409,12 @@ async function sendDailyRecordWorklogEmail(p) {
   }
   const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
   const subject = `Daily Records invoice package — ${p.workerName} — ${p.fromDate} to ${p.toDate}`;
-  const htmlLink = p.links && p.links.html ? String(p.links.html).trim() : '';
-  const zipLink = p.links && p.links.zip ? String(p.links.zip).trim() : '';
   const text = [
-    'Daily Records invoice package generated from operative updates.',
+    'Invoice summary',
+    '---------------',
     `Worker: ${p.workerName}${p.workerEmail ? ` (${p.workerEmail})` : ''}`,
     `Project: ${p.projectName}`,
     `Period: ${p.fromDate} -> ${p.toDate}`,
-    '',
-    htmlLink ? `HTML report: ${htmlLink}` : null,
-    zipLink ? `ZIP download: ${zipLink}` : null,
-    '',
-    'For more details, access proconix.uk and open the Work Logs section.',
-    '',
-    'Best regards,',
-    'Proconix.uk - Construction workflow management',
-    '',
   ].filter(Boolean).join('\n');
 
   await transport.sendMail({
