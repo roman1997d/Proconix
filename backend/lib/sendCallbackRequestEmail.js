@@ -1426,6 +1426,37 @@ async function sendDailyRecordWorklogEmail(p) {
     'Proconix.uk - Construction workflow management',
     '',
   ].filter(Boolean).join('\n');
+  const btnBase = 'display:inline-block;padding:11px 16px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;';
+  const previewBtn = htmlLink
+    ? `<a href="${htmlLink}" style="${btnBase}background:#2563eb;color:#ffffff;">Preview file</a>`
+    : '';
+  const packageBtn = zipLink
+    ? `<a href="${zipLink}" style="${btnBase}background:#0f172a;color:#ffffff;">Full package</a>`
+    : '';
+  const html = `
+    <div style="margin:0;padding:24px;background:#f3f6fb;font-family:Arial,sans-serif;color:#0f172a;">
+      <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+        <div style="padding:18px 22px;background:linear-gradient(90deg,#0f172a,#1d4ed8);color:#ffffff;">
+          <div style="font-size:20px;font-weight:700;">Proconix</div>
+          <div style="margin-top:4px;font-size:13px;opacity:0.9;">Construction workflow management</div>
+        </div>
+        <div style="padding:20px 22px;">
+          <h2 style="margin:0 0 12px 0;font-size:18px;">Daily Records Invoice Package</h2>
+          <p style="margin:0 0 12px 0;color:#334155;">Daily Records invoice package generated from operative updates.</p>
+          <table style="width:100%;border-collapse:collapse;margin:8px 0 16px 0;font-size:14px;">
+            <tr><td style="padding:6px 0;color:#475569;width:110px;">Worker</td><td style="padding:6px 0;color:#0f172a;font-weight:600;">${p.workerName}${p.workerEmail ? ` (${p.workerEmail})` : ''}</td></tr>
+            <tr><td style="padding:6px 0;color:#475569;">Project</td><td style="padding:6px 0;color:#0f172a;font-weight:600;">${p.projectName}</td></tr>
+            <tr><td style="padding:6px 0;color:#475569;">Period</td><td style="padding:6px 0;color:#0f172a;font-weight:600;">${p.fromDate} -> ${p.toDate}</td></tr>
+          </table>
+          <div style="margin:14px 0 10px 0;display:flex;gap:10px;flex-wrap:wrap;">
+            ${previewBtn}
+            ${packageBtn}
+          </div>
+          <p style="margin:14px 0 0 0;color:#475569;font-size:13px;">For more details, access <strong>proconix.uk</strong> and open the <strong>Work Logs</strong> section.</p>
+        </div>
+      </div>
+    </div>
+  `;
 
   await transport.sendMail({
     from,
@@ -1433,6 +1464,7 @@ async function sendDailyRecordWorklogEmail(p) {
     replyTo: p.workerEmail || from,
     subject,
     text,
+    html,
     attachments: Array.isArray(p.attachments) ? p.attachments : [],
   });
 }
