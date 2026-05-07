@@ -759,6 +759,214 @@
     ctx.textAlign = 'left';
   }
 
+  function uploadsPublicHrefForAdmin(relPath) {
+    var p = String(relPath || '').replace(/^\/+/, '');
+    if (!p) return '/uploads/';
+    return '/uploads/' + p.split('/').map(function (seg) { return encodeURIComponent(seg); }).join('/');
+  }
+
+  var orphanScanLastTotal = 0;
+  var orphanScanEverDone = false;
+
+  function renderUploadOrphanTable(sess, payload) {
+    var body = document.getElementById('pxAdminOrphanBody');
+    var meta = document.getElementById('pxAdminOrphanMeta');
+    var purgeBtn = document.getElementById('pxAdminOrphanPurgeAllBtn');
+    if (!body) return;
+    if (!payload || !payload.success) {
+      orphanScanLastTotal = 0;
+      orphanScanEverDone = false;
+      if (purgeBtn) {
+        purgeBtn.disabled = true;
+        purgeBtn.classList.add('d-none');
+      }
+      body.innerHTML =
+        '<tr><td colspan="3" class="text-warning">' +
+        cellText((payload && payload.message) || 'Scan failed.') +
+        '</td></tr>';
+      if (meta) meta.textContent = payload && payload.message ? String(payload.message) : '—';
+      return;
+    }
+    orphanScanLastTotal = Number(payload.total_orphans) || 0;
+    orphanScanEverDone = true;
+    if (purgeBtn) {
+      purgeBtn.classList.remove('d-none');
+      purgeBtn.disabled = orphanScanLastTotal < 1;
+    }
+    var files = Array.isArray(payload.orphans) ? payload.orphans : [];
+    var shown = files.length;
+    var totalOr = orphanScanLastTotal;
+    if (meta) {
+      var noteSnippet = '';
+      if (payload.note) {
+        var ns = String(payload.note);
+        noteSnippet =
+          ns.length > 280 ? ' · ' + ns.slice(0, 280) + '…' : ' · ' + ns;
+      }
+      meta.textContent =
+        'Scanned files: ' +
+        String(payload.total_scanned_files != null ? payload.total_scanned_files : '—') +
+        ' · DB/index references: ~' +
+        String(payload.referenced_unique_paths != null ? payload.referenced_unique_paths : '—') +
+        ' · Orphans found: ' +
+        String(totalOr) +
+        (payload.truncated && totalOr > shown ? ' · showing first ' + String(shown) + ' rows' : '') +
+        noteSnippet;
+    }
+    body.innerHTML = '';
+    if (!files.length && totalOr < 1) {
+      body.innerHTML = '<tr><td colspan="3" class="text-white-50">No unreferenced files found.</td></tr>';
+      return;
+    }
+    if (!files.length && totalOr > 0) {
+      body.innerHTML =
+        '<tr><td colspan="3" class="text-warning">Many orphans (> list cap). Use “Delete ALL unreferenced” or raise PLATFORM_UPLOADS_ORPHAN_SCAN_MAX.</td></tr>';
+      return;
+    }
+    files.forEach(function (f) {
+      var pathStr = String(f.path || '');
+      var disp = cellText(pathStr || '—');
+      var href = uploadsPublicHrefForAdmin(pathStr);
+      var pathCell =
+        pathStr ?
+          '<a class="link-info link-underline-opacity-50 text-break" href="' +
+          href +
+          '" target="_blank" rel="noopener noreferrer">' +
+          disp +
+          '</a>'
+          : disp;
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="font-monospace small">' +
+        pathCell +
+        '</td><td class="text-end text-nowrap">' +
+        cellText(formatStorageBytes(Number(f.size_bytes) || 0)) +
+        '</td><td class="text-end">' +
+        '<button type="button" class="btn btn-sm btn-outline-danger px-admin-orphan-delete" data-orphan-path="' +
+        encodeURIComponent(pathStr) +
+        '">Delete</button>' +
+        '</td>';
+      body.appendChild(tr);
+    });
+  }
+
+  function runUploadOrphanScan(sessForReq, scanBtn) {
+    var body = document.getElementById('pxAdminOrphanBody');
+    var meta = document.getElementById('pxAdminOrphanMeta');
+    if (scanBtn) scanBtn.disabled = true;
+    if (body) body.innerHTML = '<tr><td colspan="3" class="text-white-50">Scanning…</td></tr>';
+    if (meta) meta.textContent = 'Scanning uploads vs database snapshot…';
+    fetch('/api/platform-admin/uploads-orphans-scan', {
+      method: 'GET',
+      headers: sessionHeaders(sessForReq),
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (scanBtn) scanBtn.disabled = false;
+        var ok = out.status === 200 && out.data && out.data.success;
+        renderUploadOrphanTable(sessForReq, ok ? out.data : { success: false, message: (out.data && out.data.message) || 'Could not scan.' });
+      })
+      .catch(function () {
+        if (scanBtn) scanBtn.disabled = false;
+        renderUploadOrphanTable(sessForReq, { success: false, message: 'Network error while scanning.' });
+      });
+  }
+
+  function deleteUploadOrphanFile(sessForReq, relPath) {
+    if (!relPath) return;
+    if (!window.confirm('Delete this unreferenced file from backend/uploads?\n\n' + relPath)) return;
+    fetch('/api/platform-admin/uploads-orphans', {
+      method: 'DELETE',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(sessForReq)),
+      credentials: 'same-origin',
+      body: JSON.stringify({ path: relPath }),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (out.status !== 200 || !out.data || !out.data.success) {
+          var errMsg = (out.data && out.data.message) || 'Could not delete file.';
+          if (window.pxAdminShowToast) window.pxAdminShowToast(errMsg, 'danger');
+          else window.alert(errMsg);
+          return;
+        }
+        runUploadOrphanScan(sessForReq);
+        loadSystemHealthPanel(sessForReq);
+      })
+      .catch(function () {
+        if (window.pxAdminShowToast) window.pxAdminShowToast('Network error.', 'danger');
+        else window.alert('Network error.');
+      });
+  }
+
+  function purgeAllUploadOrphans(sessForReq, purgeBtn) {
+    if (!orphanScanEverDone) {
+      if (
+        !window.confirm(
+          'You have not completed a successful scan in this session. The server will still delete every file under backend/uploads that is not matched by the heuristic (fresh DB snapshot). Continue?'
+        )
+      ) {
+        return;
+      }
+    }
+    var n = orphanScanLastTotal;
+    var msg =
+      'This will DELETE every file under backend/uploads that is NOT matched by the orphan scan heuristic (fresh DB snapshot).\n\n' +
+      'Last scan reported approximately ' +
+      String(n) +
+      ' orphan file(s). The server will delete all current orphans — not only the rows in the table.\n\n' +
+      'Type the phrase DELETE ORPHANS in the next prompt to confirm.';
+    if (!window.confirm(msg)) return;
+    var typed = window.prompt('Type DELETE ORPHANS to confirm:', '');
+    if (String(typed || '').trim() !== 'DELETE ORPHANS') {
+      if (window.pxAdminShowToast) window.pxAdminShowToast('Cancelled.', 'secondary');
+      return;
+    }
+    if (purgeBtn) purgeBtn.disabled = true;
+    fetch('/api/platform-admin/uploads-orphans/purge-all', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(sessForReq)),
+      credentials: 'same-origin',
+      body: JSON.stringify({ confirm: 'DELETE ORPHANS' }),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (purgeBtn) purgeBtn.disabled = false;
+        if (out.status !== 200 || !out.data || !out.data.success) {
+          var errMsg = (out.data && out.data.message) || 'Purge failed.';
+          if (window.pxAdminShowToast) window.pxAdminShowToast(errMsg, 'danger');
+          else window.alert(errMsg);
+          return;
+        }
+        runUploadOrphanScan(sessForReq);
+        loadSystemHealthPanel(sessForReq);
+        var rm = String(out.data.deleted_files || 0);
+        var fail = String(out.data.failed_unlinks || 0);
+        var successMsg =
+          out.data.message ||
+          ('Deleted unreferenced files: ' + rm + (fail !== '0' ? ' · failed: ' + fail : ''));
+        if (window.pxAdminShowToast) window.pxAdminShowToast(successMsg, 'success');
+        else window.alert(successMsg);
+      })
+      .catch(function () {
+        if (purgeBtn) purgeBtn.disabled = false;
+        if (window.pxAdminShowToast) window.pxAdminShowToast('Network error during purge.', 'danger');
+        else window.alert('Network error during purge.');
+      });
+  }
+
   function loadSystemHealthPanel(sess) {
     var loading = document.getElementById('pxAdminSysLoading');
     var auditLoading = document.getElementById('pxAdminAuditLoading');
@@ -2299,6 +2507,28 @@
           if (window.pxAdminShowToast) window.pxAdminShowToast(msg, 'danger');
           else window.alert(msg);
         });
+    });
+  }
+
+  var orphanScanBtnEl = document.getElementById('pxAdminOrphanScanBtn');
+  var orphanPurgeBtnEl = document.getElementById('pxAdminOrphanPurgeAllBtn');
+  var orphanBodyEl = document.getElementById('pxAdminOrphanBody');
+  if (orphanScanBtnEl) {
+    orphanScanBtnEl.addEventListener('click', function () {
+      runUploadOrphanScan(session, orphanScanBtnEl);
+    });
+  }
+  if (orphanPurgeBtnEl) {
+    orphanPurgeBtnEl.addEventListener('click', function () {
+      purgeAllUploadOrphans(session, orphanPurgeBtnEl);
+    });
+  }
+  if (orphanBodyEl && !orphanBodyEl.__pxBoundOrphanDel) {
+    orphanBodyEl.__pxBoundOrphanDel = true;
+    orphanBodyEl.addEventListener('click', function (ev) {
+      var btn = ev.target.closest('.px-admin-orphan-delete');
+      if (!btn) return;
+      deleteUploadOrphanFile(session, decodeURIComponent(btn.getAttribute('data-orphan-path') || ''));
     });
   }
 

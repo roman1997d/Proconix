@@ -5,7 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
+const { UPLOADS_ROOT, sanitizeCompanyFolderName } = require('../middleware/resolveCompanyDocsDir');
 
 function isSafeUploadsPublicPath(u) {
   if (!u || typeof u !== 'string') return false;
@@ -282,6 +282,162 @@ function removeDigitalDocsCompanyFolders(companyId) {
   });
 }
 
+function addRelativeUploadPathToSet(set, relativeFromUploadsRoot) {
+  const r =
+    relativeFromUploadsRoot != null ? String(relativeFromUploadsRoot).trim().replace(/^\/+/, '') : '';
+  if (!r || r.includes('..')) return;
+  const parts = r.split('/').filter(Boolean);
+  const native = parts.join(path.sep);
+  const abs = path.resolve(path.join(UPLOADS_ROOT, native));
+  const rootR = path.resolve(UPLOADS_ROOT);
+  if (abs !== rootR && !abs.startsWith(rootR + path.sep)) return;
+  set.add(abs);
+}
+
+function sanitizeCloudStoredName(raw) {
+  const s = String(raw || '').trim();
+  if (!s || s.includes('/') || s.includes('\\') || s.includes('..')) return '';
+  return s;
+}
+
+/**
+ * All files under backend/uploads referenced from known DB columns (global, all tenants).
+ * @param {{ query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> }} dbClient
+ * @returns {Promise<Set<string>>}
+ */
+async function collectGlobalDbReferencedUploadAbsolutePaths(dbClient) {
+  const set = new Set();
+
+  const wlRows = await safeQueryRows(
+    dbClient,
+    `SELECT photo_urls, timesheet_jobs, invoice_file_path FROM work_logs`,
+    []
+  );
+  wlRows.forEach(function (row) {
+    collectWorkLogFilePaths(row).forEach(function (abs) {
+      set.add(abs);
+    });
+  });
+
+  const uploadRows = await safeQueryRows(
+    dbClient,
+    `SELECT file_url FROM uploads WHERE file_url IS NOT NULL AND TRIM(file_url) <> ''`,
+    []
+  );
+  uploadRows.forEach(function (r) {
+    addUploadPathToSet(set, r.file_url);
+  });
+
+  const issueRows = await safeQueryRows(
+    dbClient,
+    `SELECT file_url FROM issues WHERE file_url IS NOT NULL AND TRIM(file_url) <> ''`,
+    []
+  );
+  issueRows.forEach(function (r) {
+    addUploadPathToSet(set, r.file_url);
+  });
+
+  const photoRows = await safeQueryRows(
+    dbClient,
+    `SELECT file_url FROM operative_task_photos WHERE file_url IS NOT NULL AND TRIM(file_url) <> ''`,
+    []
+  );
+  photoRows.forEach(function (r) {
+    addUploadPathToSet(set, r.file_url);
+  });
+
+  const ddRows = await safeQueryRows(
+    dbClient,
+    `SELECT file_relative_path, file_url FROM digital_documents`,
+    []
+  );
+  ddRows.forEach(function (r) {
+    if (r.file_url) addUploadPathToSet(set, r.file_url);
+    if (r.file_relative_path) addRelativeUploadPathToSet(set, r.file_relative_path);
+  });
+
+  const sigRows = await safeQueryRows(
+    dbClient,
+    `SELECT signature_image_rel_path, signature_image_url FROM digital_document_signatures`,
+    []
+  );
+  sigRows.forEach(function (r) {
+    if (r.signature_image_url) addUploadPathToSet(set, r.signature_image_url);
+    if (r.signature_image_rel_path) addRelativeUploadPathToSet(set, r.signature_image_rel_path);
+  });
+
+  const drawRows = await safeQueryRows(
+    dbClient,
+    `SELECT relative_path FROM drawing_version WHERE relative_path IS NOT NULL AND TRIM(relative_path) <> ''`,
+    []
+  );
+  drawRows.forEach(function (r) {
+    addRelativeUploadPathToSet(set, r.relative_path);
+  });
+
+  const qaRows = await safeQueryRows(
+    dbClient,
+    `SELECT file_url FROM qa_job_step_photos WHERE file_url IS NOT NULL AND TRIM(file_url) <> ''`,
+    []
+  );
+  qaRows.forEach(function (r) {
+    addUploadPathToSet(set, r.file_url);
+  });
+
+  const chatMsg = await safeQueryRows(
+    dbClient,
+    `SELECT file_url FROM site_chat_message WHERE file_url IS NOT NULL AND TRIM(file_url) <> ''`,
+    []
+  );
+  chatMsg.forEach(function (r) {
+    addUploadPathToSet(set, r.file_url);
+  });
+
+  const chatPhotos = await safeQueryRows(
+    dbClient,
+    `SELECT file_url FROM site_chat_request_photo WHERE file_url IS NOT NULL AND TRIM(file_url) <> ''`,
+    []
+  );
+  chatPhotos.forEach(function (r) {
+    addUploadPathToSet(set, r.file_url);
+  });
+
+  const snagRows = await safeQueryRows(
+    dbClient,
+    `SELECT photos_before, photos_after FROM site_snags`,
+    []
+  );
+  snagRows.forEach(function (row) {
+    const a = parseJsonField(row.photos_before, []);
+    const b = parseJsonField(row.photos_after, []);
+    [a, b].forEach(function (arr) {
+      if (!Array.isArray(arr)) return;
+      arr.forEach(function (p) {
+        if (typeof p === 'string') addUploadPathToSet(set, p);
+      });
+    });
+  });
+
+  const snagDrawingCloud = await safeQueryRows(
+    dbClient,
+    `SELECT d.company_id, d.cloud_stored_name, c.name AS company_name
+     FROM site_snag_drawings d
+     INNER JOIN companies c ON c.id = d.company_id
+     WHERE d.cloud_stored_name IS NOT NULL AND TRIM(d.cloud_stored_name) <> ''`,
+    []
+  );
+  snagDrawingCloud.forEach(function (r) {
+    const cid = Number(r.company_id);
+    const stored = sanitizeCloudStoredName(r.cloud_stored_name);
+    if (!Number.isInteger(cid) || cid < 1 || !stored) return;
+    const safeName = sanitizeCompanyFolderName(r.company_name);
+    const folder = `${safeName}_${cid}_docs`;
+    addRelativeUploadPathToSet(set, `${folder}/cloud/${stored}`);
+  });
+
+  return set;
+}
+
 module.exports = {
   UPLOADS_ROOT,
   collectCompanyTenantUploadPaths,
@@ -289,4 +445,5 @@ module.exports = {
   sumStorageStatsForAbsolutePaths,
   unlinkCollectedUploadFiles,
   removeDigitalDocsCompanyFolders,
+  collectGlobalDbReferencedUploadAbsolutePaths,
 };

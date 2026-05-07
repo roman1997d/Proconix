@@ -603,8 +603,39 @@
                 <button type="button" class="btn btn-sm btn-outline-warning px-admin-cleanup-open" data-cleanup-target="share_links_json" data-cleanup-label="site_cloud_share_links.json entries">
                   Delete share links json
                 </button>
+                <button type="button" class="btn btn-sm btn-outline-info" id="pxAdminOrphanScanBtn" title="List files under backend/uploads with no matching row in scanned database tables nor Site Cloud index files">
+                  <i class="bi bi-search" aria-hidden="true"></i> Scan unreferenced files
+                </button>
               </div>
               <p class="small text-white-50 mt-2 mb-0">Delete all files from all <code class="text-info">cloud_trash</code> folders.</p>
+
+              <div class="border border-secondary rounded-3 mt-3 p-3 bg-dark bg-opacity-25">
+                <h3 class="h6 text-warning mb-2">Useless records — double check before delete</h3>
+                <p class="small text-white-50 mb-2" id="pxAdminOrphanHint">
+                  Files exist on disk but were not matched to uploads, documents, QA photos, Site Cloud JSON indexes, and other scanned tables (see API note).
+                  Paths may exist in undocumented places — verify before deleting.
+                </p>
+                <p class="small text-white-50 mb-2 font-monospace" id="pxAdminOrphanMeta">Run a scan.</p>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                  <button type="button" class="btn btn-sm btn-outline-danger d-none" id="pxAdminOrphanPurgeAllBtn" disabled>
+                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Delete ALL unreferenced (full disk sweep)
+                  </button>
+                </div>
+                <div class="table-responsive border border-secondary rounded-3" style="max-height: 260px; overflow-y: auto;">
+                  <table class="table table-dark table-sm px-admin-data-table mb-0">
+                    <thead>
+                      <tr>
+                        <th scope="col">Path</th>
+                        <th scope="col" class="text-end">Size</th>
+                        <th scope="col" class="text-end">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="pxAdminOrphanBody">
+                      <tr><td colspan="3" class="text-white-50">No scan yet.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
 
             <div class="mb-4">

@@ -22,6 +22,11 @@ const {
   unlinkCollectedUploadFiles,
   removeDigitalDocsCompanyFolders,
 } = require('../lib/companyTenantFileCleanup');
+const {
+  scanUploadOrphans,
+  deleteOrphanFileByRelPath,
+  purgeAllUploadOrphans,
+} = require('../lib/uploadOrphanAudit');
 const { UPLOADS_ROOT, sanitizeCompanyFolderName } = require('../middleware/resolveCompanyDocsDir');
 
 const SALT_ROUNDS = 10;
@@ -31,6 +36,7 @@ const BACKUP_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
 let autoBackupSchedulerStarted = false;
 const dataSystemOtpChallenges = new Map();
 const UPLOADS_AUDIT_MAX_FILES = parseInt(process.env.PLATFORM_UPLOADS_AUDIT_MAX_FILES || '10000', 10);
+const ORPHAN_SCAN_MAX_FILES = parseInt(process.env.PLATFORM_UPLOADS_ORPHAN_SCAN_MAX || '10000', 10);
 const GENERATED_REPORTS_DIR = path.resolve(__dirname, '../uploads/worklogs/generated');
 
 /**
@@ -2040,6 +2046,73 @@ async function purgeAllCloudTrashFiles(req, res) {
  * POST /api/platform-admin/uploads-generated/purge-by-age
  * Body: { target: 'full_data_html'|'full_data_pdf'|'raport_data_pdf'|'daily_records_zip'|'share_links_json', older_than_days: number }
  */
+/**
+ * GET /api/platform-admin/uploads-orphans-scan
+ * Files on disk under backend/uploads with no match in aggregated DB URLs/paths nor cloud JSON indexes.
+ */
+async function scanBackendUploadOrphans(req, res) {
+  try {
+    const out = await scanUploadOrphans(pool, ORPHAN_SCAN_MAX_FILES);
+    return res.status(200).json({
+      success: true,
+      ...out,
+      note:
+        'These files are not referenced by the scanned tables (uploads, issues, work logs, documents, QA, chat, drawings, tenant cloud indexes). Custom or future references may be missing — verify before deleting.',
+    });
+  } catch (err) {
+    console.error('platformAdmin scanBackendUploadOrphans error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Orphan scan failed.' });
+  }
+}
+
+/**
+ * DELETE /api/platform-admin/uploads-orphans
+ * Same path rules as DELETE /uploads-files.
+ */
+async function deleteBackendUploadOrphan(req, res) {
+  try {
+    const relPath = String((req.body && req.body.path) || '').trim();
+    const result = deleteOrphanFileByRelPath(relPath);
+    if (!result.ok) {
+      return res.status(400).json({ success: false, message: result.message });
+    }
+    return res.status(200).json({ success: true, message: result.message });
+  } catch (err) {
+    console.error('platformAdmin deleteBackendUploadOrphan error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to delete orphan file.' });
+  }
+}
+
+/**
+ * POST /api/platform-admin/uploads-orphans/purge-all
+ * Body: { confirm: "DELETE ORPHANS" } — deletes every on-disk orphan per current snapshot.
+ */
+async function purgeAllBackendUploadOrphans(req, res) {
+  try {
+    const confirm = String((req.body && req.body.confirm) || '').trim();
+    if (confirm !== 'DELETE ORPHANS') {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Confirmation required: send JSON { confirm: "DELETE ORPHANS" }. This removes all unreferenced files under backend/uploads.',
+      });
+    }
+    const stats = await purgeAllUploadOrphans(pool);
+    return res.status(200).json({
+      success: true,
+      deleted_files: stats.deleted,
+      failed_unlinks: stats.failed,
+      message:
+        stats.deleted > 0
+          ? `Deleted ${stats.deleted} unreferenced file(s).`
+          : 'No orphan files deleted (filesystem already clean or references match).',
+    });
+  } catch (err) {
+    console.error('platformAdmin purgeAllBackendUploadOrphans error:', err);
+    return res.status(500).json({ success: false, message: 'Purge orphans failed.' });
+  }
+}
+
 async function purgeGeneratedArtifactsByAge(req, res) {
   try {
     const b = req.body || {};
@@ -2150,4 +2223,7 @@ module.exports = {
   deleteBackendUploadsFile,
   purgeAllCloudTrashFiles,
   purgeGeneratedArtifactsByAge,
+  scanBackendUploadOrphans,
+  deleteBackendUploadOrphan,
+  purgeAllBackendUploadOrphans,
 };

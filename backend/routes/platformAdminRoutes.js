@@ -33,6 +33,9 @@ const {
   deleteBackendUploadsFile,
   purgeAllCloudTrashFiles,
   purgeGeneratedArtifactsByAge,
+  scanBackendUploadOrphans,
+  deleteBackendUploadOrphan,
+  purgeAllBackendUploadOrphans,
 } = require('../controllers/platformAdminController');
 const {
   listPlatformUsers,
@@ -78,6 +81,9 @@ router.delete('/companies/:id', requirePlatformAdminAuth, deleteCompany);
 router.post('/site-chat/purge-older-than', requirePlatformAdminAuth, purgeSiteChatOlderThan);
 router.get('/uploads-files', requirePlatformAdminAuth, listBackendUploadsFiles);
 router.delete('/uploads-files', requirePlatformAdminAuth, deleteBackendUploadsFile);
+router.get('/uploads-orphans-scan', requirePlatformAdminAuth, scanBackendUploadOrphans);
+router.delete('/uploads-orphans', requirePlatformAdminAuth, deleteBackendUploadOrphan);
+router.post('/uploads-orphans/purge-all', requirePlatformAdminAuth, purgeAllBackendUploadOrphans);
 router.post('/uploads-cloud-trash/purge-all', requirePlatformAdminAuth, purgeAllCloudTrashFiles);
 router.post('/uploads-generated/purge-by-age', requirePlatformAdminAuth, purgeGeneratedArtifactsByAge);
 
