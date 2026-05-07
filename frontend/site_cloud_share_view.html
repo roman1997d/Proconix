@@ -28,7 +28,9 @@
   </div>
   <script>
     (function () {
-      var token = new URLSearchParams(window.location.search).get('token') || '';
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token') || '';
+      var isZip = params.get('zip') === '1';
       var frame = document.getElementById('viewFrame');
       var err = document.getElementById('err');
       var downloadBtn = document.getElementById('downloadBtn');
@@ -39,7 +41,10 @@
       }
       var viewUrl = '/api/site-cloud/share/' + encodeURIComponent(token) + '/view';
       var downloadUrl = '/api/site-cloud/share/' + encodeURIComponent(token);
-      if (downloadBtn) downloadBtn.href = downloadUrl;
+      if (downloadBtn) {
+        downloadBtn.href = downloadUrl;
+        if (isZip) downloadBtn.innerHTML = '<i class="bi bi-download"></i> Download ZIP file';
+      }
       if (frame) {
         frame.src = viewUrl;
         frame.addEventListener('error', function () {

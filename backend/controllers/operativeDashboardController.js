@@ -7,6 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
 const { pool } = require('../db/pool');
+const { UPLOADS_ROOT, sanitizeCompanyFolderName } = require('../middleware/resolveCompanyDocsDir');
+const { createShareLinkRecord, CLOUD_AUTO_DELETE_RETENTION_MS } = require('./siteCloudController');
 const { enrichJobsWithQaPriceTotals } = require('./worklogsController');
 const { sendWorkLogInvoiceCopyEmail, sendDailyRecordWorklogEmail } = require('../lib/sendCallbackRequestEmail');
 const { loadStepsByTemplateForQaJob, computeEntryMoneyForTemplates } = require('../lib/qaPriceWorkMoney');
@@ -1924,6 +1926,50 @@ function resolvePublicBaseUrl(req) {
   return `${req.protocol}://${req.get('host')}`.replace(/\/$/, '');
 }
 
+async function resolveCompanyDocsContext(companyId) {
+  const r = await pool.query('SELECT name FROM companies WHERE id = $1', [companyId]);
+  const rawName = r.rows[0] && r.rows[0].name != null ? String(r.rows[0].name) : `company${companyId}`;
+  const safe = sanitizeCompanyFolderName(rawName);
+  const folderName = `${safe}_${companyId}_docs`;
+  const docsAbs = path.join(UPLOADS_ROOT, folderName);
+  const cloudAbs = path.join(docsAbs, 'cloud');
+  const folderIdxAbs = path.join(docsAbs, 'cloud_folders_index.json');
+  const cloudIdxAbs = path.join(docsAbs, 'cloud_index.json');
+  fs.mkdirSync(cloudAbs, { recursive: true });
+  return { folderName, cloudAbs, folderIdxAbs, cloudIdxAbs };
+}
+
+function ensureCloudInvoiceFolder(folderIdxAbs, folderName) {
+  let list = [];
+  try {
+    if (fs.existsSync(folderIdxAbs)) {
+      const parsed = JSON.parse(fs.readFileSync(folderIdxAbs, 'utf8'));
+      list = Array.isArray(parsed) ? parsed : [];
+    }
+  } catch (_) {
+    list = [];
+  }
+  const exists = list.some((n) => String(n || '').toLowerCase() === String(folderName || '').toLowerCase());
+  if (!exists) {
+    list.push(folderName);
+    fs.writeFileSync(folderIdxAbs, JSON.stringify(list, null, 2), 'utf8');
+  }
+}
+
+function appendCloudFileIndexEntry(cloudIdxAbs, entry) {
+  let list = [];
+  try {
+    if (fs.existsSync(cloudIdxAbs)) {
+      const parsed = JSON.parse(fs.readFileSync(cloudIdxAbs, 'utf8'));
+      list = Array.isArray(parsed) ? parsed : [];
+    }
+  } catch (_) {
+    list = [];
+  }
+  list.push(entry);
+  fs.writeFileSync(cloudIdxAbs, JSON.stringify(list, null, 2), 'utf8');
+}
+
 function sanitizeNamePart(v) {
   return String(v || '').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'item';
 }
@@ -2358,7 +2404,31 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
     const zipPath = `/uploads/worklogs/generated/${zipName}`;
     const publicBase = resolvePublicBaseUrl(req);
     const fullHtmlUrl = `${publicBase}${fullHtmlPath}`;
-    const zipUrl = `${publicBase}${zipPath}`;
+
+    const cloudCtx = await resolveCompanyDocsContext(companyId);
+    const invoiceFolderName = `${String(projectName || 'Project').replace(/[^a-zA-Z0-9 _-]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Project'}-zip invoices`;
+    ensureCloudInvoiceFolder(cloudCtx.folderIdxAbs, invoiceFolderName);
+    const cloudStoredZipName = `daily_records_invoice_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.zip`;
+    const cloudZipAbs = path.join(cloudCtx.cloudAbs, cloudStoredZipName);
+    fs.copyFileSync(zipAbs, cloudZipAbs);
+    appendCloudFileIndexEntry(cloudCtx.cloudIdxAbs, {
+      id: `cf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      folder: invoiceFolderName,
+      stored_name: cloudStoredZipName,
+      original_name: zipName,
+      mime_type: 'application/zip',
+      size_bytes: zipBuffer.length,
+      uploaded_at: new Date().toISOString(),
+      uploaded_by_manager_id: null,
+      auto_delete_at: new Date(Date.now() + CLOUD_AUTO_DELETE_RETENTION_MS).toISOString(),
+    });
+    const share = createShareLinkRecord({
+      company_folder_name: cloudCtx.folderName,
+      stored_name: cloudStoredZipName,
+      original_name: zipName,
+      ttl_ms: CLOUD_AUTO_DELETE_RETENTION_MS,
+    });
+    const zipCloudShareUrl = `${publicBase}${share.view_path}&zip=1`;
 
     const toEmail = await resolveCompanyInvoiceEmail(companyId);
     if (!toEmail) {
@@ -2420,7 +2490,7 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
       projectName,
       fromDate,
       toDate,
-      links: { html: fullHtmlUrl, zip: zipUrl },
+      links: { html: fullHtmlUrl, zip: zipCloudShareUrl },
       attachments: [],
     });
 
@@ -2428,7 +2498,7 @@ async function generateDailyRecordInvoiceFromPeriod(req, res) {
       success: true,
       message: 'Invoice package generated and sent to manager.',
       workLogId: ins.rows[0] ? ins.rows[0].id : null,
-      files: { zipPath, reportPath, fullPath, fullHtmlPath },
+      files: { zipPath, reportPath, fullPath, fullHtmlPath, zipCloudShareUrl },
     });
   } catch (err) {
     if (err && err.code === 'SMTP_NOT_CONFIGURED') {

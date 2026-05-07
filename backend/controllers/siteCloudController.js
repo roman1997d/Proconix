@@ -14,6 +14,7 @@ const GLOBAL_SHARE_INDEX_PATH = path.join(UPLOADS_ROOT, 'site_cloud_share_links.
 let shareCleanupSchedulerStarted = false;
 const DELETED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 let deletedCleanupSchedulerStarted = false;
+const CLOUD_AUTO_DELETE_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
 
 function normalizeFolder(value) {
   const v = String(value || '').trim().toLowerCase();
@@ -314,6 +315,64 @@ function purgeExpiredDeletedForAllTenants() {
   }
 }
 
+function purgeExpiredCloudFilesForAllTenants() {
+  try {
+    if (!fs.existsSync(UPLOADS_ROOT)) return 0;
+    const now = Date.now();
+    const entries = fs.readdirSync(UPLOADS_ROOT, { withFileTypes: true });
+    let removedTotal = 0;
+    for (let i = 0; i < entries.length; i += 1) {
+      const e = entries[i];
+      if (!e || !e.isDirectory() || !/_\d+_docs$/.test(e.name)) continue;
+      const docsDir = path.join(UPLOADS_ROOT, e.name);
+      const cloudDir = path.join(docsDir, 'cloud');
+      const idxPath = path.join(docsDir, 'cloud_index.json');
+      if (!fs.existsSync(idxPath)) continue;
+      let items;
+      try {
+        const raw = fs.readFileSync(idxPath, 'utf8');
+        const parsed = JSON.parse(raw);
+        items = Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        items = [];
+      }
+      if (!items.length) continue;
+      const keep = [];
+      const removedStored = [];
+      for (let j = 0; j < items.length; j += 1) {
+        const it = items[j];
+        const ts = new Date(it && it.auto_delete_at ? it.auto_delete_at : 0).getTime();
+        if (!ts || ts > now) {
+          keep.push(it);
+          continue;
+        }
+        const stored = sanitizeStoredName(it && it.stored_name);
+        if (!stored) continue;
+        const full = path.join(cloudDir, stored);
+        try {
+          if (fs.existsSync(full)) fs.unlinkSync(full);
+        } catch (_) {}
+        removedStored.push(stored);
+      }
+      if (removedStored.length) {
+        fs.writeFileSync(idxPath, JSON.stringify(keep, null, 2), 'utf8');
+        removedTotal += removedStored.length;
+        const removedSet = new Set(removedStored);
+        const shares = readGlobalShareIndex().filter(
+          (s) => !(
+            String(s.company_folder_name || '') === String(e.name || '') &&
+            removedSet.has(String(s.stored_name || ''))
+          )
+        );
+        writeGlobalShareIndex(shares);
+      }
+    }
+    return removedTotal;
+  } catch (_) {
+    return 0;
+  }
+}
+
 function startDeletedFilesCleanupScheduler() {
   if (deletedCleanupSchedulerStarted) return;
   deletedCleanupSchedulerStarted = true;
@@ -323,8 +382,10 @@ function startDeletedFilesCleanupScheduler() {
   );
   setInterval(() => {
     purgeExpiredDeletedForAllTenants();
+    purgeExpiredCloudFilesForAllTenants();
   }, intervalMs);
   purgeExpiredDeletedForAllTenants();
+  purgeExpiredCloudFilesForAllTenants();
 }
 
 function ensureCloudDir(req) {
@@ -348,7 +409,44 @@ function mapItem(item) {
     size_bytes: item.size_bytes || 0,
     uploaded_at: item.uploaded_at,
     uploaded_by_manager_id: item.uploaded_by_manager_id,
+    auto_delete_at: item.auto_delete_at || null,
   };
+}
+
+function purgeExpiredCloudFilesForRequest(req) {
+  ensureCloudDir(req);
+  const now = Date.now();
+  const items = readIndex(req);
+  if (!items.length) return 0;
+  const keep = [];
+  const removedStored = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const it = items[i];
+    const ts = new Date(it && it.auto_delete_at ? it.auto_delete_at : 0).getTime();
+    if (!ts || ts > now) {
+      keep.push(it);
+      continue;
+    }
+    const stored = sanitizeStoredName(it && it.stored_name);
+    if (!stored) continue;
+    const full = path.join(req.siteCloudCompanyDir, stored);
+    try {
+      if (fs.existsSync(full)) fs.unlinkSync(full);
+    } catch (_) {}
+    removedStored.push(stored);
+  }
+  if (removedStored.length) {
+    writeIndex(req, keep);
+    const removedSet = new Set(removedStored);
+    const shares = readGlobalShareIndex().filter(
+      (s) => !(
+        String(s.company_folder_name || '') === String(req.digitalDocsFolderName || '') &&
+        removedSet.has(String(s.stored_name || ''))
+      )
+    );
+    writeGlobalShareIndex(shares);
+  }
+  return removedStored.length;
 }
 
 async function getTenantStorageLimitBytes(req) {
@@ -367,6 +465,7 @@ async function getTenantStorageLimitBytes(req) {
 
 function listFiles(req, res) {
   ensureCloudDir(req);
+  purgeExpiredCloudFilesForRequest(req);
   const q = String(req.query.q || '').trim().toLowerCase();
   const folder = resolveFolder(req, req.query.folder);
   const current = readIndex(req).filter((it) => {
@@ -384,6 +483,7 @@ function listFiles(req, res) {
 
 async function getStats(req, res) {
   ensureCloudDir(req);
+  purgeExpiredCloudFilesForRequest(req);
   const limitBytes = await getTenantStorageLimitBytes(req);
   const activeItems = readIndex(req).filter((it) => {
     if (!it || !it.stored_name) return false;
@@ -797,6 +897,36 @@ function generateShareLink(req, res) {
   });
 }
 
+function createShareLinkRecord(params) {
+  const companyFolderName = String((params && params.company_folder_name) || '').trim();
+  const storedName = sanitizeStoredName(params && params.stored_name);
+  const originalName = String((params && params.original_name) || storedName || '').trim();
+  const ttlMs = Math.max(60 * 1000, Number((params && params.ttl_ms) || SHARE_LINK_TTL_MS) || SHARE_LINK_TTL_MS);
+  if (!companyFolderName || !storedName) {
+    const err = new Error('Missing share link file reference.');
+    err.code = 'INVALID_SHARE_INPUT';
+    throw err;
+  }
+  const token = crypto.randomBytes(24).toString('hex');
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  const all = readGlobalShareIndex().filter((s) => s && s.expires_at && new Date(s.expires_at).getTime() > Date.now());
+  all.push({
+    token,
+    company_folder_name: companyFolderName,
+    stored_name: storedName,
+    original_name: originalName || storedName,
+    created_at: new Date().toISOString(),
+    expires_at: expiresAt,
+  });
+  writeGlobalShareIndex(all);
+  return {
+    token,
+    expires_at: expiresAt,
+    path: `/api/site-cloud/share/${token}`,
+    view_path: `/site_cloud_share_view.html?token=${encodeURIComponent(token)}`,
+  };
+}
+
 function listSharedLinks(req, res) {
   ensureCloudDir(req);
   const all = readGlobalShareIndex();
@@ -953,12 +1083,14 @@ module.exports = {
   restoreDeletedFile,
   permanentlyDeleteFile,
   generateShareLink,
+  createShareLinkRecord,
   listSharedLinks,
   revokeSharedLink,
   downloadSharedFile,
   viewSharedFile,
   sendFileByEmail,
   moveFileToFolder,
+  CLOUD_AUTO_DELETE_RETENTION_MS,
   startShareLinkCleanupScheduler,
   startDeletedFilesCleanupScheduler,
 };
