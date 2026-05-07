@@ -80,6 +80,17 @@ function getOperativeCompanyId(req) {
   return req.operative && req.operative.company_id != null ? Number(req.operative.company_id) : null;
 }
 
+function normalizeScopedProjectId(raw) {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+}
+
+function getScopedProjectIdFromReq(req) {
+  const q = req && req.query ? req.query.project_id : undefined;
+  const b = req && req.body ? req.body.project_id : undefined;
+  return normalizeScopedProjectId(q != null ? q : b);
+}
+
 async function getOperativeAccessProfile(req) {
   const opId = req && req.operative && req.operative.id != null ? Number(req.operative.id) : null;
   if (!Number.isInteger(opId) || opId < 1) {
@@ -268,40 +279,75 @@ function mergeWorkspacePreserveTimelinePhotos(existing, incoming) {
   return sanitized;
 }
 
-async function getWorkspaceByCompanyId(companyId) {
-  const result = await pool.query(
-    'SELECT workspace FROM unit_progress_state WHERE company_id = $1',
-    [companyId]
-  );
-  if (!result.rows.length) return defaultWorkspace();
-  const rowWorkspace = result.rows[0].workspace;
+async function getWorkspaceByCompanyId(companyId, projectId) {
+  const pid = normalizeScopedProjectId(projectId);
+  let rowWorkspace = null;
+  try {
+    const scoped = await pool.query(
+      'SELECT workspace FROM unit_progress_state WHERE company_id = $1 AND project_id = $2',
+      [companyId, pid]
+    );
+    if (scoped.rows.length) rowWorkspace = scoped.rows[0].workspace;
+    if (!rowWorkspace && pid > 0) {
+      const legacyScoped = await pool.query(
+        'SELECT workspace FROM unit_progress_state WHERE company_id = $1 AND project_id = 0',
+        [companyId]
+      );
+      if (legacyScoped.rows.length) rowWorkspace = legacyScoped.rows[0].workspace;
+    }
+  } catch (error) {
+    if (error && error.code !== '42703') throw error;
+    const legacy = await pool.query(
+      'SELECT workspace FROM unit_progress_state WHERE company_id = $1',
+      [companyId]
+    );
+    if (legacy.rows.length) rowWorkspace = legacy.rows[0].workspace;
+  }
+  if (!rowWorkspace) return defaultWorkspace();
   if (!rowWorkspace || typeof rowWorkspace !== 'object' || Array.isArray(rowWorkspace)) {
     return defaultWorkspace();
   }
   return rowWorkspace;
 }
 
-async function upsertWorkspace(companyId, workspace, actorKind, actorId) {
-  await pool.query(
-    `INSERT INTO unit_progress_state (company_id, workspace, updated_by_kind, updated_by_id, updated_at)
-     VALUES ($1, $2::jsonb, $3, $4, NOW())
-     ON CONFLICT (company_id)
-     DO UPDATE SET
-       workspace = EXCLUDED.workspace,
-       updated_by_kind = EXCLUDED.updated_by_kind,
-       updated_by_id = EXCLUDED.updated_by_id,
-       updated_at = NOW()`,
-    [companyId, JSON.stringify(workspace), actorKind, actorId]
-  );
+async function upsertWorkspace(companyId, projectId, workspace, actorKind, actorId) {
+  const pid = normalizeScopedProjectId(projectId);
+  try {
+    await pool.query(
+      `INSERT INTO unit_progress_state (company_id, project_id, workspace, updated_by_kind, updated_by_id, updated_at)
+       VALUES ($1, $2, $3::jsonb, $4, $5, NOW())
+       ON CONFLICT (company_id, project_id)
+       DO UPDATE SET
+         workspace = EXCLUDED.workspace,
+         updated_by_kind = EXCLUDED.updated_by_kind,
+         updated_by_id = EXCLUDED.updated_by_id,
+         updated_at = NOW()`,
+      [companyId, pid, JSON.stringify(workspace), actorKind, actorId]
+    );
+  } catch (error) {
+    if (!(error && (error.code === '42703' || error.code === '42P10'))) throw error;
+    await pool.query(
+      `INSERT INTO unit_progress_state (company_id, workspace, updated_by_kind, updated_by_id, updated_at)
+       VALUES ($1, $2::jsonb, $3, $4, NOW())
+       ON CONFLICT (company_id)
+       DO UPDATE SET
+         workspace = EXCLUDED.workspace,
+         updated_by_kind = EXCLUDED.updated_by_kind,
+         updated_by_id = EXCLUDED.updated_by_id,
+         updated_at = NOW()`,
+      [companyId, JSON.stringify(workspace), actorKind, actorId]
+    );
+  }
 }
 
 async function getWorkspace(req, res) {
   const companyId = getManagerCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   if (companyId == null) {
     return res.status(400).json({ success: false, message: 'Manager has no company_id.' });
   }
   try {
-    const workspace = await getWorkspaceByCompanyId(companyId);
+    const workspace = await getWorkspaceByCompanyId(companyId, projectId);
     const slim =
       String(req.query.slim || '').trim() === '1' ||
       String(req.query.slim || '').toLowerCase() === 'true';
@@ -322,14 +368,15 @@ async function getWorkspace(req, res) {
 
 async function putWorkspace(req, res) {
   const companyId = getManagerCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   if (companyId == null) {
     return res.status(400).json({ success: false, message: 'Manager has no company_id.' });
   }
   try {
-    const existing = await getWorkspaceByCompanyId(companyId);
+    const existing = await getWorkspaceByCompanyId(companyId, projectId);
     const incoming = sanitizeWorkspace(req.body && req.body.workspace ? req.body.workspace : req.body);
     const workspace = mergeWorkspacePreserveTimelinePhotos(existing, incoming);
-    await upsertWorkspace(companyId, workspace, 'manager', req.manager && req.manager.id ? req.manager.id : null);
+    await upsertWorkspace(companyId, projectId, workspace, 'manager', req.manager && req.manager.id ? req.manager.id : null);
     return res.json({ success: true, workspace });
   } catch (error) {
     if (error.message === 'workspace must be an object') {
@@ -349,11 +396,12 @@ async function putWorkspace(req, res) {
 
 async function getWorkspaceSupervisor(req, res) {
   const companyId = getSupervisorCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   if (companyId == null) {
     return res.status(400).json({ success: false, message: 'Supervisor has no company_id.' });
   }
   try {
-    const workspace = await getWorkspaceByCompanyId(companyId);
+    const workspace = await getWorkspaceByCompanyId(companyId, projectId);
     const slim =
       String(req.query.slim || '').trim() === '1' ||
       String(req.query.slim || '').toLowerCase() === 'true';
@@ -374,15 +422,17 @@ async function getWorkspaceSupervisor(req, res) {
 
 async function putWorkspaceSupervisor(req, res) {
   const companyId = getSupervisorCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   if (companyId == null) {
     return res.status(400).json({ success: false, message: 'Supervisor has no company_id.' });
   }
   try {
-    const existing = await getWorkspaceByCompanyId(companyId);
+    const existing = await getWorkspaceByCompanyId(companyId, projectId);
     const incoming = sanitizeWorkspace(req.body && req.body.workspace ? req.body.workspace : req.body);
     const workspace = mergeWorkspacePreserveTimelinePhotos(existing, incoming);
     await upsertWorkspace(
       companyId,
+      projectId,
       workspace,
       'supervisor',
       req.supervisor && req.supervisor.id ? req.supervisor.id : null
@@ -450,7 +500,8 @@ async function appendQaJobLinkToUnitTimeline(opts) {
   const jid = qaJobId != null ? Number(qaJobId) : NaN;
   if (!unitId || !Number.isInteger(jid) || jid < 1) return { ok: false, reason: 'bad_args' };
 
-  let workspace = await getWorkspaceByCompanyId(cid);
+  const scopedProjectId = normalizeScopedProjectId(projectId);
+  let workspace = await getWorkspaceByCompanyId(cid, scopedProjectId);
   const unit = getUnitFromWorkspace(workspace, unitId);
   if (!unit) return { ok: false, reason: 'unit_not_found' };
 
@@ -490,6 +541,7 @@ async function appendQaJobLinkToUnitTimeline(opts) {
   workspace = sanitizeWorkspace(workspace);
   await upsertWorkspace(
     cid,
+    scopedProjectId,
     workspace,
     actorKind === 'supervisor' ? 'supervisor' : 'manager',
     actorId != null && Number.isFinite(Number(actorId)) ? Number(actorId) : null
@@ -587,12 +639,13 @@ function sanitizeIncomingProgress(body) {
 
 async function getPrivateTimelineManager(req, res) {
   const companyId = getManagerCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   const unitId = normalizeUnitId(req.params.unitId);
   if (companyId == null || !unitId) {
     return res.status(400).json({ success: false, message: 'Invalid request.' });
   }
   try {
-    const workspace = await getWorkspaceByCompanyId(companyId);
+    const workspace = await getWorkspaceByCompanyId(companyId, projectId);
     const unit = getUnitFromWorkspace(workspace, unitId);
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
     return res.json({
@@ -608,12 +661,13 @@ async function getPrivateTimelineManager(req, res) {
 
 async function getPrivateTimelineSupervisor(req, res) {
   const companyId = getSupervisorCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   const unitId = normalizeUnitId(req.params.unitId);
   if (companyId == null || !unitId) {
     return res.status(400).json({ success: false, message: 'Invalid request.' });
   }
   try {
-    const workspace = await getWorkspaceByCompanyId(companyId);
+    const workspace = await getWorkspaceByCompanyId(companyId, projectId);
     const unit = getUnitFromWorkspace(workspace, unitId);
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
     const supervisorProjectId = req.supervisor && req.supervisor.project_id != null
@@ -639,13 +693,14 @@ async function getPrivateTimelineSupervisor(req, res) {
 
 async function appendPrivateProgressManager(req, res) {
   const companyId = getManagerCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   const unitId = normalizeUnitId(req.params.unitId);
   if (companyId == null || !unitId) {
     return res.status(400).json({ success: false, message: 'Invalid request.' });
   }
   try {
     const progress = sanitizeIncomingProgress(req.body);
-    const workspace = await getWorkspaceByCompanyId(companyId);
+    const workspace = await getWorkspaceByCompanyId(companyId, projectId);
     const unit = getUnitFromWorkspace(workspace, unitId);
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
     if (!Array.isArray(unit.timeline)) unit.timeline = [];
@@ -658,7 +713,7 @@ async function appendPrivateProgressManager(req, res) {
       date: new Date().toISOString(),
     });
     workspace.updated_at = new Date().toISOString();
-    await upsertWorkspace(companyId, workspace, 'manager', req.manager && req.manager.id ? req.manager.id : null);
+    await upsertWorkspace(companyId, projectId, workspace, 'manager', req.manager && req.manager.id ? req.manager.id : null);
     return res.json({ success: true, timeline: unit.timeline });
   } catch (error) {
     if (error.message && error.message.endsWith('required.')) {
@@ -671,13 +726,14 @@ async function appendPrivateProgressManager(req, res) {
 
 async function appendPrivateProgressSupervisor(req, res) {
   const companyId = getSupervisorCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   const unitId = normalizeUnitId(req.params.unitId);
   if (companyId == null || !unitId) {
     return res.status(400).json({ success: false, message: 'Invalid request.' });
   }
   try {
     const progress = sanitizeIncomingProgress(req.body);
-    const workspace = await getWorkspaceByCompanyId(companyId);
+    const workspace = await getWorkspaceByCompanyId(companyId, projectId);
     const unit = getUnitFromWorkspace(workspace, unitId);
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
     const supervisorProjectId = req.supervisor && req.supervisor.project_id != null
@@ -700,6 +756,7 @@ async function appendPrivateProgressSupervisor(req, res) {
     workspace.updated_at = new Date().toISOString();
     await upsertWorkspace(
       companyId,
+      projectId,
       workspace,
       'supervisor',
       req.supervisor && req.supervisor.id ? req.supervisor.id : null
@@ -730,7 +787,7 @@ async function getOperativeDailyRecordUnits(req, res) {
   try {
     const profile = await getOperativeAccessProfile(req);
     if (!profile.ok) return res.status(403).json({ success: false, message: profile.message });
-    const workspace = await getWorkspaceByCompanyId(profile.companyId);
+    const workspace = await getWorkspaceByCompanyId(profile.companyId, profile.projectId);
     const units = (Array.isArray(workspace.units) ? workspace.units : [])
       .filter((u) => {
         const unitProjectId = u && u.project_id != null ? Number(u.project_id) : null;
@@ -757,7 +814,7 @@ async function getPrivateTimelineOperative(req, res) {
   try {
     const profile = await getOperativeAccessProfile(req);
     if (!profile.ok) return res.status(403).json({ success: false, message: profile.message });
-    const workspace = await getWorkspaceByCompanyId(profile.companyId);
+    const workspace = await getWorkspaceByCompanyId(profile.companyId, profile.projectId);
     const unit = getUnitFromWorkspace(workspace, unitId);
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
     const unitProjectId = unit && unit.project_id != null ? Number(unit.project_id) : null;
@@ -787,7 +844,7 @@ async function appendPrivateProgressOperative(req, res) {
     const profile = await getOperativeAccessProfile(req);
     if (!profile.ok) return res.status(403).json({ success: false, message: profile.message });
     const progress = sanitizeIncomingProgress(req.body);
-    const workspace = await getWorkspaceByCompanyId(profile.companyId);
+    const workspace = await getWorkspaceByCompanyId(profile.companyId, profile.projectId);
     const unit = getUnitFromWorkspace(workspace, unitId);
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
     const unitProjectId = unit && unit.project_id != null ? Number(unit.project_id) : null;
@@ -805,7 +862,7 @@ async function appendPrivateProgressOperative(req, res) {
       date: new Date().toISOString(),
     });
     workspace.updated_at = new Date().toISOString();
-    await upsertWorkspace(profile.companyId, workspace, 'operative', profile.opId);
+    await upsertWorkspace(profile.companyId, profile.projectId, workspace, 'operative', profile.opId);
     const ownTimeline = unit.timeline.filter((entry) => {
       const authorKind = String((entry && entry.author_kind) || '').trim();
       const authorId = entry && entry.author_id != null ? Number(entry.author_id) : null;
@@ -830,7 +887,7 @@ async function deletePrivateProgressOperative(req, res) {
   try {
     const profile = await getOperativeAccessProfile(req);
     if (!profile.ok) return res.status(403).json({ success: false, message: profile.message });
-    const workspace = await getWorkspaceByCompanyId(profile.companyId);
+    const workspace = await getWorkspaceByCompanyId(profile.companyId, profile.projectId);
     const unit = getUnitFromWorkspace(workspace, unitId);
     if (!unit) return res.status(404).json({ success: false, message: 'Unit not found.' });
     const unitProjectId = unit && unit.project_id != null ? Number(unit.project_id) : null;
@@ -849,7 +906,7 @@ async function deletePrivateProgressOperative(req, res) {
       return res.status(404).json({ success: false, message: 'Timeline entry not found.' });
     }
     workspace.updated_at = new Date().toISOString();
-    await upsertWorkspace(profile.companyId, workspace, 'operative', profile.opId);
+    await upsertWorkspace(profile.companyId, profile.projectId, workspace, 'operative', profile.opId);
     const ownTimeline = unit.timeline.filter((entry) => {
       const authorKind = String((entry && entry.author_kind) || '').trim();
       const authorId = entry && entry.author_id != null ? Number(entry.author_id) : null;
@@ -896,6 +953,7 @@ function removeFloorFromWorkspace(workspace, floorId) {
 
 async function requestDeleteUnitManager(req, res) {
   const companyId = getManagerCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const unitId = normalizeUnitId(body.unitId);
   if (companyId == null || !unitId) {
@@ -906,7 +964,7 @@ async function requestDeleteUnitManager(req, res) {
     return res.status(400).json({ success: false, message: 'Manager email is missing; cannot send verification code.' });
   }
   try {
-    const workspace = await getWorkspaceByCompanyId(companyId);
+    const workspace = await getWorkspaceByCompanyId(companyId, projectId);
     const unit = getUnitFromWorkspace(workspace, unitId);
     if (!unit) {
       return res.status(404).json({ success: false, message: 'Unit not found.' });
@@ -941,6 +999,7 @@ async function requestDeleteUnitManager(req, res) {
 
 async function confirmDeleteUnitManager(req, res) {
   const companyId = getManagerCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const unitId = normalizeUnitId(body.unitId);
   const otpInput = parseDeleteUnitCode(body);
@@ -973,7 +1032,7 @@ async function confirmDeleteUnitManager(req, res) {
     return res.status(403).json({ success: false, message: 'Invalid verification code.' });
   }
   try {
-    const existing = await getWorkspaceByCompanyId(companyId);
+    const existing = await getWorkspaceByCompanyId(companyId, projectId);
     const unit = getUnitFromWorkspace(existing, unitId);
     if (!unit) {
       unitDeleteChallenges.delete(key);
@@ -981,7 +1040,7 @@ async function confirmDeleteUnitManager(req, res) {
     }
     removeUnitFromWorkspace(existing, unitId);
     existing.updated_at = new Date().toISOString();
-    await upsertWorkspace(companyId, existing, 'manager', req.manager && req.manager.id ? req.manager.id : null);
+    await upsertWorkspace(companyId, projectId, existing, 'manager', req.manager && req.manager.id ? req.manager.id : null);
     unitDeleteChallenges.delete(key);
     return res.json({ success: true, workspace: existing });
   } catch (error) {
@@ -999,13 +1058,14 @@ async function confirmDeleteUnitManager(req, res) {
 
 async function requestDeleteUnitSupervisor(req, res) {
   const companyId = getSupervisorCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const unitId = normalizeUnitId(body.unitId);
   if (companyId == null || !unitId) {
     return res.status(400).json({ success: false, message: 'Valid unit id is required.' });
   }
   try {
-    const workspace = await getWorkspaceByCompanyId(companyId);
+    const workspace = await getWorkspaceByCompanyId(companyId, projectId);
     const unit = getUnitFromWorkspace(workspace, unitId);
     if (!unit) {
       return res.status(404).json({ success: false, message: 'Unit not found.' });
@@ -1053,6 +1113,7 @@ async function requestDeleteUnitSupervisor(req, res) {
 
 async function confirmDeleteUnitSupervisor(req, res) {
   const companyId = getSupervisorCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const unitId = normalizeUnitId(body.unitId);
   const otpInput = parseDeleteUnitCode(body);
@@ -1085,7 +1146,7 @@ async function confirmDeleteUnitSupervisor(req, res) {
     return res.status(403).json({ success: false, message: 'Invalid verification code.' });
   }
   try {
-    const existing = await getWorkspaceByCompanyId(companyId);
+    const existing = await getWorkspaceByCompanyId(companyId, projectId);
     const unit = getUnitFromWorkspace(existing, unitId);
     if (!unit) {
       unitDeleteChallenges.delete(key);
@@ -1102,6 +1163,7 @@ async function confirmDeleteUnitSupervisor(req, res) {
     existing.updated_at = new Date().toISOString();
     await upsertWorkspace(
       companyId,
+      projectId,
       existing,
       'supervisor',
       req.supervisor && req.supervisor.id ? req.supervisor.id : null
@@ -1130,6 +1192,7 @@ function floorDescriptionFromFloor(floor) {
 
 async function requestDeleteFloorManager(req, res) {
   const companyId = getManagerCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const floorId = normalizeFloorId(body.floorId);
   if (companyId == null || !floorId) {
@@ -1140,7 +1203,7 @@ async function requestDeleteFloorManager(req, res) {
     return res.status(400).json({ success: false, message: 'Manager email is missing; cannot send verification code.' });
   }
   try {
-    const workspace = await getWorkspaceByCompanyId(companyId);
+    const workspace = await getWorkspaceByCompanyId(companyId, projectId);
     const floor = getFloorFromWorkspace(workspace, floorId);
     if (!floor) {
       return res.status(404).json({ success: false, message: 'Floor not found.' });
@@ -1175,6 +1238,7 @@ async function requestDeleteFloorManager(req, res) {
 
 async function confirmDeleteFloorManager(req, res) {
   const companyId = getManagerCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const floorId = normalizeFloorId(body.floorId);
   const otpInput = parseDeleteUnitCode(body);
@@ -1207,7 +1271,7 @@ async function confirmDeleteFloorManager(req, res) {
     return res.status(403).json({ success: false, message: 'Invalid verification code.' });
   }
   try {
-    const existing = await getWorkspaceByCompanyId(companyId);
+    const existing = await getWorkspaceByCompanyId(companyId, projectId);
     const floor = getFloorFromWorkspace(existing, floorId);
     if (!floor) {
       floorDeleteChallenges.delete(key);
@@ -1215,7 +1279,7 @@ async function confirmDeleteFloorManager(req, res) {
     }
     removeFloorFromWorkspace(existing, floorId);
     existing.updated_at = new Date().toISOString();
-    await upsertWorkspace(companyId, existing, 'manager', req.manager && req.manager.id ? req.manager.id : null);
+    await upsertWorkspace(companyId, projectId, existing, 'manager', req.manager && req.manager.id ? req.manager.id : null);
     floorDeleteChallenges.delete(key);
     return res.json({ success: true, workspace: existing });
   } catch (error) {
@@ -1233,13 +1297,14 @@ async function confirmDeleteFloorManager(req, res) {
 
 async function requestDeleteFloorSupervisor(req, res) {
   const companyId = getSupervisorCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const floorId = normalizeFloorId(body.floorId);
   if (companyId == null || !floorId) {
     return res.status(400).json({ success: false, message: 'Valid floor id is required.' });
   }
   try {
-    const workspace = await getWorkspaceByCompanyId(companyId);
+    const workspace = await getWorkspaceByCompanyId(companyId, projectId);
     const floor = getFloorFromWorkspace(workspace, floorId);
     if (!floor) {
       return res.status(404).json({ success: false, message: 'Floor not found.' });
@@ -1287,6 +1352,7 @@ async function requestDeleteFloorSupervisor(req, res) {
 
 async function confirmDeleteFloorSupervisor(req, res) {
   const companyId = getSupervisorCompanyId(req);
+  const projectId = getScopedProjectIdFromReq(req);
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const floorId = normalizeFloorId(body.floorId);
   const otpInput = parseDeleteUnitCode(body);
@@ -1319,7 +1385,7 @@ async function confirmDeleteFloorSupervisor(req, res) {
     return res.status(403).json({ success: false, message: 'Invalid verification code.' });
   }
   try {
-    const existing = await getWorkspaceByCompanyId(companyId);
+    const existing = await getWorkspaceByCompanyId(companyId, projectId);
     const floor = getFloorFromWorkspace(existing, floorId);
     if (!floor) {
       floorDeleteChallenges.delete(key);
@@ -1336,6 +1402,7 @@ async function confirmDeleteFloorSupervisor(req, res) {
     existing.updated_at = new Date().toISOString();
     await upsertWorkspace(
       companyId,
+      projectId,
       existing,
       'supervisor',
       req.supervisor && req.supervisor.id ? req.supervisor.id : null

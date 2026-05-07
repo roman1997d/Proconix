@@ -2268,6 +2268,16 @@
       return null;
     }
 
+    function buildScopedUnitProgressUrl(path) {
+      const base = String(path || "");
+      if (!base) return base;
+      const pid = getUnitProgressProjectFilterId();
+      if (!pid) return base;
+      return base.includes("?")
+        ? `${base}&project_id=${encodeURIComponent(pid)}`
+        : `${base}?project_id=${encodeURIComponent(pid)}`;
+    }
+
     function escapeHtmlAttr(value) {
       return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -2689,7 +2699,7 @@
       const cfg = getWorkspaceApiConfig();
       if (!cfg) return;
       try {
-        const base = cfg.getUrl;
+        const base = buildScopedUnitProgressUrl(cfg.getUrl);
         const url = base.includes("?") ? `${base}&slim=1` : `${base}?slim=1`;
         const response = await fetch(url, { headers: cfg.headers, credentials: "same-origin" });
         const payload = await response.json();
@@ -2735,7 +2745,7 @@
           ? `/api/unit-progress/manager/private-timeline/${uid}`
           : `/api/unit-progress/supervisor/private-timeline/${uid}`;
       try {
-        const response = await fetch(path, { headers: cfg.headers, credentials: "same-origin" });
+        const response = await fetch(buildScopedUnitProgressUrl(path), { headers: cfg.headers, credentials: "same-origin" });
         const payload = await response.json().catch(() => ({}));
         if (response.ok && payload && payload.success && Array.isArray(payload.timeline)) {
           unit.timeline = payload.timeline;
@@ -2752,7 +2762,7 @@
       try {
         const workspacePayload =
           stripTransientQaEvidenceFromWorkspace(DATA);
-        const response = await fetch(cfg.putUrl, {
+        const response = await fetch(buildScopedUnitProgressUrl(cfg.putUrl), {
           method: "PUT",
           headers: { ...cfg.headers, "Content-Type": "application/json" },
           credentials: "same-origin",
@@ -2761,6 +2771,7 @@
               workspacePayload != null && typeof workspacePayload === "object"
                 ? workspacePayload
                 : DATA,
+            project_id: getUnitProgressProjectFilterId(),
             reason: reason || "update",
           })
         });
@@ -2782,11 +2793,11 @@
           ? "/api/unit-progress/manager/delete-unit/request"
           : "/api/unit-progress/supervisor/delete-unit/request";
       try {
-        const response = await fetch(requestUrl, {
+        const response = await fetch(buildScopedUnitProgressUrl(requestUrl), {
           method: "POST",
           headers: { ...cfg.headers, "Content-Type": "application/json" },
           credentials: "same-origin",
-          body: JSON.stringify({ unitId: unit.id })
+          body: JSON.stringify({ unitId: unit.id, project_id: getUnitProgressProjectFilterId() })
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload || !payload.success) {
@@ -2809,11 +2820,11 @@
           ? "/api/unit-progress/manager/delete-unit/confirm"
           : "/api/unit-progress/supervisor/delete-unit/confirm";
       try {
-        const response = await fetch(confirmUrl, {
+        const response = await fetch(buildScopedUnitProgressUrl(confirmUrl), {
           method: "POST",
           headers: { ...cfg.headers, "Content-Type": "application/json" },
           credentials: "same-origin",
-          body: JSON.stringify({ unitId: unit.id, code: String(codeRaw || "").trim() })
+          body: JSON.stringify({ unitId: unit.id, code: String(codeRaw || "").trim(), project_id: getUnitProgressProjectFilterId() })
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload || !payload.success) {
@@ -2845,11 +2856,11 @@
           ? "/api/unit-progress/manager/delete-floor/request"
           : "/api/unit-progress/supervisor/delete-floor/request";
       try {
-        const response = await fetch(requestUrl, {
+        const response = await fetch(buildScopedUnitProgressUrl(requestUrl), {
           method: "POST",
           headers: { ...cfg.headers, "Content-Type": "application/json" },
           credentials: "same-origin",
-          body: JSON.stringify({ floorId })
+          body: JSON.stringify({ floorId, project_id: getUnitProgressProjectFilterId() })
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload || !payload.success) {
@@ -2872,11 +2883,11 @@
           ? "/api/unit-progress/manager/delete-floor/confirm"
           : "/api/unit-progress/supervisor/delete-floor/confirm";
       try {
-        const response = await fetch(confirmUrl, {
+        const response = await fetch(buildScopedUnitProgressUrl(confirmUrl), {
           method: "POST",
           headers: { ...cfg.headers, "Content-Type": "application/json" },
           credentials: "same-origin",
-          body: JSON.stringify({ floorId, code: String(codeRaw || "").trim() })
+          body: JSON.stringify({ floorId, code: String(codeRaw || "").trim(), project_id: getUnitProgressProjectFilterId() })
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload || !payload.success) {
@@ -2910,11 +2921,11 @@
           ? `/api/unit-progress/manager/private-timeline/${uid}/progress`
           : `/api/unit-progress/supervisor/private-timeline/${uid}/progress`;
       try {
-        const response = await fetch(url, {
+        const response = await fetch(buildScopedUnitProgressUrl(url), {
           method: "POST",
           credentials: "same-origin",
           headers: { ...cfg.headers, "Content-Type": "application/json" },
-          body: JSON.stringify(progressPayload)
+          body: JSON.stringify({ ...progressPayload, project_id: getUnitProgressProjectFilterId() })
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || !payload || !payload.success) {

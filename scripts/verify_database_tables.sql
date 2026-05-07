@@ -19,7 +19,8 @@ WITH expected(name, tier) AS (
     ('planning_plans', 1),
     ('planning_plan_tasks', 1),
     ('operative_task_photos', 1),
-    ('proconix_admin', 1)
+    ('proconix_admin', 1),
+    ('unit_progress_state', 1)
 ),
 actual AS (
   SELECT table_name
@@ -106,6 +107,7 @@ WITH all_expected(name) AS (
     ('companies'), ('manager'), ('users'), ('projects'), ('project_assignments'),
     ('work_logs'), ('work_hours'), ('tasks'), ('issues'), ('uploads'),
     ('planning_plans'), ('planning_plan_tasks'), ('operative_task_photos'), ('proconix_admin'),
+    ('unit_progress_state'),
     ('material_categories'), ('material_suppliers'), ('materials'), ('material_consumption'),
     ('qa_worker_categories'), ('qa_cost_types'), ('qa_job_statuses'), ('qa_floors'),
     ('qa_supervisors'), ('qa_workers'), ('qa_templates'), ('qa_template_steps'),
@@ -135,6 +137,7 @@ WHERE t.table_schema = 'public'
     'companies', 'manager', 'users', 'projects', 'project_assignments',
     'work_logs', 'work_hours', 'tasks', 'issues', 'uploads',
     'planning_plans', 'planning_plan_tasks', 'operative_task_photos', 'proconix_admin',
+    'unit_progress_state',
     'material_categories', 'material_suppliers', 'materials', 'material_consumption',
     'qa_worker_categories', 'qa_cost_types', 'qa_job_statuses', 'qa_floors',
     'qa_supervisors', 'qa_workers', 'qa_templates', 'qa_template_steps',
