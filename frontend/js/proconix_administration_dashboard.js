@@ -656,9 +656,11 @@
     sysPollTimer = setInterval(function () {
       var sys = document.querySelector('[data-px-admin-panel="system"]');
       var aud = document.querySelector('[data-px-admin-panel="audit"]');
+      var mem = document.querySelector('[data-px-admin-panel="server-memory"]');
       var sysVis = sys && !sys.classList.contains('d-none');
       var audVis = aud && !aud.classList.contains('d-none');
-      if (sysVis || audVis) {
+      var memVis = mem && !mem.classList.contains('d-none');
+      if (sysVis || audVis || memVis) {
         loadSystemHealthPanel(sess);
       }
     }, 30000);
@@ -2032,6 +2034,10 @@
         scheduleSysPoll(session);
         startServerLogStream(session);
       }
+      if (id === 'server-memory') {
+        loadSystemHealthPanel(session);
+        scheduleSysPoll(session);
+      }
       if (offcanvasEl && window.bootstrap) {
         var inst = window.bootstrap.Offcanvas.getInstance(offcanvasEl);
         if (inst) inst.hide();
@@ -2056,6 +2062,13 @@
   var btnAuditRefresh = document.getElementById('pxAdminAuditRefresh');
   if (btnAuditRefresh) {
     btnAuditRefresh.addEventListener('click', function () {
+      loadSystemHealthPanel(session);
+    });
+  }
+
+  var btnServerMemoryRefresh = document.getElementById('pxAdminServerMemoryRefresh');
+  if (btnServerMemoryRefresh) {
+    btnServerMemoryRefresh.addEventListener('click', function () {
       loadSystemHealthPanel(session);
     });
   }

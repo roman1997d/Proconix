@@ -71,6 +71,9 @@
         <a href="#" class="px-admin-nav-link" data-px-admin-section="audit" data-px-admin-title="Audit &amp; logs">
           <i class="bi bi-journal-text"></i> Audit &amp; logs
         </a>
+        <a href="#" class="px-admin-nav-link" data-px-admin-section="server-memory" data-px-admin-title="Server Memory">
+          <i class="bi bi-hdd-network"></i> Server Memory
+        </a>
         <a href="#" class="px-admin-nav-link" data-px-admin-section="content" data-px-admin-title="Content &amp; communications">
           <i class="bi bi-envelope-paper"></i> Content &amp; communications
         </a>
@@ -486,7 +489,7 @@
               </div>
             </div>
             <p class="text-white-50 small mb-3">
-              Server output, deployment footprint on disk, PostgreSQL diagnostics (slow-query hints), and <code class="text-info">FEATURE_*</code> environment flags. Operational metrics (API, uptime, charts, pool) stay under <strong>System &amp; health</strong>.
+              Server output, PostgreSQL diagnostics (slow-query hints), and <code class="text-info">FEATURE_*</code> environment flags. Operational metrics (API, uptime, charts, pool) stay under <strong>System &amp; health</strong>.
             </p>
             <div id="pxAdminAuditAlert" class="alert alert-danger d-none" role="alert"></div>
             <div id="pxAdminAuditLoading" class="text-white-50 py-3 d-none">Loading audit data…</div>
@@ -513,37 +516,6 @@
                 </p>
                 <div class="px-admin-sys-console-outer">
                   <pre id="pxAdminAuditLiveLog" class="px-admin-sys-console px-admin-sys-live-log mb-0" role="log" aria-live="polite" aria-label="Live server log"></pre>
-                </div>
-              </div>
-
-              <h3 class="h6 text-white mb-2">Proconix project on disk</h3>
-              <p class="small text-white-50 mb-3" id="pxAdminAuditDiskIntro">
-                All files under the project root (backend, frontend, <code class="text-info">uploads</code>, images, <code class="text-info">node_modules</code>, etc.). Sizes are per top-level folder; total is the sum. Scan is cached ~90s per server process.
-              </p>
-              <div class="row g-3 mb-3">
-                <div class="col-md-4">
-                  <div class="px-admin-stat-card h-100">
-                    <div class="text-white-50 small">Total (project)</div>
-                    <div class="px-admin-stat-value" id="pxAdminAuditDiskTotal">—</div>
-                    <div class="small text-white-50 text-break" id="pxAdminAuditDiskMeta">—</div>
-                    <hr class="border-secondary my-2">
-                    <div class="small text-white-50">Images: <span class="text-info" id="pxAdminAuditDiskImages">—</span></div>
-                    <div class="small text-white-50">Documents: <span class="text-info" id="pxAdminAuditDiskDocuments">—</span></div>
-                    <div class="small text-white-50">Others: <span class="text-info" id="pxAdminAuditDiskOthers">—</span></div>
-                  </div>
-                </div>
-                <div class="col-md-8">
-                  <div class="table-responsive border border-secondary rounded-3" style="max-height: 280px; overflow-y: auto;">
-                    <table class="table table-dark table-sm px-admin-data-table mb-0">
-                      <thead>
-                        <tr>
-                          <th scope="col">Top-level</th>
-                          <th scope="col" class="text-end">Size</th>
-                        </tr>
-                      </thead>
-                      <tbody id="pxAdminAuditDiskBody"></tbody>
-                    </table>
-                  </div>
                 </div>
               </div>
 
@@ -579,21 +551,67 @@
               </div>
               <p id="pxAdminAuditFlagsEmpty" class="text-white-50 small mb-0 d-none">No feature flags found in this process environment.</p>
 
-              <hr class="border-secondary my-4">
-              <h3 class="h6 text-white mb-2">backend/uploads files</h3>
-              <p class="small text-white-50 mb-2" id="pxAdminAuditUploadsMeta">—</p>
-              <div class="table-responsive border border-secondary rounded-3" style="max-height: 320px; overflow-y: auto;">
-                <table class="table table-dark table-sm px-admin-data-table mb-0">
-                  <thead>
-                    <tr>
-                      <th scope="col">Path</th>
-                      <th scope="col" class="text-end">Size</th>
-                      <th scope="col">Modified</th>
-                    </tr>
-                  </thead>
-                  <tbody id="pxAdminAuditUploadsBody"></tbody>
-                </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-none" data-px-admin-panel="server-memory">
+          <div class="px-admin-panel-card">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+              <h2 class="h5 text-white mb-0">Server Memory</h2>
+              <button type="button" class="btn btn-sm btn-outline-light" id="pxAdminServerMemoryRefresh" title="Reload disk and uploads usage">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
+              </button>
+            </div>
+            <p class="text-white-50 small mb-3">
+              Deployment footprint on disk and recursive listing of files from <code class="text-info">backend/uploads</code>.
+            </p>
+
+            <h3 class="h6 text-white mb-2">Proconix project on disk</h3>
+            <p class="small text-white-50 mb-3" id="pxAdminAuditDiskIntro">
+              All files under the project root (backend, frontend, <code class="text-info">uploads</code>, images, <code class="text-info">node_modules</code>, etc.). Sizes are per top-level folder; total is the sum. Scan is cached ~90s per server process.
+            </p>
+            <div class="row g-3 mb-3">
+              <div class="col-md-4">
+                <div class="px-admin-stat-card h-100">
+                  <div class="text-white-50 small">Total (project)</div>
+                  <div class="px-admin-stat-value" id="pxAdminAuditDiskTotal">—</div>
+                  <div class="small text-white-50 text-break" id="pxAdminAuditDiskMeta">—</div>
+                  <hr class="border-secondary my-2">
+                  <div class="small text-white-50">Images: <span class="text-info" id="pxAdminAuditDiskImages">—</span></div>
+                  <div class="small text-white-50">Documents: <span class="text-info" id="pxAdminAuditDiskDocuments">—</span></div>
+                  <div class="small text-white-50">Others: <span class="text-info" id="pxAdminAuditDiskOthers">—</span></div>
+                </div>
               </div>
+              <div class="col-md-8">
+                <div class="table-responsive border border-secondary rounded-3" style="max-height: 280px; overflow-y: auto;">
+                  <table class="table table-dark table-sm px-admin-data-table mb-0">
+                    <thead>
+                      <tr>
+                        <th scope="col">Top-level</th>
+                        <th scope="col" class="text-end">Size</th>
+                      </tr>
+                    </thead>
+                    <tbody id="pxAdminAuditDiskBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <hr class="border-secondary my-4">
+            <h3 class="h6 text-white mb-2">backend/uploads files</h3>
+            <p class="small text-white-50 mb-2" id="pxAdminAuditUploadsMeta">—</p>
+            <div class="table-responsive border border-secondary rounded-3" style="max-height: 320px; overflow-y: auto;">
+              <table class="table table-dark table-sm px-admin-data-table mb-0">
+                <thead>
+                  <tr>
+                    <th scope="col">Path</th>
+                    <th scope="col" class="text-end">Size</th>
+                    <th scope="col">Modified</th>
+                  </tr>
+                </thead>
+                <tbody id="pxAdminAuditUploadsBody"></tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1013,6 +1031,9 @@
     </a>
     <a href="#" class="px-admin-nav-link" data-px-admin-section="audit" data-px-admin-title="Audit &amp; logs">
       <i class="bi bi-journal-text"></i> Audit &amp; logs
+    </a>
+    <a href="#" class="px-admin-nav-link" data-px-admin-section="server-memory" data-px-admin-title="Server Memory">
+      <i class="bi bi-hdd-network"></i> Server Memory
     </a>
     <a href="#" class="px-admin-nav-link" data-px-admin-section="content" data-px-admin-title="Content &amp; communications">
       <i class="bi bi-envelope-paper"></i> Content &amp; communications
