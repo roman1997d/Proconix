@@ -363,6 +363,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.px-admin-memory-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 .px-admin-companies-table .px-admin-company-row {
   cursor: pointer;
 }

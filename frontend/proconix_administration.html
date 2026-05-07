@@ -597,6 +597,18 @@
               </div>
             </div>
 
+            <div class="mb-4">
+              <h3 class="h6 text-white mb-2">Server memory capacity</h3>
+              <p class="small text-white-50 mb-2">Maximum allowed server memory: 9GB.</p>
+              <div class="px-admin-memory-donut-wrap">
+                <canvas id="pxAdminMemoryDonut" width="180" height="180" aria-label="Server memory usage donut"></canvas>
+                <div class="small text-white-50">
+                  <div id="pxAdminMemoryDonutText">Used: — / 9GB</div>
+                  <div id="pxAdminMemoryDonutPct">—%</div>
+                </div>
+              </div>
+            </div>
+
             <h3 class="h6 text-white mb-2">Proconix project on disk</h3>
             <p class="small text-white-50 mb-3" id="pxAdminAuditDiskIntro">
               All files under the project root (backend, frontend, <code class="text-info">uploads</code>, images, <code class="text-info">node_modules</code>, etc.). Sizes are per top-level folder; total is the sum. Scan is cached ~90s per server process.

@@ -756,6 +756,7 @@
 
     var memoryProjectTotalBytes = 0;
     var memoryBusinessBytes = 0;
+    var MAX_SERVER_MEMORY_BYTES = 9 * 1024 * 1024 * 1024;
 
     function formatBytesSmart(n) {
       var b = Number(n || 0);
@@ -783,6 +784,45 @@
       busBar.style.width = busPct.toFixed(1) + '%';
       sysText.textContent = formatBytesSmart(system) + ' (' + sysPct.toFixed(1) + '%)';
       busText.textContent = formatBytesSmart(business) + ' (' + busPct.toFixed(1) + '%)';
+    }
+
+    function renderMemoryDonut() {
+      var canvas = document.getElementById('pxAdminMemoryDonut');
+      var txt = document.getElementById('pxAdminMemoryDonutText');
+      var pctEl = document.getElementById('pxAdminMemoryDonutPct');
+      if (!canvas || !canvas.getContext) return;
+      var ctx = canvas.getContext('2d');
+      var w = canvas.width;
+      var h = canvas.height;
+      var cx = w / 2;
+      var cy = h / 2;
+      var r = Math.min(w, h) / 2 - 12;
+      var used = Math.max(0, Number(memoryProjectTotalBytes || 0));
+      var pct = Math.max(0, Math.min(100, (used / MAX_SERVER_MEMORY_BYTES) * 100));
+      var end = -Math.PI / 2 + (Math.PI * 2 * pct) / 100;
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+      ctx.lineWidth = 16;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, -Math.PI / 2, end);
+      ctx.strokeStyle = pct > 85 ? '#ef4444' : '#0ea5e9';
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 16;
+      ctx.stroke();
+
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = '600 20px Inter, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pct.toFixed(1) + '%', cx, cy);
+
+      if (txt) txt.textContent = 'Used: ' + formatBytesSmart(used) + ' / 9GB';
+      if (pctEl) pctEl.textContent = pct.toFixed(1) + '%';
     }
 
     function renderUploadsAudit(sessForReq) {
@@ -820,6 +860,7 @@
             return sum + (Number(f && f.size_bytes) || 0);
           }, 0);
           renderMemoryBars();
+          renderMemoryDonut();
           if (!files.length) {
             var tr0 = document.createElement('tr');
             tr0.innerHTML = '<td colspan="3" class="text-white-50">No files found.</td>';
@@ -848,6 +889,7 @@
           if (meta) meta.textContent = '—';
           memoryBusinessBytes = 0;
           renderMemoryBars();
+          renderMemoryDonut();
         });
     }
 
@@ -1237,6 +1279,7 @@
         if (content) content.classList.remove('d-none');
         if (auditContent) auditContent.classList.remove('d-none');
         renderMemoryBars();
+        renderMemoryDonut();
         renderUploadsAudit(sess);
         var uploadsBody = document.getElementById('pxAdminAuditUploadsBody');
         if (uploadsBody && !uploadsBody.__pxBoundDelete) {
