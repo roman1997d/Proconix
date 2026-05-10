@@ -2824,8 +2824,6 @@
     var jobsWrap = document.getElementById('op-wr-jobs');
     if (jobsWrap) jobsWrap.innerHTML = '';
     addTimesheetJobItem();
-    var notesEl = document.getElementById('op-wr-notes');
-    if (notesEl) notesEl.value = '';
     var fromEl = document.getElementById('op-wr-period-from');
     var toEl = document.getElementById('op-wr-period-to');
     var today = new Date();
@@ -2886,7 +2884,6 @@
     var afterTax = !isNaN(beforeTax) ? beforeTax * 0.8 : NaN;
     var workType = getOperativeRole() || null;
     var description = (document.getElementById('op-wl-description').value || '').trim() || null;
-    var notes = (document.getElementById('op-wr-notes').value || '').trim() || null;
     var periodFromEl = document.getElementById('op-wr-period-from');
     var periodToEl = document.getElementById('op-wr-period-to');
     var periodFrom = periodFromEl ? (periodFromEl.value || '').trim() : '';
@@ -3173,21 +3170,6 @@
             y += 2;
           });
 
-          if (notes) {
-            // Notes after jobs (separate section)
-            if (y > pageH - 40) {
-              doc.addPage();
-              y = 20;
-            }
-            doc.setFont('helvetica', 'bold');
-            doc.text('Extra notes', margin, y + 2);
-            y += 7;
-            doc.setFont('helvetica', 'normal');
-            var nLines = doc.splitTextToSize(notes, pageW - margin * 2);
-            doc.text(nLines, margin, y);
-            y += nLines.length * 5 + 2;
-          }
-
           // Footer on all pages
           var pages = doc.getNumberOfPages();
           for (var pn = 1; pn <= pages; pn++) {
@@ -3226,7 +3208,7 @@
         total_before_tax: isNaN(beforeTax) ? 0 : beforeTax,
         total_after_tax: isNaN(afterTax) ? 0 : afterTax,
         work_type: workType,
-        notes: notes,
+        notes: null,
         description: description,
         period_from: periodFrom,
         period_to: periodTo,
