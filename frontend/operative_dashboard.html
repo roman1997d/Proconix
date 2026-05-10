@@ -69,16 +69,6 @@
       <div id="op-clock-feedback" class="op-feedback d-none" role="alert" aria-live="assertive"></div>
     </section>
 
-    <section class="op-card op-daily-records-card" id="op-daily-records">
-      <h2 class="op-card-title"><i class="bi bi-journal-text"></i> Daily Records</h2>
-      <p class="op-tasks-hint">Add your own unit progress updates for timeline visibility in Unit Progress.</p>
-      <button type="button" class="op-btn op-btn-primary" id="op-dr-btn-add">
-        <i class="bi bi-plus-lg"></i> Add
-      </button>
-      <div id="op-dr-feedback" class="op-feedback d-none" role="alert"></div>
-      <div id="op-dr-list" class="op-dr-list">Loading…</div>
-    </section>
-
     <!-- Drawing Gallery (inline for operatives) -->
     <section class="op-card">
       <h2 class="op-card-title"><i class="bi bi-diagram-3"></i> Drawing Gallery</h2>
@@ -300,91 +290,6 @@
 
   <div class="op-chat-toast" id="op-chat-toast" role="status" aria-live="polite"></div>
 
-  <div class="op-modal" id="op-modal-daily-record" aria-hidden="true" role="dialog" aria-labelledby="op-dr-title">
-    <div class="op-modal-backdrop" data-dismiss="modal"></div>
-    <div class="op-modal-dialog">
-      <div class="op-modal-content">
-        <div class="op-modal-header">
-          <h3 id="op-dr-title">Add Daily Record</h3>
-          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
-        </div>
-        <div class="op-modal-body">
-          <form id="op-form-daily-record">
-            <div class="op-field">
-              <label for="op-dr-unit">Location / Unit</label>
-              <select id="op-dr-unit" required></select>
-            </div>
-            <div class="op-field-row">
-              <div class="op-field">
-                <label for="op-dr-stage">Stage</label>
-                <input type="text" id="op-dr-stage" placeholder="e.g. Plastering" required maxlength="120">
-              </div>
-              <div class="op-field">
-                <label for="op-dr-status">Status</label>
-                <select id="op-dr-status" required>
-                  <option value="In progress">In progress</option>
-                  <option value="Done">Done</option>
-                  <option value="Blocked">Blocked</option>
-                </select>
-              </div>
-            </div>
-            <div class="op-field d-none" id="op-dr-reason-wrap">
-              <label for="op-dr-reason">Reason (for Blocked)</label>
-              <input type="text" id="op-dr-reason" maxlength="180" placeholder="Why blocked?">
-            </div>
-            <div class="op-field">
-              <label for="op-dr-comment">Comment</label>
-              <textarea id="op-dr-comment" rows="3" maxlength="1200" required placeholder="What progress did you make today?"></textarea>
-            </div>
-            <div class="op-field">
-              <label for="op-dr-photos">Photos (max 3)</label>
-              <input type="file" id="op-dr-photos" accept="image/*" multiple>
-            </div>
-            <div id="op-dr-modal-feedback" class="op-feedback d-none" role="alert"></div>
-            <button type="submit" class="op-btn op-btn-primary">Save record</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="op-modal" id="op-modal-daily-record-view" aria-hidden="true" role="dialog" aria-labelledby="op-dr-view-title">
-    <div class="op-modal-backdrop" data-dismiss="modal"></div>
-    <div class="op-modal-dialog">
-      <div class="op-modal-content">
-        <div class="op-modal-header">
-          <h3 id="op-dr-view-title">Daily Record Details</h3>
-          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
-        </div>
-        <div class="op-modal-body">
-          <div class="op-field"><label for="op-dr-view-stage">Stage</label><input type="text" id="op-dr-view-stage" maxlength="120"></div>
-          <div class="op-field-row">
-            <div class="op-field">
-              <label for="op-dr-view-status">Status</label>
-              <select id="op-dr-view-status">
-                <option value="In progress">In progress</option>
-                <option value="Done">Done</option>
-                <option value="Blocked">Blocked</option>
-              </select>
-            </div>
-            <div class="op-field"><label>Date</label><input type="text" id="op-dr-view-date" readonly></div>
-          </div>
-          <div class="op-field d-none" id="op-dr-view-reason-wrap"><label for="op-dr-view-reason">Blocked reason</label><textarea id="op-dr-view-reason" rows="2" maxlength="180"></textarea></div>
-          <div class="op-field"><label for="op-dr-view-comment">Comment</label><textarea id="op-dr-view-comment" rows="3" maxlength="1200"></textarea></div>
-          <div class="op-field">
-            <label>Photos</label>
-            <div id="op-dr-view-photos" class="op-dr-photos"></div>
-          </div>
-          <div id="op-dr-view-feedback" class="op-feedback d-none" role="alert"></div>
-          <div class="op-field-row">
-            <button type="button" class="op-btn op-btn-secondary" id="op-dr-view-update">Update</button>
-            <button type="button" class="op-btn op-btn-danger-outline" id="op-dr-view-delete">Delete</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <div class="op-modal op-modal-dg" id="op-modal-dg" aria-hidden="true" role="dialog" aria-labelledby="op-dg-title">
     <div class="op-modal-backdrop" data-dismiss="modal"></div>
     <div class="op-modal-dialog op-modal-dialog-dg">
@@ -505,11 +410,6 @@
                 <button type="button" class="op-btn op-btn-secondary op-wl-flow-btn" id="op-btn-flow-time-sheet">Time Sheet</button>
               </div>
             </div>
-            <div class="op-field">
-              <button type="button" class="op-btn op-btn-secondary op-wl-flow-btn" id="op-btn-daily-record-invoice">
-                Generate invoice based on my daily record
-              </button>
-            </div>
             <div class="op-field" id="op-wl-price-upload-wrap">
               <label for="op-wl-document">Price Work file (PDF / Excel / image)</label>
               <input type="file" id="op-wl-document" accept=".pdf,.xlsx,.xls,image/*">
@@ -585,36 +485,6 @@
             <button type="button" class="op-btn op-btn-primary" id="op-wl-inv-yes">Yes, email a copy</button>
             <button type="button" class="op-btn op-btn-secondary" id="op-wl-inv-no">No thanks</button>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="op-modal op-modal-worklog" id="op-modal-daily-record-invoice" aria-hidden="true" role="dialog" aria-labelledby="op-dr-inv-title">
-    <div class="op-modal-backdrop" data-dismiss="modal"></div>
-    <div class="op-modal-dialog op-modal-dialog-worklog">
-      <div class="op-modal-content">
-        <div class="op-modal-header">
-          <h3 id="op-dr-inv-title">Generate invoice from Daily Records</h3>
-          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
-        </div>
-        <div class="op-modal-body">
-          <div class="op-field-row">
-            <div class="op-field">
-              <label for="op-dr-inv-from">From</label>
-              <input type="date" id="op-dr-inv-from">
-            </div>
-            <div class="op-field">
-              <label for="op-dr-inv-to">To</label>
-              <input type="date" id="op-dr-inv-to">
-            </div>
-          </div>
-          <div id="op-dr-inv-feedback" class="op-feedback d-none" role="alert"></div>
-          <div id="op-dr-inv-loader" class="op-inline-loader d-none" aria-live="polite">
-            <span class="op-inline-loader-spinner" aria-hidden="true"></span>
-            <span>Generating invoice package, please wait...</span>
-          </div>
-          <button type="button" class="op-btn op-btn-primary" id="op-dr-inv-generate">Generate and send to manager</button>
         </div>
       </div>
     </div>
