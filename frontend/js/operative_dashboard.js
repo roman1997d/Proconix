@@ -2603,6 +2603,19 @@
     return 'Operative';
   }
 
+  /** Work log work type is always the operative's DB role (users.role). */
+  function getOperativeRole() {
+    try {
+      var raw = localStorage.getItem(USER_KEY);
+      if (raw) {
+        var u = JSON.parse(raw);
+        var r = u && u.role != null ? String(u.role).trim() : '';
+        return r;
+      }
+    } catch (e) {}
+    return '';
+  }
+
   function renderWorklogList(entries) {
     if (!worklogListEl) return;
     entries = Array.isArray(entries) ? entries : [];
@@ -2689,7 +2702,6 @@
   }
 
   var activeWorklogFlow = 'price';
-  var fallbackWorkTypes = ['Plastering', 'Drylining', 'Fixing', 'Painting', 'Electricity', 'Plumbing', 'Carpentry', 'Other'];
 
   function setWorklogFlow(flow) {
     activeWorklogFlow = flow === 'timesheet' ? 'timesheet' : 'price';
@@ -2701,36 +2713,6 @@
     if (tsWrap) tsWrap.classList.toggle('d-none', activeWorklogFlow !== 'timesheet');
     if (btnPrice) btnPrice.classList.toggle('op-btn-primary', activeWorklogFlow === 'price');
     if (btnTs) btnTs.classList.toggle('op-btn-primary', activeWorklogFlow === 'timesheet');
-  }
-
-  function renderWorkTypes(list) {
-    var sel = document.getElementById('op-wl-work-type');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">Select…</option>';
-    (list || []).forEach(function (t) {
-      var opt = document.createElement('option');
-      opt.value = t;
-      opt.textContent = t;
-      sel.appendChild(opt);
-    });
-  }
-
-  function loadWorkTypes() {
-    return api('/work-types')
-      .then(function (r) {
-        var arr = (r.data && (r.data.workTypes || r.data.work_types || r.data.items)) || [];
-        arr = Array.isArray(arr) ? arr : [];
-        var normalized = arr
-          .map(function (x) {
-            return typeof x === 'string' ? x : x && (x.name || x.label || x.value);
-          })
-          .filter(Boolean);
-        if (!normalized.length) normalized = fallbackWorkTypes;
-        renderWorkTypes(normalized);
-      })
-      .catch(function () {
-        renderWorkTypes(fallbackWorkTypes);
-      });
   }
 
   function renderDocumentName() {
@@ -2901,8 +2883,8 @@
     }
 
     var beforeTax = parseFloat(document.getElementById('op-wl-total-before-tax').value);
-    var afterTax = parseFloat(document.getElementById('op-wl-total-after-tax').value);
-    var workType = (document.getElementById('op-wl-work-type').value || '').trim() || null;
+    var afterTax = !isNaN(beforeTax) ? beforeTax * 0.8 : NaN;
+    var workType = getOperativeRole() || null;
     var description = (document.getElementById('op-wl-description').value || '').trim() || null;
     var notes = (document.getElementById('op-wr-notes').value || '').trim() || null;
     var periodFromEl = document.getElementById('op-wr-period-from');
@@ -2915,8 +2897,8 @@
     }
 
     var worker = getOperativeName();
-    var projectInput = document.getElementById('op-wl-project');
-    var projectName = (currentWorklogProject && (currentWorklogProject.name || currentWorklogProject.project_name)) || (projectInput && projectInput.value) || '—';
+    var projectName =
+      (currentWorklogProject && (currentWorklogProject.name || currentWorklogProject.project_name)) || '—';
 
     var fileDate = new Date().toISOString().slice(0, 10);
     var pdfFileName = 'work_report_' + fileDate + '.pdf';
@@ -4015,18 +3997,11 @@
   }
 
   function openWorklogModal() {
-    document.getElementById('op-wl-worker').value = getOperativeName();
-    var projectInput = document.getElementById('op-wl-project');
-    if (projectInput) {
-      projectInput.value = 'Loading…';
-      currentWorklogProject = null;
-    }
-    ['op-wl-total-before-tax', 'op-wl-total-after-tax', 'op-wl-description'].forEach(function (id) {
+    currentWorklogProject = null;
+    ['op-wl-total-before-tax', 'op-wl-description'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.value = '';
     });
-    var wt = document.getElementById('op-wl-work-type');
-    if (wt) wt.value = '';
     if (documentInputEl) documentInputEl.value = '';
     if (invoicePathEl) invoicePathEl.value = '';
     pendingWorklogPhotoUrls = [];
@@ -4040,13 +4015,6 @@
       generatedPdfLinkEl.removeAttribute('href');
     }
     setWorklogFlow('price');
-    if (wt) {
-      wt.innerHTML = '';
-      var lo = document.createElement('option');
-      lo.value = '';
-      lo.textContent = 'Loading work types…';
-      wt.appendChild(lo);
-    }
     renderDocumentName();
     if (documentNameEl) documentNameEl.classList.add('d-none');
     hideFeedback(document.getElementById('op-worklog-feedback'));
@@ -4054,68 +4022,35 @@
 
     api('/project/current')
       .then(function (r) {
-        if (!projectInput) return;
         if (!r.data || !r.data.success) {
-          projectInput.value = 'No project assigned';
           currentWorklogProject = null;
-          loadWorkTypes();
           return;
         }
         var proj = r.data.project;
         var name = proj && (proj.name || proj.project_name || '');
         if (proj && (name || proj.id)) {
-          projectInput.value = name || 'Project #' + proj.id;
           currentWorklogProject = proj;
-          var labels = [];
-          if (Array.isArray(proj.trades) && proj.trades.length) {
-            proj.trades.forEach(function (t) {
-              var L = typeof t === 'string' ? t : t && t.label;
-              if (L && String(L).trim()) labels.push(String(L).trim());
-            });
-          }
-          if (labels.length) renderWorkTypes(labels);
-          else loadWorkTypes();
         } else {
-          projectInput.value = 'No project assigned';
           currentWorklogProject = null;
-          loadWorkTypes();
         }
       })
       .catch(function (err) {
-        if (projectInput) {
-          projectInput.value = 'No project assigned';
-          currentWorklogProject = null;
-        }
-        loadWorkTypes();
+        currentWorklogProject = null;
         console.error('project/current:', err && err.message ? err.message : err);
       });
-  }
-
-  var totalBeforeEl = document.getElementById('op-wl-total-before-tax');
-  var totalAfterEl = document.getElementById('op-wl-total-after-tax');
-  if (totalBeforeEl && totalAfterEl) {
-    totalBeforeEl.addEventListener('input', function () {
-      var before = parseFloat(totalBeforeEl.value);
-      if (isNaN(before)) {
-        totalAfterEl.value = '';
-        return;
-      }
-      totalAfterEl.value = (before * 0.8).toFixed(2);
-    });
   }
 
   if (formWorklog) {
     formWorklog.addEventListener('submit', function (e) {
       e.preventDefault();
       var feedback = document.getElementById('op-worklog-feedback');
-      var projectVal = (document.getElementById('op-wl-project').value || '').trim();
-      if (!currentWorklogProject || projectVal === 'No project assigned' || !projectVal) {
+      if (!currentWorklogProject) {
         showFeedback(feedback, 'You are not assigned to a project. Contact your manager.', true);
         return;
       }
-      var workType = (document.getElementById('op-wl-work-type').value || '').trim();
+      var workType = getOperativeRole();
       if (!workType) {
-        showFeedback(feedback, 'Please select work type.', true);
+        showFeedback(feedback, 'Your account has no role set. Contact your manager.', true);
         return;
       }
       var description = (document.getElementById('op-wl-description').value || '').trim();
@@ -4124,9 +4059,12 @@
         return;
       }
       var totalBeforeTax = parseFloat(document.getElementById('op-wl-total-before-tax').value);
-      var totalAfterTax = parseFloat(document.getElementById('op-wl-total-after-tax').value);
-      if (isNaN(totalBeforeTax)) totalBeforeTax = null;
-      if (isNaN(totalAfterTax)) totalAfterTax = null;
+      var totalAfterTax = null;
+      if (!isNaN(totalBeforeTax)) {
+        totalAfterTax = totalBeforeTax * 0.8;
+      } else {
+        totalBeforeTax = null;
+      }
 
       var submitBtn = formWorklog.querySelector('button[type="submit"]');
       if (submitBtn) submitBtn.disabled = true;
