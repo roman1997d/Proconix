@@ -37,6 +37,9 @@ const {
   sendWorkLogInvoiceCopy,
   archiveMyWorkLog,
   listQaAssignedJobsForOperative,
+  getCollaborationSession,
+  generateCollaborationCode,
+  joinCollaborationSession,
 } = require('../controllers/operativeDashboardController');
 const {
   registerPushDevice,
@@ -93,6 +96,10 @@ router.post(
 
 router.post('/issues', requireOperativeAuth, uploadIssueFile, injectFileUrl('issues'), reportIssue);
 router.post('/uploads', requireOperativeAuth, uploadDocumentFile, injectFileUrl('documents'), uploadDocument);
+
+router.get('/collaboration/work-entry/session', requireOperativeAuth, getCollaborationSession);
+router.post('/collaboration/work-entry/code', requireOperativeAuth, generateCollaborationCode);
+router.post('/collaboration/work-entry/join', requireOperativeAuth, joinCollaborationSession);
 
 router.get('/work-log', requireOperativeAuth, getMyWorkLogs);
 router.post('/work-log/upload', requireOperativeAuth, uploadWorklogFile, workLogUpload);

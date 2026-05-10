@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const PDFDocument = require('pdfkit');
 const { pool } = require('../db/pool');
 const { UPLOADS_ROOT, sanitizeCompanyFolderName } = require('../middleware/resolveCompanyDocsDir');
@@ -972,9 +973,22 @@ function parseWorkLogJsonField(val, defaultVal) {
 
 function rowToWorkLogEntry(row) {
   if (!row) return null;
+  let collaboratorsDisplay = [];
+  try {
+    const cd = row.collaborators_display;
+    if (Array.isArray(cd)) collaboratorsDisplay = cd;
+    else if (cd && typeof cd === 'string') collaboratorsDisplay = JSON.parse(cd);
+    else collaboratorsDisplay = [];
+  } catch (_) {
+    collaboratorsDisplay = [];
+  }
   return {
     id: row.id,
     jobId: row.job_display_id,
+    submittedByUserId: row.submitted_by_user_id != null ? Number(row.submitted_by_user_id) : null,
+    workerName: row.worker_name != null ? String(row.worker_name) : '',
+    collaboratorUserIds: normalizeCollaboratorUserIds(row.collaborator_user_ids),
+    collaboratorsDisplay: Array.isArray(collaboratorsDisplay) ? collaboratorsDisplay : [],
     workType: row.work_type,
     project: row.project,
     block: row.block,
@@ -1011,10 +1025,14 @@ async function getMyWorkLogs(req, res) {
         `SELECT id, job_display_id, worker_name, project, block, floor, apartment, zone,
                 work_type, quantity, unit_price, total, description, invoice_file_path, photo_urls, timesheet_jobs,
                 operative_archived, operative_archived_at,
-                status, submitted_at
+                status, submitted_at,
+                submitted_by_user_id, collaborator_user_ids, collaborators_display
          FROM work_logs
-         WHERE submitted_by_user_id = $1
-           AND COALESCE(operative_archived, false) = false
+         WHERE COALESCE(operative_archived, false) = false
+           AND (
+             submitted_by_user_id = $1
+             OR ($1 = ANY (COALESCE(collaborator_user_ids, '{}')))
+           )
          ORDER BY submitted_at DESC
          LIMIT 100`,
         [op.id]
@@ -1027,6 +1045,35 @@ async function getMyWorkLogs(req, res) {
       }
       return res.status(200).json({ success: true, entries });
     } catch (err) {
+      if (
+        err &&
+        err.code === '42703' &&
+        /collaborator_user_ids|collaborators_display/i.test(err.message || '')
+      ) {
+        const resultNoCollab = await pool.query(
+          `SELECT id, job_display_id, worker_name, project, block, floor, apartment, zone,
+                  work_type, quantity, unit_price, total, description, invoice_file_path, photo_urls, timesheet_jobs,
+                  operative_archived, operative_archived_at,
+                  status, submitted_at,
+                  submitted_by_user_id
+           FROM work_logs
+           WHERE COALESCE(operative_archived, false) = false
+             AND submitted_by_user_id = $1
+           ORDER BY submitted_at DESC
+           LIMIT 100`,
+          [op.id]
+        );
+        const rowsNc = resultNoCollab.rows.map((rw) =>
+          Object.assign({}, rw, { collaborator_user_ids: [], collaborators_display: [] })
+        );
+        let entriesNc = rowsNc.map(rowToWorkLogEntry);
+        try {
+          await enrichJobsWithQaPriceTotals(entriesNc);
+        } catch (enrichErr) {
+          console.error('enrichJobsWithQaPriceTotals (operative list no-collab cols):', enrichErr);
+        }
+        return res.status(200).json({ success: true, entries: entriesNc });
+      }
       if (err && err.code === '42703' && /timesheet_jobs|operative_archived/i.test(err.message || '')) {
         const result2 = await pool.query(
           `SELECT id, job_display_id, worker_name, project, block, floor, apartment, zone,
@@ -1069,13 +1116,30 @@ async function archiveMyWorkLog(req, res) {
          SET operative_archived = true,
              operative_archived_at = NOW(),
              updated_at = NOW()
-         WHERE id = $1 AND submitted_by_user_id = $2
+         WHERE id = $1
+           AND (
+             submitted_by_user_id = $2
+             OR ($2 = ANY (COALESCE(collaborator_user_ids, '{}')))
+           )
          RETURNING id`,
         [id, op.id]
       );
       if (!r.rows.length) return res.status(404).json({ success: false, message: 'Work entry not found.' });
       return res.status(200).json({ success: true });
     } catch (err) {
+      if (err && err.code === '42703' && /collaborator_user_ids/i.test(err.message || '')) {
+        const r2 = await pool.query(
+          `UPDATE work_logs
+           SET operative_archived = true,
+               operative_archived_at = NOW(),
+               updated_at = NOW()
+           WHERE id = $1 AND submitted_by_user_id = $2
+           RETURNING id`,
+          [id, op.id]
+        );
+        if (!r2.rows.length) return res.status(404).json({ success: false, message: 'Work entry not found.' });
+        return res.status(200).json({ success: true });
+      }
       if (err && err.code === '42703' && /operative_archived/i.test(err.message || '')) {
         return res.status(503).json({
           success: false,
@@ -1663,89 +1727,322 @@ async function sendWorkLogInvoiceCopy(req, res) {
   }
 }
 
+/**
+ * Company + project for work logs / collaboration (shared by createWorkLog, collaboration endpoints).
+ */
+async function loadOperativeCompanyProjectContext(opId) {
+  let companyId = null;
+  let projectId = null;
+  let workerName = 'Operative';
+
+  try {
+    const userRow = await pool.query(
+      'SELECT id, name, email, company_id, project_id FROM users WHERE id = $1',
+      [opId]
+    );
+    if (userRow.rows.length === 0) {
+      return { ok: false, status: 404, message: 'User not found.' };
+    }
+    const user = userRow.rows[0];
+    companyId = user.company_id;
+    projectId = user.project_id;
+    workerName = (user.name && String(user.name).trim()) || user.email || 'Operative';
+  } catch (userErr) {
+    if (userErr.code === '42703') {
+      try {
+        await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS project_id INT');
+        const retry = await pool.query('SELECT id, name, email, company_id, project_id FROM users WHERE id = $1', [opId]);
+        if (retry.rows.length > 0) {
+          const u = retry.rows[0];
+          companyId = u.company_id;
+          projectId = u.project_id;
+          workerName = (u.name && String(u.name).trim()) || u.email || 'Operative';
+        }
+      } catch (_) {
+        /* fallback query failed */
+      }
+    }
+    if (companyId == null) throw userErr;
+  }
+
+  if (projectId == null) {
+    try {
+      const paRow = await pool.query(
+        'SELECT project_id FROM project_assignments WHERE user_id = $1 ORDER BY assigned_at DESC LIMIT 1',
+        [opId]
+      );
+      if (paRow.rows.length > 0 && paRow.rows[0].project_id != null) projectId = paRow.rows[0].project_id;
+    } catch (_) {
+      /* project_assignments lookup failed */
+    }
+  }
+
+  if (projectId == null) {
+    return {
+      ok: false,
+      status: 400,
+      message: 'You are not assigned to a project. Contact your manager.',
+    };
+  }
+
+  if (companyId == null) {
+    try {
+      const pr = await pool.query('SELECT company_id FROM projects WHERE id = $1', [projectId]);
+      if (pr.rows[0] && pr.rows[0].company_id != null) {
+        const cid = parseInt(String(pr.rows[0].company_id), 10);
+        if (Number.isInteger(cid)) companyId = cid;
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  let projectName = null;
+  try {
+    const projRow = await pool.query(
+      'SELECT COALESCE(project_name, name) AS name FROM projects WHERE id = $1',
+      [projectId]
+    );
+    if (projRow.rows.length > 0) projectName = projRow.rows[0].name;
+  } catch (projErr) {
+    if (projErr.code === '42703') {
+      const projRow2 = await pool.query('SELECT project_name AS name FROM projects WHERE id = $1', [projectId]);
+      if (projRow2.rows.length > 0) projectName = projRow2.rows[0].name;
+    }
+  }
+
+  return { ok: true, companyId, projectId, workerName, projectName };
+}
+
+function normalizeCollaboratorUserIds(raw, excludeUserId) {
+  const ex = excludeUserId != null ? Number(excludeUserId) : null;
+  let arr = [];
+  if (Array.isArray(raw)) arr = raw;
+  else return [];
+  const seen = new Set();
+  const out = [];
+  for (const x of arr) {
+    const n = parseInt(String(x), 10);
+    if (!Number.isInteger(n) || n < 1) continue;
+    if (ex != null && n === ex) continue;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
+async function loadCollaboratorsFromHostSession(hostUserId) {
+  try {
+    const r = await pool.query(
+      `SELECT guest_user_ids FROM operative_collaboration_sessions
+       WHERE host_user_id = $1 AND expires_at > NOW()
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [hostUserId]
+    );
+    if (!r.rows.length) return [];
+    return normalizeCollaboratorUserIds(r.rows[0].guest_user_ids, hostUserId);
+  } catch (e) {
+    if (e && e.code === '42P01') return [];
+    throw e;
+  }
+}
+
+async function resolveCollaboratorDisplay(userIds) {
+  const ids = normalizeCollaboratorUserIds(userIds);
+  if (!ids.length) return [];
+  const ur = await pool.query(
+    `SELECT id,
+      COALESCE(NULLIF(TRIM(name), ''), NULLIF(TRIM(email), ''), 'Operative') AS disp_name
+     FROM users WHERE id = ANY($1::int[])`,
+    [ids]
+  );
+  const byId = {};
+  ur.rows.forEach((row) => {
+    byId[row.id] = row.disp_name;
+  });
+  return ids.map((id) => ({ userId: id, name: byId[id] != null ? String(byId[id]) : 'Operative' }));
+}
+
+function generateRandomCollaborationCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let raw = '';
+  const buf = crypto.randomBytes(12);
+  for (let i = 0; i < 8; i++) {
+    raw += alphabet[buf[i] % alphabet.length];
+  }
+  return `${raw.slice(0, 4)}-${raw.slice(4, 8)}`;
+}
+
+function normalizeCollaborationCodeInput(s) {
+  const alnum = String(s || '')
+    .replace(/[^A-Za-z0-9]/g, '')
+    .toUpperCase();
+  if (alnum.length !== 8) return null;
+  return `${alnum.slice(0, 4)}-${alnum.slice(4, 8)}`;
+}
+
+/**
+ * GET /api/operatives/collaboration/work-entry/session
+ * Host: active collaboration code if any.
+ */
+async function getCollaborationSession(req, res) {
+  const op = getOperative(req);
+  if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+
+  try {
+    const r = await pool.query(
+      `SELECT code, expires_at FROM operative_collaboration_sessions
+       WHERE host_user_id = $1 AND expires_at > NOW()
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [op.id]
+    );
+    if (!r.rows.length) {
+      return res.status(200).json({ success: true, active: false });
+    }
+    const row = r.rows[0];
+    return res.status(200).json({
+      success: true,
+      active: true,
+      code: row.code,
+      expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : null,
+    });
+  } catch (err) {
+    if (err && err.code === '42P01') {
+      return res.status(200).json({ success: true, active: false });
+    }
+    console.error('getCollaborationSession:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load collaboration session.' });
+  }
+}
+
+/**
+ * POST /api/operatives/collaboration/work-entry/code
+ */
+async function generateCollaborationCode(req, res) {
+  const op = getOperative(req);
+  if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+
+  try {
+    const ctx = await loadOperativeCompanyProjectContext(op.id);
+    if (!ctx.ok) return res.status(ctx.status).json({ success: false, message: ctx.message });
+
+    await pool.query(`DELETE FROM operative_collaboration_sessions WHERE host_user_id = $1`, [op.id]);
+
+    const code = generateRandomCollaborationCode();
+    const expiresHours = 48;
+    const expiresAt = new Date(Date.now() + expiresHours * 3600000);
+
+    await pool.query(
+      `INSERT INTO operative_collaboration_sessions (code, company_id, project_id, host_user_id, guest_user_ids, expires_at)
+       VALUES ($1, $2, $3, $4, '{}', $5)`,
+      [code, ctx.companyId, ctx.projectId, op.id, expiresAt.toISOString()]
+    );
+
+    return res.status(201).json({
+      success: true,
+      code,
+      expiresAt: expiresAt.toISOString(),
+    });
+  } catch (err) {
+    if (err && err.code === '42P01') {
+      return res.status(503).json({
+        success: false,
+        message: 'Collaboration is not set up. Run scripts/create_operative_collaboration_sessions.sql',
+      });
+    }
+    console.error('generateCollaborationCode:', err);
+    return res.status(500).json({ success: false, message: 'Could not create collaboration code.' });
+  }
+}
+
+/**
+ * POST /api/operatives/collaboration/work-entry/join
+ */
+async function joinCollaborationSession(req, res) {
+  const op = getOperative(req);
+  if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+
+  const b = req.body || {};
+  const raw = (b.code && String(b.code)) || (b.collaborationCode && String(b.collaborationCode)) || '';
+  const codeNorm = normalizeCollaborationCodeInput(raw);
+  if (!codeNorm) {
+    return res.status(400).json({
+      success: false,
+      message: 'Enter the 8-character code (letters and numbers).',
+    });
+  }
+
+  try {
+    const sess = await pool.query(
+      `SELECT id, company_id, project_id, host_user_id
+       FROM operative_collaboration_sessions
+       WHERE code = $1 AND expires_at > NOW()`,
+      [codeNorm]
+    );
+    if (!sess.rows.length) {
+      return res.status(404).json({ success: false, message: 'Invalid or expired code.' });
+    }
+    const row = sess.rows[0];
+    if (Number(row.host_user_id) === Number(op.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot join your own collaboration code. Share it with a coworker.',
+      });
+    }
+
+    const guestCtx = await loadOperativeCompanyProjectContext(op.id);
+    if (!guestCtx.ok) return res.status(guestCtx.status).json({ success: false, message: guestCtx.message });
+
+    if (
+      Number(guestCtx.companyId) !== Number(row.company_id) ||
+      Number(guestCtx.projectId) !== Number(row.project_id)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'You must be on the same site/project as the person who shared this code.',
+      });
+    }
+
+    await pool.query(
+      `UPDATE operative_collaboration_sessions
+       SET guest_user_ids = CASE
+         WHEN $2::int = ANY(guest_user_ids) THEN guest_user_ids
+         ELSE array_append(guest_user_ids, $2::int)
+       END
+       WHERE id = $1`,
+      [row.id, op.id]
+    );
+
+    const hostRow = await pool.query(
+      `SELECT COALESCE(NULLIF(TRIM(name), ''), NULLIF(TRIM(email), ''), 'Operative') AS nm FROM users WHERE id = $1`,
+      [row.host_user_id]
+    );
+    const hostName = hostRow.rows[0] ? String(hostRow.rows[0].nm) : 'Colleague';
+
+    return res.status(200).json({ success: true, hostName });
+  } catch (err) {
+    if (err && err.code === '42P01') {
+      return res.status(503).json({
+        success: false,
+        message: 'Collaboration is not set up. Run scripts/create_operative_collaboration_sessions.sql',
+      });
+    }
+    console.error('joinCollaborationSession:', err);
+    return res.status(500).json({ success: false, message: 'Could not join collaboration session.' });
+  }
+}
+
 async function createWorkLog(req, res) {
   const op = getOperative(req);
   if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
 
   try {
-    let companyId = null;
-    let projectId = null;
-    let workerName = 'Operative';
-
-    try {
-      const userRow = await pool.query(
-        'SELECT id, name, email, company_id, project_id FROM users WHERE id = $1',
-        [op.id]
-      );
-      if (userRow.rows.length === 0) {
-        return res.status(404).json({ success: false, message: 'User not found.' });
-      }
-      const user = userRow.rows[0];
-      companyId = user.company_id;
-      projectId = user.project_id;
-      workerName = (user.name && String(user.name).trim()) || user.email || 'Operative';
-    } catch (userErr) {
-      if (userErr.code === '42703') {
-        try {
-          await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS project_id INT');
-          const retry = await pool.query('SELECT id, name, email, company_id, project_id FROM users WHERE id = $1', [op.id]);
-          if (retry.rows.length > 0) {
-            const u = retry.rows[0];
-            companyId = u.company_id;
-            projectId = u.project_id;
-            workerName = (u.name && String(u.name).trim()) || u.email || 'Operative';
-          }
-        } catch (_) {
-          /* fallback query failed */
-        }
-      }
-      if (companyId == null) throw userErr;
-    }
-
-    if (projectId == null) {
-      try {
-        const paRow = await pool.query(
-          'SELECT project_id FROM project_assignments WHERE user_id = $1 ORDER BY assigned_at DESC LIMIT 1',
-          [op.id]
-        );
-        if (paRow.rows.length > 0 && paRow.rows[0].project_id != null) projectId = paRow.rows[0].project_id;
-      } catch (_) {
-        /* project_assignments lookup failed */
-      }
-    }
-
-    if (projectId == null) {
-      return res.status(400).json({
-        success: false,
-        message: 'You are not assigned to a project. Contact your manager.',
-      });
-    }
-
-    if (companyId == null) {
-      try {
-        const pr = await pool.query('SELECT company_id FROM projects WHERE id = $1', [projectId]);
-        if (pr.rows[0] && pr.rows[0].company_id != null) {
-          const cid = parseInt(String(pr.rows[0].company_id), 10);
-          if (Number.isInteger(cid)) companyId = cid;
-        }
-      } catch (_) {
-        /* ignore */
-      }
-    }
-
-    let projectName = null;
-    try {
-      const projRow = await pool.query(
-        'SELECT COALESCE(project_name, name) AS name FROM projects WHERE id = $1',
-        [projectId]
-      );
-      if (projRow.rows.length > 0) projectName = projRow.rows[0].name;
-    } catch (projErr) {
-      if (projErr.code === '42703') {
-        const projRow2 = await pool.query('SELECT project_name AS name FROM projects WHERE id = $1', [projectId]);
-        if (projRow2.rows.length > 0) projectName = projRow2.rows[0].name;
-      }
-    }
+    const ctx = await loadOperativeCompanyProjectContext(op.id);
+    if (!ctx.ok) return res.status(ctx.status).json({ success: false, message: ctx.message });
+    const { companyId, projectId, workerName, projectName } = ctx;
 
     const b = req.body || {};
     const workType = (b.workType && String(b.workType).trim()) || (b.work_type && String(b.work_type).trim());
@@ -1799,6 +2096,9 @@ async function createWorkLog(req, res) {
       }
       timesheetPayload.push({ type: 'qa_price_work', entries: priceWorkJobs });
     }
+
+    const collabIds = await loadCollaboratorsFromHostSession(op.id);
+    const collabDisplay = await resolveCollaboratorDisplay(collabIds);
 
     const jobDisplayId = await nextJobDisplayId(companyId);
 
@@ -1855,6 +2155,28 @@ async function createWorkLog(req, res) {
       }
     }
 
+    if (workLogId != null) {
+      if (collabIds.length > 0) {
+        try {
+          await pool.query(
+            `UPDATE work_logs SET
+              collaborator_user_ids = $1::int[],
+              collaborators_display = $2::jsonb,
+              updated_at = NOW()
+             WHERE id = $3`,
+            [collabIds, JSON.stringify(collabDisplay), workLogId]
+          );
+        } catch (updErr) {
+          if (updErr && updErr.code !== '42703') console.error('createWorkLog collaborator update:', updErr);
+        }
+      }
+      try {
+        await pool.query(`DELETE FROM operative_collaboration_sessions WHERE host_user_id = $1`, [op.id]);
+      } catch (delErr) {
+        if (delErr && delErr.code !== '42P01') console.error('createWorkLog collaboration session cleanup:', delErr);
+      }
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Work entry submitted. Manager will review it in Work Logs.',
@@ -1887,11 +2209,29 @@ async function patchMyWorkLog(req, res) {
   }
 
   try {
-    const existing = await pool.query(
-      `SELECT id, submitted_by_user_id, status, timesheet_jobs, company_id
-       FROM work_logs WHERE id = $1`,
-      [id]
-    );
+    let existing;
+    try {
+      existing = await pool.query(
+        `SELECT id, submitted_by_user_id, status, timesheet_jobs, company_id,
+                collaborator_user_ids, collaborators_display
+         FROM work_logs WHERE id = $1`,
+        [id]
+      );
+    } catch (selErr) {
+      if (selErr && selErr.code === '42703') {
+        existing = await pool.query(
+          `SELECT id, submitted_by_user_id, status, timesheet_jobs, company_id
+           FROM work_logs WHERE id = $1`,
+          [id]
+        );
+        if (existing.rows.length) {
+          existing.rows[0].collaborator_user_ids = [];
+          existing.rows[0].collaborators_display = [];
+        }
+      } else {
+        throw selErr;
+      }
+    }
     if (!existing.rows.length) {
       return res.status(404).json({ success: false, message: 'Work entry not found.' });
     }
@@ -1990,31 +2330,82 @@ async function patchMyWorkLog(req, res) {
 
     const description = (b.description && String(b.description).trim()) || null;
 
-    await pool.query(
-      `UPDATE work_logs SET
-        work_type = $1,
-        quantity = $2,
-        unit_price = $3,
-        total = $4,
-        description = $5,
-        photo_urls = $6::jsonb,
-        timesheet_jobs = $7::jsonb,
-        invoice_file_path = COALESCE($8, invoice_file_path),
-        updated_at = NOW()
-       WHERE id = $9 AND submitted_by_user_id = $10`,
-      [
-        workType,
-        quantity,
-        unitPrice,
-        total,
-        description,
-        JSON.stringify(photoUrls),
-        JSON.stringify(timesheetPayload),
-        invoiceFilePath || null,
-        id,
-        op.id,
-      ]
-    );
+    let mergedCollabIds = normalizeCollaboratorUserIds(dbRow.collaborator_user_ids);
+    try {
+      const sessionGuests = await loadCollaboratorsFromHostSession(op.id);
+      mergedCollabIds = normalizeCollaboratorUserIds([...mergedCollabIds, ...sessionGuests]);
+    } catch (_) {
+      /* ignore session load errors */
+    }
+    const mergedCollabDisplay = await resolveCollaboratorDisplay(mergedCollabIds);
+
+    try {
+      await pool.query(
+        `UPDATE work_logs SET
+          work_type = $1,
+          quantity = $2,
+          unit_price = $3,
+          total = $4,
+          description = $5,
+          photo_urls = $6::jsonb,
+          timesheet_jobs = $7::jsonb,
+          invoice_file_path = COALESCE($8, invoice_file_path),
+          collaborator_user_ids = $11::int[],
+          collaborators_display = $12::jsonb,
+          updated_at = NOW()
+         WHERE id = $9 AND submitted_by_user_id = $10`,
+        [
+          workType,
+          quantity,
+          unitPrice,
+          total,
+          description,
+          JSON.stringify(photoUrls),
+          JSON.stringify(timesheetPayload),
+          invoiceFilePath || null,
+          id,
+          op.id,
+          mergedCollabIds,
+          JSON.stringify(mergedCollabDisplay),
+        ]
+      );
+    } catch (updErr) {
+      if (updErr && updErr.code === '42703' && /collaborator/i.test(updErr.message || '')) {
+        await pool.query(
+          `UPDATE work_logs SET
+            work_type = $1,
+            quantity = $2,
+            unit_price = $3,
+            total = $4,
+            description = $5,
+            photo_urls = $6::jsonb,
+            timesheet_jobs = $7::jsonb,
+            invoice_file_path = COALESCE($8, invoice_file_path),
+            updated_at = NOW()
+           WHERE id = $9 AND submitted_by_user_id = $10`,
+          [
+            workType,
+            quantity,
+            unitPrice,
+            total,
+            description,
+            JSON.stringify(photoUrls),
+            JSON.stringify(timesheetPayload),
+            invoiceFilePath || null,
+            id,
+            op.id,
+          ]
+        );
+      } else {
+        throw updErr;
+      }
+    }
+
+    try {
+      await pool.query(`DELETE FROM operative_collaboration_sessions WHERE host_user_id = $1`, [op.id]);
+    } catch (delErr) {
+      if (delErr && delErr.code !== '42P01') console.error('patchMyWorkLog collaboration cleanup:', delErr);
+    }
 
     return res.status(200).json({
       success: true,
@@ -2712,4 +3103,7 @@ module.exports = {
   generateDailyRecordInvoiceFromPeriod,
   archiveMyWorkLog,
   listQaAssignedJobsForOperative,
+  getCollaborationSession,
+  generateCollaborationCode,
+  joinCollaborationSession,
 };

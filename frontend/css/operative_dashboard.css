@@ -430,6 +430,76 @@ a.op-doc-row:active {
   width: 100%;
   margin-bottom: 1.25rem;
 }
+
+.op-wl-collab-section {
+  padding-top: 12px;
+  margin-top: 10px;
+  border-top: 1px solid var(--op-card-border);
+}
+.op-wl-collab-guest-banner {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(73, 230, 126, 0.1);
+  border: 1px solid rgba(73, 230, 126, 0.28);
+  margin-bottom: 10px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.op-wl-collab-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.op-wl-collab-code-panel {
+  margin-top: 10px;
+}
+.op-wl-collab-code-display {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.op-wl-collab-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 10px;
+  font-size: 0.78rem;
+  color: var(--op-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.op-wl-collab-divider::before,
+.op-wl-collab-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--op-card-border);
+}
+.op-wl-collab-join-row {
+  margin-top: 4px;
+}
+#op-wl-collab-code-input {
+  flex: 1;
+  min-width: 140px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--op-card-border);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+}
+.op-wl-collab-inline-feedback {
+  font-size: 0.82rem;
+  color: var(--op-text-muted);
+  flex: 1 1 100%;
+}
+.op-worklog-collab-hint {
+  font-size: 0.78rem;
+  color: var(--op-accent);
+  margin: 4px 0 2px;
+  line-height: 1.35;
+}
 .op-worklog-list-title {
   font-size: 0.95rem;
   font-weight: 600;

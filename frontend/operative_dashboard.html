@@ -381,6 +381,30 @@
                 <button type="button" class="op-btn op-btn-secondary op-wl-flow-btn" id="op-btn-flow-time-sheet">Time Sheet</button>
               </div>
             </div>
+            <div class="op-field op-wl-collab-section" id="op-wl-collab-section">
+              <span class="op-field-label">Collaboration</span>
+              <p class="op-wl-collab-intro op-tasks-hint" style="margin:0 0 10px 0;">
+                One person fills out and submits the entry. Generate a code for coworkers on the same project so they are credited on the same work log.
+              </p>
+              <div id="op-wl-collab-guest-banner" class="op-wl-collab-guest-banner d-none" role="status"></div>
+              <div id="op-wl-collab-host-block">
+                <div class="op-wl-collab-row">
+                  <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-wl-btn-collab-generate">Generate collaboration code</button>
+                  <span id="op-wl-collab-host-feedback" class="op-wl-collab-inline-feedback" aria-live="polite"></span>
+                </div>
+                <div id="op-wl-collab-code-panel" class="op-wl-collab-code-panel d-none">
+                  <div class="op-wl-collab-code-display" id="op-wl-collab-code-text">—</div>
+                  <p class="op-wl-collab-expires op-text-muted" id="op-wl-collab-expires" style="margin:6px 0 0 0;font-size:0.85rem;"></p>
+                  <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-wl-btn-collab-copy">Copy code</button>
+                </div>
+              </div>
+              <div class="op-wl-collab-divider" id="op-wl-collab-divider"><span>or join with a code</span></div>
+              <div class="op-wl-collab-row op-wl-collab-join-row" id="op-wl-collab-join-block">
+                <input type="text" id="op-wl-collab-code-input" maxlength="12" autocomplete="off" placeholder="e.g. AB12-CD34" aria-label="Collaboration code">
+                <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-wl-btn-collab-join">Join</button>
+                <span id="op-wl-collab-join-feedback" class="op-wl-collab-inline-feedback" aria-live="polite"></span>
+              </div>
+            </div>
             <div class="op-field" id="op-wl-price-upload-wrap">
               <span class="op-field-label">Price Work file (PDF / Excel / image)</span>
               <div class="op-wl-file-picker">

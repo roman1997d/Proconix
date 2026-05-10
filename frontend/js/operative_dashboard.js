@@ -2375,6 +2375,128 @@
   var opTsSubmittedEntriesCache = [];
   /** @type {number|null} when set, work log submit PATCHes this id instead of POST */
   var pendingContinueWorkLogId = null;
+  /** True after coworker joins via collaboration code (they must not submit their own duplicate entry). */
+  var opWlCollaborationGuest = false;
+
+  function getOperativeUserId() {
+    try {
+      var raw = localStorage.getItem(USER_KEY);
+      if (raw) {
+        var u = JSON.parse(raw);
+        return u && u.id != null ? Number(u.id) : null;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function clearWorklogCollaborationGuestLocks() {
+    var ids = [
+      'op-btn-flow-price-work',
+      'op-btn-flow-time-sheet',
+      'op-wl-document',
+      'op-btn-create-work-report',
+      'op-btn-continue-timesheet-jobs',
+      'op-wl-total-before-tax',
+      'op-wl-description',
+    ];
+    ids.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.disabled = false;
+    });
+    if (formWorklog) {
+      var sb = formWorklog.querySelector('button[type="submit"]');
+      if (sb) sb.disabled = false;
+    }
+    var sec = document.getElementById('op-wl-collab-section');
+    if (sec) sec.classList.remove('op-wl-collab-locked');
+  }
+
+  function resetWorklogCollaborationUi() {
+    opWlCollaborationGuest = false;
+    var gb = document.getElementById('op-wl-collab-guest-banner');
+    if (gb) {
+      gb.classList.add('d-none');
+      gb.innerHTML = '';
+    }
+    var hostBlock = document.getElementById('op-wl-collab-host-block');
+    var divider = document.getElementById('op-wl-collab-divider');
+    var joinBlock = document.getElementById('op-wl-collab-join-block');
+    if (hostBlock) {
+      hostBlock.classList.remove('d-none');
+    }
+    if (divider) divider.classList.remove('d-none');
+    if (joinBlock) joinBlock.classList.remove('d-none');
+    var cp = document.getElementById('op-wl-collab-code-panel');
+    if (cp) cp.classList.add('d-none');
+    var ct = document.getElementById('op-wl-collab-code-text');
+    if (ct) ct.textContent = '—';
+    var ex = document.getElementById('op-wl-collab-expires');
+    if (ex) ex.textContent = '';
+    var cin = document.getElementById('op-wl-collab-code-input');
+    if (cin) cin.value = '';
+    var hf = document.getElementById('op-wl-collab-host-feedback');
+    var jf = document.getElementById('op-wl-collab-join-feedback');
+    if (hf) hf.textContent = '';
+    if (jf) jf.textContent = '';
+    clearWorklogCollaborationGuestLocks();
+  }
+
+  function applyWorklogCollaborationGuestMode(hostName) {
+    opWlCollaborationGuest = true;
+    var gb = document.getElementById('op-wl-collab-guest-banner');
+    if (gb) {
+      gb.classList.remove('d-none');
+      gb.innerHTML =
+        '<strong>Linked.</strong> You are credited on <strong>' +
+        escapeHtml(hostName || 'your coworker') +
+        '</strong>&rsquo;s entry. They will fill out and submit this form — you do not need to submit.';
+    }
+    var hostBlock = document.getElementById('op-wl-collab-host-block');
+    var divider = document.getElementById('op-wl-collab-divider');
+    var joinBlock = document.getElementById('op-wl-collab-join-block');
+    if (hostBlock) hostBlock.classList.add('d-none');
+    if (divider) divider.classList.add('d-none');
+    if (joinBlock) joinBlock.classList.add('d-none');
+    var sec = document.getElementById('op-wl-collab-section');
+    if (sec) sec.classList.add('op-wl-collab-locked');
+    var ids = [
+      'op-btn-flow-price-work',
+      'op-btn-flow-time-sheet',
+      'op-wl-document',
+      'op-btn-create-work-report',
+      'op-btn-continue-timesheet-jobs',
+      'op-wl-total-before-tax',
+      'op-wl-description',
+    ];
+    ids.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.disabled = true;
+    });
+    if (formWorklog) {
+      var sb = formWorklog.querySelector('button[type="submit"]');
+      if (sb) sb.disabled = true;
+    }
+  }
+
+  function pollCollabSessionIntoUi() {
+    api('/collaboration/work-entry/session')
+      .then(function (r) {
+        if (!r.data || !r.data.success || !r.data.active || !r.data.code) return;
+        var cp = document.getElementById('op-wl-collab-code-panel');
+        var ct = document.getElementById('op-wl-collab-code-text');
+        var ex = document.getElementById('op-wl-collab-expires');
+        if (cp) cp.classList.remove('d-none');
+        if (ct) ct.textContent = r.data.code;
+        if (ex && r.data.expiresAt) {
+          try {
+            ex.textContent = 'Valid until ' + new Date(r.data.expiresAt).toLocaleString();
+          } catch (e) {
+            ex.textContent = '';
+          }
+        }
+      })
+      .catch(function () {});
+  }
 
   function formatWorklogOverviewWhen(iso) {
     if (!iso) return '—';
@@ -2413,6 +2535,23 @@
     parts.push('<dt>Reference</dt><dd>' + escapeHtml(entry.jobId || '—') + '</dd>');
     parts.push('<dt>Status</dt><dd>' + escapeHtml(String(entry.status || 'pending').replace(/_/g, ' ')) + '</dd>');
     parts.push('<dt>Submitted</dt><dd>' + escapeHtml(formatWorklogOverviewWhen(entry.submittedAt)) + '</dd>');
+    var myOid = getOperativeUserId();
+    var subId = entry.submittedByUserId != null ? Number(entry.submittedByUserId) : null;
+    if (myOid != null && subId != null && subId !== myOid && entry.workerName) {
+      parts.push('<dt>Submitted by</dt><dd>' + escapeHtml(String(entry.workerName)) + '</dd>');
+    }
+    var cd = entry.collaboratorsDisplay || [];
+    if (Array.isArray(cd) && cd.length > 0) {
+      var cn = cd
+        .map(function (x) {
+          return x && x.name ? String(x.name) : '';
+        })
+        .filter(Boolean)
+        .join(', ');
+      if (cn) {
+        parts.push('<dt>Collaborators</dt><dd>' + escapeHtml(cn) + '</dd>');
+      }
+    }
     parts.push('<dt>Location</dt><dd>' + escapeHtml(loc) + '</dd>');
     parts.push('<dt>Work type</dt><dd>' + escapeHtml(entry.workType || '—') + '</dd>');
     parts.push(
@@ -2639,6 +2778,25 @@
           : e.qaPriceWorkTotal != null && !isNaN(Number(e.qaPriceWorkTotal))
             ? Number(e.qaPriceWorkTotal).toFixed(2)
             : '—';
+      var myUid = getOperativeUserId();
+      var subUid = e.submittedByUserId != null ? Number(e.submittedByUserId) : null;
+      var collabLine = '';
+      if (myUid != null && subUid != null && subUid !== myUid) {
+        collabLine =
+          '<div class="op-worklog-collab-hint">Shared entry · submitted by ' +
+          escapeHtml(e.workerName || 'colleague') +
+          '</div>';
+      } else if (e.collaboratorsDisplay && e.collaboratorsDisplay.length) {
+        var names = e.collaboratorsDisplay
+          .map(function (c) {
+            return c && c.name ? String(c.name) : '';
+          })
+          .filter(Boolean)
+          .join(', ');
+        if (names) {
+          collabLine = '<div class="op-worklog-collab-hint">With ' + escapeHtml(names) + '</div>';
+        }
+      }
       return (
         '<div class="op-worklog-item op-worklog-item--openable"' +
         invAttr +
@@ -2655,6 +2813,7 @@
         escapeHtml(e.status || 'Pending') +
         '</span>' +
         '</div>' +
+        collabLine +
         '<div class="op-worklog-item-meta">' +
         (e.jobId ? escapeHtml(e.jobId) + ' · ' : '') +
         escapeHtml(submitted) +
@@ -2884,6 +3043,7 @@
 
   function openWorkReportModalFromSubmittedEntry(entry) {
     if (!entry || entry.id == null) return;
+    resetWorklogCollaborationUi();
     pendingContinueWorkLogId = Number(entry.id);
     var tsModal = document.getElementById('op-modal-timesheet-submitted');
     if (tsModal) closeModal(tsModal);
@@ -4185,6 +4345,7 @@
   }
 
   function openWorklogModal() {
+    resetWorklogCollaborationUi();
     currentWorklogProject = null;
     ['op-wl-total-before-tax', 'op-wl-description'].forEach(function (id) {
       var el = document.getElementById(id);
@@ -4208,6 +4369,7 @@
     if (documentNameEl) documentNameEl.classList.add('d-none');
     hideFeedback(document.getElementById('op-worklog-feedback'));
     openModal(modalWorklog);
+    pollCollabSessionIntoUi();
 
     api('/project/current')
       .then(function (r) {
@@ -4233,6 +4395,14 @@
     formWorklog.addEventListener('submit', function (e) {
       e.preventDefault();
       var feedback = document.getElementById('op-worklog-feedback');
+      if (opWlCollaborationGuest) {
+        showFeedback(
+          feedback,
+          'You joined as a collaborator. Your coworker submits this shared entry.',
+          true
+        );
+        return;
+      }
       if (!currentWorklogProject) {
         showFeedback(feedback, 'You are not assigned to a project. Contact your manager.', true);
         return;
@@ -4409,6 +4579,95 @@
   }
 
   document.getElementById('op-btn-worklog-new').addEventListener('click', openWorklogModal);
+
+  var btnCollabGen = document.getElementById('op-wl-btn-collab-generate');
+  if (btnCollabGen) {
+    btnCollabGen.addEventListener('click', function () {
+      var hf = document.getElementById('op-wl-collab-host-feedback');
+      if (hf) hf.textContent = 'Creating…';
+      api('/collaboration/work-entry/code', { method: 'POST', body: '{}' })
+        .then(function (r) {
+          if (r.data && r.data.success && r.data.code) {
+            if (hf) hf.textContent = '';
+            var cp = document.getElementById('op-wl-collab-code-panel');
+            var ct = document.getElementById('op-wl-collab-code-text');
+            var ex = document.getElementById('op-wl-collab-expires');
+            if (cp) cp.classList.remove('d-none');
+            if (ct) ct.textContent = r.data.code;
+            if (ex && r.data.expiresAt) {
+              try {
+                ex.textContent = 'Valid until ' + new Date(r.data.expiresAt).toLocaleString();
+              } catch (e) {
+                ex.textContent = '';
+              }
+            }
+          } else {
+            if (hf) hf.textContent = (r.data && r.data.message) || 'Could not create code.';
+          }
+        })
+        .catch(function (err) {
+          if (hf) hf.textContent = err.message || 'Could not create code.';
+        });
+    });
+  }
+  var btnCollabJoin = document.getElementById('op-wl-btn-collab-join');
+  if (btnCollabJoin) {
+    btnCollabJoin.addEventListener('click', function () {
+      var input = document.getElementById('op-wl-collab-code-input');
+      var jf = document.getElementById('op-wl-collab-join-feedback');
+      var code = input ? String(input.value || '').trim() : '';
+      if (!code) {
+        if (jf) jf.textContent = 'Enter the code from your coworker.';
+        return;
+      }
+      if (jf) jf.textContent = 'Checking…';
+      api('/collaboration/work-entry/join', {
+        method: 'POST',
+        body: JSON.stringify({ code: code }),
+      })
+        .then(function (r) {
+          if (r.data && r.data.success) {
+            if (jf) jf.textContent = 'Joined.';
+            applyWorklogCollaborationGuestMode(r.data.hostName);
+          } else {
+            if (jf) jf.textContent = (r.data && r.data.message) || 'Could not join.';
+          }
+        })
+        .catch(function (err) {
+          if (jf) jf.textContent = err.message || 'Could not join.';
+        });
+    });
+  }
+  var btnCollabCopy = document.getElementById('op-wl-btn-collab-copy');
+  if (btnCollabCopy) {
+    btnCollabCopy.addEventListener('click', function () {
+      var ct = document.getElementById('op-wl-collab-code-text');
+      var text = ct ? String(ct.textContent || '').trim() : '';
+      if (!text || text === '—') return;
+      function fallbackCopy() {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        } catch (e) {}
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(function () {
+          fallbackCopy();
+        });
+      } else {
+        fallbackCopy();
+      }
+      var hf = document.getElementById('op-wl-collab-host-feedback');
+      if (hf) hf.textContent = 'Copied.';
+      setTimeout(function () {
+        if (hf && hf.textContent === 'Copied.') hf.textContent = '';
+      }, 2000);
+    });
+  }
 
   var btnWlInvYes = document.getElementById('op-wl-inv-yes');
   var btnWlInvNo = document.getElementById('op-wl-inv-no');
