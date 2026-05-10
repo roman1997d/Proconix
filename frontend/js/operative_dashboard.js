@@ -2820,21 +2820,40 @@
     renderPhotoPreview();
   }
 
-  function openWorkReportModal() {
-    var jobsWrap = document.getElementById('op-wr-jobs');
-    if (jobsWrap) jobsWrap.innerHTML = '';
-    addTimesheetJobItem();
-    var fromEl = document.getElementById('op-wr-period-from');
-    var toEl = document.getElementById('op-wr-period-to');
+  function todayIsoDate() {
     var today = new Date();
-    var d =
+    return (
       today.getFullYear() +
       '-' +
       String(today.getMonth() + 1).padStart(2, '0') +
       '-' +
-      String(today.getDate()).padStart(2, '0');
-    if (fromEl) fromEl.value = d;
-    if (toEl) toEl.value = d;
+      String(today.getDate()).padStart(2, '0')
+    );
+  }
+
+  /**
+   * @param {boolean} preserveExisting - true: reopen builder without clearing jobs/dates (continue editing).
+   */
+  function openWorkReportModal(preserveExisting) {
+    var preserve = !!preserveExisting;
+    var jobsWrap = document.getElementById('op-wr-jobs');
+    var fromEl = document.getElementById('op-wr-period-from');
+    var toEl = document.getElementById('op-wr-period-to');
+    var d = todayIsoDate();
+
+    if (!preserve) {
+      if (jobsWrap) jobsWrap.innerHTML = '';
+      addTimesheetJobItem();
+      if (fromEl) fromEl.value = d;
+      if (toEl) toEl.value = d;
+    } else {
+      if (jobsWrap && !jobsWrap.querySelector('.op-wr-job-card')) {
+        addTimesheetJobItem();
+      }
+      if (fromEl && !(String(fromEl.value || '').trim())) fromEl.value = d;
+      if (toEl && !(String(toEl.value || '').trim())) toEl.value = d;
+    }
+
     hideFeedback(document.getElementById('op-work-report-feedback'));
     openModal(modalWorkReport);
   }
@@ -4129,7 +4148,15 @@
 
   var btnCreateWorkReport = document.getElementById('op-btn-create-work-report');
   if (btnCreateWorkReport) {
-    btnCreateWorkReport.addEventListener('click', openWorkReportModal);
+    btnCreateWorkReport.addEventListener('click', function () {
+      openWorkReportModal(false);
+    });
+  }
+  var btnContinueTimesheetJobs = document.getElementById('op-btn-continue-timesheet-jobs');
+  if (btnContinueTimesheetJobs) {
+    btnContinueTimesheetJobs.addEventListener('click', function () {
+      openWorkReportModal(true);
+    });
   }
   var btnAddJob = document.getElementById('op-wr-add-job');
   if (btnAddJob) {
