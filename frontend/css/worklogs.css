@@ -204,6 +204,10 @@
   color: var(--text-secondary);
   background: var(--input-bg);
 }
+.worklogs-table td:nth-child(3) {
+  max-width: 260px;
+  word-break: break-word;
+}
 .worklogs-table tbody tr {
   transition: background 0.15s ease;
 }

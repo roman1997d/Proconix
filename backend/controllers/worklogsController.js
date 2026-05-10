@@ -113,6 +113,29 @@ function parseJsonField(val, defaultVal) {
   try { return JSON.parse(val || '[]'); } catch (_) { return defaultVal; }
 }
 
+/** Submitter + collaborator names for manager UI / invoice (comma-separated, deduped). */
+function buildWorkersDisplayLine(workerName, collaboratorsDisplayVal) {
+  const primary = (workerName && String(workerName).trim()) || '';
+  const cd = parseJsonField(collaboratorsDisplayVal, []);
+  const seen = new Set();
+  const out = [];
+  function pushName(n) {
+    const s = String(n || '').trim();
+    if (!s) return;
+    const k = s.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(s);
+  }
+  pushName(primary);
+  if (Array.isArray(cd)) {
+    cd.forEach((x) => {
+      if (x && x.name) pushName(x.name);
+    });
+  }
+  return out.join(', ');
+}
+
 /**
  * Sum £ from QA price work (rates from qa_template_steps × quantities in timesheet payload).
  */
@@ -251,10 +274,13 @@ async function jobFromRow(row) {
 
 function rowToJob(row) {
   if (!row) return null;
+  const collabDisp = parseJsonField(row.collaborators_display, []);
   return {
     id: row.id,
     jobId: row.job_display_id,
     workerName: row.worker_name,
+    workersDisplay: buildWorkersDisplayLine(row.worker_name, row.collaborators_display),
+    collaboratorsDisplay: Array.isArray(collabDisp) ? collabDisp : [],
     project: row.project,
     block: row.block,
     floor: row.floor,
@@ -300,7 +326,8 @@ async function list(req, res) {
              work_type, quantity, unit_price, total, status, description, submitted_at,
              work_was_edited, edit_history, photo_urls, timesheet_jobs, invoice_file_path,
              operative_archived, operative_archived_at,
-             archived
+             archived,
+             collaborator_user_ids, collaborators_display
       FROM work_logs
       WHERE company_id = $1 AND archived = false
     `;
@@ -351,9 +378,28 @@ async function list(req, res) {
       await enrichJobsWithQaPriceTotals(jobs);
       return res.json({ success: true, jobs });
     } catch (err) {
+      if (err && err.code === '42703' && /collaborators_display|collaborator_user_ids/i.test(err.message || '')) {
+        const qNoCollab = query.replace(/\s*,\s*collaborator_user_ids\s*,\s*collaborators_display\s*/i, '');
+        try {
+          const resultNc = await pool.query(qNoCollab, params);
+          const jobsNc = resultNc.rows.map(rowToJob);
+          await enrichJobsWithQaPriceTotals(jobsNc);
+          return res.json({ success: true, jobs: jobsNc });
+        } catch (err2) {
+          if (err2 && err2.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(err2.message || '')) {
+            let fallbackQuery = qNoCollab.replace(', timesheet_jobs', '').replace(', operative_archived, operative_archived_at', '');
+            const result2 = await pool.query(fallbackQuery, params);
+            const jobs2 = result2.rows.map(rowToJob);
+            await enrichJobsWithQaPriceTotals(jobs2);
+            return res.json({ success: true, jobs: jobs2 });
+          }
+          throw err2;
+        }
+      }
       if (err && err.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(err.message || '')) {
         // Fallback for installations before the migration was applied.
         let fallbackQuery = query.replace(', timesheet_jobs', '').replace(', operative_archived, operative_archived_at', '');
+        fallbackQuery = fallbackQuery.replace(/\s*,\s*collaborator_user_ids\s*,\s*collaborators_display\s*/i, '');
         const result2 = await pool.query(fallbackQuery, params);
         const jobs2 = result2.rows.map(rowToJob);
         // timesheetJobs/operativeArchived will be empty because columns aren't selected.
@@ -414,7 +460,8 @@ async function getOne(req, res) {
               work_type, quantity, unit_price, total, status, description, submitted_at,
               work_was_edited, edit_history, photo_urls, timesheet_jobs, invoice_file_path,
               operative_archived, operative_archived_at,
-              archived
+              archived,
+              collaborator_user_ids, collaborators_display
        FROM work_logs WHERE id = $1 AND company_id = $2`,
       [id, companyId]
     );
@@ -425,6 +472,37 @@ async function getOne(req, res) {
     return res.json({ success: true, job: jobOne });
   } catch (err) {
     if (err.code === '42P01') return res.status(404).json({ success: false, message: 'Job not found.' });
+    if (err && err.code === '42703' && /collaborators_display|collaborator_user_ids/i.test(err.message || '')) {
+      try {
+        const resultNc = await pool.query(
+          `SELECT id, company_id, job_display_id, worker_name, project, block, floor, apartment, zone,
+                  work_type, quantity, unit_price, total, status, description, submitted_at,
+                  work_was_edited, edit_history, photo_urls, timesheet_jobs, invoice_file_path,
+                  operative_archived, operative_archived_at,
+                  archived
+           FROM work_logs WHERE id = $1 AND company_id = $2`,
+          [id, companyId]
+        );
+        if (resultNc.rows.length === 0) return res.status(404).json({ success: false, message: 'Job not found.' });
+        const jobNc = await jobFromRow(resultNc.rows[0]);
+        return res.json({ success: true, job: jobNc });
+      } catch (errNc) {
+        if (errNc && errNc.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(errNc.message || '')) {
+          const result2 = await pool.query(
+            `SELECT id, company_id, job_display_id, worker_name, project, block, floor, apartment, zone,
+                    work_type, quantity, unit_price, total, status, description, submitted_at,
+                    work_was_edited, edit_history, photo_urls, invoice_file_path, archived
+             FROM work_logs WHERE id = $1 AND company_id = $2`,
+            [id, companyId]
+          );
+          if (result2.rows.length === 0) return res.status(404).json({ success: false, message: 'Job not found.' });
+          const jobTwo = await jobFromRow(result2.rows[0]);
+          return res.json({ success: true, job: jobTwo });
+        }
+        console.error('worklogsController getOne:', errNc);
+        return res.status(500).json({ success: false, message: 'Failed to get job.' });
+      }
+    }
     if (err && err.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(err.message || '')) {
       // Fallback before migration.
       const result2 = await pool.query(

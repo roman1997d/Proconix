@@ -329,7 +329,7 @@
       idCell.appendChild(link);
       tr.appendChild(idCell);
 
-      tr.appendChild(document.createElement('td')).textContent = job.workerName || '—';
+      tr.appendChild(document.createElement('td')).textContent = formatWorkersDisplay(job);
       tr.appendChild(document.createElement('td')).textContent = getLocation(job);
       tr.appendChild(document.createElement('td')).textContent = job.workType || '—';
       tr.appendChild(document.createElement('td')).textContent =
@@ -372,6 +372,14 @@
     var div = document.createElement('div');
     div.textContent = s;
     return div.innerHTML;
+  }
+
+  /** Submitter + collaborators (from API workersDisplay), fallback to workerName. */
+  function formatWorkersDisplay(job) {
+    if (!job) return '—';
+    var w = job.workersDisplay != null && String(job.workersDisplay).trim() !== '' ? String(job.workersDisplay).trim() : '';
+    if (w) return w;
+    return job.workerName || '—';
   }
 
   /** Render QA price work entries for manager detail modal */
@@ -469,7 +477,7 @@
     var submitted = job.submittedAt ? new Date(job.submittedAt).toLocaleString() : '—';
 
     var html = '<dl class="worklogs-details-dl">';
-    html += '<dt>Worker</dt><dd>' + (job.workerName || '—') + '</dd>';
+    html += '<dt>Worker</dt><dd>' + escapeHtml(formatWorkersDisplay(job)) + '</dd>';
     html += '<dt>Location</dt><dd>' + getLocation(job) + '</dd>';
     html += '<dt>Work type</dt><dd>' + (job.workType || '—') + '</dd>';
     html += '<dt>Quantity</dt><dd>' + (job.quantity != null ? job.quantity : '—') + '</dd>';
@@ -615,7 +623,7 @@
     var rows = selectedJobs.map(function (j) {
       var t = getWorkLogAmountNumeric(j);
       totalAmount += t;
-      return '<tr><td>' + (j.workerName || '—') + '</td><td>' + getLocation(j) + '</td><td>' + (j.workType || '—') + '</td><td>' + (j.quantity != null ? j.quantity : '—') + '</td><td>£' + (j.unitPrice != null ? Number(j.unitPrice).toFixed(2) : '—') + '</td><td>£' + t.toFixed(2) + '</td></tr>';
+      return '<tr><td>' + escapeHtml(formatWorkersDisplay(j)) + '</td><td>' + escapeHtml(getLocation(j)) + '</td><td>' + escapeHtml(j.workType || '—') + '</td><td>' + (j.quantity != null ? j.quantity : '—') + '</td><td>£' + (j.unitPrice != null ? Number(j.unitPrice).toFixed(2) : '—') + '</td><td>£' + t.toFixed(2) + '</td></tr>';
     }).join('');
     content.innerHTML = '<p><strong>Invoice</strong> – ' + selectedJobs.length + ' job(s)</p><table><thead><tr><th>Worker</th><th>Location</th><th>Work type</th><th>Qty</th><th>Unit price</th><th>Total</th></tr></thead><tbody>' + rows + '</tbody></table><p class="worklogs-invoice-total">Total: £' + totalAmount.toFixed(2) + '</p>';
     content.dataset.jobIds = selectedJobs.map(function (j) { return j.id; }).join(',');
