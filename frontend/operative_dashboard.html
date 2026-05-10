@@ -382,8 +382,11 @@
               </div>
             </div>
             <div class="op-field" id="op-wl-price-upload-wrap">
-              <label for="op-wl-document">Price Work file (PDF / Excel / image)</label>
-              <input type="file" id="op-wl-document" accept=".pdf,.xlsx,.xls,image/*">
+              <span class="op-field-label">Price Work file (PDF / Excel / image)</span>
+              <div class="op-wl-file-picker">
+                <input type="file" id="op-wl-document" class="op-wl-file-input-hidden" accept=".pdf,.xlsx,.xls,image/*">
+                <label for="op-wl-document" class="op-btn op-btn-secondary op-wl-choose-file-btn">Choose file</label>
+              </div>
               <div id="op-wl-document-name" class="op-wl-file-name d-none"></div>
               <a id="op-wl-generated-pdf-link" class="op-wl-file-name d-none" href="#" target="_blank" rel="noopener">Download generated report</a>
               <input type="hidden" id="op-wl-invoice-path">
