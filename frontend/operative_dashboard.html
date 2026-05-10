@@ -375,14 +375,6 @@
         <div class="op-modal-body">
           <form id="op-form-worklog">
             <div class="op-field">
-              <label for="op-wl-total-before-tax">Total before tax (£)</label>
-              <input type="number" id="op-wl-total-before-tax" min="0" step="0.01" placeholder="0.00">
-            </div>
-            <div class="op-field">
-              <label for="op-wl-description">Describe your jobs <span class="op-required">*</span></label>
-              <textarea id="op-wl-description" rows="3" placeholder="What was done" required></textarea>
-            </div>
-            <div class="op-field">
               <label class="op-field-label">Choose workflow</label>
               <div class="op-wl-flow-buttons">
                 <button type="button" class="op-btn op-btn-secondary op-wl-flow-btn" id="op-btn-flow-price-work">Price work booking</button>
@@ -400,6 +392,14 @@
               <button type="button" class="op-btn op-btn-secondary op-btn-sm op-wl-report-btn" id="op-btn-create-work-report">
                 Open Time Sheet Jobs Builder
               </button>
+            </div>
+            <div class="op-field">
+              <label for="op-wl-total-before-tax">Total before tax (£)</label>
+              <input type="number" id="op-wl-total-before-tax" min="0" step="0.01" placeholder="0.00">
+            </div>
+            <div class="op-field">
+              <label for="op-wl-description">Describe your jobs <span class="op-required">*</span></label>
+              <textarea id="op-wl-description" rows="3" placeholder="What was done" required></textarea>
             </div>
             <div id="op-worklog-feedback" class="op-feedback d-none"></div>
             <button type="submit" class="op-btn op-btn-primary">Submit for manager review</button>
