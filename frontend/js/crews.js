@@ -172,6 +172,9 @@
           var stClass = c.active ? 'status-green' : 'status-red';
           var leader = escapeHtml(c.leader_name || '—');
           var mc = c.member_count != null ? String(c.member_count) : '0';
+          var cc = c.collaboration_code
+            ? '<code class="small user-select-all">' + escapeHtml(c.collaboration_code) + '</code>'
+            : '<span class="text-muted">—</span>';
           html +=
             '<tr data-crew-id="' +
             escapeHtml(String(c.id)) +
@@ -184,6 +187,9 @@
             '</td>' +
             '<td>' +
             escapeHtml(mc) +
+            '</td>' +
+            '<td class="crew-table-collab-code">' +
+            cc +
             '</td>' +
             '<td><span class="status-badge ' +
             stClass +
@@ -232,6 +238,22 @@
         if (title) title.textContent = crew.name || 'Crew';
         if (hid) hid.value = String(crew.id);
         if (meta) {
+          var collabCode = crew.collaboration_code || '';
+          var collabBlock =
+            '<div class="mt-3 p-3 border rounded crew-collab-code-panel bg-light">' +
+            '<div class="text-muted small mb-1">Work entry collaboration code (permanent)</div>' +
+            '<div class="d-flex align-items-center gap-2 flex-wrap">' +
+            (collabCode
+              ? '<code class="fs-6 mb-0 user-select-all">' +
+                escapeHtml(collabCode) +
+                '</code>' +
+                '<button type="button" class="btn-operatives btn-operatives-operative btn-sm" data-crew-action="copy-collab-code" data-code="' +
+                escapeHtml(collabCode) +
+                '">Copy</button>'
+              : '<span class="text-muted small">—</span>') +
+            '</div>' +
+            '<p class="small text-muted mb-0 mt-2">Operatives enter this code when submitting work to credit every crew member who is on the same project.</p>' +
+            '</div>';
           meta.innerHTML =
             '<div class="crew-detail-meta-grid">' +
             '<div><span class="text-muted small">Crew leader</span><br><strong class="crew-leader-name">' +
@@ -241,6 +263,7 @@
             escapeHtml(crew.subcontractor || '—') +
             '</div>' +
             '</div>' +
+            collabBlock +
             (crew.description
               ? '<p class="mt-2 mb-0 small">' + escapeHtml(crew.description) + '</p>'
               : '');
@@ -642,6 +665,32 @@
     if (e.target.closest('#crew-btn-edit-info')) {
       e.preventDefault();
       openEditCrewModal();
+      return;
+    }
+
+    var copyCollab = e.target.closest('[data-crew-action="copy-collab-code"]');
+    if (copyCollab) {
+      e.preventDefault();
+      var code = (copyCollab.getAttribute('data-code') || '').trim();
+      if (!code) return;
+      function fallbackCopy() {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = code;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        } catch (err) {}
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).catch(function () {
+          fallbackCopy();
+        });
+      } else {
+        fallbackCopy();
+      }
+      showOperativesFeedback('Collaboration code copied.', false);
       return;
     }
 

@@ -4622,7 +4622,28 @@
         body: JSON.stringify({ code: code }),
       })
         .then(function (r) {
+          var list = r.data && Array.isArray(r.data.collaborators) ? r.data.collaborators : null;
           var col = r.data && r.data.collaborator;
+          if (r.data && r.data.success && list && list.length) {
+            var added = 0;
+            list.forEach(function (c) {
+              if (!c || c.userId == null) return;
+              var uid = Number(c.userId);
+              var exists = pendingWorklogCollaborators.some(function (x) {
+                return Number(x.userId) === uid;
+              });
+              if (exists) return;
+              pendingWorklogCollaborators.push({
+                userId: uid,
+                name: String(c.name || ''),
+              });
+              added += 1;
+            });
+            renderWorklogCollaboratorsChips();
+            if (input) input.value = '';
+            if (jf) jf.textContent = added ? 'Added ' + added + ' colleague(s).' : 'Already in list.';
+            return;
+          }
           if (r.data && r.data.success && col && col.userId != null) {
             var uid = Number(col.userId);
             var exists = pendingWorklogCollaborators.some(function (x) {

@@ -1893,6 +1893,53 @@ async function validateCollaboratorUserIdsForSubmit(submitterId, collaboratorIds
   return { ok: true, ids };
 }
 
+/** Same company + project as submitter; skips IDs not on project (used for crew collaboration codes). */
+async function expandUserIdsToCollaboratorsForProject(submitterId, rawIds) {
+  const ids = normalizeCollaboratorUserIds(Array.isArray(rawIds) ? rawIds : [], submitterId);
+  if (!ids.length) return { ok: true, collaborators: [] };
+
+  const ctx = await loadOperativeCompanyProjectContext(submitterId);
+  if (!ctx.ok) return { ok: false, message: ctx.message, collaborators: [] };
+
+  const ur = await pool.query(
+    `SELECT id, company_id, project_id,
+            COALESCE(NULLIF(TRIM(name),''), NULLIF(TRIM(email),''), 'Operative') AS disp_name
+     FROM users WHERE id = ANY($1::int[])`,
+    [ids]
+  );
+  const byId = {};
+  ur.rows.forEach((row) => {
+    byId[row.id] = row;
+  });
+
+  const collaborators = [];
+  for (const cid of ids) {
+    const row = byId[cid];
+    if (!row) continue;
+    if (Number(row.company_id) !== Number(ctx.companyId)) continue;
+
+    let pId = row.project_id != null ? Number(row.project_id) : null;
+    if (pId == null) {
+      try {
+        const paRow = await pool.query(
+          `SELECT project_id FROM project_assignments WHERE user_id = $1 ORDER BY assigned_at DESC LIMIT 1`,
+          [cid]
+        );
+        if (paRow.rows.length > 0 && paRow.rows[0].project_id != null) {
+          pId = Number(paRow.rows[0].project_id);
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    if (pId == null || pId !== Number(ctx.projectId)) continue;
+
+    collaborators.push({ userId: Number(cid), name: String(row.disp_name || 'Operative') });
+  }
+
+  return { ok: true, collaborators };
+}
+
 function generateRandomCollaborationCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let raw = '';
@@ -2012,43 +2059,86 @@ async function joinCollaborationSession(req, res) {
        WHERE code = $1 AND expires_at > NOW()`,
       [codeNorm]
     );
-    if (!sess.rows.length) {
-      return res.status(404).json({ success: false, message: 'Invalid or expired code.' });
-    }
-    const row = sess.rows[0];
-    if (Number(row.host_user_id) === Number(op.id)) {
-      return res.status(400).json({
-        success: false,
-        message: 'That is your own collaboration code. Give it to a coworker so they can add you on their form.',
+    if (sess.rows.length) {
+      const row = sess.rows[0];
+      if (Number(row.host_user_id) === Number(op.id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'That is your own collaboration code. Give it to a coworker so they can add you on their form.',
+        });
+      }
+
+      const guestCtx = await loadOperativeCompanyProjectContext(op.id);
+      if (!guestCtx.ok) return res.status(guestCtx.status).json({ success: false, message: guestCtx.message });
+
+      if (
+        Number(guestCtx.companyId) !== Number(row.company_id) ||
+        Number(guestCtx.projectId) !== Number(row.project_id)
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: 'You must be on the same site/project as the person who shared this code.',
+        });
+      }
+
+      const hostRow = await pool.query(
+        `SELECT COALESCE(NULLIF(TRIM(name), ''), NULLIF(TRIM(email), ''), 'Operative') AS nm FROM users WHERE id = $1`,
+        [row.host_user_id]
+      );
+      const hostName = hostRow.rows[0] ? String(hostRow.rows[0].nm) : 'Colleague';
+
+      return res.status(200).json({
+        success: true,
+        collaborator: {
+          userId: Number(row.host_user_id),
+          name: hostName,
+        },
       });
     }
 
     const guestCtx = await loadOperativeCompanyProjectContext(op.id);
     if (!guestCtx.ok) return res.status(guestCtx.status).json({ success: false, message: guestCtx.message });
 
-    if (
-      Number(guestCtx.companyId) !== Number(row.company_id) ||
-      Number(guestCtx.projectId) !== Number(row.project_id)
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: 'You must be on the same site/project as the person who shared this code.',
+    let crewR;
+    try {
+      crewR = await pool.query(`SELECT id, company_id FROM crews WHERE collaboration_code = $1 AND active = true`, [
+        codeNorm,
+      ]);
+    } catch (crewErr) {
+      if (crewErr && crewErr.code === '42703') crewR = { rows: [] };
+      else throw crewErr;
+    }
+
+    if (crewR.rows.length) {
+      const crewRow = crewR.rows[0];
+      if (Number(crewRow.company_id) !== Number(guestCtx.companyId)) {
+        return res.status(404).json({ success: false, message: 'Invalid or expired code.' });
+      }
+      const mem = await pool.query(
+        `SELECT u.id FROM crew_members cm
+         INNER JOIN users u ON u.id = cm.user_id
+         WHERE cm.crew_id = $1 AND u.active = true`,
+        [crewRow.id]
+      );
+      const rawMemberIds = mem.rows.map((r) => r.id);
+      const expanded = await expandUserIdsToCollaboratorsForProject(op.id, rawMemberIds);
+      if (!expanded.ok) {
+        return res.status(400).json({ success: false, message: expanded.message || 'Could not resolve crew members.' });
+      }
+      if (!expanded.collaborators.length) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'No crew members from this code are on your current project. Ask your manager to align crew members with this site.',
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        collaborators: expanded.collaborators,
       });
     }
 
-    const hostRow = await pool.query(
-      `SELECT COALESCE(NULLIF(TRIM(name), ''), NULLIF(TRIM(email), ''), 'Operative') AS nm FROM users WHERE id = $1`,
-      [row.host_user_id]
-    );
-    const hostName = hostRow.rows[0] ? String(hostRow.rows[0].nm) : 'Colleague';
-
-    return res.status(200).json({
-      success: true,
-      collaborator: {
-        userId: Number(row.host_user_id),
-        name: hostName,
-      },
-    });
+    return res.status(404).json({ success: false, message: 'Invalid or expired code.' });
   } catch (err) {
     if (err && err.code === '42P01') {
       return res.status(503).json({

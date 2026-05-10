@@ -427,6 +427,7 @@ function getOperativesHtml() {
                   <th>Crew name</th>
                   <th>Crew leader</th>
                   <th>Members</th>
+                  <th>Collaboration code</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>

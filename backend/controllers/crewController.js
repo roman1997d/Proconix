@@ -2,7 +2,49 @@
  * Crews API – manager-only. Teams of operatives with a leader and members.
  */
 
+const crypto = require('crypto');
 const { pool } = require('../db/pool');
+
+/** Same format as operative work-entry collaboration codes (XXXX-XXXX). */
+function generateCrewCollaborationCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let raw = '';
+  const buf = crypto.randomBytes(12);
+  for (let i = 0; i < 8; i++) {
+    raw += alphabet[buf[i] % alphabet.length];
+  }
+  return `${raw.slice(0, 4)}-${raw.slice(4, 8)}`;
+}
+
+/** Assign a unique lifetime code when column exists (backfill legacy crews). */
+async function assignCollaborationCodeIfMissing(crewId) {
+  try {
+    const existing = await pool.query(`SELECT collaboration_code FROM crews WHERE id = $1`, [crewId]);
+    if (!existing.rows.length) return null;
+    if (existing.rows[0].collaboration_code) return existing.rows[0].collaboration_code;
+
+    for (let attempt = 0; attempt < 16; attempt++) {
+      const code = generateCrewCollaborationCode();
+      try {
+        const up = await pool.query(
+          `UPDATE crews SET collaboration_code = $1, updated_at = NOW() WHERE id = $2 AND collaboration_code IS NULL`,
+          [code, crewId]
+        );
+        if (up.rowCount > 0) return code;
+        const again = await pool.query(`SELECT collaboration_code FROM crews WHERE id = $1`, [crewId]);
+        if (again.rows[0] && again.rows[0].collaboration_code) return again.rows[0].collaboration_code;
+      } catch (e) {
+        if (e.code === '23505') continue;
+        if (e.code === '42703') return null;
+        throw e;
+      }
+    }
+  } catch (e) {
+    if (e.code === '42703') return null;
+    throw e;
+  }
+  return null;
+}
 
 function getCompanyId(req) {
   return req.manager && req.manager.company_id != null ? req.manager.company_id : null;
@@ -59,17 +101,41 @@ async function listCrews(req, res) {
   const companyId = getCompanyId(req);
   if (companyId == null) return res.status(403).json({ success: false, message: 'Access denied.' });
   try {
-    const r = await pool.query(
-      `SELECT c.id, c.name, c.leader_user_id, c.subcontractor, c.description, c.active, c.created_at,
-              u.name AS leader_name,
-              (SELECT COUNT(*)::int FROM crew_members cm WHERE cm.crew_id = c.id) AS member_count
-       FROM crews c
-       LEFT JOIN users u ON u.id = c.leader_user_id
-       WHERE c.company_id = $1
-       ORDER BY c.name ASC`,
-      [companyId]
-    );
-    return res.json({ success: true, crews: r.rows });
+    let rows;
+    try {
+      const r = await pool.query(
+        `SELECT c.id, c.name, c.leader_user_id, c.subcontractor, c.description, c.active, c.created_at,
+                c.collaboration_code,
+                u.name AS leader_name,
+                (SELECT COUNT(*)::int FROM crew_members cm WHERE cm.crew_id = c.id) AS member_count
+         FROM crews c
+         LEFT JOIN users u ON u.id = c.leader_user_id
+         WHERE c.company_id = $1
+         ORDER BY c.name ASC`,
+        [companyId]
+      );
+      rows = r.rows || [];
+      for (let i = 0; i < rows.length; i++) {
+        if (!rows[i].collaboration_code) {
+          const code = await assignCollaborationCodeIfMissing(rows[i].id);
+          if (code) rows[i].collaboration_code = code;
+        }
+      }
+    } catch (e) {
+      if (e.code !== '42703') throw e;
+      const r = await pool.query(
+        `SELECT c.id, c.name, c.leader_user_id, c.subcontractor, c.description, c.active, c.created_at,
+                u.name AS leader_name,
+                (SELECT COUNT(*)::int FROM crew_members cm WHERE cm.crew_id = c.id) AS member_count
+         FROM crews c
+         LEFT JOIN users u ON u.id = c.leader_user_id
+         WHERE c.company_id = $1
+         ORDER BY c.name ASC`,
+        [companyId]
+      );
+      rows = r.rows || [];
+    }
+    return res.json({ success: true, crews: rows });
   } catch (e) {
     if (e.code === '42P01') return res.json({ success: true, crews: [] });
     console.error('listCrews', e);
@@ -96,13 +162,42 @@ async function createCrew(req, res) {
     if (!ur.rows.length) return res.status(400).json({ success: false, message: 'Leader not found in your company.' });
     if (!ur.rows[0].active) return res.status(400).json({ success: false, message: 'Selected leader is inactive. Choose an active operative.' });
 
-    const ins = await pool.query(
-      `INSERT INTO crews (company_id, name, leader_user_id, subcontractor, description, active, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
-       RETURNING id`,
-      [companyId, name, leaderId, subcontractor || null, description || null]
-    );
-    const crewId = ins.rows[0].id;
+    let crewId;
+    let collaborationCode = null;
+    let insertOk = false;
+    for (let insAttempt = 0; insAttempt < 16 && !insertOk; insAttempt++) {
+      const codeTry = generateCrewCollaborationCode();
+      try {
+        const ins = await pool.query(
+          `INSERT INTO crews (company_id, name, leader_user_id, subcontractor, description, active, collaboration_code, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, true, $6, NOW(), NOW())
+           RETURNING id, collaboration_code`,
+          [companyId, name, leaderId, subcontractor || null, description || null, codeTry]
+        );
+        crewId = ins.rows[0].id;
+        collaborationCode = ins.rows[0].collaboration_code || codeTry;
+        insertOk = true;
+      } catch (e) {
+        if (e.code === '23505') continue;
+        if (e.code === '42703') {
+          const ins2 = await pool.query(
+            `INSERT INTO crews (company_id, name, leader_user_id, subcontractor, description, active, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
+             RETURNING id`,
+            [companyId, name, leaderId, subcontractor || null, description || null]
+          );
+          crewId = ins2.rows[0].id;
+          collaborationCode = await assignCollaborationCodeIfMissing(crewId);
+          insertOk = true;
+        } else {
+          throw e;
+        }
+      }
+    }
+    if (!insertOk || crewId == null) {
+      return res.status(500).json({ success: false, message: 'Could not create crew (code collision). Retry.' });
+    }
+
     await pool.query(
       `INSERT INTO crew_members (crew_id, user_id, role_in_crew, created_at)
        VALUES ($1, $2, 'Leader', NOW())
@@ -113,7 +208,10 @@ async function createCrew(req, res) {
     const leaderName = ur.rows[0].name || 'Operative';
     await notifyCompany(companyId, `Crew "${name}" was created with ${leaderName} as leader.`);
 
-    return res.status(201).json({ success: true, crew: { id: crewId } });
+    return res.status(201).json({
+      success: true,
+      crew: { id: crewId, collaboration_code: collaborationCode },
+    });
   } catch (e) {
     console.error('createCrew', e);
     return res.status(500).json({ success: false, message: 'Failed to create crew.' });
@@ -135,6 +233,10 @@ async function getCrew(req, res) {
     );
     if (!cr.rows.length) return res.status(404).json({ success: false, message: 'Crew not found.' });
     const crew = cr.rows[0];
+    if (!crew.collaboration_code) {
+      const filled = await assignCollaborationCodeIfMissing(id);
+      if (filled) crew.collaboration_code = filled;
+    }
     const mem = await pool.query(
       `SELECT cm.user_id, cm.role_in_crew, u.name, u.role AS trade, u.active
        FROM crew_members cm

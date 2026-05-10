@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS crews (
   leader_user_id  INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   subcontractor   VARCHAR(255),
   description     TEXT,
+  collaboration_code VARCHAR(9),
   active          BOOLEAN NOT NULL DEFAULT TRUE,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -15,6 +16,8 @@ CREATE TABLE IF NOT EXISTS crews (
 
 CREATE INDEX IF NOT EXISTS idx_crews_company ON crews(company_id);
 CREATE INDEX IF NOT EXISTS idx_crews_leader ON crews(leader_user_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_crews_collaboration_code ON crews (collaboration_code) WHERE collaboration_code IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS crew_members (
   crew_id         INT NOT NULL REFERENCES crews(id) ON DELETE CASCADE,
