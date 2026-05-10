@@ -2405,7 +2405,7 @@
           escapeHtml(String(c.userId)) +
           '"><span class="op-wl-collab-chip-name">' +
           escapeHtml(c.name || '') +
-          '</span><button type="button" class="op-wl-collab-chip-remove" aria-label="Elimină">&times;</button></li>'
+          '</span><button type="button" class="op-wl-collab-chip-remove" aria-label="Remove">&times;</button></li>'
         );
       })
       .join('');
@@ -2463,7 +2463,7 @@
         if (ct) ct.textContent = r.data.code;
         if (ex && r.data.expiresAt) {
           try {
-            ex.textContent = 'Valabil până la ' + new Date(r.data.expiresAt).toLocaleString();
+            ex.textContent = 'Valid until ' + new Date(r.data.expiresAt).toLocaleString();
           } catch (e) {
             ex.textContent = '';
           }
@@ -4557,7 +4557,7 @@
   if (btnCollabGen) {
     btnCollabGen.addEventListener('click', function () {
       var hf = document.getElementById('op-wl-collab-host-feedback');
-      if (hf) hf.textContent = 'Se generează…';
+      if (hf) hf.textContent = 'Generating…';
       api('/collaboration/work-entry/code', { method: 'POST', body: '{}' })
         .then(function (r) {
           if (r.data && r.data.success && r.data.code) {
@@ -4569,7 +4569,7 @@
             if (ct) ct.textContent = r.data.code;
             if (ex && r.data.expiresAt) {
               try {
-                ex.textContent = 'Valabil până la ' + new Date(r.data.expiresAt).toLocaleString();
+                ex.textContent = 'Valid until ' + new Date(r.data.expiresAt).toLocaleString();
               } catch (e) {
                 ex.textContent = '';
               }
@@ -4606,7 +4606,7 @@
               return Number(x.userId) === uid;
             });
             if (exists) {
-              if (jf) jf.textContent = 'Deja în listă.';
+              if (jf) jf.textContent = 'Already in list.';
               return;
             }
             pendingWorklogCollaborators.push({
@@ -4615,13 +4615,13 @@
             });
             renderWorklogCollaboratorsChips();
             if (input) input.value = '';
-            if (jf) jf.textContent = 'Adăugat.';
+            if (jf) jf.textContent = 'Added.';
           } else {
-            if (jf) jf.textContent = (r.data && r.data.message) || 'Cod invalid.';
+            if (jf) jf.textContent = (r.data && r.data.message) || 'Invalid code.';
           }
         })
         .catch(function (err) {
-          if (jf) jf.textContent = err.message || 'Eroare.';
+          if (jf) jf.textContent = err.message || 'Error.';
         });
     });
   }
@@ -4649,9 +4649,9 @@
         fallbackCopy();
       }
       var hf = document.getElementById('op-wl-collab-host-feedback');
-      if (hf) hf.textContent = 'Copiat.';
+      if (hf) hf.textContent = 'Copied.';
       setTimeout(function () {
-        if (hf && hf.textContent === 'Copiat.') hf.textContent = '';
+        if (hf && hf.textContent === 'Copied.') hf.textContent = '';
       }, 2000);
     });
   }
