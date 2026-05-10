@@ -1777,6 +1777,21 @@ async function createWorkLog(req, res) {
       return Object.assign({}, ent, { stepPhotoUrls });
     });
     let timesheetPayload = Array.isArray(timesheetJobs) ? timesheetJobs.slice() : [];
+    const tsPf =
+      (b.timesheetPeriodFrom && String(b.timesheetPeriodFrom).trim()) ||
+      (b.timesheet_period_from && String(b.timesheet_period_from).trim()) ||
+      '';
+    const tsPt =
+      (b.timesheetPeriodTo && String(b.timesheetPeriodTo).trim()) ||
+      (b.timesheet_period_to && String(b.timesheet_period_to).trim()) ||
+      '';
+    if (tsPf && tsPt && timesheetPayload.length > 0) {
+      timesheetPayload.unshift({
+        type: 'timesheet_meta',
+        period_from: tsPf,
+        period_to: tsPt,
+      });
+    }
     if (priceWorkJobs.length) {
       const v = await validatePriceWorkJobsAgainstRemaining(companyId, projectId, op.id, priceWorkJobs);
       if (!v.ok) {

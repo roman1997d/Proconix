@@ -2831,6 +2831,92 @@
     );
   }
 
+  function formatYmdToDdMmYy(ymd) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ymd || '').trim());
+    if (!m) return '—';
+    return m[3] + '/' + m[2] + '/' + m[1].slice(-2);
+  }
+
+  function extractTimesheetMetaFromJobs(ts) {
+    if (!Array.isArray(ts)) return null;
+    for (var i = 0; i < ts.length; i++) {
+      var x = ts[i];
+      if (x && x.type === 'timesheet_meta' && x.period_from && x.period_to) {
+        return { from: String(x.period_from).trim(), to: String(x.period_to).trim() };
+      }
+    }
+    return null;
+  }
+
+  function entryIsTimesheetSubmission(entry) {
+    var ts = entry.timesheetJobs || [];
+    if (!Array.isArray(ts) || !ts.length) return false;
+    var hasMeta = ts.some(function (x) {
+      return x && x.type === 'timesheet_meta';
+    });
+    var hasJobRows = ts.some(function (x) {
+      if (!x || typeof x !== 'object') return false;
+      if (x.type === 'timesheet_meta' || x.type === 'qa_price_work') return false;
+      return true;
+    });
+    return hasJobRows || hasMeta;
+  }
+
+  function openTimesheetSubmittedModal() {
+    var modal = document.getElementById('op-modal-timesheet-submitted');
+    var listEl = document.getElementById('op-ts-submitted-list');
+    var fb = document.getElementById('op-ts-submitted-feedback');
+    if (fb) hideFeedback(fb);
+    if (listEl) listEl.textContent = 'Loading…';
+    if (modal) openModal(modal);
+
+    api('/work-log')
+      .then(function (r) {
+        if (!r.data || !r.data.success) {
+          if (listEl) {
+            listEl.innerHTML = '<p class="op-ts-submitted-empty">Could not load submissions.</p>';
+          }
+          return;
+        }
+        var entries = (r.data.entries || []).filter(entryIsTimesheetSubmission);
+        if (!listEl) return;
+        if (!entries.length) {
+          listEl.innerHTML =
+            '<p class="op-ts-submitted-empty">No time sheet submissions yet. Submit a work entry with Time Sheet jobs.</p>';
+          return;
+        }
+        listEl.innerHTML = entries
+          .map(function (e) {
+            var meta = extractTimesheetMetaFromJobs(e.timesheetJobs || []);
+            var periodLine;
+            if (meta && meta.from && meta.to) {
+              periodLine =
+                'Form submitted for period ' +
+                formatYmdToDdMmYy(meta.from) +
+                ' – ' +
+                formatYmdToDdMmYy(meta.to);
+            } else {
+              periodLine = 'Form submitted (period not recorded)';
+            }
+            var desc = String(e.description || '').trim();
+            return (
+              '<article class="op-ts-submitted-card">' +
+              '<p class="op-ts-submitted-period">' +
+              escapeHtml(periodLine) +
+              '</p>' +
+              '<p class="op-ts-submitted-desc">' +
+              (desc ? escapeHtml(desc) : '<em>No description</em>') +
+              '</p>' +
+              '</article>'
+            );
+          })
+          .join('');
+      })
+      .catch(function () {
+        if (listEl) listEl.innerHTML = '<p class="op-ts-submitted-empty">Could not load submissions.</p>';
+      });
+  }
+
   /**
    * @param {boolean} preserveExisting - true: reopen builder without clearing jobs/dates (continue editing).
    */
@@ -4091,25 +4177,42 @@
         })
         .then(function (path) {
           if (path) docPath = path;
+          var tsJobsPayload = pendingWorklogTimesheetJobs || [];
+          var periodExtra = {};
+          if (tsJobsPayload.length > 0) {
+            var pfe = document.getElementById('op-wr-period-from');
+            var pte = document.getElementById('op-wr-period-to');
+            var pf = pfe ? String(pfe.value || '').trim() : '';
+            var pt = pte ? String(pte.value || '').trim() : '';
+            if (pf && pt) {
+              periodExtra.timesheetPeriodFrom = pf;
+              periodExtra.timesheetPeriodTo = pt;
+            }
+          }
           return api('/work-log', {
             method: 'POST',
-            body: JSON.stringify({
-              block: null,
-              floor: null,
-              apartment: null,
-              zone: null,
-              workType: workType,
-              quantity: null,
-              unitPrice: null,
-              total: totalBeforeTax,
-              totalBeforeTax: totalBeforeTax,
-              totalAfterTax: totalAfterTax,
-              description: description,
-              photoUrls: pendingWorklogPhotoUrls || [],
-              timesheetJobs: pendingWorklogTimesheetJobs || [],
-              priceWorkJobs: pendingPriceWorkEntries || [],
-              invoiceFilePath: docPath,
-            }),
+            body: JSON.stringify(
+              Object.assign(
+                {
+                  block: null,
+                  floor: null,
+                  apartment: null,
+                  zone: null,
+                  workType: workType,
+                  quantity: null,
+                  unitPrice: null,
+                  total: totalBeforeTax,
+                  totalBeforeTax: totalBeforeTax,
+                  totalAfterTax: totalAfterTax,
+                  description: description,
+                  photoUrls: pendingWorklogPhotoUrls || [],
+                  timesheetJobs: tsJobsPayload,
+                  priceWorkJobs: pendingPriceWorkEntries || [],
+                  invoiceFilePath: docPath,
+                },
+                periodExtra
+              )
+            ),
           });
         })
         .then(function (r) {
@@ -4154,9 +4257,7 @@
   }
   var btnContinueTimesheetJobs = document.getElementById('op-btn-continue-timesheet-jobs');
   if (btnContinueTimesheetJobs) {
-    btnContinueTimesheetJobs.addEventListener('click', function () {
-      openWorkReportModal(true);
-    });
+    btnContinueTimesheetJobs.addEventListener('click', openTimesheetSubmittedModal);
   }
   var btnAddJob = document.getElementById('op-wr-add-job');
   if (btnAddJob) {

@@ -819,6 +819,47 @@ a.op-doc-row:active {
   margin-top: 10px;
   width: 100%;
 }
+.op-ts-submitted-intro {
+  margin-bottom: 12px;
+}
+
+.op-ts-submitted-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+}
+
+.op-ts-submitted-card {
+  border: 1px solid var(--op-card-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.op-ts-submitted-period {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin: 0 0 8px 0;
+  color: var(--op-text);
+}
+
+.op-ts-submitted-desc {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--op-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.op-ts-submitted-empty {
+  margin: 0;
+  color: var(--op-text-muted);
+  font-size: 0.95rem;
+}
+
 .op-wl-flow-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;

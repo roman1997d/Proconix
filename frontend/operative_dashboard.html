@@ -396,7 +396,7 @@
                 Open Time Sheet Jobs Builder
               </button>
               <button type="button" class="op-btn op-btn-secondary op-btn-sm op-wl-report-btn op-wl-timesheet-continue-btn" id="op-btn-continue-timesheet-jobs">
-                Continue to add jobs on existing form
+                View submitted time sheets
               </button>
             </div>
             <div class="op-field">
@@ -518,6 +518,26 @@
             <div id="op-work-report-feedback" class="op-feedback d-none"></div>
             <button type="submit" class="op-btn op-btn-primary">Generate Time Sheet Report</button>
           </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: submitted time sheets (from DB) -->
+  <div class="op-modal op-modal-worklog" id="op-modal-timesheet-submitted" aria-hidden="true" role="dialog" aria-labelledby="op-ts-submitted-title">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog op-modal-dialog-worklog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3 id="op-ts-submitted-title">Submitted time sheets</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <p class="op-ts-submitted-intro op-tasks-hint" style="margin-top:0;">
+            Forms you submitted with time sheet jobs (saved on the server).
+          </p>
+          <div id="op-ts-submitted-list" class="op-ts-submitted-list">Loading…</div>
+          <div id="op-ts-submitted-feedback" class="op-feedback d-none" role="alert"></div>
         </div>
       </div>
     </div>
