@@ -100,6 +100,7 @@ router.post('/uploads', requireOperativeAuth, uploadDocumentFile, injectFileUrl(
 router.get('/collaboration/work-entry/session', requireOperativeAuth, getCollaborationSession);
 router.post('/collaboration/work-entry/code', requireOperativeAuth, generateCollaborationCode);
 router.post('/collaboration/work-entry/join', requireOperativeAuth, joinCollaborationSession);
+router.post('/collaboration/work-entry/verify-code', requireOperativeAuth, joinCollaborationSession);
 
 router.get('/work-log', requireOperativeAuth, getMyWorkLogs);
 router.post('/work-log/upload', requireOperativeAuth, uploadWorklogFile, workLogUpload);

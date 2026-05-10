@@ -1832,23 +1832,6 @@ function normalizeCollaboratorUserIds(raw, excludeUserId) {
   return out;
 }
 
-async function loadCollaboratorsFromHostSession(hostUserId) {
-  try {
-    const r = await pool.query(
-      `SELECT guest_user_ids FROM operative_collaboration_sessions
-       WHERE host_user_id = $1 AND expires_at > NOW()
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [hostUserId]
-    );
-    if (!r.rows.length) return [];
-    return normalizeCollaboratorUserIds(r.rows[0].guest_user_ids, hostUserId);
-  } catch (e) {
-    if (e && e.code === '42P01') return [];
-    throw e;
-  }
-}
-
 async function resolveCollaboratorDisplay(userIds) {
   const ids = normalizeCollaboratorUserIds(userIds);
   if (!ids.length) return [];
@@ -1863,6 +1846,51 @@ async function resolveCollaboratorDisplay(userIds) {
     byId[row.id] = row.disp_name;
   });
   return ids.map((id) => ({ userId: id, name: byId[id] != null ? String(byId[id]) : 'Operative' }));
+}
+
+/** Validates collaborator IDs from the submitter's JSON body (same company + project). */
+async function validateCollaboratorUserIdsForSubmit(submitterId, collaboratorIdsRaw) {
+  const ids = normalizeCollaboratorUserIds(collaboratorIdsRaw);
+  if (!ids.length) return { ok: true, ids: [] };
+
+  const ctx = await loadOperativeCompanyProjectContext(submitterId);
+  if (!ctx.ok) return { ok: false, message: ctx.message };
+
+  for (const cid of ids) {
+    if (Number(cid) === Number(submitterId)) {
+      return { ok: false, message: 'You cannot list yourself as a collaborator.' };
+    }
+  }
+
+  const ur = await pool.query(`SELECT id, company_id, project_id FROM users WHERE id = ANY($1::int[])`, [ids]);
+  if (ur.rows.length !== ids.length) {
+    return { ok: false, message: 'One or more collaborators could not be found.' };
+  }
+
+  for (const row of ur.rows) {
+    if (Number(row.company_id) !== Number(ctx.companyId)) {
+      return { ok: false, message: 'Collaborators must belong to your company.' };
+    }
+    let pId = row.project_id != null ? Number(row.project_id) : null;
+    if (pId == null) {
+      try {
+        const paRow = await pool.query(
+          `SELECT project_id FROM project_assignments WHERE user_id = $1 ORDER BY assigned_at DESC LIMIT 1`,
+          [row.id]
+        );
+        if (paRow.rows.length > 0 && paRow.rows[0].project_id != null) {
+          pId = Number(paRow.rows[0].project_id);
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    if (pId == null || pId !== Number(ctx.projectId)) {
+      return { ok: false, message: 'Each collaborator must be on the same project as you.' };
+    }
+  }
+
+  return { ok: true, ids };
 }
 
 function generateRandomCollaborationCode() {
@@ -1960,6 +1988,8 @@ async function generateCollaborationCode(req, res) {
 
 /**
  * POST /api/operatives/collaboration/work-entry/join
+ * POST /api/operatives/collaboration/work-entry/verify-code
+ * Resolve who owns the code (they become a collaborator on the caller's work entry).
  */
 async function joinCollaborationSession(req, res) {
   const op = getOperative(req);
@@ -1989,7 +2019,7 @@ async function joinCollaborationSession(req, res) {
     if (Number(row.host_user_id) === Number(op.id)) {
       return res.status(400).json({
         success: false,
-        message: 'You cannot join your own collaboration code. Share it with a coworker.',
+        message: 'That is your own collaboration code. Give it to a coworker so they can add you on their form.',
       });
     }
 
@@ -2006,23 +2036,19 @@ async function joinCollaborationSession(req, res) {
       });
     }
 
-    await pool.query(
-      `UPDATE operative_collaboration_sessions
-       SET guest_user_ids = CASE
-         WHEN $2::int = ANY(guest_user_ids) THEN guest_user_ids
-         ELSE array_append(guest_user_ids, $2::int)
-       END
-       WHERE id = $1`,
-      [row.id, op.id]
-    );
-
     const hostRow = await pool.query(
       `SELECT COALESCE(NULLIF(TRIM(name), ''), NULLIF(TRIM(email), ''), 'Operative') AS nm FROM users WHERE id = $1`,
       [row.host_user_id]
     );
     const hostName = hostRow.rows[0] ? String(hostRow.rows[0].nm) : 'Colleague';
 
-    return res.status(200).json({ success: true, hostName });
+    return res.status(200).json({
+      success: true,
+      collaborator: {
+        userId: Number(row.host_user_id),
+        name: hostName,
+      },
+    });
   } catch (err) {
     if (err && err.code === '42P01') {
       return res.status(503).json({
@@ -2031,7 +2057,7 @@ async function joinCollaborationSession(req, res) {
       });
     }
     console.error('joinCollaborationSession:', err);
-    return res.status(500).json({ success: false, message: 'Could not join collaboration session.' });
+    return res.status(500).json({ success: false, message: 'Could not verify collaboration code.' });
   }
 }
 
@@ -2097,7 +2123,16 @@ async function createWorkLog(req, res) {
       timesheetPayload.push({ type: 'qa_price_work', entries: priceWorkJobs });
     }
 
-    const collabIds = await loadCollaboratorsFromHostSession(op.id);
+    const rawCollabFromBody = Array.isArray(b.collaboratorUserIds)
+      ? b.collaboratorUserIds
+      : Array.isArray(b.collaborator_user_ids)
+        ? b.collaborator_user_ids
+        : [];
+    const cv = await validateCollaboratorUserIdsForSubmit(op.id, rawCollabFromBody);
+    if (!cv.ok) {
+      return res.status(400).json({ success: false, message: cv.message });
+    }
+    const collabIds = cv.ids;
     const collabDisplay = await resolveCollaboratorDisplay(collabIds);
 
     const jobDisplayId = await nextJobDisplayId(companyId);
@@ -2169,11 +2204,6 @@ async function createWorkLog(req, res) {
         } catch (updErr) {
           if (updErr && updErr.code !== '42703') console.error('createWorkLog collaborator update:', updErr);
         }
-      }
-      try {
-        await pool.query(`DELETE FROM operative_collaboration_sessions WHERE host_user_id = $1`, [op.id]);
-      } catch (delErr) {
-        if (delErr && delErr.code !== '42P01') console.error('createWorkLog collaboration session cleanup:', delErr);
       }
     }
 
@@ -2331,11 +2361,20 @@ async function patchMyWorkLog(req, res) {
     const description = (b.description && String(b.description).trim()) || null;
 
     let mergedCollabIds = normalizeCollaboratorUserIds(dbRow.collaborator_user_ids);
-    try {
-      const sessionGuests = await loadCollaboratorsFromHostSession(op.id);
-      mergedCollabIds = normalizeCollaboratorUserIds([...mergedCollabIds, ...sessionGuests]);
-    } catch (_) {
-      /* ignore session load errors */
+    const hasCollabBody =
+      Object.prototype.hasOwnProperty.call(b, 'collaboratorUserIds') ||
+      Object.prototype.hasOwnProperty.call(b, 'collaborator_user_ids');
+    if (hasCollabBody) {
+      const rawCollabFromBody = Array.isArray(b.collaboratorUserIds)
+        ? b.collaboratorUserIds
+        : Array.isArray(b.collaborator_user_ids)
+          ? b.collaborator_user_ids
+          : [];
+      const cv = await validateCollaboratorUserIdsForSubmit(op.id, rawCollabFromBody);
+      if (!cv.ok) {
+        return res.status(400).json({ success: false, message: cv.message });
+      }
+      mergedCollabIds = cv.ids;
     }
     const mergedCollabDisplay = await resolveCollaboratorDisplay(mergedCollabIds);
 
@@ -2399,12 +2438,6 @@ async function patchMyWorkLog(req, res) {
       } else {
         throw updErr;
       }
-    }
-
-    try {
-      await pool.query(`DELETE FROM operative_collaboration_sessions WHERE host_user_id = $1`, [op.id]);
-    } catch (delErr) {
-      if (delErr && delErr.code !== '42P01') console.error('patchMyWorkLog collaboration cleanup:', delErr);
     }
 
     return res.status(200).json({

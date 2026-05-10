@@ -2375,8 +2375,8 @@
   var opTsSubmittedEntriesCache = [];
   /** @type {number|null} when set, work log submit PATCHes this id instead of POST */
   var pendingContinueWorkLogId = null;
-  /** True after coworker joins via collaboration code (they must not submit their own duplicate entry). */
-  var opWlCollaborationGuest = false;
+  /** Collaborators on this draft entry { userId, name } — filled via verified coworker codes. */
+  var pendingWorklogCollaborators = [];
 
   function getOperativeUserId() {
     try {
@@ -2389,43 +2389,58 @@
     return null;
   }
 
-  function clearWorklogCollaborationGuestLocks() {
-    var ids = [
-      'op-btn-flow-price-work',
-      'op-btn-flow-time-sheet',
-      'op-wl-document',
-      'op-btn-create-work-report',
-      'op-btn-continue-timesheet-jobs',
-      'op-wl-total-before-tax',
-      'op-wl-description',
-    ];
-    ids.forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) el.disabled = false;
-    });
-    if (formWorklog) {
-      var sb = formWorklog.querySelector('button[type="submit"]');
-      if (sb) sb.disabled = false;
+  function renderWorklogCollaboratorsChips() {
+    var ul = document.getElementById('op-wl-collab-added-list');
+    var lbl = document.getElementById('op-wl-collab-added-label');
+    if (!ul) return;
+    if (!pendingWorklogCollaborators.length) {
+      ul.innerHTML = '';
+      ul.classList.add('d-none');
+      if (lbl) lbl.style.display = 'none';
+      return;
     }
-    var sec = document.getElementById('op-wl-collab-section');
-    if (sec) sec.classList.remove('op-wl-collab-locked');
+    ul.classList.remove('d-none');
+    if (lbl) lbl.style.display = '';
+    ul.innerHTML = pendingWorklogCollaborators
+      .map(function (c) {
+        return (
+          '<li class="op-wl-collab-chip" data-user-id="' +
+          escapeHtml(String(c.userId)) +
+          '"><span class="op-wl-collab-chip-name">' +
+          escapeHtml(c.name || '') +
+          '</span><button type="button" class="op-wl-collab-chip-remove" aria-label="Elimină">&times;</button></li>'
+        );
+      })
+      .join('');
+  }
+
+  function syncPendingCollaboratorsFromEntry(entry) {
+    pendingWorklogCollaborators = [];
+    if (!entry) {
+      renderWorklogCollaboratorsChips();
+      return;
+    }
+    var cd = entry.collaboratorsDisplay;
+    if (Array.isArray(cd) && cd.length) {
+      cd.forEach(function (c) {
+        if (c && c.userId != null) {
+          pendingWorklogCollaborators.push({
+            userId: Number(c.userId),
+            name: String(c.name || ''),
+          });
+        }
+      });
+    } else if (Array.isArray(entry.collaboratorUserIds) && entry.collaboratorUserIds.length) {
+      entry.collaboratorUserIds.forEach(function (id) {
+        pendingWorklogCollaborators.push({ userId: Number(id), name: '' });
+      });
+    }
+    renderWorklogCollaboratorsChips();
   }
 
   function resetWorklogCollaborationUi() {
-    opWlCollaborationGuest = false;
-    var gb = document.getElementById('op-wl-collab-guest-banner');
-    if (gb) {
-      gb.classList.add('d-none');
-      gb.innerHTML = '';
-    }
-    var hostBlock = document.getElementById('op-wl-collab-host-block');
-    var divider = document.getElementById('op-wl-collab-divider');
-    var joinBlock = document.getElementById('op-wl-collab-join-block');
-    if (hostBlock) {
-      hostBlock.classList.remove('d-none');
-    }
-    if (divider) divider.classList.remove('d-none');
-    if (joinBlock) joinBlock.classList.remove('d-none');
+    pendingWorklogCollaborators = [];
+    renderWorklogCollaboratorsChips();
     var cp = document.getElementById('op-wl-collab-code-panel');
     if (cp) cp.classList.add('d-none');
     var ct = document.getElementById('op-wl-collab-code-text');
@@ -2438,44 +2453,6 @@
     var jf = document.getElementById('op-wl-collab-join-feedback');
     if (hf) hf.textContent = '';
     if (jf) jf.textContent = '';
-    clearWorklogCollaborationGuestLocks();
-  }
-
-  function applyWorklogCollaborationGuestMode(hostName) {
-    opWlCollaborationGuest = true;
-    var gb = document.getElementById('op-wl-collab-guest-banner');
-    if (gb) {
-      gb.classList.remove('d-none');
-      gb.innerHTML =
-        '<strong>Linked.</strong> You are credited on <strong>' +
-        escapeHtml(hostName || 'your coworker') +
-        '</strong>&rsquo;s entry. They will fill out and submit this form — you do not need to submit.';
-    }
-    var hostBlock = document.getElementById('op-wl-collab-host-block');
-    var divider = document.getElementById('op-wl-collab-divider');
-    var joinBlock = document.getElementById('op-wl-collab-join-block');
-    if (hostBlock) hostBlock.classList.add('d-none');
-    if (divider) divider.classList.add('d-none');
-    if (joinBlock) joinBlock.classList.add('d-none');
-    var sec = document.getElementById('op-wl-collab-section');
-    if (sec) sec.classList.add('op-wl-collab-locked');
-    var ids = [
-      'op-btn-flow-price-work',
-      'op-btn-flow-time-sheet',
-      'op-wl-document',
-      'op-btn-create-work-report',
-      'op-btn-continue-timesheet-jobs',
-      'op-wl-total-before-tax',
-      'op-wl-description',
-    ];
-    ids.forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) el.disabled = true;
-    });
-    if (formWorklog) {
-      var sb = formWorklog.querySelector('button[type="submit"]');
-      if (sb) sb.disabled = true;
-    }
   }
 
   function pollCollabSessionIntoUi() {
@@ -2489,7 +2466,7 @@
         if (ct) ct.textContent = r.data.code;
         if (ex && r.data.expiresAt) {
           try {
-            ex.textContent = 'Valid until ' + new Date(r.data.expiresAt).toLocaleString();
+            ex.textContent = 'Valabil până la ' + new Date(r.data.expiresAt).toLocaleString();
           } catch (e) {
             ex.textContent = '';
           }
@@ -3070,6 +3047,7 @@
     if (fromEl) fromEl.value = meta && meta.from ? meta.from : d;
     if (toEl) toEl.value = meta && meta.to ? meta.to : d;
     hideFeedback(document.getElementById('op-work-report-feedback'));
+    syncPendingCollaboratorsFromEntry(entry);
     openModal(modalWorkReport);
   }
 
@@ -4395,14 +4373,6 @@
     formWorklog.addEventListener('submit', function (e) {
       e.preventDefault();
       var feedback = document.getElementById('op-worklog-feedback');
-      if (opWlCollaborationGuest) {
-        showFeedback(
-          feedback,
-          'You joined as a collaborator. Your coworker submits this shared entry.',
-          true
-        );
-        return;
-      }
       if (!currentWorklogProject) {
         showFeedback(feedback, 'You are not assigned to a project. Contact your manager.', true);
         return;
@@ -4461,6 +4431,9 @@
               periodExtra.timesheetPeriodTo = pt;
             }
           }
+          var collabIds = pendingWorklogCollaborators.map(function (x) {
+            return x.userId;
+          });
           var payloadBody = Object.assign(
             {
               block: null,
@@ -4478,6 +4451,7 @@
               timesheetJobs: tsJobsPayload,
               priceWorkJobs: pendingPriceWorkEntries || [],
               invoiceFilePath: docPath,
+              collaboratorUserIds: collabIds,
             },
             periodExtra
           );
@@ -4501,6 +4475,8 @@
             pendingWorklogTimesheetJobs = [];
             pendingPriceWorkEntries = [];
             pendingContinueWorkLogId = null;
+            pendingWorklogCollaborators = [];
+            renderWorklogCollaboratorsChips();
             if (wlId != null) {
               setTimeout(function () {
                 closeModal(modalWorklog);
@@ -4584,7 +4560,7 @@
   if (btnCollabGen) {
     btnCollabGen.addEventListener('click', function () {
       var hf = document.getElementById('op-wl-collab-host-feedback');
-      if (hf) hf.textContent = 'Creating…';
+      if (hf) hf.textContent = 'Se generează…';
       api('/collaboration/work-entry/code', { method: 'POST', body: '{}' })
         .then(function (r) {
           if (r.data && r.data.success && r.data.code) {
@@ -4596,7 +4572,7 @@
             if (ct) ct.textContent = r.data.code;
             if (ex && r.data.expiresAt) {
               try {
-                ex.textContent = 'Valid until ' + new Date(r.data.expiresAt).toLocaleString();
+                ex.textContent = 'Valabil până la ' + new Date(r.data.expiresAt).toLocaleString();
               } catch (e) {
                 ex.textContent = '';
               }
@@ -4626,15 +4602,29 @@
         body: JSON.stringify({ code: code }),
       })
         .then(function (r) {
-          if (r.data && r.data.success) {
-            if (jf) jf.textContent = 'Joined.';
-            applyWorklogCollaborationGuestMode(r.data.hostName);
+          var col = r.data && r.data.collaborator;
+          if (r.data && r.data.success && col && col.userId != null) {
+            var uid = Number(col.userId);
+            var exists = pendingWorklogCollaborators.some(function (x) {
+              return Number(x.userId) === uid;
+            });
+            if (exists) {
+              if (jf) jf.textContent = 'Deja în listă.';
+              return;
+            }
+            pendingWorklogCollaborators.push({
+              userId: uid,
+              name: String(col.name || ''),
+            });
+            renderWorklogCollaboratorsChips();
+            if (input) input.value = '';
+            if (jf) jf.textContent = 'Adăugat.';
           } else {
-            if (jf) jf.textContent = (r.data && r.data.message) || 'Could not join.';
+            if (jf) jf.textContent = (r.data && r.data.message) || 'Cod invalid.';
           }
         })
         .catch(function (err) {
-          if (jf) jf.textContent = err.message || 'Could not join.';
+          if (jf) jf.textContent = err.message || 'Eroare.';
         });
     });
   }
@@ -4662,10 +4652,25 @@
         fallbackCopy();
       }
       var hf = document.getElementById('op-wl-collab-host-feedback');
-      if (hf) hf.textContent = 'Copied.';
+      if (hf) hf.textContent = 'Copiat.';
       setTimeout(function () {
-        if (hf && hf.textContent === 'Copied.') hf.textContent = '';
+        if (hf && hf.textContent === 'Copiat.') hf.textContent = '';
       }, 2000);
+    });
+  }
+
+  if (modalWorklog) {
+    modalWorklog.addEventListener('click', function (e) {
+      var rm = e.target.closest('.op-wl-collab-chip-remove');
+      if (!rm) return;
+      e.preventDefault();
+      var li = rm.closest('.op-wl-collab-chip');
+      if (!li) return;
+      var uid = li.getAttribute('data-user-id');
+      pendingWorklogCollaborators = pendingWorklogCollaborators.filter(function (x) {
+        return String(x.userId) !== String(uid);
+      });
+      renderWorklogCollaboratorsChips();
     });
   }
 

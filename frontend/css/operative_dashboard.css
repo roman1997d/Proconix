@@ -436,14 +436,48 @@ a.op-doc-row:active {
   margin-top: 10px;
   border-top: 1px solid var(--op-card-border);
 }
-.op-wl-collab-guest-banner {
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: rgba(73, 230, 126, 0.1);
-  border: 1px solid rgba(73, 230, 126, 0.28);
-  margin-bottom: 10px;
+.op-wl-collab-sub {
+  margin-top: 14px;
+}
+.op-wl-collab-sub-label {
+  display: block;
+  font-weight: 600;
   font-size: 0.88rem;
-  line-height: 1.45;
+  margin-bottom: 6px;
+  color: var(--op-text-muted);
+}
+.op-wl-collab-added-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.op-wl-collab-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--op-card-border);
+  font-size: 0.85rem;
+}
+.op-wl-collab-chip-name {
+  font-weight: 500;
+}
+.op-wl-collab-chip-remove {
+  background: none;
+  border: none;
+  color: var(--op-text-muted);
+  cursor: pointer;
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0 2px;
+}
+.op-wl-collab-chip-remove:hover {
+  color: var(--op-danger, #ff6b6b);
 }
 .op-wl-collab-row {
   display: flex;
@@ -459,23 +493,6 @@ a.op-doc-row:active {
   font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: 0.05em;
-}
-.op-wl-collab-divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 14px 0 10px;
-  font-size: 0.78rem;
-  color: var(--op-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.op-wl-collab-divider::before,
-.op-wl-collab-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--op-card-border);
 }
 .op-wl-collab-join-row {
   margin-top: 4px;
