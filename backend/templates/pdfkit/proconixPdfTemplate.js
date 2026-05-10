@@ -425,7 +425,7 @@ function renderTimesheet(doc, opts) {
   var tableW = pageW - MARGIN * 2;
   var totalTimeText = buildTotalTimeText(jobs);
   drawSummaryGrid(doc, MARGIN, tableTop, tableW, [
-    { label: 'Operative', value: escapeText(workerName) },
+    { label: 'Worker(s)', value: escapeText(workerName) },
     { label: 'Project', value: escapeText(projectName) },
     { label: 'Work type', value: escapeText(workType) },
     { label: 'Total (before tax)', value: '£' + totalBeforeTax.toFixed(2) },

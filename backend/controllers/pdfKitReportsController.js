@@ -83,6 +83,33 @@ function mergePhotoList(payload) {
   return out;
 }
 
+/** Prefer explicit workersDisplay from client; else merge primary name + collaboratorsDisplay array. */
+function buildWorkersDisplayFromPayload(payload, primaryName) {
+  payload = payload || {};
+  var explicit = payload.workersDisplay || payload.workers_display;
+  if (explicit != null && String(explicit).trim()) return String(explicit).trim();
+
+  var primary = primaryName != null && String(primaryName).trim() ? String(primaryName).trim() : '';
+  var cd = payload.collaboratorsDisplay || payload.collaborators_display;
+  var seen = new Set();
+  var out = [];
+  function pushName(n) {
+    var s = String(n || '').trim();
+    if (!s) return;
+    var k = s.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(s);
+  }
+  pushName(primary);
+  if (Array.isArray(cd)) {
+    cd.forEach(function (x) {
+      if (x && x.name) pushName(x.name);
+    });
+  }
+  return out.length ? out.join(', ') : primary || 'Operative';
+}
+
 async function generateTimesheetPdf(req, res) {
   try {
     var payload = req.body || {};
@@ -99,6 +126,7 @@ async function generateTimesheetPdf(req, res) {
     var periodRange = formatDateRange(dateFrom, dateTo);
 
     var meta = await getWorkerAndProjectMeta(req, payload);
+    var workerDisplay = buildWorkersDisplayFromPayload(payload, meta.workerName);
 
     var fileDate = new Date().toISOString().slice(0, 10);
     var fileName = 'timesheet_report_' + fileDate + '.pdf';
@@ -113,7 +141,7 @@ async function generateTimesheetPdf(req, res) {
 
     renderTimesheet(doc, {
       jobs: jobs,
-      workerName: meta.workerName,
+      workerName: workerDisplay,
       projectName: meta.projectName,
       workType: workType,
       totalBeforeTax: totalBeforeTax,
