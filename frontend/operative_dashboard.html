@@ -381,42 +381,6 @@
                 <button type="button" class="op-btn op-btn-secondary op-wl-flow-btn" id="op-btn-flow-time-sheet">Time Sheet</button>
               </div>
             </div>
-            <div class="op-field op-wl-collab-section" id="op-wl-collab-section">
-              <span class="op-field-label">Colaborare</span>
-              <p class="op-wl-collab-intro op-tasks-hint" style="margin:0 0 12px 0;">
-                Dacă lucrați împreună la aceeași înregistrare: tu trimiți formularul; colegii tale îți dau <strong>codul lor</strong> de colaborare și îl adaugi mai jos (poți adăuga mai mulți).
-              </p>
-              <div class="op-wl-collab-sub">
-                <span class="op-wl-collab-sub-label">Codul tău (pentru colegi)</span>
-                <p class="op-tasks-hint" style="margin:0 0 8px 0;font-size:0.85rem;">
-                  Generează un cod și dă-l colegului care completează formularul, ca să te poată include la „Colaboratori”.
-                </p>
-                <div class="op-wl-collab-row">
-                  <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-wl-btn-collab-generate">
-                    Generează cod colaborare
-                  </button>
-                  <span id="op-wl-collab-host-feedback" class="op-wl-collab-inline-feedback" aria-live="polite"></span>
-                </div>
-                <div id="op-wl-collab-code-panel" class="op-wl-collab-code-panel d-none">
-                  <div class="op-wl-collab-code-display" id="op-wl-collab-code-text">—</div>
-                  <p class="op-wl-collab-expires op-text-muted" id="op-wl-collab-expires" style="margin:6px 0 0 0;font-size:0.85rem;"></p>
-                  <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-wl-btn-collab-copy">Copiază codul</button>
-                </div>
-              </div>
-              <div class="op-wl-collab-sub op-wl-collab-sub-add">
-                <span class="op-wl-collab-sub-label">Colaboratori la această înregistrare</span>
-                <p class="op-tasks-hint" style="margin:0 0 8px 0;font-size:0.85rem;">
-                  Introdu codul de colaborare al colegului (cel generat de el). Apoi „Adaugă colaborator” — numele apare mai jos; poți repeta pentru mai mulți.
-                </p>
-                <div class="op-wl-collab-row op-wl-collab-join-row" id="op-wl-collab-join-block">
-                  <input type="text" id="op-wl-collab-code-input" maxlength="12" autocomplete="off" placeholder="ex. AB12-CD34" aria-label="Cod colaborare coleg">
-                  <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-wl-btn-collab-join">Adaugă colaborator</button>
-                  <span id="op-wl-collab-join-feedback" class="op-wl-collab-inline-feedback" aria-live="polite"></span>
-                </div>
-                <p class="op-wl-collab-added-label op-text-muted" id="op-wl-collab-added-label" style="margin:10px 0 6px;font-size:0.8rem;display:none;">Colaboratori:</p>
-                <ul id="op-wl-collab-added-list" class="op-wl-collab-added-list d-none" aria-live="polite"></ul>
-              </div>
-            </div>
             <div class="op-field" id="op-wl-price-upload-wrap">
               <span class="op-field-label">Price Work file (PDF / Excel / image)</span>
               <div class="op-wl-file-picker">
@@ -445,6 +409,27 @@
             </div>
             <div id="op-worklog-feedback" class="op-feedback d-none"></div>
             <button type="submit" class="op-btn op-btn-primary">Submit for manager review</button>
+            <div class="op-wl-collab-footer" id="op-wl-collab-section">
+              <div class="op-wl-collab-footer-row">
+                <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-wl-btn-collab-generate">
+                  Generează cod pentru un coleg
+                </button>
+                <span id="op-wl-collab-host-feedback" class="op-wl-collab-inline-feedback" aria-live="polite"></span>
+              </div>
+              <div id="op-wl-collab-code-panel" class="op-wl-collab-code-panel d-none">
+                <div class="op-wl-collab-code-display" id="op-wl-collab-code-text">—</div>
+                <p class="op-wl-collab-expires op-text-muted" id="op-wl-collab-expires" style="margin:6px 0 0 0;font-size:0.85rem;"></p>
+                <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-wl-btn-collab-copy">Copiază codul</button>
+              </div>
+              <div class="op-wl-collab-footer-row op-wl-collab-join-row" id="op-wl-collab-join-block">
+                <input type="text" id="op-wl-collab-code-input" maxlength="12" autocomplete="off" placeholder="Cod coleg" aria-label="Cod colaborare coleg">
+                <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-wl-btn-collab-join">
+                  Adaugă coleg la acest entry
+                </button>
+                <span id="op-wl-collab-join-feedback" class="op-wl-collab-inline-feedback" aria-live="polite"></span>
+              </div>
+              <ul id="op-wl-collab-added-list" class="op-wl-collab-added-list d-none" aria-live="polite"></ul>
+            </div>
           </form>
         </div>
       </div>

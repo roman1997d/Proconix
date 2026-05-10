@@ -2391,16 +2391,13 @@
 
   function renderWorklogCollaboratorsChips() {
     var ul = document.getElementById('op-wl-collab-added-list');
-    var lbl = document.getElementById('op-wl-collab-added-label');
     if (!ul) return;
     if (!pendingWorklogCollaborators.length) {
       ul.innerHTML = '';
       ul.classList.add('d-none');
-      if (lbl) lbl.style.display = 'none';
       return;
     }
     ul.classList.remove('d-none');
-    if (lbl) lbl.style.display = '';
     ul.innerHTML = pendingWorklogCollaborators
       .map(function (c) {
         return (

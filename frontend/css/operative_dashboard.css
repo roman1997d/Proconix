@@ -431,20 +431,25 @@ a.op-doc-row:active {
   margin-bottom: 1.25rem;
 }
 
-.op-wl-collab-section {
-  padding-top: 12px;
-  margin-top: 10px;
+.op-wl-collab-footer {
+  margin-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid var(--op-card-border);
 }
-.op-wl-collab-sub {
-  margin-top: 14px;
+.op-wl-collab-footer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
-.op-wl-collab-sub-label {
-  display: block;
-  font-weight: 600;
-  font-size: 0.88rem;
-  margin-bottom: 6px;
-  color: var(--op-text-muted);
+.op-wl-collab-footer .op-wl-collab-code-panel {
+  margin-top: 10px;
+}
+.op-wl-collab-footer .op-wl-collab-join-row {
+  margin-top: 12px;
+}
+.op-wl-collab-footer .op-wl-collab-added-list {
+  margin-top: 10px;
 }
 .op-wl-collab-added-list {
   list-style: none;
