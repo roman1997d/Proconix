@@ -1872,6 +1872,161 @@ async function createWorkLog(req, res) {
   }
 }
 
+/**
+ * PATCH /api/operatives/work-log/:id
+ * Operative updates own work log (same payload shape as POST where applicable).
+ * Preserves existing QA price-work blocks from DB when the body omits new price work.
+ */
+async function patchMyWorkLog(req, res) {
+  const op = getOperative(req);
+  if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid work log id.' });
+  }
+
+  try {
+    const existing = await pool.query(
+      `SELECT id, submitted_by_user_id, status, timesheet_jobs, company_id
+       FROM work_logs WHERE id = $1`,
+      [id]
+    );
+    if (!existing.rows.length) {
+      return res.status(404).json({ success: false, message: 'Work entry not found.' });
+    }
+    const dbRow = existing.rows[0];
+    if (Number(dbRow.submitted_by_user_id) !== Number(op.id)) {
+      return res.status(403).json({ success: false, message: 'You can only edit your own entries.' });
+    }
+    const st = String(dbRow.status || '').toLowerCase();
+    if (st === 'approved' || st === 'completed' || st === 'rejected') {
+      return res.status(403).json({
+        success: false,
+        message: 'This entry cannot be edited anymore.',
+      });
+    }
+
+    const b = req.body || {};
+    const companyId = dbRow.company_id != null ? Number(dbRow.company_id) : null;
+
+    let projectId = null;
+    try {
+      const ur = await pool.query('SELECT project_id FROM users WHERE id = $1', [op.id]);
+      if (ur.rows.length && ur.rows[0].project_id != null) projectId = Number(ur.rows[0].project_id);
+    } catch (_) {
+      /* ignore */
+    }
+
+    const workType =
+      (b.workType && String(b.workType).trim()) || (b.work_type && String(b.work_type).trim());
+    if (!workType) {
+      return res.status(400).json({ success: false, message: 'Work type is required.' });
+    }
+
+    const quantity = b.quantity != null ? parseFloat(b.quantity) : null;
+    const unitPrice =
+      b.unitPrice != null ? parseFloat(b.unitPrice) : b.unit_price != null ? parseFloat(b.unit_price) : null;
+    const total =
+      b.total != null ? parseFloat(b.total) : quantity != null && unitPrice != null ? quantity * unitPrice : null;
+    const photoUrls = Array.isArray(b.photoUrls) ? b.photoUrls : [];
+    const invoiceFilePath =
+      (b.invoiceFilePath && String(b.invoiceFilePath).trim()) ||
+      (b.invoice_file_path && String(b.invoice_file_path).trim()) ||
+      null;
+
+    const timesheetJobsRaw = Array.isArray(b.timesheetJobs)
+      ? b.timesheetJobs
+      : Array.isArray(b.timesheet_jobs)
+        ? b.timesheet_jobs
+        : [];
+    const priceWorkJobsRaw = Array.isArray(b.priceWorkJobs)
+      ? b.priceWorkJobs
+      : Array.isArray(b.price_work_jobs)
+        ? b.price_work_jobs
+        : [];
+    const priceWorkJobs = priceWorkJobsRaw.map((ent) => {
+      if (!ent || typeof ent !== 'object') return ent;
+      const camel = ent.stepPhotoUrls && typeof ent.stepPhotoUrls === 'object' ? ent.stepPhotoUrls : null;
+      const snake = ent.step_photo_urls && typeof ent.step_photo_urls === 'object' ? ent.step_photo_urls : null;
+      const stepPhotoUrls = camel || snake || {};
+      return Object.assign({}, ent, { stepPhotoUrls });
+    });
+
+    let timesheetPayload = Array.isArray(timesheetJobsRaw) ? timesheetJobsRaw.slice() : [];
+
+    const tsPf =
+      (b.timesheetPeriodFrom && String(b.timesheetPeriodFrom).trim()) ||
+      (b.timesheet_period_from && String(b.timesheet_period_from).trim()) ||
+      '';
+    const tsPt =
+      (b.timesheetPeriodTo && String(b.timesheetPeriodTo).trim()) ||
+      (b.timesheet_period_to && String(b.timesheet_period_to).trim()) ||
+      '';
+    if (tsPf && tsPt && timesheetPayload.length > 0) {
+      timesheetPayload.unshift({
+        type: 'timesheet_meta',
+        period_from: tsPf,
+        period_to: tsPt,
+      });
+    }
+
+    if (priceWorkJobs.length && companyId != null && projectId != null) {
+      const v = await validatePriceWorkJobsAgainstRemaining(companyId, projectId, op.id, priceWorkJobs);
+      if (!v.ok) {
+        return res.status(400).json({ success: false, message: v.message || 'Invalid QA price work quantities.' });
+      }
+      timesheetPayload.push({ type: 'qa_price_work', entries: priceWorkJobs });
+    } else {
+      const oldTs = parseWorkLogJsonField(dbRow.timesheet_jobs, []);
+      if (Array.isArray(oldTs)) {
+        oldTs.forEach((block) => {
+          if (block && block.type === 'qa_price_work') {
+            timesheetPayload.push(block);
+          }
+        });
+      }
+    }
+
+    const description = (b.description && String(b.description).trim()) || null;
+
+    await pool.query(
+      `UPDATE work_logs SET
+        work_type = $1,
+        quantity = $2,
+        unit_price = $3,
+        total = $4,
+        description = $5,
+        photo_urls = $6::jsonb,
+        timesheet_jobs = $7::jsonb,
+        invoice_file_path = COALESCE($8, invoice_file_path),
+        updated_at = NOW()
+       WHERE id = $9 AND submitted_by_user_id = $10`,
+      [
+        workType,
+        quantity,
+        unitPrice,
+        total,
+        description,
+        JSON.stringify(photoUrls),
+        JSON.stringify(timesheetPayload),
+        invoiceFilePath || null,
+        id,
+        op.id,
+      ]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Work entry updated.',
+      workLogId: id,
+    });
+  } catch (err) {
+    console.error('patchMyWorkLog error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update work entry.' });
+  }
+}
+
 function parseDateOnlyStart(v) {
   const s = String(v || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
@@ -2552,6 +2707,7 @@ module.exports = {
   getMyWorkLogs,
   workLogUpload,
   createWorkLog,
+  patchMyWorkLog,
   sendWorkLogInvoiceCopy,
   generateDailyRecordInvoiceFromPeriod,
   archiveMyWorkLog,

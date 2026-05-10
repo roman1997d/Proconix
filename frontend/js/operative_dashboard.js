@@ -2371,6 +2371,10 @@
   var worklogOverviewBodyEl = document.getElementById('op-worklog-overview-body');
   /** @type {Array<object>} last loaded entries for overview modal */
   var opWorklogEntriesCache = [];
+  /** @type {Array<object>} time sheet list modal — for "Continue adding jobs" */
+  var opTsSubmittedEntriesCache = [];
+  /** @type {number|null} when set, work log submit PATCHes this id instead of POST */
+  var pendingContinueWorkLogId = null;
 
   function formatWorklogOverviewWhen(iso) {
     if (!iso) return '—';
@@ -2737,13 +2741,14 @@
     });
   }
 
-  function addTimesheetJobItem() {
+  function addTimesheetJobItem(initial) {
     var wrap = document.getElementById('op-wr-jobs');
     if (!wrap) return;
     var idx = wrap.querySelectorAll('.op-wr-job-card').length + 1;
     var card = document.createElement('div');
     card.className = 'op-wr-job-card';
     card.__photoFiles = [];
+    card.__existingPhotoPaths = [];
     var MAX_JOB_PHOTOS = 15;
     card.innerHTML =
       '<div class="op-wr-job-title">Job #' + idx + '</div>' +
@@ -2783,6 +2788,13 @@
     function renderPhotoPreview() {
       if (!previewEl) return;
       previewEl.innerHTML = '';
+      (card.__existingPhotoPaths || []).forEach(function (url) {
+        if (typeof url !== 'string' || !url.trim()) return;
+        var img = document.createElement('img');
+        img.src = url;
+        img.alt = 'Saved photo';
+        previewEl.appendChild(img);
+      });
       (card.__photoFiles || []).forEach(function (f) {
         var img = document.createElement('img');
         img.src = URL.createObjectURL(f);
@@ -2790,7 +2802,8 @@
         previewEl.appendChild(img);
       });
       if (countEl) {
-        countEl.textContent = String((card.__photoFiles || []).length) + ' / ' + String(MAX_JOB_PHOTOS);
+        var n = (card.__existingPhotoPaths || []).length + (card.__photoFiles || []).length;
+        countEl.textContent = String(n) + ' / ' + String(MAX_JOB_PHOTOS);
       }
     }
 
@@ -2801,7 +2814,9 @@
       photosInput.addEventListener('change', function () {
         var incoming = Array.from(this.files || []);
         if (incoming.length === 0) return;
-        var remaining = MAX_JOB_PHOTOS - (card.__photoFiles || []).length;
+        var used =
+          (card.__existingPhotoPaths || []).length + (card.__photoFiles || []).length;
+        var remaining = MAX_JOB_PHOTOS - used;
         if (remaining <= 0) {
           this.value = '';
           renderPhotoPreview();
@@ -2817,7 +2832,85 @@
     card.querySelector('.op-wr-remove-job').addEventListener('click', function () {
       card.remove();
     });
+
+    if (initial && typeof initial === 'object') {
+      var locIn = card.querySelector('.op-wr-job-location');
+      if (locIn && initial.location != null) locIn.value = String(initial.location);
+      var descIn = card.querySelector('.op-wr-job-description');
+      if (descIn && initial.description != null) descIn.value = String(initial.description);
+      var durIn = card.querySelector('.op-wr-job-duration');
+      if (durIn && initial.duration != null && !isNaN(parseFloat(initial.duration))) {
+        durIn.value = String(initial.duration);
+      }
+      var durU = card.querySelector('.op-wr-job-unit');
+      var duStr = initial.duration_unit || initial.durationUnit || 'hours';
+      if (durU) durU.value = String(duStr).toLowerCase() === 'days' ? 'days' : 'hours';
+      var stSel = card.querySelector('.op-wr-job-stage');
+      var stVal = initial.stage || 'ongoing';
+      if (stSel) {
+        stSel.value = stVal === 'complete' ? 'complete' : 'ongoing';
+        progressWrap.classList.toggle('d-none', stSel.value !== 'ongoing');
+      }
+      var progIn = card.querySelector('.op-wr-job-progress');
+      var pp = initial.progress_pct != null ? initial.progress_pct : initial.progressPct;
+      if (progIn != null && pp != null && !isNaN(Number(pp))) progIn.value = String(pp);
+      var photosArr = Array.isArray(initial.photos) ? initial.photos : [];
+      card.__existingPhotoPaths = photosArr.filter(function (p) {
+        return typeof p === 'string' && (p.indexOf('/uploads/') === 0 || /^https?:\/\//i.test(p));
+      });
+    }
+
     renderPhotoPreview();
+  }
+
+  function extractPlainTimesheetJobs(ts) {
+    if (!Array.isArray(ts)) return [];
+    return ts.filter(function (x) {
+      return x && typeof x === 'object' && x.type !== 'timesheet_meta' && x.type !== 'qa_price_work';
+    });
+  }
+
+  function normalizeSavedTimesheetJob(job) {
+    return {
+      location: job.location,
+      description: job.description,
+      duration: job.duration,
+      duration_unit: job.duration_unit || job.durationUnit || 'hours',
+      stage: job.stage || 'ongoing',
+      progress_pct: job.progress_pct != null ? job.progress_pct : job.progressPct,
+      photos: Array.isArray(job.photos) ? job.photos : [],
+    };
+  }
+
+  function openWorkReportModalFromSubmittedEntry(entry) {
+    if (!entry || entry.id == null) return;
+    pendingContinueWorkLogId = Number(entry.id);
+    var tsModal = document.getElementById('op-modal-timesheet-submitted');
+    if (tsModal) closeModal(tsModal);
+    openModal(modalWorklog);
+    setWorklogFlow('timesheet');
+
+    var descMain = document.getElementById('op-wl-description');
+    if (descMain) descMain.value = String(entry.description || '').trim();
+
+    var jobsWrap = document.getElementById('op-wr-jobs');
+    var fromEl = document.getElementById('op-wr-period-from');
+    var toEl = document.getElementById('op-wr-period-to');
+    var meta = extractTimesheetMetaFromJobs(entry.timesheetJobs || []);
+    var d = todayIsoDate();
+    if (jobsWrap) jobsWrap.innerHTML = '';
+    var plain = extractPlainTimesheetJobs(entry.timesheetJobs || []);
+    if (!plain.length) {
+      addTimesheetJobItem();
+    } else {
+      plain.forEach(function (job) {
+        addTimesheetJobItem(normalizeSavedTimesheetJob(job));
+      });
+    }
+    if (fromEl) fromEl.value = meta && meta.from ? meta.from : d;
+    if (toEl) toEl.value = meta && meta.to ? meta.to : d;
+    hideFeedback(document.getElementById('op-work-report-feedback'));
+    openModal(modalWorkReport);
   }
 
   function todayIsoDate() {
@@ -2879,6 +2972,7 @@
           return;
         }
         var entries = (r.data.entries || []).filter(entryIsTimesheetSubmission);
+        opTsSubmittedEntriesCache = entries.slice();
         if (!listEl) return;
         if (!entries.length) {
           listEl.innerHTML =
@@ -2899,6 +2993,7 @@
               periodLine = 'Form submitted (period not recorded)';
             }
             var desc = String(e.description || '').trim();
+            var eid = e.id != null ? String(e.id) : '';
             return (
               '<article class="op-ts-submitted-card">' +
               '<p class="op-ts-submitted-period">' +
@@ -2907,6 +3002,9 @@
               '<p class="op-ts-submitted-desc">' +
               (desc ? escapeHtml(desc) : '<em>No description</em>') +
               '</p>' +
+              '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-ts-continue-jobs" data-op-ts-continue-id="' +
+              escapeHtml(eid) +
+              '">Continue adding jobs</button>' +
               '</article>'
             );
           })
@@ -2966,6 +3064,7 @@
       var durUnit = card.querySelector('.op-wr-job-unit').value || 'hours';
       var totalHours = !isNaN(durVal) ? (durUnit === 'days' ? durVal * 8 : durVal) : 0;
       var photos = card.__photoFiles || [];
+      var existingPaths = Array.isArray(card.__existingPhotoPaths) ? card.__existingPhotoPaths.slice() : [];
       return {
         location: (card.querySelector('.op-wr-job-location').value || '').trim() || null,
         description: (card.querySelector('.op-wr-job-description').value || '').trim() || null,
@@ -2974,6 +3073,7 @@
         totalHours: totalHours,
         stage: card.querySelector('.op-wr-job-stage').value || 'ongoing',
         progress_pct: parseInt(card.querySelector('.op-wr-job-progress').value || '0', 10),
+        existingPhotoPaths: existingPaths,
         photoFiles: photos,
         photoPaths: [],
         photoDataUrls: [],
@@ -3056,9 +3156,10 @@
       return Promise.all(
         jobs.map(function (job) {
           var files = job.photoFiles || [];
+          var existing = Array.isArray(job.existingPhotoPaths) ? job.existingPhotoPaths.slice() : [];
           return Promise.all(files.map(function (f) { return uploadWorklogFile(f); }))
             .then(function (paths) {
-              job.photoPaths = paths || [];
+              job.photoPaths = (existing || []).concat(paths || []);
               return job.photoPaths;
             });
         })
@@ -4094,6 +4195,7 @@
     pendingWorklogPhotoUrls = [];
     pendingWorklogTimesheetJobs = [];
     pendingPriceWorkEntries = [];
+    pendingContinueWorkLogId = null;
     pwbAllJobs = [];
     pwbSelectedJob = null;
     pwbCurrentJob = null;
@@ -4189,30 +4291,36 @@
               periodExtra.timesheetPeriodTo = pt;
             }
           }
+          var payloadBody = Object.assign(
+            {
+              block: null,
+              floor: null,
+              apartment: null,
+              zone: null,
+              workType: workType,
+              quantity: null,
+              unitPrice: null,
+              total: totalBeforeTax,
+              totalBeforeTax: totalBeforeTax,
+              totalAfterTax: totalAfterTax,
+              description: description,
+              photoUrls: pendingWorklogPhotoUrls || [],
+              timesheetJobs: tsJobsPayload,
+              priceWorkJobs: pendingPriceWorkEntries || [],
+              invoiceFilePath: docPath,
+            },
+            periodExtra
+          );
+          var continueId = pendingContinueWorkLogId;
+          if (continueId != null && Number(continueId) > 0) {
+            return api('/work-log/' + encodeURIComponent(String(continueId)), {
+              method: 'PATCH',
+              body: JSON.stringify(payloadBody),
+            });
+          }
           return api('/work-log', {
             method: 'POST',
-            body: JSON.stringify(
-              Object.assign(
-                {
-                  block: null,
-                  floor: null,
-                  apartment: null,
-                  zone: null,
-                  workType: workType,
-                  quantity: null,
-                  unitPrice: null,
-                  total: totalBeforeTax,
-                  totalBeforeTax: totalBeforeTax,
-                  totalAfterTax: totalAfterTax,
-                  description: description,
-                  photoUrls: pendingWorklogPhotoUrls || [],
-                  timesheetJobs: tsJobsPayload,
-                  priceWorkJobs: pendingPriceWorkEntries || [],
-                  invoiceFilePath: docPath,
-                },
-                periodExtra
-              )
-            ),
+            body: JSON.stringify(payloadBody),
           });
         })
         .then(function (r) {
@@ -4222,6 +4330,7 @@
             pendingWorklogPhotoUrls = [];
             pendingWorklogTimesheetJobs = [];
             pendingPriceWorkEntries = [];
+            pendingContinueWorkLogId = null;
             if (wlId != null) {
               setTimeout(function () {
                 closeModal(modalWorklog);
@@ -4252,12 +4361,27 @@
   var btnCreateWorkReport = document.getElementById('op-btn-create-work-report');
   if (btnCreateWorkReport) {
     btnCreateWorkReport.addEventListener('click', function () {
+      pendingContinueWorkLogId = null;
       openWorkReportModal(false);
     });
   }
   var btnContinueTimesheetJobs = document.getElementById('op-btn-continue-timesheet-jobs');
   if (btnContinueTimesheetJobs) {
     btnContinueTimesheetJobs.addEventListener('click', openTimesheetSubmittedModal);
+  }
+  var modalTsSubmitted = document.getElementById('op-modal-timesheet-submitted');
+  if (modalTsSubmitted) {
+    modalTsSubmitted.addEventListener('click', function (e) {
+      var btn = e.target.closest('.op-ts-continue-jobs');
+      if (!btn) return;
+      e.preventDefault();
+      var sid = btn.getAttribute('data-op-ts-continue-id');
+      if (!sid) return;
+      var entry = opTsSubmittedEntriesCache.find(function (x) {
+        return String(x.id) === String(sid);
+      });
+      if (entry) openWorkReportModalFromSubmittedEntry(entry);
+    });
   }
   var btnAddJob = document.getElementById('op-wr-add-job');
   if (btnAddJob) {

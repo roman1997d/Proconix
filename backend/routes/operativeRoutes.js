@@ -32,6 +32,7 @@ const {
   getMyWorkLogs,
   workLogUpload,
   createWorkLog,
+  patchMyWorkLog,
   generateDailyRecordInvoiceFromPeriod,
   sendWorkLogInvoiceCopy,
   archiveMyWorkLog,
@@ -96,6 +97,7 @@ router.post('/uploads', requireOperativeAuth, uploadDocumentFile, injectFileUrl(
 router.get('/work-log', requireOperativeAuth, getMyWorkLogs);
 router.post('/work-log/upload', requireOperativeAuth, uploadWorklogFile, workLogUpload);
 router.post('/work-log', requireOperativeAuth, createWorkLog);
+router.patch('/work-log/:id', requireOperativeAuth, patchMyWorkLog);
 router.post('/work-log/daily-record-invoice', requireOperativeAuth, generateDailyRecordInvoiceFromPeriod);
 router.post('/work-log/:id/send-invoice-copy', requireOperativeAuth, sendWorkLogInvoiceCopy);
 router.post('/work-log/:id/archive', requireOperativeAuth, archiveMyWorkLog);

@@ -823,15 +823,24 @@ a.op-doc-row:active {
   margin-bottom: 12px;
 }
 
+/* ~4 cards visible; additional rows scroll inside this box */
 .op-ts-submitted-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: min(60vh, 420px);
+  max-height: min(22rem, 42vh);
   overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 6px 2px 2px;
+  margin-right: -4px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.12);
 }
 
 .op-ts-submitted-card {
+  flex-shrink: 0;
   border: 1px solid var(--op-card-border);
   border-radius: 10px;
   padding: 12px 14px;
@@ -852,6 +861,11 @@ a.op-doc-row:active {
   color: var(--op-text-muted);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.op-ts-continue-jobs {
+  margin-top: 12px;
+  width: 100%;
 }
 
 .op-ts-submitted-empty {
