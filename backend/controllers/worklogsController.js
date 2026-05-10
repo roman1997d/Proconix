@@ -265,10 +265,71 @@ async function enrichJobsWithQaPriceTotals(jobs) {
   return jobs;
 }
 
+/**
+ * For QA price work entries, attach crew names from qa_job_crews (current roster on the QA job).
+ */
+async function enrichJobsTimesheetsWithQaCrewNames(companyId, jobs) {
+  if (companyId == null || !Array.isArray(jobs) || jobs.length === 0) return;
+
+  const qaIds = new Set();
+  jobs.forEach(function (j) {
+    if (!j || !Array.isArray(j.timesheetJobs)) return;
+    j.timesheetJobs.forEach(function (block) {
+      if (!block || block.type !== 'qa_price_work' || !Array.isArray(block.entries)) return;
+      block.entries.forEach(function (ent) {
+        if (!ent || ent.qaJobId == null) return;
+        const id = parseInt(String(ent.qaJobId), 10);
+        if (Number.isInteger(id)) qaIds.add(id);
+      });
+    });
+  });
+  if (qaIds.size === 0) return;
+
+  const ids = Array.from(qaIds);
+  const crewByJob = new Map();
+  try {
+    const r = await pool.query(
+      `SELECT jc.job_id, c.name
+       FROM qa_job_crews jc
+       INNER JOIN crews c ON c.id = jc.crew_id AND c.company_id = $2
+       WHERE jc.job_id = ANY($1::int[])
+       ORDER BY jc.job_id, c.name`,
+      [ids, companyId]
+    );
+    r.rows.forEach(function (row) {
+      const jid = parseInt(String(row.job_id), 10);
+      if (!Number.isInteger(jid)) return;
+      const nm = (row.name && String(row.name).trim()) || '';
+      if (!nm) return;
+      if (!crewByJob.has(jid)) crewByJob.set(jid, []);
+      const arr = crewByJob.get(jid);
+      if (arr.indexOf(nm) === -1) arr.push(nm);
+    });
+  } catch (e) {
+    if (e.code !== '42P01') throw e;
+    return;
+  }
+
+  jobs.forEach(function (j) {
+    if (!j || !Array.isArray(j.timesheetJobs)) return;
+    j.timesheetJobs.forEach(function (block) {
+      if (!block || block.type !== 'qa_price_work' || !Array.isArray(block.entries)) return;
+      block.entries.forEach(function (ent) {
+        if (!ent || ent.qaJobId == null) return;
+        const id = parseInt(String(ent.qaJobId), 10);
+        if (!Number.isInteger(id)) return;
+        const names = crewByJob.get(id);
+        if (names && names.length) ent.attachedCrewNames = names.join(', ');
+      });
+    });
+  });
+}
+
 async function jobFromRow(row) {
   const j = rowToJob(row);
   if (!j) return null;
   await enrichJobsWithQaPriceTotals([j]);
+  await enrichJobsTimesheetsWithQaCrewNames(row.company_id, [j]);
   return j;
 }
 
@@ -376,6 +437,7 @@ async function list(req, res) {
       const result = await pool.query(query, params);
       const jobs = result.rows.map(rowToJob);
       await enrichJobsWithQaPriceTotals(jobs);
+      await enrichJobsTimesheetsWithQaCrewNames(companyId, jobs);
       return res.json({ success: true, jobs });
     } catch (err) {
       if (err && err.code === '42703' && /collaborators_display|collaborator_user_ids/i.test(err.message || '')) {
@@ -384,6 +446,7 @@ async function list(req, res) {
           const resultNc = await pool.query(qNoCollab, params);
           const jobsNc = resultNc.rows.map(rowToJob);
           await enrichJobsWithQaPriceTotals(jobsNc);
+          await enrichJobsTimesheetsWithQaCrewNames(companyId, jobsNc);
           return res.json({ success: true, jobs: jobsNc });
         } catch (err2) {
           if (err2 && err2.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(err2.message || '')) {
@@ -391,6 +454,7 @@ async function list(req, res) {
             const result2 = await pool.query(fallbackQuery, params);
             const jobs2 = result2.rows.map(rowToJob);
             await enrichJobsWithQaPriceTotals(jobs2);
+            await enrichJobsTimesheetsWithQaCrewNames(companyId, jobs2);
             return res.json({ success: true, jobs: jobs2 });
           }
           throw err2;
@@ -404,6 +468,7 @@ async function list(req, res) {
         const jobs2 = result2.rows.map(rowToJob);
         // timesheetJobs/operativeArchived will be empty because columns aren't selected.
         await enrichJobsWithQaPriceTotals(jobs2);
+        await enrichJobsTimesheetsWithQaCrewNames(companyId, jobs2);
         return res.json({ success: true, jobs: jobs2 });
       }
       throw err;

@@ -390,12 +390,21 @@
     entries.forEach(function (ent) {
       var jn = ent.jobNumber != null && String(ent.jobNumber).trim() !== '' ? String(ent.jobNumber) : ent.qaJobId || '—';
       var jt = (ent.jobTitle && String(ent.jobTitle).trim()) || '';
+      var crewLine =
+        ent.attachedCrewNames != null && String(ent.attachedCrewNames).trim() !== ''
+          ? '<div class="worklogs-qa-price-crew small text-muted mt-1">Crew' +
+            (String(ent.attachedCrewNames).indexOf(',') !== -1 ? 's' : '') +
+            ': ' +
+            escapeHtml(String(ent.attachedCrewNames).trim()) +
+            '</div>'
+          : '';
       html +=
         '<div class="worklogs-qa-price-job"><div class="worklogs-qa-price-job-head"><strong>' +
         escapeHtml('Job ' + jn) +
         '</strong>' +
         (jt ? ' — ' + escapeHtml(jt) : '') +
-        '</div>';
+        '</div>' +
+        crewLine;
       var sq = ent.stepQuantities && typeof ent.stepQuantities === 'object' ? ent.stepQuantities : {};
       var stepLabels = ent.stepLabels && typeof ent.stepLabels === 'object' ? ent.stepLabels : {};
       var spu =
