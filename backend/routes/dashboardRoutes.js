@@ -844,12 +844,19 @@ function getWorkLogsHtml() {
       </div>
     </div>
 
-    <!-- Photo Lightbox -->
-    <div id="worklogs-modal-lightbox" class="worklogs-modal worklogs-lightbox" aria-hidden="true" role="dialog">
+    <!-- Photo Lightbox (gallery: Back / Next / Close) -->
+    <div id="worklogs-modal-lightbox" class="worklogs-modal worklogs-lightbox" aria-hidden="true" role="dialog" aria-label="Photo preview">
       <div class="worklogs-modal-backdrop" data-dismiss="worklogs-modal"></div>
       <div class="worklogs-lightbox-content">
         <button type="button" class="worklogs-lightbox-close" data-dismiss="worklogs-modal" aria-label="Close">&times;</button>
+        <span id="worklogs-lightbox-counter" class="worklogs-lightbox-counter" aria-live="polite"></span>
+        <button type="button" id="worklogs-lightbox-prev" class="worklogs-lightbox-nav worklogs-lightbox-prev" aria-label="Previous photo">
+          <i class="bi bi-chevron-left" aria-hidden="true"></i><span class="worklogs-lightbox-nav-label">Back</span>
+        </button>
         <img id="worklogs-lightbox-img" src="" alt="Photo" class="worklogs-lightbox-img">
+        <button type="button" id="worklogs-lightbox-next" class="worklogs-lightbox-nav worklogs-lightbox-next" aria-label="Next photo">
+          <span class="worklogs-lightbox-nav-label">Next</span><i class="bi bi-chevron-right" aria-hidden="true"></i>
+        </button>
       </div>
     </div>
       </div>

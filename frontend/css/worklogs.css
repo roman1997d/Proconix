@@ -598,17 +598,65 @@
 /* Lightbox */
 .worklogs-lightbox .worklogs-lightbox-content {
   position: relative;
-  max-width: 90vw;
+  max-width: 92vw;
   max-height: 90vh;
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
+  z-index: 1;
 }
 .worklogs-lightbox-img {
-  max-width: 100%;
+  max-width: min(78vw, 100%);
   max-height: 85vh;
   object-fit: contain;
   border-radius: 8px;
+  flex-shrink: 1;
+}
+.worklogs-lightbox-counter {
+  position: absolute;
+  top: -2.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.worklogs-lightbox-nav {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--divider);
+  color: var(--text-white);
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.worklogs-lightbox-nav:hover:not(:disabled) {
+  background: var(--input-bg);
+  border-color: var(--text-muted);
+}
+.worklogs-lightbox-nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.worklogs-lightbox-nav .bi {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.worklogs-lightbox-nav-label {
+  display: none;
+}
+@media (min-width: 640px) {
+  .worklogs-lightbox-nav-label {
+    display: inline;
+  }
 }
 .worklogs-lightbox-close {
   position: absolute;
@@ -622,7 +670,7 @@
   height: 36px;
   border-radius: 50%;
   cursor: pointer;
-  z-index: 1;
+  z-index: 2;
 }
 .worklogs-lightbox-close:hover {
   background: var(--input-bg);

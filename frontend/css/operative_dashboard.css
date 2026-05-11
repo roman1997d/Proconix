@@ -1112,6 +1112,95 @@ a.op-doc-row:active {
   visibility: visible;
 }
 
+/* Work log overview — full-screen photo preview (above other modals) */
+.op-modal-photo-preview {
+  z-index: 260;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.op-modal-photo-preview .op-modal-backdrop {
+  background: rgba(0, 0, 0, 0.82);
+}
+.op-photo-preview-shell {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  max-height: 90vh;
+  z-index: 1;
+}
+.op-photo-preview-img-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.op-photo-preview-img {
+  max-width: min(78vw, 100%);
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: var(--op-radius);
+}
+.op-photo-preview-counter {
+  position: absolute;
+  top: -1.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+}
+.op-photo-preview-close {
+  position: absolute;
+  top: -2.5rem;
+  right: 0;
+  color: rgba(255, 255, 255, 0.85);
+  z-index: 2;
+}
+.op-photo-preview-close:hover {
+  color: #fff;
+}
+.op-photo-preview-nav {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  background: var(--op-card);
+  border: 1px solid var(--op-card-border);
+  color: var(--op-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--op-radius);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.op-photo-preview-nav:hover:not(:disabled) {
+  background: var(--op-bg);
+  border-color: var(--op-accent);
+}
+.op-photo-preview-nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.op-photo-preview-nav .bi {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.op-photo-preview-nav-text {
+  display: none;
+}
+@media (min-width: 640px) {
+  .op-photo-preview-nav-text {
+    display: inline;
+  }
+}
+
 .op-modal-backdrop {
   position: absolute;
   inset: 0;

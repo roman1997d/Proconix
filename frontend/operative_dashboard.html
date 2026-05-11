@@ -516,6 +516,24 @@
     </div>
   </div>
 
+  <!-- Photo preview (work entry overview gallery: Back / Next / Close) -->
+  <div class="op-modal op-modal-photo-preview" id="op-modal-photo-preview" aria-hidden="true" role="dialog" aria-label="Photo preview">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-photo-preview-shell">
+      <button type="button" class="op-modal-close op-photo-preview-close" data-dismiss="modal" aria-label="Close">&times;</button>
+      <span id="op-photo-preview-counter" class="op-photo-preview-counter" aria-live="polite"></span>
+      <button type="button" id="op-photo-preview-prev" class="op-photo-preview-nav op-photo-preview-nav-prev" aria-label="Previous photo">
+        <i class="bi bi-chevron-left" aria-hidden="true"></i><span class="op-photo-preview-nav-text">Back</span>
+      </button>
+      <div class="op-photo-preview-img-wrap">
+        <img id="op-photo-preview-img" src="" alt="" class="op-photo-preview-img">
+      </div>
+      <button type="button" id="op-photo-preview-next" class="op-photo-preview-nav op-photo-preview-nav-next" aria-label="Next photo">
+        <span class="op-photo-preview-nav-text">Next</span><i class="bi bi-chevron-right" aria-hidden="true"></i>
+      </button>
+    </div>
+  </div>
+
   <!-- Modal: Update time sheet jobs on an existing work entry -->
   <div class="op-modal op-modal-worklog" id="op-modal-work-entry-update-timesheet" aria-hidden="true" role="dialog" aria-labelledby="op-wu-title">
     <div class="op-modal-backdrop" data-dismiss="modal"></div>

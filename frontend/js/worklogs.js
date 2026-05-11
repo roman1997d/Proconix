@@ -43,6 +43,50 @@
     return window.location.origin + s;
   }
 
+  /** Manager work log detail photo lightbox gallery */
+  var worklogsLightboxUrls = [];
+  var worklogsLightboxIndex = 0;
+
+  function worklogsLightboxRender() {
+    var modal = document.getElementById('worklogs-modal-lightbox');
+    var img = document.getElementById('worklogs-lightbox-img');
+    var prev = document.getElementById('worklogs-lightbox-prev');
+    var next = document.getElementById('worklogs-lightbox-next');
+    var counter = document.getElementById('worklogs-lightbox-counter');
+    if (!modal || !img) return;
+    var urls = worklogsLightboxUrls;
+    var i = worklogsLightboxIndex;
+    if (!urls.length || i < 0 || i >= urls.length) {
+      img.removeAttribute('src');
+      return;
+    }
+    img.src = urls[i];
+    var n = urls.length;
+    if (counter) {
+      counter.textContent = n > 1 ? String(i + 1) + ' / ' + String(n) : '';
+    }
+    var single = n <= 1;
+    if (prev) {
+      prev.disabled = single || i <= 0;
+      prev.setAttribute('aria-hidden', single ? 'true' : 'false');
+      prev.style.visibility = single ? 'hidden' : 'visible';
+    }
+    if (next) {
+      next.disabled = single || i >= n - 1;
+      next.setAttribute('aria-hidden', single ? 'true' : 'false');
+      next.style.visibility = single ? 'hidden' : 'visible';
+    }
+  }
+
+  function worklogsLightboxStep(delta) {
+    var n = worklogsLightboxUrls.length;
+    if (n <= 1) return;
+    worklogsLightboxIndex += delta;
+    if (worklogsLightboxIndex < 0) worklogsLightboxIndex = 0;
+    if (worklogsLightboxIndex >= n) worklogsLightboxIndex = n - 1;
+    worklogsLightboxRender();
+  }
+
   function loadWorklogCloudFolderOptions(selectEl, onDone) {
     if (!selectEl) return;
     var h = getManagerCloudHeaders();
@@ -568,11 +612,24 @@
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
 
-    // Photo thumb click -> lightbox
-    content.querySelectorAll('.worklogs-photo-thumb').forEach(function (img) {
+    // Photo thumb click -> lightbox gallery (order matches thumbnails with URLs)
+    var thumbs = Array.prototype.slice.call(content.querySelectorAll('.worklogs-photo-thumb'));
+    thumbs.forEach(function (img) {
       img.addEventListener('click', function () {
-        var url = img.getAttribute('data-url');
-        if (url) openLightbox(url);
+        var gallery = [];
+        var start = 0;
+        var found = false;
+        for (var t = 0; t < thumbs.length; t++) {
+          var u = (thumbs[t].getAttribute('data-url') || '').trim();
+          if (!u) continue;
+          if (thumbs[t] === img) {
+            start = gallery.length;
+            found = true;
+          }
+          gallery.push(u);
+        }
+        if (!found || !gallery.length) return;
+        openLightbox(gallery, start);
       });
     });
 
@@ -592,14 +649,28 @@
     wireInvoiceSaveToCloud(content);
   }
 
-  function openLightbox(url) {
+  /** @param {string|string[]} urlsOrUrl @param {number} [startIndex] */
+  function openLightbox(urlsOrUrl, startIndex) {
     var modal = document.getElementById('worklogs-modal-lightbox');
     var img = document.getElementById('worklogs-lightbox-img');
-    if (modal && img) {
-      img.src = url;
-      modal.classList.add('is-open');
-      modal.setAttribute('aria-hidden', 'false');
+    if (!modal || !img) return;
+    var urls;
+    var idx = 0;
+    if (typeof urlsOrUrl === 'string') {
+      urls = [urlsOrUrl];
+    } else if (urlsOrUrl && urlsOrUrl.length) {
+      urls = urlsOrUrl.slice();
+      idx = typeof startIndex === 'number' ? startIndex : 0;
+      if (idx < 0) idx = 0;
+      if (idx >= urls.length) idx = urls.length - 1;
+    } else {
+      return;
     }
+    worklogsLightboxUrls = urls;
+    worklogsLightboxIndex = idx;
+    worklogsLightboxRender();
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
   }
 
   function openEditModal(job) {
@@ -923,4 +994,38 @@
   }
 
   window.initWorkLogsModule = initWorkLogsModule;
+
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var prevBtn = t.closest('#worklogs-lightbox-prev');
+    var nextBtn = t.closest('#worklogs-lightbox-next');
+    if (prevBtn) {
+      e.preventDefault();
+      worklogsLightboxStep(-1);
+      return;
+    }
+    if (nextBtn) {
+      e.preventDefault();
+      worklogsLightboxStep(1);
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    var modal = document.getElementById('worklogs-modal-lightbox');
+    if (!modal || !modal.classList.contains('is-open')) return;
+    if (e.key === 'Escape') {
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden', 'true');
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'ArrowLeft') {
+      worklogsLightboxStep(-1);
+      e.preventDefault();
+    } else if (e.key === 'ArrowRight') {
+      worklogsLightboxStep(1);
+      e.preventDefault();
+    }
+  });
 })();

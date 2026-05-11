@@ -2368,8 +2368,11 @@
   var modalWorkReport = document.getElementById('op-modal-work-report');
   var formWorkReport = document.getElementById('op-form-work-report');
   var modalWorklogOverview = document.getElementById('op-modal-worklog-overview');
+  var modalPhotoPreview = document.getElementById('op-modal-photo-preview');
   var modalWorkEntryTimesheetUpdate = document.getElementById('op-modal-work-entry-update-timesheet');
   var worklogOverviewBodyEl = document.getElementById('op-worklog-overview-body');
+  var opPhotoPreviewUrls = [];
+  var opPhotoPreviewIndex = 0;
   /** @type {object|null} entry shown in overview (for Update record). */
   var worklogOverviewCurrentEntry = null;
   /** @type {object|null} entry being PATCHed from Update time sheet modal. */
@@ -2812,6 +2815,90 @@
       });
   }
 
+  function opPhotoPreviewRender() {
+    var img = document.getElementById('op-photo-preview-img');
+    var prev = document.getElementById('op-photo-preview-prev');
+    var next = document.getElementById('op-photo-preview-next');
+    var counter = document.getElementById('op-photo-preview-counter');
+    if (!img) return;
+    var urls = opPhotoPreviewUrls;
+    var i = opPhotoPreviewIndex;
+    if (!urls.length || i < 0 || i >= urls.length) {
+      img.removeAttribute('src');
+      return;
+    }
+    img.src = urls[i];
+    var n = urls.length;
+    if (counter) counter.textContent = n > 1 ? String(i + 1) + ' / ' + String(n) : '';
+    var single = n <= 1;
+    if (prev) {
+      prev.disabled = single || i <= 0;
+      prev.style.visibility = single ? 'hidden' : 'visible';
+    }
+    if (next) {
+      next.disabled = single || i >= n - 1;
+      next.style.visibility = single ? 'hidden' : 'visible';
+    }
+  }
+
+  function opPhotoPreviewStep(delta) {
+    var n = opPhotoPreviewUrls.length;
+    if (n <= 1) return;
+    opPhotoPreviewIndex += delta;
+    if (opPhotoPreviewIndex < 0) opPhotoPreviewIndex = 0;
+    if (opPhotoPreviewIndex >= n) opPhotoPreviewIndex = n - 1;
+    opPhotoPreviewRender();
+  }
+
+  function openOperativePhotoPreview(urls, startIndex) {
+    if (!modalPhotoPreview || !Array.isArray(urls) || !urls.length) return;
+    var list = urls.slice();
+    var idx = typeof startIndex === 'number' ? startIndex : 0;
+    if (idx < 0) idx = 0;
+    if (idx >= list.length) idx = list.length - 1;
+    opPhotoPreviewUrls = list;
+    opPhotoPreviewIndex = idx;
+    opPhotoPreviewRender();
+    openModal(modalPhotoPreview);
+  }
+
+  (function bindOperativePhotoPreviewNav() {
+    var prev = document.getElementById('op-photo-preview-prev');
+    var next = document.getElementById('op-photo-preview-next');
+    if (prev && !prev.dataset.opPhotoNavBound) {
+      prev.dataset.opPhotoNavBound = '1';
+      prev.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        opPhotoPreviewStep(-1);
+      });
+    }
+    if (next && !next.dataset.opPhotoNavBound) {
+      next.dataset.opPhotoNavBound = '1';
+      next.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        opPhotoPreviewStep(1);
+      });
+    }
+  })();
+
+  document.addEventListener('keydown', function (e) {
+    if (!modalPhotoPreview || !modalPhotoPreview.classList.contains('is-open')) return;
+    if (e.key === 'Escape') {
+      closeModal(modalPhotoPreview);
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'ArrowLeft') {
+      opPhotoPreviewStep(-1);
+      e.preventDefault();
+    } else if (e.key === 'ArrowRight') {
+      opPhotoPreviewStep(1);
+      e.preventDefault();
+    }
+  });
+
   function openWorklogOverviewModal(entry) {
     if (!modalWorklogOverview || !worklogOverviewBodyEl) return;
     worklogOverviewCurrentEntry = entry || null;
@@ -2830,10 +2917,23 @@
         btnUp.classList.toggle('d-none', locked || !isMine);
       }
     }
-    worklogOverviewBodyEl.querySelectorAll('img[data-op-overview-photo]').forEach(function (img) {
+    var overviewPhotos = worklogOverviewBodyEl.querySelectorAll('img[data-op-overview-photo]');
+    var photoEls = Array.prototype.slice.call(overviewPhotos);
+    photoEls.forEach(function (img) {
       img.addEventListener('click', function () {
-        var u = img.getAttribute('data-op-overview-photo');
-        if (u) window.open(u, '_blank', 'noopener');
+        var gallery = [];
+        var start = 0;
+        var found = false;
+        for (var p = 0; p < photoEls.length; p++) {
+          var u = (photoEls[p].getAttribute('data-op-overview-photo') || '').trim();
+          if (!u) continue;
+          if (photoEls[p] === img) {
+            start = gallery.length;
+            found = true;
+          }
+          gallery.push(u);
+        }
+        if (found && gallery.length) openOperativePhotoPreview(gallery, start);
       });
     });
     openModal(modalWorklogOverview);
