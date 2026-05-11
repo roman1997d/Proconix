@@ -110,6 +110,12 @@ function buildWorkersDisplayFromPayload(payload, primaryName) {
   return out.length ? out.join(', ') : primary || 'Operative';
 }
 
+/** Avoid same-day collisions: a fixed name overwrote the file so older work-log links showed the latest PDF. */
+function uniqueWorklogPdfFileName(prefix) {
+  var fileDate = new Date().toISOString().slice(0, 10);
+  return prefix + '_' + fileDate + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9) + '.pdf';
+}
+
 async function generateTimesheetPdf(req, res) {
   try {
     var payload = req.body || {};
@@ -128,8 +134,7 @@ async function generateTimesheetPdf(req, res) {
     var meta = await getWorkerAndProjectMeta(req, payload);
     var workerDisplay = buildWorkersDisplayFromPayload(payload, meta.workerName);
 
-    var fileDate = new Date().toISOString().slice(0, 10);
-    var fileName = 'timesheet_report_' + fileDate + '.pdf';
+    var fileName = uniqueWorklogPdfFileName('timesheet_report');
     var outPath = path.join(__dirname, '../uploads/worklogs/timesheets', fileName);
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
@@ -186,8 +191,7 @@ async function generateWorkReportPdf(req, res) {
     var meta = await getWorkerAndProjectMeta(req, payload);
     var location = payload.location || payload.block || payload.floor || payload.zone || '—';
 
-    var fileDate = new Date().toISOString().slice(0, 10);
-    var fileName = 'work_report_' + fileDate + '.pdf';
+    var fileName = uniqueWorklogPdfFileName('work_report');
     var outPath = path.join(__dirname, '../uploads/worklogs/work-reports', fileName);
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
