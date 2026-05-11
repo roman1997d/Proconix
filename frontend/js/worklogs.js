@@ -285,7 +285,15 @@
   }
 
   function statusLabel(s) {
-    var labels = { pending: 'Pending', edited: 'Edited', waiting_worker: 'Waiting Worker', approved: 'Approved', rejected: 'Rejected', completed: 'Completed' };
+    var labels = {
+      draft: 'Still working on',
+      pending: 'Pending',
+      edited: 'Edited',
+      waiting_worker: 'Waiting Worker',
+      approved: 'Approved',
+      rejected: 'Rejected',
+      completed: 'Completed'
+    };
     return labels[s] || s;
   }
 
@@ -677,7 +685,7 @@
     var canvas = document.getElementById('worklogs-chart');
     if (!canvas || typeof Chart === 'undefined') return;
     var approved = filtered.filter(function (j) { return j.status === 'approved'; }).length;
-    var pending = filtered.filter(function (j) { return j.status === 'pending' || j.status === 'edited' || j.status === 'waiting_worker'; }).length;
+    var pending = filtered.filter(function (j) { return j.status === 'draft' || j.status === 'pending' || j.status === 'edited' || j.status === 'waiting_worker'; }).length;
     var ctx = canvas.getContext('2d');
     var existing = Chart.getChart(canvas);
     if (existing) existing.destroy();
