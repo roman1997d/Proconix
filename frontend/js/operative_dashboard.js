@@ -3181,7 +3181,15 @@
 
         var popup = null;
         try {
-          popup = window.open(payloadUrl, 'photoStamper_' + reqId, 'width=430,height=820');
+          var sw = typeof window.screen !== 'undefined' && window.screen.availWidth ? window.screen.availWidth : 430;
+          var sh = typeof window.screen !== 'undefined' && window.screen.availHeight ? window.screen.availHeight : 820;
+          var features =
+            'width=' +
+            sw +
+            ',height=' +
+            sh +
+            ',left=0,top=0,scrollbars=no,resizable=yes,toolbar=no,menubar=no,location=no,status=no';
+          popup = window.open(payloadUrl, 'photoStamper_' + reqId, features);
         } catch (_) {}
 
         if (!popup) {

@@ -2,11 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
     <title>Photo Stamper</title>
     <link rel="stylesheet" href="css/photo_stamper.css" />
   </head>
-  <body>
+  <body class="ps-body">
     <div class="ps-root">
       <div class="ps-topbar">
         <div class="ps-title">Stamped photo</div>
@@ -32,6 +35,8 @@
         </div>
       </div>
 
+      <div class="ps-feedback" id="ps-feedback" aria-live="polite"></div>
+
       <div class="ps-actions">
         <button type="button" class="ps-btn ps-btn-primary" id="ps-capture-btn">
           Capture
@@ -42,8 +47,6 @@
         </button>
         <input type="file" id="ps-gallery-input" accept="image/*" capture="environment" class="d-none" />
       </div>
-
-      <div class="ps-feedback" id="ps-feedback" aria-live="polite"></div>
     </div>
 
     <script src="js/photo_stamper.js"></script>
