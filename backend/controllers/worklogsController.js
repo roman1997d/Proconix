@@ -395,9 +395,7 @@ async function list(req, res) {
     const params = [companyId];
     let idx = 2;
 
-    if (!status || String(status).toLowerCase() !== 'draft') {
-      query += ` AND LOWER(TRIM(COALESCE(status, ''))) IS DISTINCT FROM 'draft'`;
-    }
+    // Show `draft` by default (managers should see "Still working on" entries).
 
     if (worker) {
       query += ` AND worker_name = $${idx}`;
