@@ -62,7 +62,8 @@ async function getOverviewStats(req, res) {
       `SELECT COALESCE(SUM(total), 0)::numeric AS s
        FROM work_logs
        WHERE company_id = $1
-         AND (archived = false OR archived IS NULL)`,
+         AND (archived = false OR archived IS NULL)
+         AND LOWER(TRIM(COALESCE(status, ''))) IS DISTINCT FROM 'draft'`,
       [companyId]
     );
     const raw = r.rows[0] && r.rows[0].s != null ? r.rows[0].s : 0;

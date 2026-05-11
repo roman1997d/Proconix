@@ -2924,12 +2924,20 @@
     return '';
   }
 
+  function formatWorklogStatusLabel(status) {
+    var s = String(status || '').toLowerCase().replace(/_/g, ' ');
+    if (s === 'draft') return 'Still working on';
+    if (!s) return '—';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
   function renderWorklogList(entries) {
     if (!worklogListEl) return;
     entries = Array.isArray(entries) ? entries : [];
     opWorklogEntriesCache = entries.slice(0, 20);
     if (entries.length === 0) {
-      worklogListEl.innerHTML = '<p class="op-worklog-empty">No entries yet. Add one to send to your manager.</p>';
+      worklogListEl.innerHTML =
+        '<p class="op-worklog-empty">No entries yet. Save a work entry, then use <strong>Send for review</strong> when it is ready for your manager.</p>';
       return;
     }
     worklogListEl.innerHTML = entries.slice(0, 20).map(function (e) {
@@ -2945,6 +2953,14 @@
             : '—';
       var myUid = getOperativeUserId();
       var subUid = e.submittedByUserId != null ? Number(e.submittedByUserId) : null;
+      var isOwner = myUid != null && subUid != null && Number(subUid) === Number(myUid);
+      var stLower = String(e.status || '').toLowerCase();
+      var sendReviewBtn =
+        isOwner && stLower === 'draft'
+          ? '<button type="button" class="op-btn op-btn-secondary op-btn-xs op-worklog-send-review" data-entry-id="' +
+            escapeHtml(String(e.id != null ? e.id : '')) +
+            '">Send for review</button> '
+          : '';
       var collabLine = '';
       if (myUid != null && subUid != null && subUid !== myUid) {
         collabLine =
@@ -2975,7 +2991,7 @@
         escapeHtml(loc) +
         '</span>' +
         '<span class="op-worklog-item-status">' +
-        escapeHtml(e.status || 'Pending') +
+        escapeHtml(formatWorklogStatusLabel(e.status)) +
         '</span>' +
         '</div>' +
         collabLine +
@@ -2987,6 +3003,7 @@
         '</div>' +
         '<p class="op-worklog-item-hint">Tap for details, prices &amp; photos</p>' +
         '<div class="op-worklog-item-actions">' +
+        sendReviewBtn +
         '<button type="button" class="op-btn op-btn-danger-outline op-btn-xs op-worklog-archive" data-entry-id="' +
         escapeHtml(String(e.id != null ? e.id : '')) +
         '">Archive</button>' +
@@ -2998,6 +3015,32 @@
 
   if (worklogListEl) {
     worklogListEl.addEventListener('click', function (e) {
+      var sendReviewBtn = e.target.closest('.op-worklog-send-review');
+      if (sendReviewBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        var srId = sendReviewBtn.getAttribute('data-entry-id');
+        if (!srId) return;
+        sendReviewBtn.disabled = true;
+        api('/work-log/' + encodeURIComponent(srId) + '/submit-for-review', { method: 'POST', body: '{}' })
+          .then(function (r) {
+            if (r.data && r.data.success) {
+              loadWorklogList();
+              var wf = document.getElementById('op-worklog-feedback');
+              if (wf) showFeedback(wf, r.data.message || 'Sent for manager review.', false);
+              return;
+            }
+            sendReviewBtn.disabled = false;
+            var wf2 = document.getElementById('op-worklog-feedback');
+            if (wf2) showFeedback(wf2, (r.data && r.data.message) || 'Could not send.', true);
+          })
+          .catch(function (err) {
+            sendReviewBtn.disabled = false;
+            var wf3 = document.getElementById('op-worklog-feedback');
+            if (wf3) showFeedback(wf3, (err && err.message) || 'Could not send.', true);
+          });
+        return;
+      }
       var archiveBtn = e.target.closest('.op-worklog-archive');
       if (archiveBtn) {
         e.preventDefault();
@@ -4664,6 +4707,7 @@
               priceWorkJobs: pendingPriceWorkEntries || [],
               invoiceFilePath: docPath,
               collaboratorUserIds: collabIds,
+              submitForReview: false,
             },
             periodExtra
           );
@@ -4682,6 +4726,7 @@
         .then(function (r) {
           if (r.data.success) {
             var wlId = r.data.workLogId != null ? r.data.workLogId : null;
+            var savedStatus = r.data.status != null ? String(r.data.status).toLowerCase() : 'draft';
             loadWorklogList();
             pendingWorklogPhotoUrls = [];
             pendingWorklogTimesheetJobs = [];
@@ -4689,7 +4734,7 @@
             pendingContinueWorkLogId = null;
             pendingWorklogCollaborators = [];
             renderWorklogCollaboratorsChips();
-            if (wlId != null) {
+            if (wlId != null && savedStatus === 'pending') {
               setTimeout(function () {
                 closeModal(modalWorklog);
                 hideFeedback(feedback);
@@ -4697,7 +4742,11 @@
                 openWorkLogInvoiceEmailModal(wlId);
               }, 500);
             } else {
-              showFeedback(feedback, r.data.message || 'Submitted. Manager will see this in Work Logs.', false);
+              showFeedback(
+                feedback,
+                r.data.message || 'Saved. Use Send for review on the entry when you want your manager to see it.',
+                false
+              );
               setTimeout(function () {
                 closeModal(modalWorklog);
                 hideFeedback(feedback);

@@ -32,6 +32,7 @@ const {
   getMyWorkLogs,
   workLogUpload,
   createWorkLog,
+  submitMyWorkLogForReview,
   patchMyWorkLog,
   generateDailyRecordInvoiceFromPeriod,
   sendWorkLogInvoiceCopy,
@@ -105,6 +106,7 @@ router.post('/collaboration/work-entry/verify-code', requireOperativeAuth, joinC
 router.get('/work-log', requireOperativeAuth, getMyWorkLogs);
 router.post('/work-log/upload', requireOperativeAuth, uploadWorklogFile, workLogUpload);
 router.post('/work-log', requireOperativeAuth, createWorkLog);
+router.post('/work-log/:id/submit-for-review', requireOperativeAuth, submitMyWorkLogForReview);
 router.patch('/work-log/:id', requireOperativeAuth, patchMyWorkLog);
 router.post('/work-log/daily-record-invoice', requireOperativeAuth, generateDailyRecordInvoiceFromPeriod);
 router.post('/work-log/:id/send-invoice-copy', requireOperativeAuth, sendWorkLogInvoiceCopy);

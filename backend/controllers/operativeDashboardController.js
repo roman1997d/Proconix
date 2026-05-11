@@ -2151,6 +2151,55 @@ async function joinCollaborationSession(req, res) {
   }
 }
 
+/**
+ * POST /api/operatives/work-log/:id/submit-for-review
+ * Operative (submitter only): draft → pending so managers see it in Work Logs.
+ */
+async function submitMyWorkLogForReview(req, res) {
+  const op = getOperative(req);
+  if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid work log id.' });
+  }
+
+  try {
+    const r = await pool.query(
+      `SELECT id, submitted_by_user_id, status FROM work_logs WHERE id = $1`,
+      [id]
+    );
+    if (!r.rows.length) return res.status(404).json({ success: false, message: 'Work entry not found.' });
+    const row = r.rows[0];
+    if (Number(row.submitted_by_user_id) !== Number(op.id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the person who created this entry can send it for review.',
+      });
+    }
+    const st = String(row.status || '').toLowerCase();
+    if (st !== 'draft') {
+      const msg =
+        st === 'pending'
+          ? 'This entry is already waiting for manager review.'
+          : 'This entry cannot be sent for review in its current state.';
+      return res.status(400).json({ success: false, message: msg });
+    }
+    await pool.query(
+      `UPDATE work_logs SET status = 'pending', updated_at = NOW() WHERE id = $1 AND submitted_by_user_id = $2`,
+      [id, op.id]
+    );
+    return res.status(200).json({
+      success: true,
+      message: 'Sent for manager review.',
+      status: 'pending',
+    });
+  } catch (err) {
+    console.error('submitMyWorkLogForReview error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to send for review.' });
+  }
+}
+
 async function createWorkLog(req, res) {
   const op = getOperative(req);
   if (!op) return res.status(401).json({ success: false, message: 'Unauthorized.' });
@@ -2227,6 +2276,10 @@ async function createWorkLog(req, res) {
 
     const jobDisplayId = await nextJobDisplayId(companyId);
 
+    const submitForReview =
+      b.submitForReview === true || b.submit_for_review === true || String(b.submitForReview || '').toLowerCase() === 'true';
+    const initialStatus = submitForReview ? 'pending' : 'draft';
+
     let workLogId = null;
     try {
       const ins = await pool.query(
@@ -2234,7 +2287,7 @@ async function createWorkLog(req, res) {
           company_id, submitted_by_user_id, project_id, job_display_id, worker_name, project,
           block, floor, apartment, zone, work_type, quantity, unit_price, total,
           status, description, photo_urls, timesheet_jobs, invoice_file_path
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', $15, $16, $17, $18)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING id`,
         [
           companyId, op.id, projectId, jobDisplayId, workerName, projectName,
@@ -2244,6 +2297,7 @@ async function createWorkLog(req, res) {
           (b.zone && String(b.zone).trim()) || null,
           workType,
           quantity, unitPrice, total,
+          initialStatus,
           (b.description && String(b.description).trim()) || null,
           JSON.stringify(photoUrls),
           JSON.stringify(timesheetPayload),
@@ -2259,7 +2313,7 @@ async function createWorkLog(req, res) {
             company_id, submitted_by_user_id, project_id, job_display_id, worker_name, project,
             block, floor, apartment, zone, work_type, quantity, unit_price, total,
             status, description, photo_urls, invoice_file_path
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'pending', $15, $16, $17)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
           RETURNING id`,
           [
             companyId, op.id, projectId, jobDisplayId, workerName, projectName,
@@ -2269,6 +2323,7 @@ async function createWorkLog(req, res) {
             (b.zone && String(b.zone).trim()) || null,
             workType,
             quantity, unitPrice, total,
+            initialStatus,
             (b.description && String(b.description).trim()) || null,
             JSON.stringify(photoUrls),
             invoiceFilePath,
@@ -2299,8 +2354,12 @@ async function createWorkLog(req, res) {
 
     return res.status(201).json({
       success: true,
-      message: 'Work entry submitted. Manager will review it in Work Logs.',
+      message:
+        initialStatus === 'pending'
+          ? 'Work entry submitted. Manager will review it in Work Logs.'
+          : 'Work entry saved. Tap Send for review on the entry when you want your manager to see it.',
       workLogId: workLogId != null ? workLogId : undefined,
+      status: initialStatus,
     });
   } catch (err) {
     if (err.code === '42P01') {
@@ -3221,6 +3280,7 @@ module.exports = {
   getMyWorkLogs,
   workLogUpload,
   createWorkLog,
+  submitMyWorkLogForReview,
   patchMyWorkLog,
   sendWorkLogInvoiceCopy,
   generateDailyRecordInvoiceFromPeriod,

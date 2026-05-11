@@ -84,7 +84,7 @@ function unlinkQuietly(absPath) {
   });
 }
 
-const VALID_STATUSES = ['pending', 'edited', 'waiting_worker', 'approved', 'rejected', 'completed'];
+const VALID_STATUSES = ['draft', 'pending', 'edited', 'waiting_worker', 'approved', 'rejected', 'completed'];
 
 function getCompanyId(req) {
   if (req.manager && req.manager.company_id != null) return req.manager.company_id;
@@ -394,6 +394,10 @@ async function list(req, res) {
     `;
     const params = [companyId];
     let idx = 2;
+
+    if (!status || String(status).toLowerCase() !== 'draft') {
+      query += ` AND LOWER(TRIM(COALESCE(status, ''))) IS DISTINCT FROM 'draft'`;
+    }
 
     if (worker) {
       query += ` AND worker_name = $${idx}`;
