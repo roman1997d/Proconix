@@ -737,9 +737,6 @@ function getWorkLogsHtml() {
           </div>
         </div>
         <div class="worklogs-actions-row">
-          <button type="button" class="btn-worklogs btn-worklogs-secondary" id="worklogs-btn-media-package" title="ZIP: one folder per time sheet location (or work-log path), photos + location_summary.pdf in each folder">
-            <i class="bi bi-folder-symlink"></i> Download media package
-          </button>
           <button type="button" class="btn-worklogs btn-worklogs-primary" id="worklogs-btn-invoice" disabled>
             <i class="bi bi-file-earmark-pdf"></i> Generate Invoice
           </button>
@@ -780,6 +777,9 @@ function getWorkLogsHtml() {
             <div id="worklogs-details-content"></div>
             <div class="worklogs-modal-actions">
               <button type="button" class="btn-worklogs btn-worklogs-secondary" data-dismiss="worklogs-modal">Close</button>
+              <button type="button" class="btn-worklogs btn-worklogs-secondary" id="worklogs-details-btn-media-package" title="ZIP for this entry: folders by time sheet location (or work-log path), each with photos + location_summary.pdf">
+                <i class="bi bi-folder-symlink"></i> Download media package
+              </button>
               <button type="button" class="btn-worklogs btn-worklogs-edit" id="worklogs-details-btn-edit"><i class="bi bi-pencil"></i> Edit</button>
               <button type="button" class="btn-worklogs btn-worklogs-approve" id="worklogs-details-btn-approve"><i class="bi bi-check-circle"></i> Approve</button>
               <button type="button" class="btn-worklogs btn-worklogs-reject" id="worklogs-details-btn-reject"><i class="bi bi-x-circle"></i> Reject</button>

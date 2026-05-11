@@ -331,18 +331,68 @@ function getCompanyId(req) {
   return null;
 }
 
-async function mediaPackage(req, res) {
+/**
+ * Load one work_logs row for the company (same column fallbacks as GET /api/worklogs/:id).
+ */
+async function fetchWorkLogRowRaw(companyId, internalId) {
+  const params = [internalId, companyId];
+  let query = `SELECT id, company_id, job_display_id, worker_name, project, block, floor, apartment, zone,
+             work_type, quantity, unit_price, total, status, description, submitted_at,
+             work_was_edited, edit_history, photo_urls, timesheet_jobs, invoice_file_path,
+             operative_archived, operative_archived_at,
+             archived,
+             collaborator_user_ids, collaborators_display
+      FROM work_logs WHERE id = $1 AND company_id = $2`;
+  try {
+    const r = await pool.query(query, params);
+    return r.rows[0] || null;
+  } catch (err) {
+    if (err && err.code === '42703' && /collaborators_display|collaborator_user_ids/i.test(err.message || '')) {
+      query = query.replace(/\s*,\s*collaborator_user_ids\s*,\s*collaborators_display\s*/i, '');
+      try {
+        const r2 = await pool.query(query, params);
+        return r2.rows[0] || null;
+      } catch (err2) {
+        if (err2 && err2.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(err2.message || '')) {
+          const q3 = query.replace(', timesheet_jobs', '').replace(', operative_archived, operative_archived_at', '');
+          const r3 = await pool.query(q3, params);
+          return r3.rows[0] || null;
+        }
+        throw err2;
+      }
+    }
+    if (err && err.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(err.message || '')) {
+      let q4 = `SELECT id, company_id, job_display_id, worker_name, project, block, floor, apartment, zone,
+             work_type, quantity, unit_price, total, status, description, submitted_at,
+             work_was_edited, edit_history, photo_urls, invoice_file_path, archived
+      FROM work_logs WHERE id = $1 AND company_id = $2`;
+      const r4 = await pool.query(q4, params);
+      return r4.rows[0] || null;
+    }
+    throw err;
+  }
+}
+
+/**
+ * GET /api/worklogs/:id/media-package — ZIP for this work log entry only (folders by location).
+ */
+async function mediaPackageForJob(req, res) {
   const companyId = getCompanyId(req);
   if (companyId == null) {
     return res.status(403).json({ success: false, message: 'Access denied. Company not found.' });
   }
 
-  const filters = listFiltersFromReq(req);
-  const { query, params } = buildWorkLogsFilterQuery(companyId, filters);
+  const internalId = parseInt(String(req.params.id || ''), 10);
+  if (!Number.isInteger(internalId) || internalId < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid job id.' });
+  }
 
   try {
-    const result = await queryWorkLogsWithColumnFallbacks(companyId, query, params);
-    const folders = collectMediaByLocationFromRows(result.rows);
+    const row = await fetchWorkLogRowRaw(companyId, internalId);
+    if (!row) {
+      return res.status(404).json({ success: false, message: 'Job not found.' });
+    }
+    const folders = collectMediaByLocationFromRows([row]);
     const keys = Object.keys(folders);
     const JSZip = getJSZipCtor();
     if (!JSZip) {
@@ -377,24 +427,25 @@ async function mediaPackage(req, res) {
     if (keys.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'No media folders matched the current filters (no photos in scope).',
+        message: 'This work entry has no photos grouped by location.',
       });
     }
     const outBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+    const safeJob = String(row.job_display_id || internalId).replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 40);
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="worklogs_media_${Date.now()}.zip"`);
+    res.setHeader('Content-Disposition', `attachment; filename="worklogs_media_${safeJob}_${Date.now()}.zip"`);
     return res.send(outBuf);
   } catch (err) {
     if (err && err.code === '42P01') {
       return res.status(404).json({ success: false, message: 'Work logs table not found.' });
     }
-    console.error('worklogsMediaPackage:', err);
+    console.error('worklogsMediaPackageForJob:', err);
     return res.status(500).json({ success: false, message: 'Failed to build media package.' });
   }
 }
 
 module.exports = {
-  mediaPackage,
+  mediaPackageForJob,
   listFiltersFromReq,
   buildWorkLogsFilterQuery,
   queryWorkLogsWithColumnFallbacks,
