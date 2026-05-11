@@ -255,6 +255,71 @@
     return parts.join(' / ') || '—';
   }
 
+  /** True if entry has time sheet period and/or plain time sheet job lines (not QA-only). */
+  function workLogHasTimesheetJobs(job) {
+    if (!job || !Array.isArray(job.timesheetJobs) || !job.timesheetJobs.length) return false;
+    for (var i = 0; i < job.timesheetJobs.length; i++) {
+      var x = job.timesheetJobs[i];
+      if (x && x.type === 'timesheet_meta') return true;
+    }
+    return summarizeTimesheetHours(job) != null;
+  }
+
+  /**
+   * Aggregate duration from plain timesheet blocks (excludes timesheet_meta, qa_price_work).
+   * @returns {{ lineCount: number, summary: string | null } | null}
+   */
+  function summarizeTimesheetHours(job) {
+    if (!job || !Array.isArray(job.timesheetJobs)) return null;
+    var totalHours = 0;
+    var totalDays = 0;
+    var jobLines = 0;
+    for (var i = 0; i < job.timesheetJobs.length; i++) {
+      var j = job.timesheetJobs[i];
+      if (!j || typeof j !== 'object') continue;
+      if (j.type === 'timesheet_meta' || j.type === 'qa_price_work') continue;
+      jobLines++;
+      var d = j.duration != null ? Number(j.duration) : NaN;
+      if (isNaN(d)) continue;
+      var u = String(j.duration_unit || j.durationUnit || 'hours').toLowerCase();
+      if (u === 'days' || u === 'day') totalDays += d;
+      else totalHours += d;
+    }
+    if (jobLines === 0) return null;
+    var parts = [];
+    if (totalDays > 0) {
+      var rd = Math.round(totalDays * 100) / 100;
+      parts.push(rd + (Math.abs(rd - 1) < 1e-9 ? ' day' : ' days'));
+    }
+    if (totalHours > 0) {
+      parts.push((Math.round(totalHours * 100) / 100) + ' hrs');
+    }
+    return { lineCount: jobLines, summary: parts.length ? parts.join(' + ') : null };
+  }
+
+  function workLogInvoiceQtyCell(job) {
+    if (workLogHasTimesheetJobs(job)) {
+      var s = summarizeTimesheetHours(job);
+      if (s && s.summary) {
+        return escapeHtml(String(s.lineCount) + ' job(s) · ' + s.summary);
+      }
+      if (s && s.lineCount) return escapeHtml(String(s.lineCount) + ' job(s)');
+      return 'Time sheet';
+    }
+    if (job.quantity != null && !isNaN(Number(job.quantity))) return escapeHtml(String(job.quantity));
+    if (job.qaPriceWorkTotal != null && !isNaN(Number(job.qaPriceWorkTotal))) return 'QA price work';
+    return '—';
+  }
+
+  function workLogInvoiceUnitCell(job) {
+    if (workLogHasTimesheetJobs(job)) return '—';
+    if (job.qaPriceWorkTotal != null && !isNaN(Number(job.qaPriceWorkTotal)) && (job.quantity == null || job.unitPrice == null)) {
+      return '—';
+    }
+    if (job.unitPrice != null && !isNaN(Number(job.unitPrice))) return '£' + Number(job.unitPrice).toFixed(2);
+    return '—';
+  }
+
   /** Stored total, else QA-computed total, else qty×unit. */
   function getWorkLogAmountNumeric(job) {
     if (!job) return 0;
@@ -711,9 +776,37 @@
     var rows = selectedJobs.map(function (j) {
       var t = getWorkLogAmountNumeric(j);
       totalAmount += t;
-      return '<tr><td>' + escapeHtml(formatWorkersDisplay(j)) + '</td><td>' + escapeHtml(getLocation(j)) + '</td><td>' + escapeHtml(j.workType || '—') + '</td><td>' + (j.quantity != null ? j.quantity : '—') + '</td><td>£' + (j.unitPrice != null ? Number(j.unitPrice).toFixed(2) : '—') + '</td><td>£' + t.toFixed(2) + '</td></tr>';
+      var qtyCell = workLogInvoiceQtyCell(j);
+      var unitCell = workLogInvoiceUnitCell(j);
+      return (
+        '<tr><td>' +
+        escapeHtml(formatWorkersDisplay(j)) +
+        '</td><td>' +
+        escapeHtml(getLocation(j)) +
+        '</td><td>' +
+        escapeHtml(j.workType || '—') +
+        '</td><td>' +
+        qtyCell +
+        '</td><td>' +
+        unitCell +
+        '</td><td>£' +
+        t.toFixed(2) +
+        '</td></tr>'
+      );
     }).join('');
-    content.innerHTML = '<p><strong>Invoice</strong> – ' + selectedJobs.length + ' job(s)</p><table><thead><tr><th>Worker</th><th>Location</th><th>Work type</th><th>Qty</th><th>Unit price</th><th>Total</th></tr></thead><tbody>' + rows + '</tbody></table><p class="worklogs-invoice-total">Total: £' + totalAmount.toFixed(2) + '</p>';
+    var anyTimesheet = selectedJobs.some(workLogHasTimesheetJobs);
+    var tsNote = anyTimesheet
+      ? '<p class="worklogs-invoice-foot">Time sheet entries: <strong>Total</strong> uses the worker\'s declared total on the work entry (same as operative <em>Total before tax</em>). The Qty column summarises recorded time sheet durations; unit price does not apply line-by-line.</p>'
+      : '';
+    content.innerHTML =
+      '<p><strong>Invoice</strong> – ' +
+      selectedJobs.length +
+      ' job(s)</p><table><thead><tr><th>Worker</th><th>Location</th><th>Work type</th><th>Qty / summary</th><th>Unit price</th><th>Total</th></tr></thead><tbody>' +
+      rows +
+      '</tbody></table><p class="worklogs-invoice-total">Total: £' +
+      totalAmount.toFixed(2) +
+      '</p>' +
+      tsNote;
     content.dataset.jobIds = selectedJobs.map(function (j) { return j.id; }).join(',');
 
     modal.classList.add('is-open');
