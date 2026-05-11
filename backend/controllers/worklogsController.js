@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const { pool } = require('../db/pool');
+const { listFiltersFromReq, buildWorkLogsFilterQuery, queryWorkLogsWithColumnFallbacks } = require('../lib/worklogsMediaPackage');
 
 const UPLOADS_ROOT = path.resolve(path.join(__dirname, '..', 'uploads'));
 
@@ -374,107 +375,14 @@ async function list(req, res) {
     return res.status(403).json({ success: false, message: 'Access denied. Company not found.' });
   }
 
-  const worker = (req.query.worker && String(req.query.worker).trim()) || '';
-  const dateFrom = (req.query.dateFrom && String(req.query.dateFrom).trim()) || '';
-  const dateTo = (req.query.dateTo && String(req.query.dateTo).trim()) || '';
-  const location = (req.query.location && String(req.query.location).trim()) || '';
-  const status = (req.query.status && String(req.query.status).trim()) || '';
-  const search = (req.query.search && String(req.query.search).trim()) || '';
-
   try {
-    let query = `
-      SELECT id, company_id, job_display_id, worker_name, project, block, floor, apartment, zone,
-             work_type, quantity, unit_price, total, status, description, submitted_at,
-             work_was_edited, edit_history, photo_urls, timesheet_jobs, invoice_file_path,
-             operative_archived, operative_archived_at,
-             archived,
-             collaborator_user_ids, collaborators_display
-      FROM work_logs
-      WHERE company_id = $1 AND archived = false
-    `;
-    const params = [companyId];
-    let idx = 2;
-
-    // Show `draft` by default (managers should see "Still working on" entries).
-
-    if (worker) {
-      query += ` AND worker_name = $${idx}`;
-      params.push(worker);
-      idx++;
-    }
-    if (status) {
-      query += ` AND status = $${idx}`;
-      params.push(status);
-      idx++;
-    }
-    if (dateFrom) {
-      query += ` AND submitted_at >= $${idx}::date`;
-      params.push(dateFrom);
-      idx++;
-    }
-    if (dateTo) {
-      query += ` AND submitted_at <= ($${idx}::date + INTERVAL '1 day')`;
-      params.push(dateTo);
-      idx++;
-    }
-    if (location) {
-      query += ` AND (
-        LOWER(COALESCE(project,'') || ' ' || COALESCE(block,'') || ' ' || COALESCE(floor,'') || ' ' || COALESCE(apartment,'') || ' ' || COALESCE(zone,'')) LIKE $${idx}
-      )`;
-      params.push('%' + location.toLowerCase() + '%');
-      idx++;
-    }
-    if (search) {
-      query += ` AND (
-        LOWER(COALESCE(job_display_id,'')) LIKE $${idx}
-        OR LOWER(COALESCE(description,'')) LIKE $${idx}
-      )`;
-      params.push('%' + search.toLowerCase() + '%');
-      idx++;
-    }
-
-    query += ` ORDER BY submitted_at DESC`;
-
-    try {
-      const result = await pool.query(query, params);
-      const jobs = result.rows.map(rowToJob);
-      await enrichJobsWithQaPriceTotals(jobs);
-      await enrichJobsTimesheetsWithQaCrewNames(companyId, jobs);
-      return res.json({ success: true, jobs });
-    } catch (err) {
-      if (err && err.code === '42703' && /collaborators_display|collaborator_user_ids/i.test(err.message || '')) {
-        const qNoCollab = query.replace(/\s*,\s*collaborator_user_ids\s*,\s*collaborators_display\s*/i, '');
-        try {
-          const resultNc = await pool.query(qNoCollab, params);
-          const jobsNc = resultNc.rows.map(rowToJob);
-          await enrichJobsWithQaPriceTotals(jobsNc);
-          await enrichJobsTimesheetsWithQaCrewNames(companyId, jobsNc);
-          return res.json({ success: true, jobs: jobsNc });
-        } catch (err2) {
-          if (err2 && err2.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(err2.message || '')) {
-            let fallbackQuery = qNoCollab.replace(', timesheet_jobs', '').replace(', operative_archived, operative_archived_at', '');
-            const result2 = await pool.query(fallbackQuery, params);
-            const jobs2 = result2.rows.map(rowToJob);
-            await enrichJobsWithQaPriceTotals(jobs2);
-            await enrichJobsTimesheetsWithQaCrewNames(companyId, jobs2);
-            return res.json({ success: true, jobs: jobs2 });
-          }
-          throw err2;
-        }
-      }
-      if (err && err.code === '42703' && /(timesheet_jobs|operative_archived)/i.test(err.message || '')) {
-        // Fallback for installations before the migration was applied.
-        let fallbackQuery = query.replace(', timesheet_jobs', '').replace(', operative_archived, operative_archived_at', '');
-        fallbackQuery = fallbackQuery.replace(/\s*,\s*collaborator_user_ids\s*,\s*collaborators_display\s*/i, '');
-        const result2 = await pool.query(fallbackQuery, params);
-        const jobs2 = result2.rows.map(rowToJob);
-        // timesheetJobs/operativeArchived will be empty because columns aren't selected.
-        await enrichJobsWithQaPriceTotals(jobs2);
-        await enrichJobsTimesheetsWithQaCrewNames(companyId, jobs2);
-        return res.json({ success: true, jobs: jobs2 });
-      }
-      throw err;
-    }
+    const filters = listFiltersFromReq(req);
+    const { query, params } = buildWorkLogsFilterQuery(companyId, filters);
+    const result = await queryWorkLogsWithColumnFallbacks(companyId, query, params);
+    const jobs = result.rows.map(rowToJob);
+    await enrichJobsWithQaPriceTotals(jobs);
+    await enrichJobsTimesheetsWithQaCrewNames(companyId, jobs);
+    return res.json({ success: true, jobs });
   } catch (err) {
     if (err.code === '42P01') {
       return res.status(200).json({ success: true, jobs: [] });

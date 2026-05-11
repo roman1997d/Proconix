@@ -17,11 +17,13 @@ const {
   archiveBulk,
   create,
 } = require('../controllers/worklogsController');
+const { mediaPackage } = require('../lib/worklogsMediaPackage');
 
 router.get('/workers', requireManagerAuth, workers);
 router.post('/archive-bulk', requireManagerAuth, archiveBulk);
 router.post('/', requireManagerAuth, create);
 router.get('/', requireManagerAuth, list);
+router.get('/media-package', requireManagerAuth, mediaPackage);
 router.get('/:id', requireManagerAuth, getOne);
 router.patch('/:id', requireManagerAuth, update);
 router.post('/:id/approve', requireManagerAuth, approve);

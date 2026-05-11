@@ -1046,6 +1046,55 @@
           .catch(function () { alert('Failed to save changes.'); });
       });
 
+      // Download media package (ZIP by location — same filters as list)
+      var btnMedia = document.getElementById('worklogs-btn-media-package');
+      if (btnMedia) btnMedia.addEventListener('click', function () {
+        var h = getHeaders();
+        if (!h) {
+          alert('Manager session required.');
+          return;
+        }
+        var f = getFilters();
+        var q = [];
+        if (f.worker) q.push('worker=' + encodeURIComponent(f.worker));
+        if (f.dateFrom) q.push('dateFrom=' + encodeURIComponent(f.dateFrom));
+        if (f.dateTo) q.push('dateTo=' + encodeURIComponent(f.dateTo));
+        if (f.location) q.push('location=' + encodeURIComponent(f.location));
+        if (f.status) q.push('status=' + encodeURIComponent(f.status));
+        if (f.search) q.push('search=' + encodeURIComponent(f.search));
+        var url = '/api/worklogs/media-package' + (q.length ? '?' + q.join('&') : '');
+        btnMedia.disabled = true;
+        fetch(url, { headers: h, credentials: 'same-origin' })
+          .then(function (res) {
+            if (!res.ok) {
+              return res.text().then(function (t) {
+                var msg = res.statusText || 'Download failed';
+                try {
+                  var j = JSON.parse(t);
+                  if (j && j.message) msg = j.message;
+                } catch (_) {}
+                throw new Error(msg);
+              });
+            }
+            return res.blob();
+          })
+          .then(function (blob) {
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'worklogs_media.zip';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(a.href);
+          })
+          .catch(function (err) {
+            alert(err && err.message ? err.message : 'Download failed.');
+          })
+          .finally(function () {
+            btnMedia.disabled = false;
+          });
+      });
+
       // Generate Invoice
       var btnInvoice = document.getElementById('worklogs-btn-invoice');
       if (btnInvoice) btnInvoice.addEventListener('click', function () {

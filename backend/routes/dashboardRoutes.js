@@ -737,6 +737,9 @@ function getWorkLogsHtml() {
           </div>
         </div>
         <div class="worklogs-actions-row">
+          <button type="button" class="btn-worklogs btn-worklogs-secondary" id="worklogs-btn-media-package" title="ZIP: one folder per time sheet location (or work-log path), photos + location_summary.pdf in each folder">
+            <i class="bi bi-folder-symlink"></i> Download media package
+          </button>
           <button type="button" class="btn-worklogs btn-worklogs-primary" id="worklogs-btn-invoice" disabled>
             <i class="bi bi-file-earmark-pdf"></i> Generate Invoice
           </button>
