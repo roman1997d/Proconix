@@ -49,7 +49,7 @@ const {
   updatePushPreferences,
 } = require('../controllers/operativePushController');
 
-const { generateTimesheetPdf, generateWorkReportPdf } = require('../controllers/pdfKitReportsController');
+const { generateTimesheetHtml, generateWorkReportPdf } = require('../controllers/pdfKitReportsController');
 const {
   uploadIssueFile,
   uploadDocumentFile,
@@ -113,7 +113,7 @@ router.post('/work-log/:id/send-invoice-copy', requireOperativeAuth, sendWorkLog
 router.post('/work-log/:id/archive', requireOperativeAuth, archiveMyWorkLog);
 
 // PDF generation (backend: PDFKit)
-router.post('/timesheet/generate', requireOperativeAuth, generateTimesheetPdf);
+router.post('/timesheet/generate', requireOperativeAuth, generateTimesheetHtml);
 router.post('/work-report/generate', requireOperativeAuth, generateWorkReportPdf);
 
 module.exports = router;

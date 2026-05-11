@@ -836,4 +836,5 @@ module.exports = {
   renderTimesheet,
   renderWorkReport,
   renderWorkLogInvoice,
+  buildTotalTimeText,
 };
