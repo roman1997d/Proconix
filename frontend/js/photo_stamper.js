@@ -98,8 +98,8 @@
     var leftPad = Math.max(12, Math.round(cw * 0.03));
     var rightPad = Math.max(12, Math.round(cw * 0.03));
 
-    var topFontSize = Math.max(22, Math.round(ch * 0.042));
-    var bottomFontSize = Math.max(22, Math.round(ch * 0.042));
+    var topFontSize = Math.max(13, Math.round(ch * 0.022));
+    var bottomFontSize = Math.max(13, Math.round(ch * 0.022));
 
     var projText = 'Project: ' + String(projectName || '—');
     var gpsText = 'GPS: ' + (geo.lat == null || geo.lng == null ? '—' : formatCoords(geo.lat) + ', ' + formatCoords(geo.lng));
@@ -118,7 +118,7 @@
     var textFill = 'rgba(255,255,255,0.92)';
 
     targetCtx.save();
-    targetCtx.font = '700 ' + topFontSize + 'px system-ui, sans-serif';
+    targetCtx.font = '600 ' + topFontSize + 'px system-ui, sans-serif';
     targetCtx.textBaseline = 'top';
     targetCtx.fillStyle = textFill;
 
@@ -129,20 +129,20 @@
       maxWidth = Math.max(maxWidth, m.width);
     });
 
-    var rectW = Math.min(maxWidth + leftPad, cw - leftPad - rightPad);
-    var rectH = topLines.length * (topFontSize + 8) + 10;
+    var rectW = Math.min(maxWidth + leftPad * 0.85, cw - leftPad - rightPad);
+    var rectH = topLines.length * (topFontSize + 5) + 8;
     drawRect(leftPad, topPad, rectW, rectH, boxFill);
 
-    var y = topPad + 10;
+    var y = topPad + 6;
     targetCtx.textAlign = 'left';
     topLines.forEach(function (t) {
-      targetCtx.fillText(t, leftPad + 10, y);
-      y += topFontSize + 8;
+      targetCtx.fillText(t, leftPad + 8, y);
+      y += topFontSize + 5;
     });
     targetCtx.restore();
 
     targetCtx.save();
-    targetCtx.font = '700 ' + bottomFontSize + 'px system-ui, sans-serif';
+    targetCtx.font = '600 ' + bottomFontSize + 'px system-ui, sans-serif';
     targetCtx.fillStyle = textFill;
     targetCtx.textAlign = 'right';
 
@@ -152,17 +152,17 @@
       var m = targetCtx.measureText(t);
       bMaxW = Math.max(bMaxW, m.width);
     });
-    var bRectW = Math.min(bMaxW + 26, cw - leftPad - rightPad);
-    var bRectH = bottomLines.length * (bottomFontSize + 8) + 10;
+    var bRectW = Math.min(bMaxW + 18, cw - leftPad - rightPad);
+    var bRectH = bottomLines.length * (bottomFontSize + 5) + 8;
     var bX = cw - rightPad - bRectW;
     var bY = ch - topPad - bRectH;
     drawRect(bX, bY, bRectW, bRectH, boxFill);
 
-    var yy = bY + 10;
+    var yy = bY + 6;
     bottomLines.forEach(function (t) {
       targetCtx.textBaseline = 'top';
-      targetCtx.fillText(t, cw - rightPad - 10, yy);
-      yy += bottomFontSize + 8;
+      targetCtx.fillText(t, cw - rightPad - 8, yy);
+      yy += bottomFontSize + 5;
     });
     targetCtx.restore();
   }
