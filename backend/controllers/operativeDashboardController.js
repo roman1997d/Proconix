@@ -1077,7 +1077,8 @@ async function getMyWorkLogs(req, res) {
       if (err && err.code === '42703' && /timesheet_jobs|operative_archived/i.test(err.message || '')) {
         const result2 = await pool.query(
           `SELECT id, job_display_id, worker_name, project, block, floor, apartment, zone,
-                  work_type, quantity, unit_price, total, invoice_file_path, status, submitted_at
+                  work_type, quantity, unit_price, total, invoice_file_path, status, submitted_at,
+                  submitted_by_user_id
            FROM work_logs
            WHERE submitted_by_user_id = $1
            ORDER BY submitted_at DESC

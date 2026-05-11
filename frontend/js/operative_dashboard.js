@@ -2952,8 +2952,14 @@
             ? Number(e.qaPriceWorkTotal).toFixed(2)
             : '—';
       var myUid = getOperativeUserId();
-      var subUid = e.submittedByUserId != null ? Number(e.submittedByUserId) : null;
-      var isOwner = myUid != null && subUid != null && Number(subUid) === Number(myUid);
+      var subRaw = e.submittedByUserId != null ? e.submittedByUserId : e.submitted_by_user_id;
+      var subUid = subRaw != null && subRaw !== '' ? Number(subRaw) : null;
+      var isOwner =
+        myUid != null &&
+        subUid != null &&
+        !Number.isNaN(subUid) &&
+        !Number.isNaN(Number(myUid)) &&
+        Number(subUid) === Number(myUid);
       var stLower = String(e.status || '').toLowerCase();
       var sendReviewBtn =
         isOwner && stLower === 'draft'
@@ -4988,8 +4994,6 @@
     });
   }
 
-  loadWorklogList();
-
   if (btnClockIn) btnClockIn.addEventListener('click', clockIn);
   if (btnClockOut) btnClockOut.addEventListener('click', clockOut);
 
@@ -5080,12 +5084,17 @@
       });
   }
 
+  if (worklogListEl) {
+    worklogListEl.innerHTML = '<p class="op-worklog-empty">Loading…</p>';
+  }
+
   loadMe()
     .then(function () {
       loadClockStatus();
       loadWeekly();
       loadProject();
       loadDocumentsInbox();
+      loadWorklogList();
       chatStartRealtime();
     })
     .catch(function (err) {
@@ -5094,6 +5103,7 @@
       loadWeekly();
       loadProject();
       loadDocumentsInbox();
+      loadWorklogList();
       chatStartRealtime();
     });
 
