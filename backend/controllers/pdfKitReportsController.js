@@ -116,9 +116,58 @@ function uniqueWorklogPdfFileName(prefix) {
   return prefix + '_' + fileDate + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9) + '.pdf';
 }
 
-function uniqueTimesheetHtmlFileName() {
-  var fileDate = new Date().toISOString().slice(0, 10);
-  return 'timesheet_report_' + fileDate + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9) + '.html';
+function slugForFilesystemSegment(s, maxLen) {
+  maxLen = maxLen || 48;
+  if (s == null || s === '') return 'operative';
+  var t = String(s)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .toLowerCase();
+  if (!t) t = 'operative';
+  return t.slice(0, maxLen);
+}
+
+function periodSegmentForTimesheetFilename(fromRaw, toRaw) {
+  var from = String(fromRaw || '').trim().replace(/[^0-9-]/g, '');
+  var to = String(toRaw || '').trim().replace(/[^0-9-]/g, '');
+  if (!from && !to) return 'period';
+  if (!to) to = from;
+  if (!from) from = to;
+  if (from === to) return from;
+  return from + '_to_' + to;
+}
+
+/** Pattern: {operative}_timesheets_{period}.html (period = yyyy-mm-dd or yyyy-mm-dd_to_yyyy-mm-dd). */
+function resolveTimesheetHtmlFileName(primaryWorkerName, dateFrom, dateTo) {
+  var namePart = slugForFilesystemSegment(primaryWorkerName, 48);
+  var periodPart = periodSegmentForTimesheetFilename(dateFrom, dateTo);
+  var dir = path.join(__dirname, '../uploads/worklogs/timesheets');
+  fs.mkdirSync(dir, { recursive: true });
+  var base = namePart + '_timesheets_' + periodPart + '.html';
+  var fileName = base;
+  var outPath = path.join(dir, fileName);
+  var n = 0;
+  while (fs.existsSync(outPath)) {
+    n += 1;
+    if (n > 99) {
+      fileName =
+        namePart +
+        '_timesheets_' +
+        periodPart +
+        '_' +
+        Date.now() +
+        '_' +
+        Math.random().toString(36).slice(2, 6) +
+        '.html';
+      break;
+    }
+    fileName = namePart + '_timesheets_' + periodPart + '_' + n + '.html';
+    outPath = path.join(dir, fileName);
+  }
+  return fileName;
 }
 
 /** Standalone HTML page; response keeps pdfPath/pdfUrl for existing clients. */
@@ -153,7 +202,7 @@ async function generateTimesheetHtml(req, res) {
       workDescription: workDescription,
     });
 
-    var fileName = uniqueTimesheetHtmlFileName();
+    var fileName = resolveTimesheetHtmlFileName(meta.workerName, dateFrom, dateTo);
     var outPath = path.join(__dirname, '../uploads/worklogs/timesheets', fileName);
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
     fs.writeFileSync(outPath, html, 'utf8');

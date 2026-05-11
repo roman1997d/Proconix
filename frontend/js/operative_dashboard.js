@@ -3698,8 +3698,33 @@
       return parts.join(', ');
     }
 
-    var fileDate = new Date().toISOString().slice(0, 10);
-    var timesheetFallbackHtmlName = 'timesheet_report_' + fileDate + '_' + Date.now() + '.html';
+    function slugForTimesheetHtmlFilename(s, maxLen) {
+      maxLen = maxLen || 48;
+      if (s == null || s === '') return 'operative';
+      var t = String(s)
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '')
+        .toLowerCase();
+      if (!t) t = 'operative';
+      return t.slice(0, maxLen);
+    }
+    function periodSlugForTimesheetHtml(fromRaw, toRaw) {
+      var from = String(fromRaw || '').trim().replace(/[^0-9-]/g, '');
+      var to = String(toRaw || '').trim().replace(/[^0-9-]/g, '');
+      if (!from && !to) return 'period';
+      if (!to) to = from;
+      if (!from) from = to;
+      if (from === to) return from;
+      return from + '_to_' + to;
+    }
+    var timesheetFallbackHtmlName =
+      slugForTimesheetHtmlFilename(worker) +
+      '_timesheets_' +
+      periodSlugForTimesheetHtml(periodFrom, periodTo) +
+      '.html';
 
     function uploadPdfBlob(blob, filename) {
       var mime = 'application/pdf';
