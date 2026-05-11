@@ -114,8 +114,8 @@
       targetCtx.restore();
     }
 
-    var boxFill = 'rgba(0,0,0,0.28)';
-    var textFill = 'rgba(255,255,255,0.92)';
+    var boxFill = 'rgba(0,0,0,0.3)'; /* 70% transparent */
+    var textFill = 'rgba(255,255,255,0.72)';
 
     targetCtx.save();
     targetCtx.font = '600 ' + topFontSize + 'px system-ui, sans-serif';
