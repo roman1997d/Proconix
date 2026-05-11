@@ -2954,15 +2954,9 @@
       var myUid = getOperativeUserId();
       var subRaw = e.submittedByUserId != null ? e.submittedByUserId : e.submitted_by_user_id;
       var subUid = subRaw != null && subRaw !== '' ? Number(subRaw) : null;
-      var isOwner =
-        myUid != null &&
-        subUid != null &&
-        !Number.isNaN(subUid) &&
-        !Number.isNaN(Number(myUid)) &&
-        Number(subUid) === Number(myUid);
       var stLower = String(e.status || '').toLowerCase();
       var sendReviewBtn =
-        isOwner && stLower === 'draft'
+        stLower === 'draft'
           ? '<button type="button" class="op-btn op-btn-secondary op-btn-xs op-worklog-send-review" data-entry-id="' +
             escapeHtml(String(e.id != null ? e.id : '')) +
             '">Send for review</button> '
