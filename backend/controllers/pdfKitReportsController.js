@@ -5,9 +5,9 @@ const { pool } = require('../db/pool');
 const {
   formatDateRange,
   resolveImageToBuffer,
+  renderTimesheet,
   renderWorkReport,
 } = require('../templates/pdfkit/proconixPdfTemplate');
-const { buildTimesheetHtmlDocument } = require('../lib/timesheetReportHtml');
 
 async function getWorkerAndProjectMeta(req, payload) {
   payload = payload || {};
@@ -110,19 +110,13 @@ function buildWorkersDisplayFromPayload(payload, primaryName) {
   return out.length ? out.join(', ') : primary || 'Operative';
 }
 
-/** Avoid same-day collisions for PDF work reports. */
+/** Avoid same-day collisions: a fixed name overwrote the file so older work-log links showed the latest PDF. */
 function uniqueWorklogPdfFileName(prefix) {
   var fileDate = new Date().toISOString().slice(0, 10);
   return prefix + '_' + fileDate + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9) + '.pdf';
 }
 
-function uniqueTimesheetHtmlFileName() {
-  var fileDate = new Date().toISOString().slice(0, 10);
-  return 'timesheet_report_' + fileDate + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9) + '.html';
-}
-
-/** Writes a standalone HTML page (same route as legacy PDF; clients use pdfPath/pdfUrl as the stored document URL). */
-async function generateTimesheetHtml(req, res) {
+async function generateTimesheetPdf(req, res) {
   try {
     var payload = req.body || {};
     var jobs = Array.isArray(payload.jobs) ? payload.jobs : [];
@@ -140,35 +134,42 @@ async function generateTimesheetHtml(req, res) {
     var meta = await getWorkerAndProjectMeta(req, payload);
     var workerDisplay = buildWorkersDisplayFromPayload(payload, meta.workerName);
 
-    var workDescription = payload.description != null ? payload.description : payload.work_summary || payload.workSummary;
+    var fileName = uniqueWorklogPdfFileName('timesheet_report');
+    var outPath = path.join(__dirname, '../uploads/worklogs/timesheets', fileName);
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
-    var html = buildTimesheetHtmlDocument({
+    var doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: false });
+    var stream = fs.createWriteStream(outPath);
+    doc.pipe(stream);
+
+    var logoBuf = logoValue ? resolveImageToBuffer(logoValue) : null;
+
+    renderTimesheet(doc, {
       jobs: jobs,
       workerName: workerDisplay,
       projectName: meta.projectName,
       workType: workType,
       totalBeforeTax: totalBeforeTax,
       periodRange: periodRange,
-      logoDataUrl: logoValue,
-      workDescription: workDescription,
+      logoBuf: logoBuf,
     });
 
-    var fileName = uniqueTimesheetHtmlFileName();
-    var outPath = path.join(__dirname, '../uploads/worklogs/timesheets', fileName);
-    fs.mkdirSync(path.dirname(outPath), { recursive: true });
-    fs.writeFileSync(outPath, html, 'utf8');
+    doc.end();
 
-    var publicPath = '/uploads/worklogs/timesheets/' + fileName;
-    return res.status(200).json({
-      success: true,
-      path: publicPath,
-      htmlPath: publicPath,
-      htmlUrl: publicPath,
-      pdfPath: publicPath,
-      pdfUrl: publicPath,
+    return await new Promise(function (resolve, reject) {
+      stream.on('finish', function () {
+        resolve(
+          res.status(200).json({
+            success: true,
+            pdfUrl: '/uploads/worklogs/timesheets/' + fileName,
+            pdfPath: '/uploads/worklogs/timesheets/' + fileName,
+          })
+        );
+      });
+      stream.on('error', reject);
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message || 'Failed to generate timesheet report.' });
+    return res.status(500).json({ success: false, message: err.message || 'Failed to generate timesheet PDF.' });
   }
 }
 
@@ -227,6 +228,6 @@ async function generateWorkReportPdf(req, res) {
 }
 
 module.exports = {
-  generateTimesheetHtml,
+  generateTimesheetPdf,
   generateWorkReportPdf,
 };

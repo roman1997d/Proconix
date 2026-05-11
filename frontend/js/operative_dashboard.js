@@ -3632,6 +3632,19 @@
     openModal(modalWorkReport);
   }
 
+  function readFileAsDataURL(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        resolve(reader.result);
+      };
+      reader.onerror = function () {
+        reject(new Error('Cannot read image file.'));
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   function generateAndUploadWorkReport() {
     var feedback = document.getElementById('op-work-report-feedback');
 
@@ -3699,14 +3712,11 @@
     }
 
     var fileDate = new Date().toISOString().slice(0, 10);
-    var timesheetFallbackHtmlName = 'timesheet_report_' + fileDate + '_' + Date.now() + '.html';
+    var pdfFileName = 'work_report_' + fileDate + '.pdf';
 
     function uploadPdfBlob(blob, filename) {
-      var mime = 'application/pdf';
-      if (filename && /\.html?$/i.test(filename)) mime = 'text/html';
-      else if (blob && blob.type && String(blob.type).indexOf('html') >= 0) mime = 'text/html';
       var fd = new FormData();
-      var file = new File([blob], filename, { type: mime });
+      var file = new File([blob], filename, { type: 'application/pdf' });
       fd.append('file', file);
       return api('/work-log/upload', { method: 'POST', body: fd }).then(function (up) {
         if (!up.data || !up.data.success || !up.data.path) {
@@ -3723,10 +3733,23 @@
           generatedPdfLinkEl.classList.remove('d-none');
         }
         closeModal(modalWorkReport);
-        var fbMsg = /\.html?$/i.test(filename || '') ? 'Time sheet page attached to this entry.' : 'PDF report attached to this entry.';
-        showFeedback(document.getElementById('op-worklog-feedback'), fbMsg, false);
+        showFeedback(document.getElementById('op-worklog-feedback'), 'PDF report attached to this entry.', false);
         return up;
       });
+    }
+
+    function readAllJobPhotos() {
+      return Promise.all(
+        jobs.map(function (job) {
+          return Promise.all(
+            (job.photoFiles || []).map(function (f) {
+              return readFileAsDataURL(f);
+            })
+          ).then(function (dataUrls) {
+            job.photoDataUrls = dataUrls || [];
+          });
+        })
+      );
     }
 
     function uploadWorklogFile(file) {
@@ -3768,16 +3791,29 @@
       });
     }
 
-    /** Simpler HTML if POST /timesheet/generate fails (mirrors data; prefer server for full layout). */
-    function generateTimesheetHtmlFallbackBlob() {
-      function esc(s) {
-        if (s == null) return '';
-        return String(s)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;');
-      }
+    function imageSizeFit(maxW, maxH, w, h) {
+      if (!w || !h) return { w: maxW, h: maxH };
+      var ratio = Math.min(maxW / w, maxH / h);
+      return { w: w * ratio, h: h * ratio };
+    }
+
+    function loadImageDimensions(dataUrl) {
+      return new Promise(function (resolve, reject) {
+        var img = new Image();
+        img.onload = function () {
+          resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+        };
+        img.onerror = function () {
+          reject(new Error('Could not decode image.'));
+        };
+        img.src = dataUrl;
+      });
+    }
+
+    function generateTimesheetPdfClientSide() {
+      var jsPdfLib = window.jspdf && window.jspdf.jsPDF;
+      if (!jsPdfLib) return Promise.reject(new Error('PDF engine is not loaded.'));
+
       var totalDaysAll = 0;
       var totalHoursAll = 0;
       jobs.forEach(function (j) {
@@ -3788,10 +3824,12 @@
         if (u === 'days') totalDaysAll += Number(d);
         else totalHoursAll += Number(d);
       });
+
       var fmtNumber = function (n) {
         if (n == null || isNaN(Number(n))) return '0';
         var x = Number(n);
-        if (Math.abs(x - Math.round(x)) < 1e-9) return String(Math.round(x));
+        var isInt = Math.abs(x - Math.round(x)) < 1e-9;
+        if (isInt) return String(Math.round(x));
         return (Math.round(x * 100) / 100).toFixed(2).replace(/\.?0+$/, '');
       };
       var pluralize = function (val, unit) {
@@ -3803,18 +3841,18 @@
       var totalTimeText = '—';
       if (totalDaysAll > 0 && totalHoursAll > 0) {
         totalTimeText =
-          fmtNumber(totalDaysAll) +
-          ' ' +
-          pluralize(totalDaysAll, 'days') +
-          ' and ' +
-          fmtNumber(totalHoursAll) +
-          ' ' +
-          pluralize(totalHoursAll, 'hours');
+          fmtNumber(totalDaysAll) + ' ' + pluralize(totalDaysAll, 'days') + ' and ' + fmtNumber(totalHoursAll) + ' ' + pluralize(totalHoursAll, 'hours');
       } else if (totalDaysAll > 0) {
         totalTimeText = fmtNumber(totalDaysAll) + ' ' + pluralize(totalDaysAll, 'days');
       } else if (totalHoursAll > 0) {
         totalTimeText = fmtNumber(totalHoursAll) + ' ' + pluralize(totalHoursAll, 'hours');
       }
+
+      var periodFromEl = document.getElementById('op-wr-period-from');
+      var periodToEl = document.getElementById('op-wr-period-to');
+      var periodFrom = periodFromEl ? (periodFromEl.value || '').trim() : '';
+      var periodTo = periodToEl ? (periodToEl.value || '').trim() : '';
+      if (!periodTo) periodTo = periodFrom;
       var htmlDateToDMYY = function (d) {
         if (!d) return '';
         var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d).trim());
@@ -3823,77 +3861,146 @@
       };
       var pf = htmlDateToDMYY(periodFrom);
       var pt = htmlDateToDMYY(periodTo);
-      var periodRangeLocal = pf && pt && pf !== pt ? pf + ' to ' + pt : pf || pt || '—';
+      var periodRange = pf && pt && pf !== pt ? pf + ' to ' + pt : (pf || pt || '');
 
-      var jobBlocks = jobs
-        .map(function (j, idx) {
-          var loc = (j.location && String(j.location).trim()) || '—';
-          var desc = (j.description && String(j.description).trim()) || '—';
-          var stageText = j.stage === 'ongoing' ? 'Ongoing (' + (j.progress_pct || 0) + '%)' : 'Complete';
-          var durLine =
-            j.duration != null ? esc(String(j.duration)) + ' ' + esc(String(j.duration_unit || 'hours')) : '—';
-          var paths = [].concat(j.photoPaths || []).filter(Boolean);
-          var imgs = paths
-            .map(function (url) {
-              return (
-                '<figure style="margin:8px 0"><img src="' +
-                esc(url) +
-                '" alt="" style="max-width:100%;height:auto;border:1px solid #cbd5e1;border-radius:6px"></figure>'
-              );
-            })
-            .join('');
-          return (
-            '<article style="margin:20px 0;padding:16px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc">' +
-            '<h2 style="margin:0 0 8px;font-size:1.1rem;color:#1e40af">Job ' +
-            (idx + 1) +
-            ' — ' +
-            esc(loc) +
-            '</h2>' +
-            '<p style="margin:4px 0"><strong>Time / stage:</strong> ' +
-            durLine +
-            ' · ' +
-            esc(stageText) +
-            '</p>' +
-            '<div style="margin:8px 0;white-space:pre-wrap">' +
-            esc(desc).replace(/\r\n|\r|\n/g, '<br>') +
-            '</div>' +
-            imgs +
-            '</article>'
-          );
-        })
-        .join('');
+      return readAllJobPhotos().then(function () {
+        var doc = new jsPdfLib({ orientation: 'p', unit: 'mm', format: 'a4' });
+        var pageW = doc.internal.pageSize.getWidth();
+        var pageH = doc.internal.pageSize.getHeight();
+        var margin = 12;
 
-      var html =
-        '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Time Sheet Report</title></head><body style="font-family:Helvetica,Arial,sans-serif;line-height:1.5;max-width:820px;margin:0 auto;padding:24px;color:#0f172a">' +
-        '<h1 style="margin-top:0">Time Sheet Report</h1>' +
-        '<p><strong>Period:</strong> ' +
-        esc(periodRangeLocal) +
-        '</p>' +
-        '<p><strong>Worker(s):</strong> ' +
-        esc(formatWorkersLineForTimesheetPdf()) +
-        '</p>' +
-        '<p><strong>Project:</strong> ' +
-        esc(projectName) +
-        '</p>' +
-        '<p><strong>Work type:</strong> ' +
-        esc(workType || '—') +
-        '</p>' +
-        '<p><strong>Total (before tax):</strong> £' +
-        (isNaN(beforeTax) ? '0.00' : beforeTax.toFixed(2)) +
-        '</p>' +
-        '<p><strong>Total time:</strong> ' +
-        esc(totalTimeText) +
-        '</p>' +
-        (description
-          ? '<p><strong>Summary:</strong> ' + esc(description).replace(/\r\n|\r|\n/g, '<br>') + '</p>'
-          : '') +
-        '<hr style="margin:24px 0">' +
-        jobBlocks +
-        '<p style="color:#64748b;font-size:0.85rem;margin-top:32px">Fallback layout (server unavailable). Try again online for the full-styled page.</p></body></html>';
-      return Promise.resolve(new Blob([html], { type: 'text/html;charset=utf-8' }));
+        var logoDataUrl = '';
+        try {
+          logoDataUrl = window.PROCONIX_COMPANY_LOGO || localStorage.getItem('proconix_company_logo') || '';
+        } catch (e) {}
+        if (logoDataUrl && /^data:image\//i.test(logoDataUrl)) {
+          try {
+            doc.addImage(logoDataUrl, 'PNG', margin, 8, 20, 12);
+          } catch (e) {}
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.text('Proconix Time Sheet Report', margin + 24, 16);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text('Generated by Proconix', pageW - margin, 16, { align: 'right' });
+
+        doc.setFontSize(11);
+        doc.text('Worker(s): ' + formatWorkersLineForTimesheetPdf(), margin, 26);
+        doc.text('Project: ' + projectName, margin, 33);
+        doc.text('Work type: ' + (workType || '—'), margin, 40);
+        if (periodRange) doc.text('For period of time: ' + periodRange, margin, 47);
+        doc.text('Total (before tax): £' + (isNaN(beforeTax) ? '0.00' : beforeTax.toFixed(2)), margin, periodRange ? 54 : 47);
+        doc.text('Total time: ' + totalTimeText, margin, periodRange ? 61 : 54);
+        return Promise.all(
+          jobs.map(function (j) {
+            return Promise.all((j.photoDataUrls || []).map(loadImageDimensions))
+              .then(function (dims) {
+                j.photoDims = dims || [];
+              })
+              .catch(function () {
+                j.photoDims = [];
+              });
+          })
+        ).then(function () {
+          // Page 1: summary, Page 2+: jobs + photos grouped per job (no mixing)
+          doc.addPage();
+          var y = 20;
+          doc.setFont('helvetica', 'bold');
+          doc.text('Job list', margin, y);
+          y += 5;
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(10);
+
+          var slotW = (pageW - margin * 2 - 6) / 2;
+          var slotH = (pageH - margin * 2 - 36 - 6) / 2;
+          var slotGap = 6;
+          var photoGapY = 8;
+
+          var drawJobPhotos = function (job, jobIdx, startY) {
+            var photos = job.photoDataUrls || [];
+            var dims = job.photoDims || [];
+            if (!photos.length) return startY;
+
+            var photoTop = startY + 2;
+            if (photoTop + 2 * slotH + slotGap > pageH - 12) {
+              doc.addPage();
+              photoTop = 20;
+            }
+
+            for (var pi = 0; pi < photos.length; pi++) {
+              if (pi > 0 && pi % 4 === 0) {
+                doc.addPage();
+                photoTop = 20;
+              }
+              var idxInPage = pi % 4; // 0..3
+              var col = idxInPage % 2; // 0..1
+              var row = Math.floor(idxInPage / 2); // 0..1
+              var x = margin + col * (slotW + slotGap);
+              var yy = photoTop + row * (slotH + slotGap);
+              var d = dims[pi] || null;
+              var fit = imageSizeFit(slotW, slotH, d && d.width, d && d.height);
+              var dx = x + (slotW - fit.w) / 2;
+              var dy = yy + (slotH - fit.h) / 2;
+              var fmt = /data:image\/png/i.test(photos[pi]) ? 'PNG' : 'JPEG';
+              doc.rect(x, yy, slotW, slotH);
+              try {
+                doc.addImage(photos[pi], fmt, dx, dy, fit.w, fit.h);
+              } catch (e) {}
+            }
+
+            // Set y after the last placed photo on the last page
+            var lastIdx = (photos.length - 1) % 4;
+            var lastRow = Math.floor(lastIdx / 2);
+            var endY = photoTop + lastRow * (slotH + slotGap) + slotH + photoGapY;
+            return endY;
+          };
+
+          jobs.forEach(function (j, idx) {
+            if (y > pageH - 40) {
+              doc.addPage();
+              y = 20;
+            }
+            var stageText = j.stage === 'ongoing' ? 'Ongoing (' + j.progress_pct + '%)' : 'Complete';
+            var line =
+              (idx + 1) +
+              '. ' +
+              (j.location || '—') +
+              ' · ' +
+              (j.duration != null ? String(j.duration) + ' ' + (j.duration_unit || 'hours') : '—') +
+              ' · ' +
+              stageText;
+            doc.text(line, margin, y);
+            y += 6;
+
+            if (j.description) {
+              var parts = doc.splitTextToSize(j.description, pageW - margin * 2);
+              doc.text(parts, margin, y);
+              y += parts.length * 5 + 2;
+            }
+
+            y += 2;
+            y = drawJobPhotos(j, idx, y);
+            y += 2;
+          });
+
+          // Footer on all pages
+          var pages = doc.getNumberOfPages();
+          for (var pn = 1; pn <= pages; pn++) {
+            doc.setPage(pn);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.text('Generated by Proconix Work Reports', pageW / 2, pageH - 12, { align: 'center' });
+            doc.text('WEB : proconix.uk', pageW / 2, pageH - 6, { align: 'center' });
+          }
+
+          return doc.output('blob');
+        });
+      });
     }
 
-    showFeedback(feedback, 'Preparing time sheet page…', false);
+    showFeedback(feedback, 'Preparing Time Sheet report…', false);
 
     // Upload photos to server first, then pass server paths to backend.
     return uploadJobPhotosToServer().then(function () {
@@ -3934,33 +4041,31 @@
 
       return api('/timesheet/generate', { method: 'POST', body: JSON.stringify(payloadMeta) })
         .then(function (r) {
-          var reportPath =
-            r &&
-            r.data &&
-            (r.data.pdfPath || r.data.pdfUrl || r.data.path || r.data.htmlPath || r.data.htmlUrl);
-          if (r && r.data && r.data.success && reportPath) {
-            if (invoicePathEl) invoicePathEl.value = reportPath;
+          var pdfPath = r && r.data && (r.data.pdfPath || r.data.pdfUrl || r.data.path);
+          if (r && r.data && r.data.success && pdfPath) {
+            if (invoicePathEl) invoicePathEl.value = pdfPath;
             if (documentInputEl) documentInputEl.value = '';
             if (documentNameEl) {
-              var base = reportPath.split('/').pop() || 'timesheet_report.html';
-              documentNameEl.textContent = base + ' (generated)';
+              documentNameEl.textContent = pdfFileName + ' (generated)';
               documentNameEl.classList.remove('d-none');
             }
             if (generatedPdfLinkEl) {
-              generatedPdfLinkEl.href = reportPath;
+              generatedPdfLinkEl.href = pdfPath;
               generatedPdfLinkEl.classList.remove('d-none');
             }
             closeModal(modalWorkReport);
-            showFeedback(document.getElementById('op-worklog-feedback'), 'Time sheet page attached to this entry.', false);
+            showFeedback(document.getElementById('op-worklog-feedback'), 'Time Sheet report attached to this entry.', false);
             return null;
           }
-          return generateTimesheetHtmlFallbackBlob().then(function (blob) {
-            return uploadPdfBlob(blob, timesheetFallbackHtmlName);
+          // Backend returned an error payload; fallback to frontend generation.
+          return generateTimesheetPdfClientSide().then(function (blob) {
+            return uploadPdfBlob(blob, pdfFileName);
           });
         })
         .catch(function () {
-          return generateTimesheetHtmlFallbackBlob().then(function (blob) {
-            return uploadPdfBlob(blob, timesheetFallbackHtmlName);
+          // Network/backend error (including "endpoint not found")
+          return generateTimesheetPdfClientSide().then(function (blob) {
+            return uploadPdfBlob(blob, pdfFileName);
           });
         });
     });
