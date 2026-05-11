@@ -137,6 +137,7 @@
     var selectEl = wrap.querySelector('.worklogs-cloud-folder-select');
     var saveBtn = wrap.querySelector('.worklogs-btn-save-invoice-cloud');
     var fb = wrap.querySelector('.worklogs-cloud-save-feedback');
+    var linkPanel = wrap.querySelector('.worklogs-cloud-share-link-panel');
     var encoded = wrap.getAttribute('data-invoice-encoded');
     var invoicePath = '';
     try {
@@ -151,6 +152,40 @@
       fb.textContent = msg || '';
       fb.className = 'worklogs-cloud-save-feedback' + (msg ? (isError ? ' is-error' : ' is-success') : '');
       fb.style.display = msg ? 'block' : 'none';
+    }
+
+    function clearShareLinkPanel() {
+      if (!linkPanel) return;
+      linkPanel.innerHTML = '';
+      linkPanel.hidden = true;
+    }
+
+    /** After upload, API returns share token; view URL works without manager session. */
+    function showTemporaryPublicLink(viewUrl, expiresAt) {
+      if (!linkPanel || !viewUrl) return;
+      linkPanel.innerHTML = '';
+      linkPanel.hidden = false;
+      var label = document.createElement('div');
+      label.className = 'worklogs-cloud-share-link-label';
+      label.textContent = 'Temporary public link (cloud)';
+      var a = document.createElement('a');
+      a.className = 'worklogs-cloud-share-link-url';
+      a.href = viewUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = viewUrl;
+      linkPanel.appendChild(label);
+      linkPanel.appendChild(a);
+      if (expiresAt) {
+        var meta = document.createElement('div');
+        meta.className = 'worklogs-cloud-share-link-meta';
+        try {
+          meta.textContent = 'Expires: ' + new Date(expiresAt).toLocaleString();
+        } catch (e) {
+          meta.textContent = '';
+        }
+        if (meta.textContent) linkPanel.appendChild(meta);
+      }
     }
 
     function updateSaveDisabled() {
@@ -172,6 +207,7 @@
         return;
       }
       setFeedback('');
+      clearShareLinkPanel();
       saveBtn.disabled = true;
       var url = absoluteUrlForUploadPath(invoicePath);
       fetch(url, { credentials: 'same-origin' })
@@ -200,12 +236,48 @@
         .then(function (out) {
           if (!out || !out.ok || !out.data || !out.data.success) {
             setFeedback((out && out.data && out.data.message) || 'Could not save to cloud.', true);
+            clearShareLinkPanel();
             return;
           }
           setFeedback('Saved to cloud folder "' + folder + '".', false);
+          var file = out.data.file;
+          var stored = file && (file.stored_name || file.storedName);
+          if (!stored) {
+            clearShareLinkPanel();
+            return;
+          }
+          return fetch('/api/site-cloud/files/' + encodeURIComponent(stored) + '/share-link', {
+            method: 'POST',
+            headers: hdr,
+            credentials: 'same-origin',
+          })
+            .then(function (r) {
+              return r.json().then(function (data) {
+                return { ok: r.ok, data: data };
+              });
+            })
+            .then(function (shareOut) {
+              if (!shareOut || !shareOut.ok || !shareOut.data || !shareOut.data.success || !shareOut.data.share) {
+                setFeedback(
+                  'Saved to cloud folder "' +
+                    folder +
+                    '". ' +
+                    ((shareOut && shareOut.data && shareOut.data.message) || 'Could not create temporary public link.'),
+                  false
+                );
+                clearShareLinkPanel();
+                return;
+              }
+              var sh = shareOut.data.share;
+              var token = sh.token || '';
+              var origin = typeof window !== 'undefined' && window.location ? window.location.origin : '';
+              var viewUrl = origin + '/site_cloud_share_view.html?token=' + encodeURIComponent(token);
+              showTemporaryPublicLink(viewUrl, sh.expires_at);
+            });
         })
         .catch(function () {
           setFeedback('Could not load invoice file or upload failed.', true);
+          clearShareLinkPanel();
         })
         .finally(function () {
           saveBtn.disabled = !selectEl.value;
@@ -630,6 +702,8 @@
       html += '<button type="button" class="btn-worklogs btn-worklogs-secondary worklogs-btn-save-invoice-cloud" disabled><i class="bi bi-cloud-upload"></i> Save</button>';
       html += '</div>';
       html += '<div class="worklogs-cloud-save-feedback" role="status" aria-live="polite"></div>';
+      html +=
+        '<div class="worklogs-cloud-share-link-panel" role="region" aria-label="Temporary public link" hidden></div>';
       html += '</div>';
     } else {
       html += '<p class="worklogs-invoice-text">No invoice file uploaded yet.</p>';

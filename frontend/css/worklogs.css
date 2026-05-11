@@ -466,6 +466,38 @@
   border: 1px solid #bbf7d0;
 }
 
+.worklogs-cloud-share-link-panel {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--divider);
+  background: var(--bg-muted, #f8fafc);
+}
+.worklogs-cloud-share-link-panel[hidden] {
+  display: none !important;
+}
+.worklogs-cloud-share-link-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.worklogs-cloud-share-link-url {
+  display: block;
+  font-size: 0.8rem;
+  word-break: break-all;
+  color: var(--accent, #2563eb);
+  text-decoration: underline;
+}
+.worklogs-cloud-share-link-url:hover {
+  text-decoration: none;
+}
+.worklogs-cloud-share-link-meta {
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .worklogs-details-subhd {
   font-size: 0.95rem;
   font-weight: 600;
