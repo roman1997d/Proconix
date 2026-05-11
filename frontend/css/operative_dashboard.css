@@ -1136,6 +1136,19 @@ a.op-doc-row:active {
   border-bottom: 1px solid var(--op-card-border);
 }
 
+.op-wlo-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.op-wlo-header-inner h3 {
+  margin: 0;
+}
+
 .op-modal-header h3 {
   margin: 0;
   font-size: 1.15rem;

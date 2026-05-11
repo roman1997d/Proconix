@@ -505,10 +505,47 @@
     <div class="op-modal-dialog op-modal-dialog-worklog op-modal-dialog-worklog-overview">
       <div class="op-modal-content">
         <div class="op-modal-header">
-          <h3 id="op-wlo-title">Work entry</h3>
+          <div class="op-wlo-header-inner">
+            <h3 id="op-wlo-title">Work entry</h3>
+            <button type="button" class="op-btn op-btn-secondary op-btn-sm d-none" id="op-wlo-btn-update-record">Update record</button>
+          </div>
           <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
         </div>
         <div class="op-modal-body op-worklog-overview-body" id="op-worklog-overview-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Update time sheet jobs on an existing work entry -->
+  <div class="op-modal op-modal-worklog" id="op-modal-work-entry-update-timesheet" aria-hidden="true" role="dialog" aria-labelledby="op-wu-title">
+    <div class="op-modal-backdrop" data-dismiss="modal"></div>
+    <div class="op-modal-dialog op-modal-dialog-worklog">
+      <div class="op-modal-content">
+        <div class="op-modal-header">
+          <h3 id="op-wu-title" class="mb-0">Update time sheet jobs</h3>
+          <button type="button" class="op-modal-close" data-dismiss="modal" aria-label="Close">&times;</button>
+        </div>
+        <div class="op-modal-body">
+          <p class="op-text-muted" style="margin-top:0;font-size:0.9rem;">Change period, edit existing time sheet lines, or add more jobs. QA price work on this entry is kept as-is.</p>
+          <div class="op-field-row">
+            <div class="op-field">
+              <label for="op-wu-period-from">For period of time (from) <span class="op-required">*</span></label>
+              <input type="date" id="op-wu-period-from" required>
+            </div>
+            <div class="op-field">
+              <label for="op-wu-period-to">For period of time (to) <span class="op-required">*</span></label>
+              <input type="date" id="op-wu-period-to" required>
+            </div>
+          </div>
+          <div id="op-wu-jobs"></div>
+          <div class="op-field">
+            <button type="button" class="op-btn op-btn-secondary op-btn-sm" id="op-wu-add-job">Add another job</button>
+          </div>
+          <div id="op-wu-feedback" class="op-feedback d-none" role="alert"></div>
+          <div class="op-field" style="margin-bottom:0;">
+            <button type="button" class="op-btn op-btn-primary" id="op-wu-save">Save changes</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

@@ -2368,7 +2368,12 @@
   var modalWorkReport = document.getElementById('op-modal-work-report');
   var formWorkReport = document.getElementById('op-form-work-report');
   var modalWorklogOverview = document.getElementById('op-modal-worklog-overview');
+  var modalWorkEntryTimesheetUpdate = document.getElementById('op-modal-work-entry-update-timesheet');
   var worklogOverviewBodyEl = document.getElementById('op-worklog-overview-body');
+  /** @type {object|null} entry shown in overview (for Update record). */
+  var worklogOverviewCurrentEntry = null;
+  /** @type {object|null} entry being PATCHed from Update time sheet modal. */
+  var worklogTimesheetUpdateEntry = null;
   /** @type {Array<object>} last loaded entries for overview modal */
   var opWorklogEntriesCache = [];
   /** @type {Array<object>} time sheet list modal — for "Continue adding jobs" */
@@ -2547,6 +2552,14 @@
     }
     parts.push(qaExtra);
 
+    /** URLs already shown under QA steps or timesheet jobs — skip them in the flat "Photos" section. */
+    var seenOverviewPhotoUrls = {};
+    function markOverviewPhotoSeen(url) {
+      if (url == null || typeof url !== 'string') return;
+      var k = url.trim();
+      if (k) seenOverviewPhotoUrls[k.toLowerCase()] = true;
+    }
+
     var ts = entry.timesheetJobs;
     if (Array.isArray(ts)) {
       ts.forEach(function (block) {
@@ -2597,6 +2610,7 @@
               if (urls.length) {
                 qaHtml += '<div class="op-worklog-overview-photos" style="margin-top:6px;">';
                 urls.forEach(function (url) {
+                  markOverviewPhotoSeen(url);
                   qaHtml +=
                     '<img src="' +
                     escapeHtml(url) +
@@ -2627,6 +2641,7 @@
             ' — photos</h4><div class="op-worklog-overview-photos">'
         );
         photos.forEach(function (url) {
+          markOverviewPhotoSeen(url);
           parts.push(
             '<img src="' +
               escapeHtml(url) +
@@ -2640,9 +2655,14 @@
     }
 
     var purls = entry.photoUrls && Array.isArray(entry.photoUrls) ? entry.photoUrls : [];
-    if (purls.length) {
+    var extraPurls = purls.filter(function (url) {
+      if (url == null || typeof url !== 'string') return false;
+      var k = url.trim().toLowerCase();
+      return k && !seenOverviewPhotoUrls[k];
+    });
+    if (extraPurls.length) {
       parts.push('<div class="op-worklog-overview-section"><h4>Photos</h4><div class="op-worklog-overview-photos">');
-      purls.forEach(function (url) {
+      extraPurls.forEach(function (url) {
         parts.push(
           '<img src="' + escapeHtml(url) + '" alt="" data-op-overview-photo="' + escapeHtml(url) + '">'
         );
@@ -2662,10 +2682,154 @@
     return parts.join('');
   }
 
+  function uploadWorklogImageForPatch(file) {
+    var fd = new FormData();
+    fd.append('file', file);
+    return api('/work-log/upload', { method: 'POST', body: fd }).then(function (r) {
+      if (r && r.data && r.data.success && r.data.path) return r.data.path;
+      throw new Error((r && r.data && r.data.message) || 'Upload failed');
+    });
+  }
+
+  function fillWorkEntryTimesheetUpdateForm(entry) {
+    var jobsWrap = document.getElementById('op-wu-jobs');
+    var fromEl = document.getElementById('op-wu-period-from');
+    var toEl = document.getElementById('op-wu-period-to');
+    var d = todayIsoDate();
+    if (jobsWrap) jobsWrap.innerHTML = '';
+    var meta = extractTimesheetMetaFromJobs((entry && entry.timesheetJobs) || []);
+    var plain = extractPlainTimesheetJobs((entry && entry.timesheetJobs) || []);
+    if (!plain.length) {
+      addTimesheetJobItem(null, 'op-wu-jobs');
+    } else {
+      plain.forEach(function (job) {
+        addTimesheetJobItem(normalizeSavedTimesheetJob(job), 'op-wu-jobs');
+      });
+    }
+    if (fromEl) fromEl.value = meta && meta.from ? meta.from : d;
+    if (toEl) toEl.value = meta && meta.to ? meta.to : d;
+  }
+
+  function openWorkEntryTimesheetUpdateModal(entry) {
+    if (!entry || entry.id == null || !modalWorkEntryTimesheetUpdate) return;
+    var st = String(entry.status || 'pending').toLowerCase();
+    if (st === 'approved' || st === 'completed' || st === 'rejected') return;
+    var myId = getOperativeUserId();
+    var subId = entry.submittedByUserId != null ? Number(entry.submittedByUserId) : null;
+    if (myId == null || subId == null || Number(subId) !== Number(myId)) return;
+
+    worklogTimesheetUpdateEntry = entry;
+    closeModal(modalWorklogOverview);
+    var ht = document.getElementById('op-wu-title');
+    if (ht) ht.textContent = entry.jobId ? 'Update time sheet · ' + String(entry.jobId) : 'Update time sheet jobs';
+    fillWorkEntryTimesheetUpdateForm(entry);
+    var wuFb = document.getElementById('op-wu-feedback');
+    if (wuFb) hideFeedback(wuFb);
+    openModal(modalWorkEntryTimesheetUpdate);
+  }
+
+  function saveWorkEntryTimesheetUpdate() {
+    var entry = worklogTimesheetUpdateEntry;
+    var fb = document.getElementById('op-wu-feedback');
+    var wlFb = document.getElementById('op-worklog-feedback');
+    if (!entry || entry.id == null) {
+      if (fb) showFeedback(fb, 'No entry selected.', true);
+      return;
+    }
+    if (!entry.workType && !getOperativeRole()) {
+      if (fb) showFeedback(fb, 'Your account has no role for work type. Contact your manager.', true);
+      return;
+    }
+    var pfEl = document.getElementById('op-wu-period-from');
+    var ptEl = document.getElementById('op-wu-period-to');
+    var periodFrom = pfEl ? String(pfEl.value || '').trim() : '';
+    var periodTo = ptEl ? String(ptEl.value || '').trim() : '';
+    if (!periodFrom || !periodTo) {
+      if (fb) showFeedback(fb, 'Please select work period dates (from and to).', true);
+      return;
+    }
+    var cards = Array.from(document.querySelectorAll('#op-wu-jobs .op-wr-job-card'));
+    if (!cards.length) {
+      if (fb) showFeedback(fb, 'Add at least one job row.', true);
+      return;
+    }
+    if (fb) showFeedback(fb, 'Saving…', false);
+
+    function cardToUploadPromise(card) {
+      var durVal = parseFloat(card.querySelector('.op-wr-job-duration').value);
+      var durUnit = (card.querySelector('.op-wr-job-unit').value || 'hours').toLowerCase();
+      var loc = (card.querySelector('.op-wr-job-location').value || '').trim() || null;
+      var desc = (card.querySelector('.op-wr-job-description').value || '').trim() || null;
+      var stage = card.querySelector('.op-wr-job-stage').value || 'ongoing';
+      var prog = parseInt(card.querySelector('.op-wr-job-progress').value || '0', 10);
+      var files = card.__photoFiles || [];
+      var existing = Array.isArray(card.__existingPhotoPaths) ? card.__existingPhotoPaths.slice() : [];
+      return Promise.all(files.map(function (f) { return uploadWorklogImageForPatch(f); })).then(function (newPaths) {
+        return {
+          location: loc,
+          description: desc,
+          duration: !isNaN(durVal) ? durVal : null,
+          duration_unit: durUnit,
+          stage: stage,
+          progress_pct: isNaN(prog) ? 0 : prog,
+          photos: (existing || []).concat(newPaths || []),
+        };
+      });
+    }
+
+    Promise.all(cards.map(cardToUploadPromise))
+      .then(function (tsJobs) {
+        var payload = {
+          workType: entry.workType || getOperativeRole(),
+          quantity: entry.quantity != null ? entry.quantity : null,
+          unitPrice: entry.unitPrice != null ? entry.unitPrice : null,
+          total: entry.total != null ? entry.total : null,
+          description: (entry.description && String(entry.description).trim()) || null,
+          photoUrls: Array.isArray(entry.photoUrls) ? entry.photoUrls : [],
+          timesheetJobs: tsJobs,
+          timesheetPeriodFrom: periodFrom,
+          timesheetPeriodTo: periodTo,
+        };
+        if (entry.invoiceFilePath) payload.invoiceFilePath = entry.invoiceFilePath;
+        return api('/work-log/' + encodeURIComponent(String(entry.id)), { method: 'PATCH', body: JSON.stringify(payload) });
+      })
+      .then(function (r) {
+        if (r.data && r.data.success) {
+          if (fb) showFeedback(fb, r.data.message || 'Saved.', false);
+          loadWorklogList();
+          setTimeout(function () {
+            closeModal(modalWorkEntryTimesheetUpdate);
+            worklogTimesheetUpdateEntry = null;
+            if (fb) hideFeedback(fb);
+            if (wlFb) showFeedback(wlFb, 'Time sheet jobs updated.', false);
+          }, 600);
+        } else {
+          if (fb) showFeedback(fb, (r.data && r.data.message) || 'Could not save.', true);
+        }
+      })
+      .catch(function (err) {
+        if (fb) showFeedback(fb, err.message || 'Could not save.', true);
+      });
+  }
+
   function openWorklogOverviewModal(entry) {
     if (!modalWorklogOverview || !worklogOverviewBodyEl) return;
+    worklogOverviewCurrentEntry = entry || null;
     document.getElementById('op-wlo-title').textContent = entry && entry.jobId ? 'Work entry ' + entry.jobId : 'Work entry';
     worklogOverviewBodyEl.innerHTML = buildWorklogOverviewHtml(entry);
+    var btnUp = document.getElementById('op-wlo-btn-update-record');
+    if (btnUp) {
+      if (!entry) {
+        btnUp.classList.add('d-none');
+      } else {
+        var st = String(entry.status || 'pending').toLowerCase();
+        var locked = st === 'approved' || st === 'completed' || st === 'rejected';
+        var myId = getOperativeUserId();
+        var subId = entry.submittedByUserId != null ? Number(entry.submittedByUserId) : null;
+        var isMine = myId != null && subId != null && Number(subId) === Number(myId);
+        btnUp.classList.toggle('d-none', locked || !isMine);
+      }
+    }
     worklogOverviewBodyEl.querySelectorAll('img[data-op-overview-photo]').forEach(function (img) {
       img.addEventListener('click', function () {
         var u = img.getAttribute('data-op-overview-photo');
@@ -2674,6 +2838,33 @@
     });
     openModal(modalWorklogOverview);
   }
+
+  (function bindWorklogOverviewUpdateUi() {
+    var btnWlo = document.getElementById('op-wlo-btn-update-record');
+    if (btnWlo && !btnWlo.dataset.bound) {
+      btnWlo.dataset.bound = '1';
+      btnWlo.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (worklogOverviewCurrentEntry) openWorkEntryTimesheetUpdateModal(worklogOverviewCurrentEntry);
+      });
+    }
+    var btnWuAdd = document.getElementById('op-wu-add-job');
+    if (btnWuAdd && !btnWuAdd.dataset.bound) {
+      btnWuAdd.dataset.bound = '1';
+      btnWuAdd.addEventListener('click', function (e) {
+        e.preventDefault();
+        addTimesheetJobItem(null, 'op-wu-jobs');
+      });
+    }
+    var btnWuSave = document.getElementById('op-wu-save');
+    if (btnWuSave && !btnWuSave.dataset.bound) {
+      btnWuSave.dataset.bound = '1';
+      btnWuSave.addEventListener('click', function (e) {
+        e.preventDefault();
+        saveWorkEntryTimesheetUpdate();
+      });
+    }
+  })();
 
   var modalWlInvoiceEmail = document.getElementById('op-modal-wl-invoice-email');
 
@@ -2874,8 +3065,9 @@
     });
   }
 
-  function addTimesheetJobItem(initial) {
-    var wrap = document.getElementById('op-wr-jobs');
+  function addTimesheetJobItem(initial, jobsWrapId) {
+    var wrapId = jobsWrapId || 'op-wr-jobs';
+    var wrap = document.getElementById(wrapId);
     if (!wrap) return;
     var idx = wrap.querySelectorAll('.op-wr-job-card').length + 1;
     var card = document.createElement('div');
