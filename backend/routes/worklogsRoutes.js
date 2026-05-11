@@ -9,6 +9,7 @@ const {
   list,
   workers,
   getOne,
+  downloadInvoiceFile,
   update,
   approve,
   reject,
@@ -24,6 +25,7 @@ router.post('/archive-bulk', requireManagerAuth, archiveBulk);
 router.post('/', requireManagerAuth, create);
 router.get('/', requireManagerAuth, list);
 router.get('/:id/media-package', requireManagerAuth, mediaPackageForJob);
+router.get('/:id/invoice-file', requireManagerAuth, downloadInvoiceFile);
 router.get('/:id', requireManagerAuth, getOne);
 router.patch('/:id', requireManagerAuth, update);
 router.post('/:id/approve', requireManagerAuth, approve);

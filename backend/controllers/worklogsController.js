@@ -497,6 +497,54 @@ async function getOne(req, res) {
 }
 
 /**
+ * GET /api/worklogs/:id/invoice-file
+ * Manager-authenticated download of the job invoice/timesheet file from disk (avoids relying on public /uploads).
+ */
+async function downloadInvoiceFile(req, res) {
+  const companyId = getCompanyId(req);
+  if (companyId == null) {
+    return res.status(403).json({ success: false, message: 'Access denied.' });
+  }
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid job id.' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT invoice_file_path FROM work_logs WHERE id = $1 AND company_id = $2`,
+      [id, companyId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Job not found.' });
+    }
+    const relPath = result.rows[0].invoice_file_path;
+    if (!relPath || typeof relPath !== 'string' || !relPath.trim()) {
+      return res.status(404).json({ success: false, message: 'No invoice file for this job.' });
+    }
+    const abs = toAbsoluteUploadPath(relPath.trim());
+    if (!abs) {
+      return res.status(400).json({ success: false, message: 'Invalid invoice file path.' });
+    }
+    if (!fs.existsSync(abs)) {
+      return res.status(404).json({ success: false, message: 'Invoice file missing on server.' });
+    }
+    const baseName = path.basename(abs);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+    return res.download(abs, baseName);
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(500).json({ success: false, message: 'Work logs table does not exist.' });
+    }
+    if (err && err.code === '42703' && /invoice_file_path/i.test(err.message || '')) {
+      return res.status(404).json({ success: false, message: 'No invoice file for this job.' });
+    }
+    console.error('worklogsController downloadInvoiceFile:', err);
+    return res.status(500).json({ success: false, message: 'Failed to download invoice file.' });
+  }
+}
+
+/**
  * PATCH /api/worklogs/:id - update quantity, unit_price, total; append edit_history; set work_was_edited, status = waiting_worker
  */
 async function update(req, res) {
@@ -781,6 +829,7 @@ module.exports = {
   list,
   workers,
   getOne,
+  downloadInvoiceFile,
   update,
   approve,
   reject,

@@ -209,12 +209,37 @@
       setFeedback('');
       clearShareLinkPanel();
       saveBtn.disabled = true;
-      var url = absoluteUrlForUploadPath(invoicePath);
-      fetch(url, { credentials: 'same-origin' })
-        .then(function (res) {
-          if (!res.ok) throw new Error('load');
+      var workLogId = content.dataset && content.dataset.id;
+      var apiHeaders = getHeaders();
+      function fetchInvoiceBlob() {
+        if (workLogId != null && workLogId !== '' && apiHeaders) {
+          return fetch(
+            '/api/worklogs/' + encodeURIComponent(String(workLogId)) + '/invoice-file',
+            { headers: apiHeaders, credentials: 'same-origin' }
+          ).then(function (res) {
+            if (!res.ok) {
+              return res
+                .json()
+                .catch(function () {
+                  return {};
+                })
+                .then(function (body) {
+                  var msg = (body && body.message) || res.statusText || String(res.status);
+                  throw new Error('Download failed: ' + msg);
+                });
+            }
+            return res.blob();
+          });
+        }
+        var url = absoluteUrlForUploadPath(invoicePath);
+        return fetch(url, { credentials: 'same-origin' }).then(function (res) {
+          if (!res.ok) {
+            throw new Error('Download failed (file URL): HTTP ' + res.status);
+          }
           return res.blob();
-        })
+        });
+      }
+      fetchInvoiceBlob()
         .then(function (blob) {
           var baseName = String(invoicePath).split(/[/\\]/).pop() || 'work-log-invoice.bin';
           var mime = blob.type || 'application/octet-stream';
@@ -275,8 +300,9 @@
               showTemporaryPublicLink(viewUrl, sh.expires_at);
             });
         })
-        .catch(function () {
-          setFeedback('Could not load invoice file or upload failed.', true);
+        .catch(function (err) {
+          var m = err && err.message ? String(err.message) : '';
+          setFeedback(m || 'Could not load invoice file or upload failed.', true);
           clearShareLinkPanel();
         })
         .finally(function () {
