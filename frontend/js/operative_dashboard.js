@@ -3159,42 +3159,61 @@
   function openPhotoStamperMiniApp(opts) {
     opts = opts || {};
     var operativeName = opts.operativeName || getOperativeName() || 'Operative';
-    var projectName =
+    var projectNameCandidate =
       opts.projectName ||
       (currentWorklogProject && (currentWorklogProject.name || currentWorklogProject.project_name)) ||
-      '—';
+      '';
 
     var reqId = 'ps_' + Date.now() + '_' + String(__photoStamperReqCounter++);
-    var payloadUrl =
-      window.location.origin +
-      '/photo_stamper.html?requestId=' +
-      encodeURIComponent(reqId) +
-      '&project=' +
-      encodeURIComponent(String(projectName || '—')) +
-      '&operative=' +
-      encodeURIComponent(String(operativeName || '—'));
 
-    return new Promise(function (resolve, reject) {
-      __photoStamperPending[reqId] = { resolve: resolve, reject: reject };
+    function openWithProjectName(projectName) {
+      var payloadUrl =
+        window.location.origin +
+        '/photo_stamper.html?requestId=' +
+        encodeURIComponent(reqId) +
+        '&project=' +
+        encodeURIComponent(String(projectName || '—')) +
+        '&operative=' +
+        encodeURIComponent(String(operativeName || '—'));
 
-      var popup = null;
-      try {
-        popup = window.open(payloadUrl, 'photoStamper_' + reqId, 'width=430,height=820');
-      } catch (_) {}
+      return new Promise(function (resolve, reject) {
+        __photoStamperPending[reqId] = { resolve: resolve, reject: reject };
 
-      if (!popup) {
-        delete __photoStamperPending[reqId];
-        reject(new Error('Pop-up blocked for photo stamping. Please allow pop-ups.'));
-        return;
-      }
+        var popup = null;
+        try {
+          popup = window.open(payloadUrl, 'photoStamper_' + reqId, 'width=430,height=820');
+        } catch (_) {}
 
-      // Safety timeout (user closes popup)
-      window.setTimeout(function () {
-        if (!__photoStamperPending[reqId]) return;
-        delete __photoStamperPending[reqId];
-        reject(new Error('Photo stamping timed out.'));
-      }, 60000);
-    });
+        if (!popup) {
+          delete __photoStamperPending[reqId];
+          reject(new Error('Pop-up blocked for photo stamping. Please allow pop-ups.'));
+          return;
+        }
+
+        // Safety timeout (user closes popup)
+        window.setTimeout(function () {
+          if (!__photoStamperPending[reqId]) return;
+          delete __photoStamperPending[reqId];
+          reject(new Error('Photo stamping timed out.'));
+        }, 60000);
+      });
+    }
+
+    // If modal was opened but /project/current didn't resolve yet,
+    // fetch it on-demand to avoid missing project name in the overlay.
+    if (projectNameCandidate && String(projectNameCandidate).trim() !== '') {
+      return openWithProjectName(projectNameCandidate);
+    }
+
+    return api('/project/current')
+      .then(function (r) {
+        var proj = r && r.data ? r.data.project : null;
+        var name = proj && (proj.name || proj.project_name || '');
+        return openWithProjectName(name || '—');
+      })
+      .catch(function () {
+        return openWithProjectName('—');
+      });
   }
 
   function addTimesheetJobItem(initial, jobsWrapId) {
