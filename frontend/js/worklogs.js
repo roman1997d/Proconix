@@ -15,32 +15,51 @@
     } catch (_) { return null; }
   }
 
+  function sanitizeManagerEmail(raw) {
+    return String(raw || '')
+      .trim()
+      .replace(/[\r\n\u0000]/g, '');
+  }
+
   function getHeaders() {
     var session = getSession();
-    if (!session || session.manager_id == null || !session.email) return null;
+    var email = sanitizeManagerEmail(session && session.email);
+    if (!session || session.manager_id == null || !email) return null;
     return {
       'Content-Type': 'application/json',
       'X-Manager-Id': String(session.manager_id),
-      'X-Manager-Email': session.email,
+      'X-Manager-Email': email,
     };
   }
 
   /** For multipart / Site Cloud (do not set Content-Type). */
   function getManagerCloudHeaders() {
     var session = getSession();
-    if (!session || session.manager_id == null || !session.email) return null;
+    var email = sanitizeManagerEmail(session && session.email);
+    if (!session || session.manager_id == null || !email) return null;
     return {
       'X-Manager-Id': String(session.manager_id),
-      'X-Manager-Email': session.email,
+      'X-Manager-Email': email,
     };
   }
 
   function absoluteUrlForUploadPath(p) {
     var s = String(p || '').trim();
     if (!s) return '';
-    if (/^https?:\/\//i.test(s)) return s;
+    if (/^https?:\/\//i.test(s)) {
+      try {
+        return new URL(s).href;
+      } catch (_) {
+        return '';
+      }
+    }
     if (s.indexOf('/') !== 0) s = '/' + s;
-    return window.location.origin + s;
+    if (typeof window === 'undefined' || !window.location || !window.location.origin) return s;
+    try {
+      return new URL(s, window.location.origin).href;
+    } catch (_) {
+      return '';
+    }
   }
 
   /** Manager work log detail photo lightbox gallery */
@@ -232,6 +251,9 @@
           });
         }
         var url = absoluteUrlForUploadPath(invoicePath);
+        if (!url) {
+          throw new Error('Download failed: invalid file address (check the file path).');
+        }
         return fetch(url, { credentials: 'same-origin' }).then(function (res) {
           if (!res.ok) {
             throw new Error('Download failed (file URL): HTTP ' + res.status);
