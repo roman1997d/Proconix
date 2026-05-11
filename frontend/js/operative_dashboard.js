@@ -3108,6 +3108,95 @@
     });
   }
 
+  // ---- Photo stamping mini app integration ----
+  var __photoStamperPending = {};
+  var __photoStamperReqCounter = 1;
+
+  window.addEventListener('message', function (ev) {
+    var d = ev && ev.data ? ev.data : null;
+    if (!d || typeof d !== 'object') return;
+    if (d.type !== 'PROCONIX_STAMPED_PHOTO') return;
+    var reqId = d.requestId;
+    if (!reqId || !__photoStamperPending[reqId]) return;
+    var pending = __photoStamperPending[reqId];
+    delete __photoStamperPending[reqId];
+
+    var blob = d.blob || null;
+    var fileName = d.fileName || ('stamped_' + Date.now() + '.jpg');
+
+    if (blob) {
+      try {
+        var file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
+        pending.resolve({ file: file, fileName: fileName });
+      } catch (_) {
+        pending.resolve({ file: blob, fileName: fileName });
+      }
+      return;
+    }
+
+    // Fallback (if blob is not passed for some reason)
+    if (d.dataUrl && /^data:image\//i.test(d.dataUrl)) {
+      fetch(d.dataUrl)
+        .then(function (r) {
+          return r.blob();
+        })
+        .then(function (b) {
+          var f = null;
+          try {
+            f = new File([b], fileName, { type: b.type || 'image/jpeg' });
+          } catch (_) {}
+          pending.resolve({ file: f || b, fileName: fileName });
+        })
+        .catch(function (err) {
+          pending.reject(err || new Error('Stamp image conversion failed.'));
+        });
+      return;
+    }
+
+    pending.reject(new Error('Photo stamper returned no image data.'));
+  });
+
+  function openPhotoStamperMiniApp(opts) {
+    opts = opts || {};
+    var operativeName = opts.operativeName || getOperativeName() || 'Operative';
+    var projectName =
+      opts.projectName ||
+      (currentWorklogProject && (currentWorklogProject.name || currentWorklogProject.project_name)) ||
+      '—';
+
+    var reqId = 'ps_' + Date.now() + '_' + String(__photoStamperReqCounter++);
+    var payloadUrl =
+      window.location.origin +
+      '/photo_stamper.html?requestId=' +
+      encodeURIComponent(reqId) +
+      '&project=' +
+      encodeURIComponent(String(projectName || '—')) +
+      '&operative=' +
+      encodeURIComponent(String(operativeName || '—'));
+
+    return new Promise(function (resolve, reject) {
+      __photoStamperPending[reqId] = { resolve: resolve, reject: reject };
+
+      var popup = null;
+      try {
+        popup = window.open(payloadUrl, 'photoStamper_' + reqId, 'width=430,height=820');
+      } catch (_) {}
+
+      if (!popup) {
+        delete __photoStamperPending[reqId];
+        reject(new Error('Pop-up blocked for photo stamping. Please allow pop-ups.'));
+        return;
+      }
+
+      // Safety timeout (user closes popup)
+      window.setTimeout(function () {
+        if (!__photoStamperPending[reqId]) return;
+        delete __photoStamperPending[reqId];
+        reject(new Error('Photo stamping timed out.'));
+      }, 60000);
+    });
+  }
+
   function addTimesheetJobItem(initial, jobsWrapId) {
     var wrapId = jobsWrapId || 'op-wr-jobs';
     var wrap = document.getElementById(wrapId);
@@ -3133,7 +3222,7 @@
       '<div class="op-field"><label>Photos</label>' +
       '<input type="file" class="op-wr-job-photos-input" accept="image/*" multiple style="display:none">' +
       '<div class="op-wr-job-add-photo-row">' +
-      '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-wr-job-add-more">Add more pictures</button>' +
+      '<button type="button" class="op-btn op-btn-secondary op-btn-sm op-wr-job-add-more">Take photo</button>' +
       '<span class="op-wr-job-photo-count">0 / ' +
       String(MAX_JOB_PHOTOS) +
       '</span>' +
@@ -3175,25 +3264,29 @@
       }
     }
 
-    if (btnAddMore && photosInput) {
+    if (btnAddMore) {
       btnAddMore.addEventListener('click', function () {
-        photosInput.click();
-      });
-      photosInput.addEventListener('change', function () {
-        var incoming = Array.from(this.files || []);
-        if (incoming.length === 0) return;
-        var used =
-          (card.__existingPhotoPaths || []).length + (card.__photoFiles || []).length;
+        var used = (card.__existingPhotoPaths || []).length + (card.__photoFiles || []).length;
         var remaining = MAX_JOB_PHOTOS - used;
-        if (remaining <= 0) {
-          this.value = '';
-          renderPhotoPreview();
-          return;
-        }
-        incoming = incoming.slice(0, remaining);
-        card.__photoFiles = (card.__photoFiles || []).concat(incoming);
-        this.value = '';
-        renderPhotoPreview();
+        if (remaining <= 0) return;
+
+        btnAddMore.disabled = true;
+        var wlFb = document.getElementById('op-worklog-feedback');
+        if (wlFb) showFeedback(wlFb, 'Opening camera for stamped photo…', false);
+
+        openPhotoStamperMiniApp({})
+          .then(function (out) {
+            var f = out && out.file ? out.file : null;
+            if (!f) throw new Error('No photo returned.');
+            card.__photoFiles = (card.__photoFiles || []).concat([f]);
+            renderPhotoPreview();
+          })
+          .catch(function (err) {
+            if (wlFb) showFeedback(wlFb, (err && err.message) || 'Could not capture photo.', true);
+          })
+          .finally(function () {
+            btnAddMore.disabled = false;
+          });
       });
     }
 

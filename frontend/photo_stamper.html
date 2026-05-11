@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Photo Stamper</title>
+    <link rel="stylesheet" href="css/photo_stamper.css" />
+  </head>
+  <body>
+    <div class="ps-root">
+      <div class="ps-topbar">
+        <div class="ps-title">Stamped photo</div>
+        <button type="button" class="ps-btn ps-btn-ghost" id="ps-cancel-btn" aria-label="Cancel">
+          Cancel
+        </button>
+      </div>
+
+      <div class="ps-preview-wrap">
+        <video id="ps-video" autoplay playsinline muted></video>
+        <canvas id="ps-stamp-canvas" class="d-none"></canvas>
+
+        <div class="ps-overlay">
+          <div class="ps-overlay-top" id="ps-overlay-top">
+            <div id="ps-overlay-project">Project: —</div>
+            <div id="ps-overlay-gps">GPS: —</div>
+          </div>
+
+          <div class="ps-overlay-bottom-right" id="ps-overlay-bottom-right">
+            <div id="ps-overlay-ts">—</div>
+            <div id="ps-overlay-op">Operative: —</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ps-actions">
+        <button type="button" class="ps-btn ps-btn-primary" id="ps-capture-btn">
+          Capture
+        </button>
+
+        <button type="button" class="ps-btn ps-btn-secondary" id="ps-gallery-btn">
+          Use existing photo
+        </button>
+        <input type="file" id="ps-gallery-input" accept="image/*" capture="environment" class="d-none" />
+      </div>
+
+      <div class="ps-feedback" id="ps-feedback" aria-live="polite"></div>
+    </div>
+
+    <script src="js/photo_stamper.js"></script>
+  </body>
+</html>
+

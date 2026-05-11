@@ -723,6 +723,7 @@ function getWorkLogsHtml() {
             <label for="worklogs-filter-status">Status</label>
             <select id="worklogs-filter-status" class="worklogs-input">
               <option value="">All</option>
+              <option value="draft">Still working on</option>
               <option value="pending">Pending</option>
               <option value="edited">Edited</option>
               <option value="waiting_worker">Waiting Worker</option>
