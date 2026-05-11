@@ -102,6 +102,24 @@ body.ps-body {
   display: block;
 }
 
+.ps-preview-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #000;
+}
+
+.ps-preview-wrap--review .ps-overlay {
+  display: none;
+}
+
+.ps-preview-wrap--review #ps-video {
+  display: none;
+}
+
 #ps-stamp-canvas {
   position: absolute;
   left: -9999px;
@@ -126,11 +144,12 @@ body.ps-body {
 }
 
 .ps-overlay-top > div {
-  font-size: clamp(11px, 2.8vw, 14px);
+  font-size: clamp(14px, 4.2vw, 20px);
   font-weight: 700;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.28);
+  color: rgba(255, 255, 255, 0.92);
   line-height: 1.25;
   word-break: break-word;
 }
@@ -148,11 +167,12 @@ body.ps-body {
 }
 
 .ps-overlay-bottom-right > div {
-  font-size: clamp(11px, 2.8vw, 14px);
+  font-size: clamp(14px, 4.2vw, 20px);
   font-weight: 700;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.28);
+  color: rgba(255, 255, 255, 0.92);
   line-height: 1.25;
   word-break: break-word;
 }
@@ -185,7 +205,28 @@ body.ps-body {
   padding: 8px 0 0;
 }
 
-.ps-actions .ps-btn {
+.ps-actions-live .ps-btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.ps-actions-review {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ps-actions-review .ps-btn-full {
+  width: 100%;
+  flex: none;
+}
+
+.ps-actions-review-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.ps-actions-review-row .ps-btn {
   flex: 1 1 0;
   min-width: 0;
 }

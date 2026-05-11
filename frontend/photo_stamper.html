@@ -18,11 +18,12 @@
         </button>
       </div>
 
-      <div class="ps-preview-wrap">
+      <div class="ps-preview-wrap" id="ps-preview-wrap">
         <video id="ps-video" autoplay playsinline muted></video>
+        <img id="ps-preview-img" class="ps-preview-img d-none" alt="Stamped preview" />
         <canvas id="ps-stamp-canvas" class="d-none"></canvas>
 
-        <div class="ps-overlay">
+        <div class="ps-overlay" id="ps-overlay">
           <div class="ps-overlay-top" id="ps-overlay-top">
             <div id="ps-overlay-project">Project: —</div>
             <div id="ps-overlay-gps">GPS: —</div>
@@ -37,15 +38,19 @@
 
       <div class="ps-feedback" id="ps-feedback" aria-live="polite"></div>
 
-      <div class="ps-actions">
-        <button type="button" class="ps-btn ps-btn-primary" id="ps-capture-btn">
-          Capture
-        </button>
+      <div class="ps-actions ps-actions-live" id="ps-actions-live">
+        <button type="button" class="ps-btn ps-btn-primary" id="ps-capture-btn">Capture</button>
+        <button type="button" class="ps-btn ps-btn-secondary" id="ps-gallery-btn">Choose from gallery</button>
+        <input type="file" id="ps-gallery-input" accept="image/*" class="d-none" />
+      </div>
 
-        <button type="button" class="ps-btn ps-btn-secondary" id="ps-gallery-btn">
-          Use existing photo
-        </button>
-        <input type="file" id="ps-gallery-input" accept="image/*" capture="environment" class="d-none" />
+      <div class="ps-actions ps-actions-review d-none" id="ps-actions-review">
+        <button type="button" class="ps-btn ps-btn-primary ps-btn-full" id="ps-use-btn">Use photo</button>
+        <div class="ps-actions-review-row">
+          <button type="button" class="ps-btn ps-btn-secondary" id="ps-retake-btn">Take again</button>
+          <button type="button" class="ps-btn ps-btn-secondary" id="ps-gallery-review-btn">Gallery</button>
+        </div>
+        <input type="file" id="ps-gallery-input-review" accept="image/*" class="d-none" />
       </div>
     </div>
 
