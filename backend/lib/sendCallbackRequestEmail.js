@@ -834,6 +834,19 @@ function createTransport() {
   });
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+let contactUsSendMailCount = 0;
+
+function resolveContactRecipient() {
+  const to = (process.env.CALLBACK_NOTIFY_EMAIL || 'rdemian732@gmail.com').trim();
+  if (!EMAIL_RE.test(to) || /@brevo-mail\.com$/i.test(to)) {
+    const err = new Error('CALLBACK_NOTIFY_EMAIL must be a real inbox, not an internal relay address.');
+    err.code = 'SMTP_INVALID_CONTACT_RECIPIENT';
+    throw err;
+  }
+  return to;
+}
+
 /**
  * @param {{ fullName: string, email: string, phone: string }} payload
  * @returns {Promise<void>}
@@ -886,8 +899,8 @@ async function sendCallbackRequestEmail(payload) {
  * @param {{ name: string, company: string, email: string, phone: string, role: string, message: string }} payload
  */
 async function sendContactUsEmail(payload) {
-  const { name, company, email, phone, role, message } = payload;
-  const to = (process.env.CALLBACK_NOTIFY_EMAIL || 'rdemian732@gmail.com').trim();
+  const { name, company, email, phone, role, message, requestId } = payload;
+  const to = resolveContactRecipient();
   const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
 
   const transport = createTransport();
@@ -929,13 +942,43 @@ async function sendContactUsEmail(payload) {
     messageBlock: { title: 'How can we help?', text: message },
   });
 
-  await transport.sendMail({
+  const sendMailCount = ++contactUsSendMailCount;
+  const mailOptions = {
     from,
     to,
+    envelope: {
+      from,
+      to,
+    },
     replyTo: email,
     subject,
     text,
     html,
+  };
+
+  console.info('[contact/message] sendMail start', {
+    requestId: requestId || null,
+    timestamp: new Date().toISOString(),
+    sendMailCount,
+    smtpHost: String(process.env.SMTP_HOST || '').trim(),
+    from,
+    to,
+    envelope: mailOptions.envelope,
+    replyTo: email,
+    subject,
+  });
+
+  const info = await transport.sendMail(mailOptions);
+
+  console.info('[contact/message] sendMail accepted', {
+    requestId: requestId || null,
+    timestamp: new Date().toISOString(),
+    sendMailCount,
+    messageId: info && info.messageId,
+    accepted: info && info.accepted,
+    rejected: info && info.rejected,
+    pending: info && info.pending,
+    response: info && info.response,
   });
 }
 

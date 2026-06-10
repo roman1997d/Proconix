@@ -251,6 +251,7 @@
       var form = document.getElementById('contactForm');
       var messageEl = document.getElementById('contactFormMessage');
       var submitBtn = document.getElementById('contactSubmitBtn');
+      var isSubmitting = false;
 
       if (!form) return;
 
@@ -265,11 +266,14 @@
         event.preventDefault();
         event.stopPropagation();
 
+        if (isSubmitting) return;
+
         if (!form.checkValidity()) {
           form.classList.add('was-validated');
           return;
         }
 
+        isSubmitting = true;
         if (submitBtn) {
           submitBtn.disabled = true;
           submitBtn.textContent = 'Sending...';
@@ -306,6 +310,7 @@
         } catch (err) {
           showMessage('Network error. Please try again.', true);
         } finally {
+          isSubmitting = false;
           if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Send message';

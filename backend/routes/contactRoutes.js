@@ -5,6 +5,7 @@
  */
 
 const express = require('express');
+const { randomUUID } = require('crypto');
 const {
   sendCallbackRequestEmail,
   sendContactUsEmail,
@@ -14,6 +15,19 @@ const {
 const router = express.Router();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function buildContactLogBody(body) {
+  const rawMessage = typeof body.message === 'string' ? body.message : '';
+  return {
+    name: typeof body.name === 'string' ? body.name.trim() : '',
+    company: typeof body.company === 'string' ? body.company.trim() : '',
+    email: typeof body.email === 'string' ? body.email.trim() : '',
+    phone: typeof body.phone === 'string' ? body.phone.trim() : '',
+    role: typeof body.role === 'string' ? body.role.trim() : '',
+    messageLength: rawMessage.trim().length,
+    messagePreview: rawMessage.trim().slice(0, 300),
+  };
+}
 
 /** POST /api/contact/request-callback */
 router.post('/request-callback', async function (req, res) {
@@ -77,6 +91,7 @@ router.post('/request-callback', async function (req, res) {
 
 /** POST /api/contact/message — ContactUs.html form */
 router.post('/message', async function (req, res) {
+  const requestId = randomUUID();
   try {
     const body = req.body || {};
     const name = typeof body.name === 'string' ? body.name.trim() : '';
@@ -105,25 +120,46 @@ router.post('/message', async function (req, res) {
       return res.status(400).json({ success: false, message: 'Please enter a message (at least 10 characters).' });
     }
 
+    console.info('[contact/message] accepted', {
+      requestId,
+      timestamp: new Date().toISOString(),
+      body: buildContactLogBody(body),
+    });
+
     try {
-      await sendContactUsEmail({ name, company, email, phone, role, message });
+      await sendContactUsEmail({ name, company, email, phone, role, message, requestId });
     } catch (mailErr) {
       if (mailErr && mailErr.code === 'SMTP_NOT_CONFIGURED') {
-        console.error('contact/message: SMTP not configured.');
+        console.error('contact/message: SMTP not configured.', { requestId });
         return res.status(503).json({
           success: false,
           message: 'Email is not configured on the server. Please try again later or email us directly.',
         });
       }
+      if (mailErr && mailErr.code === 'SMTP_INVALID_CONTACT_RECIPIENT') {
+        console.error('contact/message: invalid contact recipient configuration.', {
+          requestId,
+          message: mailErr.message,
+        });
+        return res.status(503).json({
+          success: false,
+          message: 'Email recipient is not configured correctly. Please try again later or email us directly.',
+        });
+      }
       throw mailErr;
     }
+
+    console.info('[contact/message] completed', {
+      requestId,
+      timestamp: new Date().toISOString(),
+    });
 
     return res.status(200).json({
       success: true,
       message: 'Thank you for your message. We will get back to you shortly.',
     });
   } catch (err) {
-    console.error('contact/message error:', err);
+    console.error('contact/message error:', { requestId, error: err });
     return res.status(500).json({
       success: false,
       message: 'Failed to send message.',
