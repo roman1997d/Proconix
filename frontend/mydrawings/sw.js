@@ -1,5 +1,5 @@
 /* My Drawings PWA — cache the app shell only. PDFs are stored in IndexedDB on demand. */
-var CACHE = 'mydrawings-shell-v2';
+var CACHE = 'mydrawings-shell-v3';
 var PRECACHE = [
   '/mydrawings/',
   '/mydrawings/index.html',
@@ -39,8 +39,8 @@ self.addEventListener('fetch', function (event) {
   var url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  /* Safari iOS breaks Worker scripts intercepted by a service worker. */
-  if (req.destination === 'worker' || url.pathname.indexOf('/mydrawings/lib/pdf.worker') === 0) {
+  /* Safari iOS breaks Worker/script loads intercepted by a service worker. */
+  if (req.destination === 'worker' || url.pathname.indexOf('/mydrawings/lib/') === 0) {
     return;
   }
 

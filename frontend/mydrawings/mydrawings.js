@@ -35,6 +35,7 @@
     viewing: null,
     zoom: 1,
     pdfDoc: null,
+    nativePdfUrl: null,
     pageBase: [],
     pinch: null,
     installPrompt: null,
@@ -390,9 +391,8 @@
     renderList();
   }
 
-  /* ---------- PDF.js (same-origin; blob worker avoids Safari iOS SW + Worker bugs) ---------- */
+  /* ---------- PDF.js: Safari iOS cannot load pdf.worker as a Worker script ---------- */
   var pdfJsReady = null;
-  var workerBlobUrl = null;
 
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
@@ -405,24 +405,18 @@
     });
   }
 
+  function hasMainThreadWorker() {
+    try {
+      return !!(globalThis.pdfjsWorker && globalThis.pdfjsWorker.WorkerMessageHandler);
+    } catch (e) {
+      return false;
+    }
+  }
+
   function setupPdfWorker(lib) {
-    return fetch(PDFJS_WORKER, { credentials: 'same-origin' })
-      .then(function (res) {
-        if (!res.ok) throw new Error('worker');
-        return res.blob();
-      })
-      .then(function (blob) {
-        if (workerBlobUrl) {
-          try { URL.revokeObjectURL(workerBlobUrl); } catch (e) {}
-        }
-        workerBlobUrl = URL.createObjectURL(blob);
-        lib.GlobalWorkerOptions.workerSrc = workerBlobUrl;
-        return lib;
-      })
-      .catch(function () {
-        lib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
-        return lib;
-      });
+    lib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    if (hasMainThreadWorker()) return Promise.resolve(lib);
+    return loadScript(PDFJS_WORKER).then(function () { return lib; }).catch(function () { return lib; });
   }
 
   function loadPdfJs() {
@@ -448,10 +442,26 @@
       isEvalSupported: false,
       useSystemFonts: false
     };
-    return lib.getDocument(opts).promise.catch(function () {
-      try { lib.disableWorker = true; } catch (e) {}
-      return lib.getDocument(opts).promise;
-    });
+    return lib.getDocument(opts).promise;
+  }
+
+  function clearNativePdf() {
+    if (state.nativePdfUrl) {
+      try { URL.revokeObjectURL(state.nativePdfUrl); } catch (e) {}
+      state.nativePdfUrl = null;
+    }
+    var bar = document.querySelector('#screen-viewer .md-viewer-bar');
+    if (bar) bar.style.display = '';
+  }
+
+  function renderNativePdf(blob) {
+    var host = $('viewer-pages');
+    clearNativePdf();
+    state.nativePdfUrl = URL.createObjectURL(blob);
+    host.className = 'md-viewer-pages is-native';
+    host.innerHTML = '<iframe class="md-pdf-native" title="Drawing PDF" src="' + state.nativePdfUrl + '"></iframe>';
+    var bar = document.querySelector('#screen-viewer .md-viewer-bar');
+    if (bar) bar.style.display = 'none';
   }
 
   function fitWidthScale(page) {
@@ -463,35 +473,45 @@
 
   async function renderPdfPages(blob) {
     var host = $('viewer-pages');
+    host.className = 'md-viewer-pages';
     host.innerHTML = '<p class="md-viewer-status">Opening drawing…</p>';
-    var lib = await loadPdfJs();
-    var buf = await blob.arrayBuffer();
-    if (state.pdfDoc && state.pdfDoc.destroy) {
-      try { state.pdfDoc.destroy(); } catch (e) {}
+    clearNativePdf();
+    try {
+      var lib = await loadPdfJs();
+      if (!hasMainThreadWorker()) {
+        renderNativePdf(blob);
+        return;
+      }
+      var buf = await blob.arrayBuffer();
+      if (state.pdfDoc && state.pdfDoc.destroy) {
+        try { state.pdfDoc.destroy(); } catch (e) {}
+      }
+      var pdf = await openPdfDocument(lib, new Uint8Array(buf));
+      state.pdfDoc = pdf;
+      host.innerHTML = '';
+      state.pageBase = [];
+      var first = await pdf.getPage(1);
+      var cssScale = fitWidthScale(first);
+      var outputScale = Math.min(2, window.devicePixelRatio || 1);
+      for (var i = 1; i <= pdf.numPages; i++) {
+        var page = i === 1 ? first : await pdf.getPage(i);
+        var viewport = page.getViewport({ scale: cssScale * outputScale });
+        var canvas = document.createElement('canvas');
+        canvas.className = 'md-page';
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.dataset.baseW = String(viewport.width / outputScale);
+        canvas.dataset.baseH = String(viewport.height / outputScale);
+        canvas.style.width = canvas.dataset.baseW + 'px';
+        canvas.style.height = canvas.dataset.baseH + 'px';
+        host.appendChild(canvas);
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+        state.pageBase.push({ w: Number(canvas.dataset.baseW), h: Number(canvas.dataset.baseH) });
+      }
+      applyZoom();
+    } catch (err) {
+      renderNativePdf(blob);
     }
-    var pdf = await openPdfDocument(lib, new Uint8Array(buf));
-    state.pdfDoc = pdf;
-    host.innerHTML = '';
-    state.pageBase = [];
-    var first = await pdf.getPage(1);
-    var cssScale = fitWidthScale(first);
-    var outputScale = Math.min(2, window.devicePixelRatio || 1);
-    for (var i = 1; i <= pdf.numPages; i++) {
-      var page = i === 1 ? first : await pdf.getPage(i);
-      var viewport = page.getViewport({ scale: cssScale * outputScale });
-      var canvas = document.createElement('canvas');
-      canvas.className = 'md-page';
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      canvas.dataset.baseW = String(viewport.width / outputScale);
-      canvas.dataset.baseH = String(viewport.height / outputScale);
-      canvas.style.width = canvas.dataset.baseW + 'px';
-      canvas.style.height = canvas.dataset.baseH + 'px';
-      host.appendChild(canvas);
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
-      state.pageBase.push({ w: Number(canvas.dataset.baseW), h: Number(canvas.dataset.baseH) });
-    }
-    applyZoom();
   }
 
   function applyZoom() {
@@ -537,6 +557,8 @@
   function closeViewer() {
     state.viewing = null;
     $('viewer-pages').innerHTML = '';
+    $('viewer-pages').className = 'md-viewer-pages';
+    clearNativePdf();
     if (state.pdfDoc && state.pdfDoc.destroy) {
       try { state.pdfDoc.destroy(); } catch (e) {}
     }
@@ -663,6 +685,8 @@
   function closeViewerQuiet() {
     state.viewing = null;
     $('viewer-pages').innerHTML = '';
+    $('viewer-pages').className = 'md-viewer-pages';
+    clearNativePdf();
     document.getElementById('md-app').classList.remove('is-fs');
   }
 
