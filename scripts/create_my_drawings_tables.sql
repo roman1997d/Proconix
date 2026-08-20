@@ -41,3 +41,34 @@ CREATE TABLE IF NOT EXISTS my_drawings_item (
 );
 
 CREATE INDEX IF NOT EXISTS idx_my_drawings_item_ws ON my_drawings_item(workspace_id);
+
+CREATE TABLE IF NOT EXISTS my_drawings_worker (
+  id SERIAL PRIMARY KEY,
+  workspace_id INT NOT NULL REFERENCES my_drawings_workspace(id) ON DELETE CASCADE,
+  first_name VARCHAR(80) NOT NULL,
+  last_name VARCHAR(80) NOT NULL,
+  email VARCHAR(254) NOT NULL,
+  pin_hash TEXT,
+  pin_sha VARCHAR(64),
+  pin_expires_at TIMESTAMPTZ,
+  verified_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_my_drawings_worker_email UNIQUE (workspace_id, email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_my_drawings_worker_ws ON my_drawings_worker(workspace_id);
+
+CREATE TABLE IF NOT EXISTS my_drawings_device (
+  id SERIAL PRIMARY KEY,
+  worker_id INT NOT NULL REFERENCES my_drawings_worker(id) ON DELETE CASCADE,
+  token_hash VARCHAR(64) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_my_drawings_device_token UNIQUE (token_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_my_drawings_device_worker ON my_drawings_device(worker_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_worker_pin_sha
+  ON my_drawings_worker(workspace_id, pin_sha)
+  WHERE pin_sha IS NOT NULL;

@@ -1,19 +1,27 @@
 /**
- * My Drawings shared catalog — PIN unlock, admin CRUD, PDF storage on disk.
+ * My Drawings shared catalog — worker email passkey, admin PIN, PDF storage on disk.
  */
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const { pool } = require('../db/pool');
 const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
+const { createTransport } = require('../lib/sendCallbackRequestEmail');
 
 const ACCESS_PIN = String(process.env.MY_DRAWINGS_ACCESS_PIN || '2580');
 const ADMIN_PIN = String(process.env.MY_DRAWINGS_ADMIN_PIN || '1470');
 const UPLOAD_DIR = path.join(UPLOADS_ROOT, 'mydrawings');
 const DEFAULT_PROJECT_NAME = 'My Drawings';
+const RESERVED_PINS = new Set([ACCESS_PIN, ADMIN_PIN, '0000']);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const REGISTER_EMAIL_MAX = 5;
+const REGISTER_IP_MAX = 20;
+const REGISTER_WINDOW_MS = 60 * 60 * 1000;
 
 let schemaReady = null;
+const registerHits = new Map();
 
 function isoDate(value) {
   if (!value) return '';
@@ -89,6 +97,38 @@ async function ensureSchemaInner() {
     ALTER TABLE my_drawings_workspace
     ADD COLUMN IF NOT EXISTS demo_cleared_at TIMESTAMPTZ
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS my_drawings_worker (
+      id SERIAL PRIMARY KEY,
+      workspace_id INT NOT NULL REFERENCES my_drawings_workspace(id) ON DELETE CASCADE,
+      first_name VARCHAR(80) NOT NULL,
+      last_name VARCHAR(80) NOT NULL,
+      email VARCHAR(254) NOT NULL,
+      pin_hash TEXT,
+      pin_sha VARCHAR(64),
+      pin_expires_at TIMESTAMPTZ,
+      verified_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT uq_my_drawings_worker_email UNIQUE (workspace_id, email)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS my_drawings_device (
+      id SERIAL PRIMARY KEY,
+      worker_id INT NOT NULL REFERENCES my_drawings_worker(id) ON DELETE CASCADE,
+      token_hash VARCHAR(64) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT uq_my_drawings_device_token UNIQUE (token_hash)
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_my_drawings_worker_ws ON my_drawings_worker(workspace_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_my_drawings_device_worker ON my_drawings_device(worker_id)`);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_worker_pin_sha
+    ON my_drawings_worker(workspace_id, pin_sha)
+    WHERE pin_sha IS NOT NULL
+  `);
 
   ensureUploadDir();
   let existing = await pool.query(
@@ -161,6 +201,260 @@ async function resolveWorkspaceByPin(pin) {
   return null;
 }
 
+function pinSha(pin) {
+  return crypto.createHash('sha256').update('mydrawings-pin:' + pin).digest('hex');
+}
+
+function tokenSha(token) {
+  return crypto.createHash('sha256').update('mydrawings-dev:' + token).digest('hex');
+}
+
+function clientIp(req) {
+  const xf = req.headers['x-forwarded-for'];
+  if (xf) return String(xf).split(',')[0].trim().slice(0, 80);
+  return String(req.ip || (req.connection && req.connection.remoteAddress) || '').slice(0, 80);
+}
+
+function allowRate(key, max, windowMs) {
+  const now = Date.now();
+  const arr = (registerHits.get(key) || []).filter((t) => now - t < windowMs);
+  if (arr.length >= max) {
+    registerHits.set(key, arr);
+    return false;
+  }
+  arr.push(now);
+  registerHits.set(key, arr);
+  return true;
+}
+
+function cleanName(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+}
+
+function cleanEmail(value) {
+  return String(value || '').trim().toLowerCase().slice(0, 254);
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function defaultWorkspace() {
+  await ensureSchema();
+  const result = await pool.query(
+    'SELECT id, name FROM my_drawings_workspace ORDER BY id ASC LIMIT 1'
+  );
+  return result.rows[0] || null;
+}
+
+async function issueUniquePin(workspaceId) {
+  for (let i = 0; i < 40; i++) {
+    const pin = String(crypto.randomInt(0, 10000)).padStart(4, '0');
+    if (RESERVED_PINS.has(pin)) continue;
+    const sha = pinSha(pin);
+    const clash = await pool.query(
+      'SELECT id FROM my_drawings_worker WHERE workspace_id = $1 AND pin_sha = $2',
+      [workspaceId, sha]
+    );
+    if (!clash.rows[0]) return { pin, sha };
+  }
+  const err = new Error('Could not allocate an access key.');
+  err.code = 'PIN_ALLOC';
+  throw err;
+}
+
+async function sendPasskeyEmail({ to, firstName, pin }) {
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const transport = createTransport();
+  if (!transport) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[My Drawings] passkey for', to, pin);
+      return;
+    }
+    const err = new Error('Email is not configured on this server.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+  const name = firstName ? String(firstName).trim() : 'there';
+  const subject = 'Your My Drawings access key';
+  const text = [
+    `Hi ${name},`,
+    '',
+    'Your My Drawings access key is:',
+    pin,
+    '',
+    'Enter this 4-digit key on the device you just used. After that, this device stays signed in.',
+    'The key expires in 24 hours.',
+    '',
+    'If you did not request this, you can ignore this email.',
+  ].join('\n');
+  const html = `
+    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:16px;color:#0f172a;">Hi ${escapeHtml(name)},</p>
+    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:16px;color:#0f172a;">Your My Drawings access key is:</p>
+    <p style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:32px;letter-spacing:0.28em;font-weight:700;color:#0f172a;margin:16px 0;">${escapeHtml(pin)}</p>
+    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:14px;color:#475569;">Enter this 4-digit key on the device you just used. After that, this device stays signed in. The key expires in 24 hours.</p>
+    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:13px;color:#64748b;">If you did not request this, you can ignore this email.</p>
+  `;
+  await transport.sendMail({ from, to, subject, text, html });
+}
+
+async function resolveDeviceToken(token) {
+  const raw = String(token || '').trim();
+  if (!raw || raw.length < 16) return null;
+  await ensureSchema();
+  const hash = tokenSha(raw);
+  const result = await pool.query(
+    `SELECT d.id AS device_id,
+            w.id AS worker_id, w.first_name, w.last_name, w.email,
+            ws.id AS workspace_id, ws.name AS workspace_name
+     FROM my_drawings_device d
+     JOIN my_drawings_worker w ON w.id = d.worker_id
+     JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
+     WHERE d.token_hash = $1`,
+    [hash]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  pool.query('UPDATE my_drawings_device SET last_seen_at = NOW() WHERE id = $1', [row.device_id]).catch(() => {});
+  return {
+    workspace: { id: row.workspace_id, name: row.workspace_name },
+    role: 'worker',
+    worker: {
+      id: row.worker_id,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      email: row.email,
+    },
+  };
+}
+
+async function registerWorker(req, res) {
+  try {
+    const firstName = cleanName(req.body && req.body.firstName);
+    const lastName = cleanName(req.body && req.body.lastName);
+    const email = cleanEmail(req.body && req.body.email);
+    if (firstName.length < 1 || lastName.length < 1) {
+      return res.status(400).json({ success: false, message: 'First name and last name are required.' });
+    }
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+    }
+    if (!allowRate('email:' + email, REGISTER_EMAIL_MAX, REGISTER_WINDOW_MS)
+        || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
+      return res.status(429).json({ success: false, message: 'Too many requests. Try again later.' });
+    }
+    const workspace = await defaultWorkspace();
+    if (!workspace) {
+      return res.status(500).json({ success: false, message: 'Drawings workspace is not ready.' });
+    }
+    const { pin, sha } = await issueUniquePin(workspace.id);
+    const pinHash = await bcrypt.hash(pin, 10);
+    const existing = await pool.query(
+      'SELECT id FROM my_drawings_worker WHERE workspace_id = $1 AND email = $2',
+      [workspace.id, email]
+    );
+    if (existing.rows[0]) {
+      await pool.query(
+        `UPDATE my_drawings_worker
+         SET first_name = $2, last_name = $3, pin_hash = $4, pin_sha = $5,
+             pin_expires_at = NOW() + INTERVAL '24 hours'
+         WHERE id = $1`,
+        [existing.rows[0].id, firstName, lastName, pinHash, sha]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO my_drawings_worker
+          (workspace_id, first_name, last_name, email, pin_hash, pin_sha, pin_expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '24 hours')`,
+        [workspace.id, firstName, lastName, email, pinHash, sha]
+      );
+    }
+    await sendPasskeyEmail({ to: email, firstName, pin });
+    return res.json({
+      success: true,
+      email,
+      message: 'We sent a 4-digit key to your email.',
+    });
+  } catch (err) {
+    console.error('myDrawings register:', err);
+    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({ success: false, message: err.message });
+    }
+    if (err && err.code === 'PIN_ALLOC') {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+    return res.status(500).json({ success: false, message: 'Could not send your access key.' });
+  }
+}
+
+async function verifyWorker(req, res) {
+  try {
+    await ensureSchema();
+    const email = cleanEmail(req.body && req.body.email);
+    const pin = String((req.body && req.body.pin) || '').trim();
+    if (!EMAIL_RE.test(email) || !/^\d{4}$/.test(pin)) {
+      return res.status(401).json({ success: false, message: 'Incorrect access key' });
+    }
+    const workspace = await defaultWorkspace();
+    if (!workspace) {
+      return res.status(500).json({ success: false, message: 'Drawings workspace is not ready.' });
+    }
+    const found = await pool.query(
+      `SELECT id, first_name, last_name, email, pin_hash, pin_expires_at
+       FROM my_drawings_worker
+       WHERE workspace_id = $1 AND email = $2`,
+      [workspace.id, email]
+    );
+    const worker = found.rows[0];
+    if (!worker || !worker.pin_hash) {
+      return res.status(401).json({ success: false, message: 'Incorrect access key' });
+    }
+    if (worker.pin_expires_at && new Date(worker.pin_expires_at).getTime() < Date.now()) {
+      return res.status(401).json({ success: false, message: 'That key has expired. Request a new one.' });
+    }
+    const ok = await bcrypt.compare(pin, worker.pin_hash);
+    if (!ok) {
+      return res.status(401).json({ success: false, message: 'Incorrect access key' });
+    }
+    const deviceToken = crypto.randomBytes(32).toString('hex');
+    await pool.query(
+      `INSERT INTO my_drawings_device (worker_id, token_hash) VALUES ($1, $2)`,
+      [worker.id, tokenSha(deviceToken)]
+    );
+    await pool.query(
+      `UPDATE my_drawings_worker
+       SET pin_hash = NULL, pin_sha = NULL, pin_expires_at = NULL, verified_at = NOW()
+       WHERE id = $1`,
+      [worker.id]
+    );
+    req.myDrawings = {
+      workspace,
+      role: 'worker',
+      worker: {
+        id: worker.id,
+        firstName: worker.first_name,
+        lastName: worker.last_name,
+        email: worker.email,
+      },
+    };
+    const catalog = await loadCatalog(workspace, 'worker');
+    return res.json({
+      ...catalog,
+      deviceToken,
+      firstName: worker.first_name,
+      lastName: worker.last_name,
+      email: worker.email,
+    });
+  } catch (err) {
+    console.error('myDrawings verify:', err);
+    return res.status(500).json({ success: false, message: 'Could not verify access key.' });
+  }
+}
+
 async function loadCatalog(workspace, role) {
   const cats = await pool.query(
     'SELECT id, name FROM my_drawings_category WHERE workspace_id = $1 ORDER BY sort_order ASC, name ASC',
@@ -205,7 +499,7 @@ async function unlock(req, res) {
       return res.status(401).json({ success: false, message: 'Incorrect access key' });
     }
     const resolved = await resolveWorkspaceByPin(pin);
-    if (!resolved) {
+    if (!resolved || resolved.role !== 'admin') {
       return res.status(401).json({ success: false, message: 'Incorrect access key' });
     }
     req.myDrawings = resolved;
@@ -471,6 +765,9 @@ function prepareUploadDir(req, res, next) {
 module.exports = {
   ensureSchema,
   resolveWorkspaceByPin,
+  resolveDeviceToken,
+  registerWorker,
+  verifyWorker,
   unlock,
   getCatalog,
   addCategory,

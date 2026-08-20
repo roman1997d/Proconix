@@ -1,8 +1,15 @@
 /**
- * Unlock My Drawings with the 4-digit access or admin key (header or JSON body).
+ * Unlock My Drawings with a remembered device token or the admin 4-digit key.
  */
 
-const { resolveWorkspaceByPin } = require('../controllers/myDrawingsController');
+const { resolveWorkspaceByPin, resolveDeviceToken } = require('../controllers/myDrawingsController');
+
+function readDevice(req) {
+  const header = req.headers['x-mydrawings-device'];
+  if (header != null && String(header).trim()) return String(header).trim();
+  if (req.body && req.body.deviceToken != null) return String(req.body.deviceToken).trim();
+  return '';
+}
 
 function readPin(req) {
   const header = req.headers['x-mydrawings-pin'];
@@ -12,13 +19,22 @@ function readPin(req) {
 }
 
 async function requireMyDrawingsPin(req, res, next) {
-  const pin = readPin(req);
-  if (!/^\d{4}$/.test(pin)) {
-    return res.status(401).json({ success: false, message: 'Incorrect access key' });
-  }
   try {
+    const device = readDevice(req);
+    if (device) {
+      const resolved = await resolveDeviceToken(device);
+      if (!resolved) {
+        return res.status(401).json({ success: false, message: 'This device is no longer signed in.' });
+      }
+      req.myDrawings = resolved;
+      return next();
+    }
+    const pin = readPin(req);
+    if (!/^\d{4}$/.test(pin)) {
+      return res.status(401).json({ success: false, message: 'Incorrect access key' });
+    }
     const resolved = await resolveWorkspaceByPin(pin);
-    if (!resolved) {
+    if (!resolved || resolved.role !== 'admin') {
       return res.status(401).json({ success: false, message: 'Incorrect access key' });
     }
     req.myDrawings = resolved;

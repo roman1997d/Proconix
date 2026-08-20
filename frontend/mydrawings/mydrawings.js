@@ -2,10 +2,9 @@
 (function () {
   'use strict';
 
-  var DEMO = true;
-  var DEMO_PIN = '2580';
-  var ADMIN_PIN = '1470';
   var SESSION_KEY = 'proconix_mydrawings_session';
+  var DEVICE_KEY = 'proconix_mydrawings_device';
+  var PENDING_KEY = 'proconix_mydrawings_pending';
   var DB_NAME = 'proconix-mydrawings';
   var DB_VER = 1;
   var PDFJS_WORKER = '/mydrawings/lib/pdf.worker.min.js';
@@ -40,7 +39,8 @@
     downloadingAll: false,
     downloadAllProgress: null,
     manageMode: null,
-    role: 'worker'
+    role: 'worker',
+    pinMode: 'worker'
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -201,15 +201,26 @@
     return s && s.pin ? String(s.pin) : '';
   }
 
+  function sessionDevice() {
+    var s = readSession();
+    return s && s.deviceToken ? String(s.deviceToken) : '';
+  }
+
+  function sessionSecret() {
+    return sessionDevice() || sessionPin();
+  }
+
   function pinHeaders(extra) {
     var headers = extra ? Object.assign({}, extra) : {};
+    var device = sessionDevice();
     var pin = sessionPin();
-    if (pin) headers['X-MyDrawings-Pin'] = pin;
+    if (device) headers['X-MyDrawings-Device'] = device;
+    else if (pin) headers['X-MyDrawings-Pin'] = pin;
     return headers;
   }
 
-  async function cacheCatalog(data, pin) {
-    var hash = pin ? await sha256('mydrawings:' + pin) : null;
+  async function cacheCatalog(data, secret) {
+    var hash = secret ? await sha256('mydrawings:' + secret) : null;
     await idbSet('meta', 'catalog', {
       pinHash: hash,
       role: data.role || state.role,
@@ -242,7 +253,7 @@
   async function applyRemoteCatalog(data) {
     if (data.role) state.role = data.role;
     applyCatalog(data);
-    await cacheCatalog(data, sessionPin());
+    await cacheCatalog(data, sessionSecret());
     await dropStaleOfflineCopies();
   }
 
@@ -270,10 +281,16 @@
   }
 
   async function fetchCatalog(pin) {
+    return fetchRemoteCatalog({ pin: pin });
+  }
+
+  async function fetchRemoteCatalog(opts) {
+    opts = opts || {};
+    var secret = opts.deviceToken || opts.pin || '';
     var cached = await idbGet('meta', 'catalog');
-    var hash = await sha256('mydrawings:' + pin);
+    var hash = secret ? await sha256('mydrawings:' + secret) : null;
     function fromCache() {
-      if (cached && cached.data && cached.pinHash === hash) {
+      if (cached && cached.data && (!hash || cached.pinHash === hash)) {
         state.role = cached.role || 'worker';
         return cached.data;
       }
@@ -281,12 +298,28 @@
     }
     if (isOnline()) {
       try {
-        var res = await fetch('/api/my-drawings/unlock', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin: pin })
-        });
+        var res;
+        if (opts.deviceToken) {
+          res = await fetch('/api/my-drawings/catalog', {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'X-MyDrawings-Device': opts.deviceToken }
+          });
+        } else if (opts.verify) {
+          res = await fetch('/api/my-drawings/verify', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: opts.email, pin: opts.pin })
+          });
+        } else {
+          res = await fetch('/api/my-drawings/unlock', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin: opts.pin })
+          });
+        }
         var data = null;
         try { data = await res.json(); } catch (e) { data = null; }
         if (res.status === 401) {
@@ -301,7 +334,7 @@
           throw fail;
         }
         state.role = data.role || 'worker';
-        await cacheCatalog(data, pin);
+        await cacheCatalog(data, data.deviceToken || secret);
         return data;
       } catch (err) {
         if (err && err.code === 'bad_pin') throw err;
@@ -319,7 +352,7 @@
 
   async function refreshCatalogFromServer() {
     if ($('screen-viewer') && $('screen-viewer').classList.contains('is-active')) return;
-    if (!isOnline() || !sessionPin()) return;
+    if (!isOnline() || !sessionSecret()) return;
     try {
       var data = await apiJson('/catalog');
       await applyRemoteCatalog(data);
@@ -360,30 +393,60 @@
   /* ---------- Session ---------- */
   function readSession() {
     try {
-      var raw = sessionStorage.getItem(SESSION_KEY);
-      return raw ? JSON.parse(raw) : null;
+      var raw = localStorage.getItem(DEVICE_KEY) || sessionStorage.getItem(SESSION_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || !parsed.ok) return null;
+      if (parsed.deviceToken || parsed.pin) {
+        try { localStorage.setItem(DEVICE_KEY, JSON.stringify(parsed)); } catch (e2) {}
+      }
+      return parsed;
     } catch (e) { return null; }
   }
 
   function writeSession(ok, extra) {
     try {
-      if (ok) {
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify({
-          ok: true,
-          at: Date.now(),
-          pin: extra && extra.pin ? String(extra.pin) : sessionPin(),
-          role: extra && extra.role ? extra.role : state.role
-        }));
-      } else {
+      if (!ok) {
+        localStorage.removeItem(DEVICE_KEY);
         sessionStorage.removeItem(SESSION_KEY);
         state.role = 'worker';
+        return;
       }
+      var prev = readSession() || {};
+      var payload = {
+        ok: true,
+        at: Date.now(),
+        role: extra && extra.role ? extra.role : (prev.role || state.role),
+        pin: extra && extra.pin != null ? String(extra.pin) : prev.pin || '',
+        deviceToken: extra && extra.deviceToken != null ? String(extra.deviceToken) : prev.deviceToken || '',
+        firstName: extra && extra.firstName != null ? extra.firstName : prev.firstName || '',
+        lastName: extra && extra.lastName != null ? extra.lastName : prev.lastName || '',
+        email: extra && extra.email != null ? extra.email : prev.email || ''
+      };
+      if (payload.role === 'admin') payload.deviceToken = '';
+      else payload.pin = '';
+      localStorage.setItem(DEVICE_KEY, JSON.stringify(payload));
+      sessionStorage.removeItem(SESSION_KEY);
+    } catch (e) {}
+  }
+
+  function readPending() {
+    try {
+      var raw = localStorage.getItem(PENDING_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  function writePending(data) {
+    try {
+      if (!data) localStorage.removeItem(PENDING_KEY);
+      else localStorage.setItem(PENDING_KEY, JSON.stringify(data));
     } catch (e) {}
   }
 
   /* ---------- Screens ---------- */
   function showScreen(id) {
-    ['screen-pin', 'screen-list', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
+    ['screen-register', 'screen-pin', 'screen-list', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
       var el = $(sid);
       if (el) el.classList.toggle('is-active', sid === id);
     });
@@ -412,24 +475,156 @@
     $('pin-tap').textContent = v.length ? '' : 'Tap to enter key';
   }
 
+  function pendingDetails() {
+    return readPending() || {};
+  }
+
+  function fillRegisterForm(pending) {
+    pending = pending || readPending() || {};
+    if ($('reg-first')) $('reg-first').value = pending.firstName || '';
+    if ($('reg-last')) $('reg-last').value = pending.lastName || '';
+    if ($('reg-email')) $('reg-email').value = pending.email || '';
+    if ($('reg-error')) $('reg-error').textContent = '';
+  }
+
+  function configurePinScreen(mode) {
+    state.pinMode = mode === 'admin' ? 'admin' : 'worker';
+    var pending = pendingDetails();
+    var worker = state.pinMode === 'worker';
+    $('pin-title').textContent = worker ? 'Enter your access key' : 'Enter admin key';
+    $('pin-hint').textContent = worker
+      ? (pending.email ? 'We sent a 4-digit key to ' + pending.email : 'We sent a 4-digit key to your email')
+      : '4-digit admin key';
+    $('pin-worker-actions').hidden = !worker;
+    $('pin-admin-back-wrap').hidden = worker;
+    $('pin-error').textContent = '';
+    $('pin-input').value = '';
+    renderPinDots();
+  }
+
+  function showRegister() {
+    fillRegisterForm();
+    showScreen('screen-register');
+    setTimeout(function () {
+      var first = $('reg-first');
+      if (first) first.focus();
+    }, 200);
+  }
+
+  function showPin(mode) {
+    configurePinScreen(mode);
+    showScreen('screen-pin');
+    setTimeout(function () { $('pin-input').focus(); }, 200);
+  }
+
+  async function enterApp(data, extra) {
+    writeSession(true, extra);
+    writePending(null);
+    $('pin-input').value = '';
+    renderPinDots();
+    applyCatalog(data);
+    await dropStaleOfflineCopies();
+    showScreen('screen-list');
+    renderList();
+    var deep = new URLSearchParams(location.search).get('d');
+    if (deep && drawingById(deep)) openViewer(deep, false);
+  }
+
+  async function postJson(path, body) {
+    var res = await fetch('/api/my-drawings' + path, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok || (data && data.success === false)) {
+      throw new Error((data && data.message) || 'Request failed.');
+    }
+    return data;
+  }
+
+  async function submitRegister(e) {
+    if (e) e.preventDefault();
+    var firstName = ($('reg-first').value || '').replace(/\s+/g, ' ').trim();
+    var lastName = ($('reg-last').value || '').replace(/\s+/g, ' ').trim();
+    var email = ($('reg-email').value || '').trim().toLowerCase();
+    $('reg-error').textContent = '';
+    if (!isOnline()) {
+      $('reg-error').textContent = 'Connect to the internet to get your access key.';
+      return;
+    }
+    if (!firstName || !lastName) {
+      $('reg-error').textContent = 'First name and last name are required.';
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      $('reg-error').textContent = 'Enter a valid email address.';
+      return;
+    }
+    $('reg-continue').disabled = true;
+    try {
+      await postJson('/register', { firstName: firstName, lastName: lastName, email: email });
+      writePending({ firstName: firstName, lastName: lastName, email: email });
+      showPin('worker');
+    } catch (err) {
+      $('reg-error').textContent = err && err.message ? err.message : 'Could not send your access key.';
+    }
+    $('reg-continue').disabled = false;
+  }
+
+  async function resendKey() {
+    var pending = pendingDetails();
+    if (!pending.email) {
+      showRegister();
+      return;
+    }
+    $('pin-error').textContent = '';
+    try {
+      await postJson('/register', {
+        firstName: pending.firstName || '',
+        lastName: pending.lastName || '',
+        email: pending.email
+      });
+      $('pin-hint').textContent = 'We sent a new 4-digit key to ' + pending.email;
+    } catch (err) {
+      $('pin-error').textContent = err && err.message ? err.message : 'Could not resend the key.';
+    }
+  }
+
   async function submitPin() {
     var pin = pinValue();
     if (pin.length !== 4) return;
+    if (!isOnline()) {
+      $('pin-error').textContent = 'Connect to the internet to verify your key.';
+      return;
+    }
     $('pin-error').textContent = '';
     $('pin-continue').disabled = true;
     try {
-      var data = await fetchCatalog(pin);
-      writeSession(true, { pin: pin, role: data.role || state.role });
-      $('pin-input').value = '';
-      renderPinDots();
-      applyCatalog(data);
-      await dropStaleOfflineCopies();
-      showScreen('screen-list');
-      renderList();
-      var deep = new URLSearchParams(location.search).get('d');
-      if (deep && drawingById(deep)) openViewer(deep, false);
+      var data;
+      var extra;
+      if (state.pinMode === 'admin') {
+        data = await fetchRemoteCatalog({ pin: pin });
+        extra = { pin: pin, role: 'admin' };
+      } else {
+        var pending = pendingDetails();
+        if (!pending.email) {
+          showRegister();
+          return;
+        }
+        data = await fetchRemoteCatalog({ verify: true, email: pending.email, pin: pin });
+        extra = {
+          deviceToken: data.deviceToken,
+          role: 'worker',
+          firstName: data.firstName || pending.firstName,
+          lastName: data.lastName || pending.lastName,
+          email: data.email || pending.email
+        };
+      }
+      await enterApp(data, extra);
     } catch (err) {
-      writeSession(false);
       $('pin-error').textContent = err && err.message ? err.message : 'Incorrect access key';
       $('screen-pin').classList.add('is-shake');
       vibrate(40);
@@ -978,7 +1173,9 @@
       installItem +
       '<button type="button" class="md-sheet-item" data-sheet="clear-offline"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 14h10l1-14"/></svg>Remove all offline copies</button>' +
       manageItem +
-      '<button type="button" class="md-sheet-item is-danger" data-sheet="lock"><svg class="md-icon" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Lock</button>' +
+      (state.role === 'admin'
+        ? '<button type="button" class="md-sheet-item is-danger" data-sheet="lock"><svg class="md-icon" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Lock</button>'
+        : '') +
       (ios && !standalone ? '<p class="md-sheet-note">On iPhone: Share → Add to Home Screen.</p>' : '')
     );
   }
@@ -1031,12 +1228,12 @@
     }
     if (act === 'lock') {
       writeSession(false);
+      writePending(null);
       $('pin-input').value = '';
       renderPinDots();
       hideManageForm();
-      showScreen('screen-pin');
       closeViewerQuiet();
-      $('pin-input').focus();
+      showPin('admin');
       return;
     }
     if (act === 'clear-offline') {
@@ -1096,27 +1293,37 @@
   /* ---------- Init ---------- */
   async function boot() {
     try {
-      if (DEMO) {
-        $('pin-demo').textContent = 'Workers ' + DEMO_PIN + ' · Admin ' + ADMIN_PIN;
-      }
       setOfflineUi();
       renderPinDots();
 
       var session = readSession();
-      if (session && session.ok && session.pin) {
+      if (session && session.ok && session.pin && session.role !== 'admin' && !session.deviceToken) {
+        writeSession(false);
+        session = null;
+      }
+      if (session && session.ok && session.deviceToken) {
         state.role = session.role || 'worker';
         try {
-          var data = await fetchCatalog(session.pin);
-          writeSession(true, { pin: session.pin, role: data.role || state.role });
-          applyCatalog(data);
-          await dropStaleOfflineCopies();
-          showScreen('screen-list');
-          renderList();
-          var deep = new URLSearchParams(location.search).get('d');
-          if (deep && drawingById(deep)) openViewer(deep, false);
+          var data = await fetchRemoteCatalog({ deviceToken: session.deviceToken });
+          await enterApp(data, {
+            deviceToken: session.deviceToken,
+            role: data.role || 'worker',
+            firstName: session.firstName,
+            lastName: session.lastName,
+            email: session.email
+          });
         } catch (err) {
           var cached = await idbGet('meta', 'catalog');
-          if (cached && cached.data) {
+          if (!isOnline() && cached && cached.data) {
+            state.role = cached.role || session.role || 'worker';
+            applyCatalog(cached.data);
+            await refreshOfflineMap();
+            showScreen('screen-list');
+            renderList();
+          } else if (err && err.code === 'bad_pin') {
+            writeSession(false);
+            showRegister();
+          } else if (cached && cached.data) {
             state.role = cached.role || session.role || 'worker';
             applyCatalog(cached.data);
             await refreshOfflineMap();
@@ -1124,28 +1331,35 @@
             renderList();
           } else {
             writeSession(false);
-            showScreen('screen-pin');
-            setTimeout(function () { $('pin-input').focus(); }, 200);
+            showRegister();
           }
         }
-      } else if (session && session.ok) {
-        var oldCache = await idbGet('meta', 'catalog');
-        if (oldCache && oldCache.data) {
-          applyCatalog(oldCache.data);
-          await refreshOfflineMap();
-          showScreen('screen-list');
-          renderList();
-        } else {
-          showScreen('screen-pin');
-          setTimeout(function () { $('pin-input').focus(); }, 200);
+      } else if (session && session.ok && session.pin && session.role === 'admin') {
+        state.role = 'admin';
+        try {
+          var adminData = await fetchRemoteCatalog({ pin: session.pin });
+          await enterApp(adminData, { pin: session.pin, role: 'admin' });
+        } catch (err) {
+          var adminCache = await idbGet('meta', 'catalog');
+          if (adminCache && adminCache.data) {
+            applyCatalog(adminCache.data);
+            await refreshOfflineMap();
+            showScreen('screen-list');
+            renderList();
+          } else {
+            writeSession(false);
+            showPin('admin');
+          }
         }
       } else {
-        showScreen('screen-pin');
-        setTimeout(function () { $('pin-input').focus(); }, 250);
+        var pending = readPending();
+        if (pending && pending.email) showPin('worker');
+        else showRegister();
       }
     } catch (err) {
-      showScreen('screen-pin');
-      setTimeout(function () { $('pin-input').focus(); }, 200);
+      var pendingFail = readPending();
+      if (pendingFail && pendingFail.email) showPin('worker');
+      else showRegister();
     }
     $('md-boot').classList.add('is-done');
   }
@@ -1162,6 +1376,11 @@
   on($('pin-tap'), 'click', function () { $('pin-input').focus(); });
   on($('pin-dots'), 'click', function () { $('pin-input').focus(); });
   on($('pin-continue'), 'click', submitPin);
+  on($('register-form'), 'submit', submitRegister);
+  on($('btn-admin-login'), 'click', function () { showPin('admin'); });
+  on($('pin-resend'), 'click', resendKey);
+  on($('pin-change'), 'click', showRegister);
+  on($('pin-admin-back'), 'click', showRegister);
 
   on($('search'), 'input', function () {
     state.query = $('search').value || '';

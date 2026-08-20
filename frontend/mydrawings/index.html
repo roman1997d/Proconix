@@ -25,10 +25,33 @@
   </div>
 
   <div class="md-app" id="md-app">
+    <section class="md-screen md-pin md-register" id="screen-register" aria-label="Sign in">
+      <p class="md-pin-brand">My Drawings</p>
+      <h2>Get access</h2>
+      <p class="md-pin-hint">First time on this device — enter your details. We will email you a 4-digit key.</p>
+      <form class="md-reg-form" id="register-form" autocomplete="on">
+        <label class="mg-field">
+          <span>First name</span>
+          <input id="reg-first" type="text" maxlength="80" autocomplete="given-name" autocapitalize="words" spellcheck="false" required>
+        </label>
+        <label class="mg-field">
+          <span>Last name</span>
+          <input id="reg-last" type="text" maxlength="80" autocomplete="family-name" autocapitalize="words" spellcheck="false" required>
+        </label>
+        <label class="mg-field">
+          <span>Email</span>
+          <input id="reg-email" type="email" maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email" required>
+        </label>
+        <p class="md-error" id="reg-error" role="alert"></p>
+        <button type="submit" class="md-btn md-btn-primary" id="reg-continue">Continue</button>
+      </form>
+      <p class="md-admin-link"><button type="button" id="btn-admin-login">Admin</button></p>
+    </section>
+
     <section class="md-screen md-pin" id="screen-pin" aria-label="Access">
       <p class="md-pin-brand">My Drawings</p>
-      <h2>Enter access key</h2>
-      <p class="md-pin-hint">4-digit project key</p>
+      <h2 id="pin-title">Enter your access key</h2>
+      <p class="md-pin-hint" id="pin-hint">We sent a 4-digit key to your email</p>
       <div class="md-pin-dots" id="pin-dots" aria-hidden="true">
         <span class="md-dot"></span>
         <span class="md-dot"></span>
@@ -46,13 +69,18 @@
           maxlength="4"
           autocomplete="one-time-code"
           enterkeyhint="done"
-          autofocus
           aria-label="4-digit access key"
         >
       </div>
       <p class="md-error" id="pin-error" role="alert"></p>
       <button type="button" class="md-btn md-btn-primary" id="pin-continue" disabled>Continue</button>
-      <p class="md-demo" id="pin-demo"></p>
+      <div class="md-pin-actions" id="pin-worker-actions">
+        <button type="button" class="md-link" id="pin-resend">Resend key</button>
+        <button type="button" class="md-link" id="pin-change">Use a different email</button>
+      </div>
+      <p class="md-admin-link" id="pin-admin-back-wrap" hidden>
+        <button type="button" class="md-link" id="pin-admin-back">Back</button>
+      </p>
     </section>
 
     <section class="md-screen" id="screen-list" aria-label="Drawings">

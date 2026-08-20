@@ -1,6 +1,7 @@
 /**
  * My Drawings — /api/my-drawings
- * Workers unlock with the access key. Admin key is required to change the catalog.
+ * Workers register with name + email, then a 4-digit key sent by email.
+ * After verify, the device token stays signed in. Admin key is required to change the catalog.
  */
 
 const express = require('express');
@@ -20,6 +21,8 @@ function handleUploadError(err, req, res, next) {
   return next(err);
 }
 
+router.post('/register', ctrl.registerWorker);
+router.post('/verify', ctrl.verifyWorker);
 router.post('/unlock', ctrl.unlock);
 router.get('/catalog', requireMyDrawingsPin, ctrl.getCatalog);
 

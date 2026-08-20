@@ -196,6 +196,54 @@ img { max-width: 100%; }
   60% { transform: translateX(-5px); }
   80% { transform: translateX(5px); }
 }
+.md-register {
+  text-align: left;
+}
+.md-register .md-pin-brand,
+.md-register h2,
+.md-register .md-pin-hint {
+  text-align: center;
+}
+.md-reg-form {
+  width: min(320px, 100%);
+  margin: 0 auto;
+}
+.md-reg-form .mg-field input {
+  width: 100%;
+}
+.md-register .md-btn-primary {
+  width: 100%;
+  margin-top: 4px;
+}
+.md-pin-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 10px;
+}
+.md-link {
+  background: none;
+  border: none;
+  color: var(--md-muted);
+  font-size: 0.84rem;
+  min-height: 40px;
+  padding: 0 8px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.md-admin-link {
+  margin-top: 28px;
+  text-align: center;
+}
+.md-admin-link button {
+  background: none;
+  border: none;
+  color: var(--md-faint);
+  font-size: 0.78rem;
+  min-height: 40px;
+  padding: 0 10px;
+}
 .md-error {
   min-height: 1.2em;
   margin: 0 0 16px;
