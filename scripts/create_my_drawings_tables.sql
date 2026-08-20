@@ -72,3 +72,15 @@ CREATE INDEX IF NOT EXISTS idx_my_drawings_device_worker ON my_drawings_device(w
 CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_worker_pin_sha
   ON my_drawings_worker(workspace_id, pin_sha)
   WHERE pin_sha IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS my_drawings_activity (
+  id SERIAL PRIMARY KEY,
+  workspace_id INT NOT NULL REFERENCES my_drawings_workspace(id) ON DELETE CASCADE,
+  actor_name VARCHAR(160) NOT NULL,
+  action VARCHAR(40) NOT NULL,
+  drawing_title VARCHAR(200),
+  drawing_number VARCHAR(40),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_my_drawings_activity_ws ON my_drawings_activity(workspace_id, created_at DESC);

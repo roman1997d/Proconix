@@ -129,6 +129,18 @@ async function ensureSchemaInner() {
     ON my_drawings_worker(workspace_id, pin_sha)
     WHERE pin_sha IS NOT NULL
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS my_drawings_activity (
+      id SERIAL PRIMARY KEY,
+      workspace_id INT NOT NULL REFERENCES my_drawings_workspace(id) ON DELETE CASCADE,
+      actor_name VARCHAR(160) NOT NULL,
+      action VARCHAR(40) NOT NULL,
+      drawing_title VARCHAR(200),
+      drawing_number VARCHAR(40),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_my_drawings_activity_ws ON my_drawings_activity(workspace_id, created_at DESC)`);
 
   ensureUploadDir();
   let existing = await pool.query(
@@ -532,6 +544,56 @@ async function catalogResponse(req, res) {
   return res.json(payload);
 }
 
+function actorName(req) {
+  const worker = req.myDrawings && req.myDrawings.worker;
+  const name = [worker && worker.firstName, worker && worker.lastName].filter(Boolean).join(' ').trim();
+  return name || 'Administrator';
+}
+
+async function logActivity(req, action, title, number) {
+  try {
+    await pool.query(
+      `INSERT INTO my_drawings_activity (workspace_id, actor_name, action, drawing_title, drawing_number)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        req.myDrawings.workspace.id,
+        actorName(req),
+        action,
+        title ? String(title).slice(0, 200) : '',
+        number ? String(number).slice(0, 40) : '',
+      ]
+    );
+  } catch (err) {
+    console.error('myDrawings activity:', err);
+  }
+}
+
+async function getActivity(req, res) {
+  try {
+    const rows = await pool.query(
+      `SELECT actor_name, action, drawing_title, drawing_number, created_at
+       FROM my_drawings_activity
+       WHERE workspace_id = $1
+       ORDER BY created_at DESC, id DESC
+       LIMIT 200`,
+      [req.myDrawings.workspace.id]
+    );
+    return res.json({
+      success: true,
+      activity: rows.rows.map((r) => ({
+        actorName: r.actor_name,
+        action: r.action,
+        drawingTitle: r.drawing_title || '',
+        drawingNumber: r.drawing_number || '',
+        at: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error('myDrawings getActivity:', err);
+    return res.status(500).json({ success: false, message: 'Could not load activity.' });
+  }
+}
+
 async function unlock(req, res) {
   try {
     await ensureSchema();
@@ -590,6 +652,7 @@ async function addCategory(req, res) {
       return res.status(400).json({ success: false, message: 'That category already exists.' });
     }
     await getOrCreateCategory(workspaceId, name);
+    await logActivity(req, 'added_category', name, '');
     return catalogResponse(req, res);
   } catch (err) {
     console.error('myDrawings addCategory:', err);
@@ -625,6 +688,7 @@ async function deleteCategory(req, res) {
       [fallback.rows[0].id, workspaceId, cat.rows[0].id]
     );
     await pool.query('DELETE FROM my_drawings_category WHERE id = $1', [cat.rows[0].id]);
+    await logActivity(req, 'deleted_category', name, '');
     return catalogResponse(req, res);
   } catch (err) {
     console.error('myDrawings deleteCategory:', err);
@@ -670,6 +734,7 @@ async function addDrawing(req, res) {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [workspaceId, cat && cat.id, number, title, revision, meta.size_bytes, meta.stored_filename, meta.relative_path, meta.mime_type]
     );
+    await logActivity(req, 'added', title, number);
     return catalogResponse(req, res);
   } catch (err) {
     if (req.file) removeStoredFile(relativeFromAbs(req.file.path));
@@ -729,6 +794,7 @@ async function editDrawing(req, res) {
        WHERE id = $9`,
       [cat && cat.id, number, title, revision, meta.size_bytes, meta.stored_filename, meta.relative_path, meta.mime_type, item.id]
     );
+    await logActivity(req, 'updated', title, number);
     return catalogResponse(req, res);
   } catch (err) {
     if (req.file) removeStoredFile(relativeFromAbs(req.file.path));
@@ -755,6 +821,7 @@ async function updateDrawingFile(req, res) {
        WHERE id = $7`,
       [title || item.title, revision, meta.size_bytes, meta.stored_filename, meta.relative_path, meta.mime_type, item.id]
     );
+    await logActivity(req, 'updated', title || item.title, item.number);
     return catalogResponse(req, res);
   } catch (err) {
     if (req.file) removeStoredFile(relativeFromAbs(req.file.path));
@@ -769,6 +836,7 @@ async function deleteDrawing(req, res) {
     if (!item) return res.status(404).json({ success: false, message: 'Drawing not found.' });
     await pool.query('DELETE FROM my_drawings_item WHERE id = $1', [item.id]);
     removeStoredFile(item.relative_path);
+    await logActivity(req, 'deleted', item.title, item.number);
     return catalogResponse(req, res);
   } catch (err) {
     console.error('myDrawings deleteDrawing:', err);
@@ -812,6 +880,7 @@ module.exports = {
   verifyWorker,
   unlock,
   getCatalog,
+  getActivity,
   addCategory,
   deleteCategory,
   addDrawing,

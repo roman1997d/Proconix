@@ -745,6 +745,24 @@ img { max-width: 100%; }
 .mg-form-actions .md-btn-primary { width: auto; flex: 1; }
 .mg-form-actions .md-btn-ghost { width: auto; }
 
+/* ---------- Activity ---------- */
+.md-activity { padding-bottom: 24px; }
+.md-activity-loading {
+  margin: 24px 0;
+  color: var(--md-muted);
+  font-size: 0.9rem;
+}
+.md-activity-item {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--md-line);
+}
+.md-activity-item p {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.45;
+  font-weight: 500;
+}
+
 /* ---------- Sheets ---------- */
 .md-backdrop {
   display: none;

@@ -63,6 +63,17 @@
     return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
   }
 
+  function formatActivityWhen(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    var hours = d.getHours();
+    var ampm = hours >= 12 ? 'PM' : 'AM';
+    var h12 = hours % 12 || 12;
+    return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear() + ' ' + h12 + ':' + pad2(d.getMinutes()) + ' ' + ampm;
+  }
+
   function formatBytes(n) {
     var bytes = Number(n) || 0;
     if (bytes < 1024) return bytes + ' B';
@@ -218,8 +229,8 @@
     var device = sessionDevice();
     var pin = sessionPin();
     if (adminPin) headers['X-MyDrawings-Pin'] = adminPin;
-    else if (device) headers['X-MyDrawings-Device'] = device;
-    else if (pin) headers['X-MyDrawings-Pin'] = pin;
+    if (device) headers['X-MyDrawings-Device'] = device;
+    else if (!adminPin && pin) headers['X-MyDrawings-Pin'] = pin;
     return headers;
   }
 
@@ -449,7 +460,7 @@
 
   /* ---------- Screens ---------- */
   function showScreen(id) {
-    ['screen-register', 'screen-login', 'screen-pin', 'screen-list', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
+    ['screen-register', 'screen-login', 'screen-pin', 'screen-list', 'screen-activity', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
       var el = $(sid);
       if (el) el.classList.toggle('is-active', sid === id);
     });
@@ -980,6 +991,57 @@
     }
   }
 
+  /* ---------- Activity ---------- */
+  function activitySentence(row) {
+    var who = row.actorName || 'Someone';
+    var title = row.drawingTitle ? '"' + row.drawingTitle + '"' : '';
+    var number = row.drawingNumber ? '"' + row.drawingNumber + '"' : '';
+    var bits = [title, number].filter(Boolean).join(' ');
+    var when = row.at ? ' on ' + formatActivityWhen(row.at) : '';
+    if (row.action === 'deleted') return who + ' deleted drawing ' + bits + when;
+    if (row.action === 'added') return who + ' added drawing ' + bits + when;
+    if (row.action === 'updated') return who + ' updated drawing ' + bits + when;
+    if (row.action === 'added_category') return who + ' added category ' + (title || bits) + when;
+    if (row.action === 'deleted_category') return who + ' deleted category ' + (title || bits) + when;
+    return who + ' ' + (row.action || 'updated') + (bits ? ' ' + bits : '') + when;
+  }
+
+  function renderActivity(items) {
+    var host = $('activity-list');
+    if (!host) return;
+    if (!items || !items.length) {
+      host.innerHTML = '<div class="md-empty"><h3>No activity yet</h3><p>Adds, updates and deletions will appear here.</p></div>';
+      return;
+    }
+    host.innerHTML = items.map(function (row) {
+      return '<article class="md-activity-item"><p>' + escapeHtml(activitySentence(row)) + '</p></article>';
+    }).join('');
+  }
+
+  async function openActivity() {
+    if (!isOnline()) {
+      alert('Connect to the internet to view activity.');
+      return;
+    }
+    closeSheet();
+    showScreen('screen-activity');
+    if ($('activity-list')) $('activity-list').innerHTML = '<p class="md-activity-loading">Loading activity…</p>';
+    try {
+      var data = await apiJson('/activity');
+      renderActivity(data.activity || []);
+    } catch (err) {
+      if ($('activity-list')) {
+        $('activity-list').innerHTML = '<div class="md-empty"><h3>Could not load activity</h3><p>' + escapeHtml(err && err.message ? err.message : 'Try again.') + '</p></div>';
+      }
+    }
+  }
+
+  function closeActivity() {
+    showScreen('screen-list');
+    renderCats();
+    renderList();
+  }
+
   /* ---------- Manage ---------- */
   function openManage() {
     if (state.role !== 'admin') {
@@ -1233,6 +1295,7 @@
     openSheet(
       '<h3 id="sheet-title">My Drawings</h3>' +
       '<button type="button" class="md-sheet-item" data-sheet="administration"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2"/></svg>Administration</button>' +
+      '<button type="button" class="md-sheet-item" data-sheet="activity"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Activity</button>' +
       '<button type="button" class="md-sheet-item" data-sheet="download-all"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Download all drawings</button>' +
       installItem +
       '<button type="button" class="md-sheet-item" data-sheet="clear-offline"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 14h10l1-14"/></svg>Remove all offline copies</button>' +
@@ -1287,6 +1350,10 @@
         return;
       }
       showPin('admin', 'menu');
+      return;
+    }
+    if (act === 'activity') {
+      openActivity();
       return;
     }
     if (act === 'download-all') {
@@ -1498,6 +1565,7 @@
 
   on($('btn-menu'), 'click', openMainMenu);
   on($('btn-download-all'), 'click', downloadAllDrawings);
+  on($('btn-activity-back'), 'click', closeActivity);
   on($('btn-manage-back'), 'click', closeManage);
   on($('btn-mg-add-cat'), 'click', addCategory);
   on($('mg-cat-input'), 'keydown', function (e) {

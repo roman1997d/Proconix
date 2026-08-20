@@ -26,6 +26,7 @@ router.post('/login', ctrl.loginWorker);
 router.post('/verify', ctrl.verifyWorker);
 router.post('/unlock', ctrl.unlock);
 router.get('/catalog', requireMyDrawingsPin, ctrl.getCatalog);
+router.get('/activity', requireMyDrawingsPin, ctrl.getActivity);
 
 router.post('/categories', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.addCategory);
 router.post('/categories/delete', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.deleteCategory);

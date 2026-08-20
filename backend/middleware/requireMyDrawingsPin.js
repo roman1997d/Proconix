@@ -25,6 +25,13 @@ async function requireMyDrawingsPin(req, res, next) {
       const byPin = await resolveWorkspaceByPin(pin);
       if (byPin && byPin.role === 'admin') {
         req.myDrawings = byPin;
+        const device = readDevice(req);
+        if (device) {
+          try {
+            const asWorker = await resolveDeviceToken(device);
+            if (asWorker && asWorker.worker) req.myDrawings.worker = asWorker.worker;
+          } catch (_) {}
+        }
         return next();
       }
     }
