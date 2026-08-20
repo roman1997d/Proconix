@@ -461,18 +461,19 @@ img { max-width: 100%; }
 }
 .md-card:active { background: var(--md-card-press); }
 .md-card-body { flex: 1; min-width: 0; }
-.md-card-num {
+.md-card-title {
   font-size: 1.12rem;
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1.15;
+  line-height: 1.2;
   margin: 0 0 4px;
 }
-.md-card-title {
+.md-card-num {
   margin: 0 0 6px;
   font-size: 0.95rem;
   font-weight: 550;
   line-height: 1.3;
+  color: var(--md-muted);
 }
 .md-card-meta {
   margin: 0;
@@ -707,8 +708,8 @@ img { max-width: 100%; }
   padding: 12px;
   margin-bottom: 8px;
 }
-.mg-item-num { margin: 0 0 2px; font-weight: 800; font-size: 1.05rem; }
-.mg-item-title { margin: 0 0 4px; font-size: 0.9rem; }
+.mg-item-title { margin: 0 0 2px; font-weight: 800; font-size: 1.05rem; }
+.mg-item-num { margin: 0 0 4px; font-size: 0.9rem; color: var(--md-muted); }
 .mg-item-meta { margin: 0 0 10px; font-size: 0.76rem; color: var(--md-muted); }
 .mg-item-actions {
   display: flex;

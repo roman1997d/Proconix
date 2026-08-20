@@ -750,8 +750,8 @@
       return (
         '<article class="md-card" data-id="' + escapeHtml(d.id) + '">' +
           '<div class="md-card-body">' +
-            '<p class="md-card-num">' + escapeHtml(d.number) + '</p>' +
             '<p class="md-card-title">' + escapeHtml(d.title) + '</p>' +
+            '<p class="md-card-num">' + escapeHtml(d.number) + '</p>' +
             '<p class="md-card-meta">Rev ' + escapeHtml(d.revision) + ' · Updated ' + escapeHtml(formatDate(d.updatedAt)) + ' · PDF · ' + escapeHtml(formatBytes(d.sizeBytes)) + '</p>' +
           '</div>' +
           '<button type="button" class="' + offCls + '" data-act="offline" aria-label="' + escapeHtml(offLabel) + '">' + offInner + '</button>' +
@@ -1044,8 +1044,8 @@
     list.innerHTML = rows.map(function (d) {
       var off = state.offlineIds[d.id] ? ' · Offline' : '';
       return '<article class="mg-item" data-id="' + escapeHtml(d.id) + '">' +
-        '<p class="mg-item-num">' + escapeHtml(d.number) + '</p>' +
         '<p class="mg-item-title">' + escapeHtml(d.title) + '</p>' +
+        '<p class="mg-item-num">' + escapeHtml(d.number) + '</p>' +
         '<p class="mg-item-meta">Rev ' + escapeHtml(d.revision || '—') + ' · ' + escapeHtml(d.category) + off + '</p>' +
         '<div class="mg-item-actions">' +
           '<button type="button" class="is-update" data-mg="update">Update</button>' +
