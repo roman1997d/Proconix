@@ -143,6 +143,7 @@ WHERE t.table_schema = 'public'
     'qa_supervisors', 'qa_workers', 'qa_templates', 'qa_template_steps',
     'qa_jobs', 'qa_job_templates', 'qa_job_workers',
     'site_snag_prefs', 'site_snag_drawings', 'site_snags', 'site_snag_measurements',
-    'site_snag_highlights', 'site_snag_custom_category', 'site_snag_removed_preset'
+    'site_snag_highlights', 'site_snag_custom_category', 'site_snag_removed_preset',
+    'my_drawings_workspace', 'my_drawings_category', 'my_drawings_item'
   )
 ORDER BY t.table_name;

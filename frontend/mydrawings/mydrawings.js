@@ -4,6 +4,7 @@
 
   var DEMO = true;
   var DEMO_PIN = '2580';
+  var ADMIN_PIN = '1470';
   var SESSION_KEY = 'proconix_mydrawings_session';
   var DB_NAME = 'proconix-mydrawings';
   var DB_VER = 1;
@@ -38,7 +39,8 @@
     pendingRemoveId: null,
     downloadingAll: false,
     downloadAllProgress: null,
-    manageMode: null
+    manageMode: null,
+    role: 'worker'
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -193,56 +195,146 @@
     };
   }
 
-  /* ---------- Catalog (replace this block with API calls) ---------- */
-  async function fetchCatalog(pin) {
-    var cached = await idbGet('meta', 'catalog');
-    var hash = await sha256('mydrawings:' + pin);
-    if (DEMO && String(pin) !== DEMO_PIN) {
-      var bad = new Error('Incorrect access key');
-      bad.code = 'bad_pin';
-      throw bad;
-    }
-    if (cached && cached.data) {
-      if (cached.pinHash && cached.pinHash !== hash) {
-        var mismatch = new Error('Incorrect access key');
-        mismatch.code = 'bad_pin';
-        throw mismatch;
-      }
-      if (!cached.pinHash) {
-        await idbSet('meta', 'catalog', { pinHash: hash, data: cached.data, savedAt: Date.now() });
-      }
-      return cached.data;
-    }
-    if (isOnline() && DEMO && String(pin) === DEMO_PIN) {
-      var data = seedCatalog();
-      await idbSet('meta', 'catalog', { pinHash: hash, data: data, savedAt: Date.now() });
-      return data;
-    }
-    var offlineErr = new Error(isOnline() ? 'Incorrect access key' : 'No drawings stored on this device yet.');
-    offlineErr.code = 'bad_pin';
-    throw offlineErr;
+  /* ---------- Catalog API ---------- */
+  function sessionPin() {
+    var s = readSession();
+    return s && s.pin ? String(s.pin) : '';
   }
 
-  async function saveCatalog() {
-    var cached = await idbGet('meta', 'catalog');
-    var data = {
-      project: state.project,
-      categories: state.categories.slice(),
-      drawings: state.drawings.map(function (d) { return Object.assign({}, d); })
-    };
+  function pinHeaders(extra) {
+    var headers = extra ? Object.assign({}, extra) : {};
+    var pin = sessionPin();
+    if (pin) headers['X-MyDrawings-Pin'] = pin;
+    return headers;
+  }
+
+  async function cacheCatalog(data, pin) {
+    var hash = pin ? await sha256('mydrawings:' + pin) : null;
     await idbSet('meta', 'catalog', {
-      pinHash: cached && cached.pinHash ? cached.pinHash : null,
-      data: data,
+      pinHash: hash,
+      role: data.role || state.role,
+      data: {
+        project: data.project,
+        categories: data.categories || [],
+        drawings: data.drawings || []
+      },
       savedAt: Date.now()
     });
   }
 
+  async function dropStaleOfflineCopies() {
+    var keys = await idbKeys('files');
+    for (var i = 0; i < keys.length; i++) {
+      var id = keys[i];
+      var d = drawingById(id);
+      if (!d) {
+        await idbDel('files', id);
+        continue;
+      }
+      var rec = await idbGet('files', id);
+      if (rec && rec.updatedAt && d.updatedAt && rec.updatedAt !== d.updatedAt) {
+        await idbDel('files', id);
+      }
+    }
+    await refreshOfflineMap();
+  }
+
+  async function applyRemoteCatalog(data) {
+    if (data.role) state.role = data.role;
+    applyCatalog(data);
+    await cacheCatalog(data, sessionPin());
+    await dropStaleOfflineCopies();
+  }
+
+  async function apiJson(path, opts) {
+    opts = opts || {};
+    if (!isOnline()) throw new Error('Connect to the internet to update drawings.');
+    var headers = pinHeaders(opts.headers || {});
+    var body = opts.body;
+    if (body && !(body instanceof FormData) && typeof body !== 'string') {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify(body);
+    }
+    var res = await fetch('/api/my-drawings' + path, {
+      method: opts.method || 'GET',
+      credentials: 'same-origin',
+      headers: headers,
+      body: body
+    });
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok || (data && data.success === false)) {
+      throw new Error((data && data.message) || 'Request failed.');
+    }
+    return data;
+  }
+
+  async function fetchCatalog(pin) {
+    var cached = await idbGet('meta', 'catalog');
+    var hash = await sha256('mydrawings:' + pin);
+    function fromCache() {
+      if (cached && cached.data && cached.pinHash === hash) {
+        state.role = cached.role || 'worker';
+        return cached.data;
+      }
+      return null;
+    }
+    if (isOnline()) {
+      try {
+        var res = await fetch('/api/my-drawings/unlock', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: pin })
+        });
+        var data = null;
+        try { data = await res.json(); } catch (e) { data = null; }
+        if (res.status === 401) {
+          var bad = new Error((data && data.message) || 'Incorrect access key');
+          bad.code = 'bad_pin';
+          throw bad;
+        }
+        if (!res.ok || !data || data.success === false) {
+          var fallback = fromCache();
+          if (fallback) return fallback;
+          var fail = new Error((data && data.message) || 'Could not load drawings.');
+          throw fail;
+        }
+        state.role = data.role || 'worker';
+        await cacheCatalog(data, pin);
+        return data;
+      } catch (err) {
+        if (err && err.code === 'bad_pin') throw err;
+        var cachedOk = fromCache();
+        if (cachedOk) return cachedOk;
+        throw err;
+      }
+    }
+    var offline = fromCache();
+    if (offline) return offline;
+    var offlineErr = new Error('No drawings stored on this device yet.');
+    offlineErr.code = 'bad_pin';
+    throw offlineErr;
+  }
+
+  async function refreshCatalogFromServer() {
+    if (!isOnline() || !sessionPin()) return;
+    try {
+      var data = await apiJson('/catalog');
+      await applyRemoteCatalog(data);
+      renderList();
+    } catch (e) {}
+  }
+
   async function fetchDrawingFile(drawing, onProgress) {
     var local = await idbGet('files', drawing.id);
-    if (local && local.blob) return local.blob;
-    if (!drawing.fileUrl) throw new Error('This drawing has no file on this device. Open Manage and add the PDF again.');
+    if (local && local.blob) {
+      if (local.updatedAt && drawing.updatedAt && local.updatedAt === drawing.updatedAt) return local.blob;
+      if (!drawing.updatedAt) return local.blob;
+    }
+    if (!drawing.fileUrl) throw new Error('This drawing has no file on the server.');
     if (!isOnline()) throw new Error('This drawing is not available offline.');
-    var res = await fetch(drawing.fileUrl, { credentials: 'same-origin' });
+    var res = await fetch(drawing.fileUrl, { credentials: 'same-origin', headers: pinHeaders() });
     if (!res.ok) throw new Error('Could not load drawing.');
     var total = Number(res.headers.get('Content-Length') || drawing.sizeBytes || 0);
     if (!res.body || !res.body.getReader) {
@@ -272,10 +364,19 @@
     } catch (e) { return null; }
   }
 
-  function writeSession(ok) {
+  function writeSession(ok, extra) {
     try {
-      if (ok) sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ok: true, at: Date.now() }));
-      else sessionStorage.removeItem(SESSION_KEY);
+      if (ok) {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+          ok: true,
+          at: Date.now(),
+          pin: extra && extra.pin ? String(extra.pin) : sessionPin(),
+          role: extra && extra.role ? extra.role : state.role
+        }));
+      } else {
+        sessionStorage.removeItem(SESSION_KEY);
+        state.role = 'worker';
+      }
     } catch (e) {}
   }
 
@@ -317,11 +418,11 @@
     $('pin-continue').disabled = true;
     try {
       var data = await fetchCatalog(pin);
-      writeSession(true);
+      writeSession(true, { pin: pin, role: data.role || state.role });
       $('pin-input').value = '';
       renderPinDots();
       applyCatalog(data);
-      await refreshOfflineMap();
+      await dropStaleOfflineCopies();
       showScreen('screen-list');
       renderList();
       var deep = new URLSearchParams(location.search).get('d');
@@ -458,7 +559,7 @@
           btn.textContent = Math.round(ratio * 100) + '%';
         }
       });
-      await idbSet('files', id, { blob: blob, size: blob.size, at: Date.now() });
+      await idbSet('files', id, { blob: blob, size: blob.size, at: Date.now(), updatedAt: d.updatedAt, revision: d.revision });
       state.offlineIds[id] = true;
     } catch (err) {
       throw err;
@@ -619,6 +720,14 @@
 
   /* ---------- Manage ---------- */
   function openManage() {
+    if (state.role !== 'admin') {
+      alert('Enter the admin key to manage drawings.');
+      return;
+    }
+    if (!isOnline()) {
+      alert('Connect to the internet to manage drawings.');
+      return;
+    }
     closeSheet();
     hideManageForm();
     showScreen('screen-manage');
@@ -704,7 +813,7 @@
 
     if (mode.type === 'add') {
       $('mg-form-title').textContent = 'Add drawing';
-      $('mg-form-note').textContent = 'The PDF is stored on this phone. It appears in the list as soon as you save.';
+      $('mg-form-note').textContent = 'The PDF is stored on the server. Workers see it the next time they open My Drawings.';
       $('mg-number').value = '';
       $('mg-title').value = '';
       $('mg-rev').value = 'A';
@@ -721,7 +830,7 @@
       $('btn-mg-save').textContent = 'Save changes';
     } else if (mode.type === 'update') {
       $('mg-form-title').textContent = 'Update drawing';
-      $('mg-form-note').textContent = 'The new PDF replaces the old copy. Opening this drawing will show the new revision.';
+      $('mg-form-note').textContent = 'The new PDF replaces the old copy on the server. Workers get the new revision.';
       $('mg-number').value = d.number;
       $('mg-title').value = d.title;
       $('mg-rev').value = nextRevision(d.revision);
@@ -736,18 +845,15 @@
   async function addCategory() {
     var name = ($('mg-cat-input').value || '').trim();
     if (!name) return;
-    var exists = state.categories.some(function (c) {
-      return c.toLowerCase() === name.toLowerCase();
-    });
-    if (exists) {
-      alert('That category already exists.');
-      return;
+    try {
+      var data = await apiJson('/categories', { method: 'POST', body: { name: name } });
+      $('mg-cat-input').value = '';
+      await applyRemoteCatalog(data);
+      renderManage();
+      renderList();
+    } catch (err) {
+      alert(err && err.message ? err.message : 'Could not add category.');
     }
-    state.categories.push(name);
-    $('mg-cat-input').value = '';
-    await saveCatalog();
-    renderCats();
-    renderManage();
   }
 
   async function deleteCategory(name) {
@@ -756,31 +862,39 @@
       ? 'Delete “' + name + '”? ' + used + ' drawing(s) will move to Uncategorised.'
       : 'Delete category “' + name + '”?';
     if (!confirm(msg)) return;
-    state.categories = state.categories.filter(function (c) { return c !== name; });
-    var fallback = state.categories[0] || 'Uncategorised';
-    if (used && state.categories.indexOf(fallback) === -1) {
-      state.categories.push(fallback);
+    try {
+      var data = await apiJson('/categories/delete', { method: 'POST', body: { name: name } });
+      if (state.category === name) state.category = 'All';
+      await applyRemoteCatalog(data);
+      renderManage();
+      renderList();
+    } catch (err) {
+      alert(err && err.message ? err.message : 'Could not delete category.');
     }
-    state.drawings.forEach(function (d) {
-      if (d.category === name) d.category = fallback;
-    });
-    if (state.category === name) state.category = 'All';
-    await saveCatalog();
-    renderCats();
-    renderManage();
   }
 
   async function deleteDrawing(id) {
     var d = drawingById(id);
     if (!d) return;
-    if (!confirm('Delete ' + d.number + ' and its offline copy?')) return;
-    state.drawings = state.drawings.filter(function (x) { return x.id !== id; });
-    await idbDel('files', id);
-    delete state.offlineIds[id];
-    await saveCatalog();
-    await refreshOfflineMap();
-    renderManage();
-    renderList();
+    if (!confirm('Delete ' + d.number + ' from the server for everyone?')) return;
+    try {
+      var data = await apiJson('/drawings/' + encodeURIComponent(id), { method: 'DELETE' });
+      await idbDel('files', id);
+      await applyRemoteCatalog(data);
+      renderManage();
+      renderList();
+    } catch (err) {
+      alert(err && err.message ? err.message : 'Could not delete drawing.');
+    }
+  }
+
+  function drawingFormData(fields, file) {
+    var fd = new FormData();
+    Object.keys(fields).forEach(function (key) {
+      if (fields[key] != null) fd.append(key, fields[key]);
+    });
+    if (file) fd.append('file', file, file.name || 'drawing.pdf');
+    return fd;
   }
 
   async function submitManageForm(e) {
@@ -798,78 +912,39 @@
       return;
     }
     try {
+      var data;
       if (mode.type === 'add') {
         if (!isPdfFile(file)) {
           $('mg-error').textContent = 'Choose a PDF file.';
           return;
         }
-        var dup = state.drawings.some(function (d) {
-          return d.number.toLowerCase() === number.toLowerCase();
+        data = await apiJson('/drawings', {
+          method: 'POST',
+          body: drawingFormData({ number: number, title: title, category: category, revision: revision }, file)
         });
-        if (dup) {
-          $('mg-error').textContent = 'A drawing with that number already exists. Use Update to replace it.';
-          return;
-        }
-        if (category && state.categories.indexOf(category) === -1) state.categories.push(category);
-        var id = slugId(number);
-        state.drawings.push({
-          id: id,
-          number: number,
-          title: title,
-          category: category || 'Uncategorised',
-          revision: revision,
-          updatedAt: todayIso(),
-          sizeBytes: file.size,
-          fileUrl: ''
-        });
-        await idbSet('files', id, { blob: await blobFromPdf(file), size: file.size, at: Date.now() });
-        await saveCatalog();
-        await refreshOfflineMap();
       } else if (mode.type === 'edit') {
-        var d = drawingById(mode.id);
-        if (!d) return;
-        var clash = state.drawings.some(function (x) {
-          return x.id !== d.id && x.number.toLowerCase() === number.toLowerCase();
-        });
-        if (clash) {
-          $('mg-error').textContent = 'Another drawing already uses that number.';
-          return;
-        }
         if (file && !isPdfFile(file)) {
           $('mg-error').textContent = 'Choose a PDF file.';
           return;
         }
-        d.number = number;
-        d.title = title;
-        d.category = category || d.category;
-        d.revision = revision;
-        d.updatedAt = todayIso();
-        if (file) {
-          await idbSet('files', d.id, { blob: await blobFromPdf(file), size: file.size, at: Date.now() });
-          d.sizeBytes = file.size;
-          d.fileUrl = '';
-        }
-        await saveCatalog();
-        await refreshOfflineMap();
+        data = await apiJson('/drawings/' + encodeURIComponent(mode.id), {
+          method: 'PUT',
+          body: drawingFormData({ number: number, title: title, category: category, revision: revision }, file)
+        });
       } else if (mode.type === 'update') {
-        var u = drawingById(mode.id);
-        if (!u) return;
         if (!isPdfFile(file)) {
           $('mg-error').textContent = 'Choose the new PDF to replace the old one.';
           return;
         }
-        await idbSet('files', u.id, { blob: await blobFromPdf(file), size: file.size, at: Date.now() });
-        u.title = title || u.title;
-        u.revision = revision;
-        u.updatedAt = todayIso();
-        u.sizeBytes = file.size;
-        u.fileUrl = '';
-        await saveCatalog();
-        await refreshOfflineMap();
+        data = await apiJson('/drawings/' + encodeURIComponent(mode.id) + '/update', {
+          method: 'POST',
+          body: drawingFormData({ title: title, revision: revision }, file)
+        });
       }
+      if (mode.id) await idbDel('files', mode.id);
+      await applyRemoteCatalog(data);
       hideManageForm();
       renderManage();
-      renderCats();
       renderList();
     } catch (err) {
       $('mg-error').textContent = err && err.message ? err.message : 'Could not save.';
@@ -893,12 +968,15 @@
     var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
     var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     var installItem = standalone ? '' : '<button type="button" class="md-sheet-item" data-sheet="install"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Add to Home Screen</button>';
+    var manageItem = state.role === 'admin'
+      ? '<button type="button" class="md-sheet-item" data-sheet="manage"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2"/></svg>Manage</button>'
+      : '';
     openSheet(
       '<h3 id="sheet-title">My Drawings</h3>' +
       '<button type="button" class="md-sheet-item" data-sheet="download-all"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Download all drawings</button>' +
       installItem +
       '<button type="button" class="md-sheet-item" data-sheet="clear-offline"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 14h10l1-14"/></svg>Remove all offline copies</button>' +
-      '<button type="button" class="md-sheet-item" data-sheet="manage"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1.1 1.5 1.2H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Manage</button>' +
+      manageItem +
       '<button type="button" class="md-sheet-item is-danger" data-sheet="lock"><svg class="md-icon" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Lock</button>' +
       (ios && !standalone ? '<p class="md-sheet-note">On iPhone: Share → Add to Home Screen.</p>' : '')
     );
@@ -1018,21 +1096,44 @@
   async function boot() {
     try {
       if (DEMO) {
-        $('pin-demo').textContent = 'Front-end preview · access key ' + DEMO_PIN;
+        $('pin-demo').textContent = 'Workers ' + DEMO_PIN + ' · Admin ' + ADMIN_PIN;
       }
       setOfflineUi();
       renderPinDots();
 
       var session = readSession();
-      if (session && session.ok) {
-        var cached = await idbGet('meta', 'catalog');
-        if (cached && cached.data) {
-          applyCatalog(cached.data);
-          await refreshOfflineMap();
+      if (session && session.ok && session.pin) {
+        state.role = session.role || 'worker';
+        try {
+          var data = await fetchCatalog(session.pin);
+          writeSession(true, { pin: session.pin, role: data.role || state.role });
+          applyCatalog(data);
+          await dropStaleOfflineCopies();
           showScreen('screen-list');
           renderList();
           var deep = new URLSearchParams(location.search).get('d');
           if (deep && drawingById(deep)) openViewer(deep, false);
+        } catch (err) {
+          var cached = await idbGet('meta', 'catalog');
+          if (cached && cached.data) {
+            state.role = cached.role || session.role || 'worker';
+            applyCatalog(cached.data);
+            await refreshOfflineMap();
+            showScreen('screen-list');
+            renderList();
+          } else {
+            writeSession(false);
+            showScreen('screen-pin');
+            setTimeout(function () { $('pin-input').focus(); }, 200);
+          }
+        }
+      } else if (session && session.ok) {
+        var oldCache = await idbGet('meta', 'catalog');
+        if (oldCache && oldCache.data) {
+          applyCatalog(oldCache.data);
+          await refreshOfflineMap();
+          showScreen('screen-list');
+          renderList();
         } else {
           showScreen('screen-pin');
           setTimeout(function () { $('pin-input').focus(); }, 200);
@@ -1130,7 +1231,11 @@
   });
   on($('btn-install'), 'click', promptInstall);
 
-  on(window, 'online', function () { setOfflineUi(); });
+  on(window, 'online', function () {
+    setOfflineUi();
+    refreshCatalogFromServer();
+  });
+  on(window, 'pageshow', function () { refreshCatalogFromServer(); });
   on(window, 'offline', function () { setOfflineUi(); });
   on(window, 'popstate', function () {
     if (state.pushingView) return;

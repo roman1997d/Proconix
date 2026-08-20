@@ -98,6 +98,7 @@ SQL_FILES=(
   scripts/create_site_snags_tables.sql
   scripts/create_unit_progress_tables.sql
   scripts/alter_unit_progress_project_scope.sql
+  scripts/create_my_drawings_tables.sql
 )
 
 echo "=== Proconix bootstrap DB ==="

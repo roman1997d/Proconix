@@ -31,6 +31,8 @@ const { requirePlatformAdminAuth } = require('./middleware/requirePlatformAdminA
 const { createBackup, restoreBackup, restoreBackupFromServer, startPlatformAutoBackupScheduler } = require('./controllers/platformAdminController');
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
 const drawingGalleryRoutes = require('./routes/drawingGalleryRoutes');
+const myDrawingsRoutes = require('./routes/myDrawingsRoutes');
+const { ensureSchema: ensureMyDrawingsSchema } = require('./controllers/myDrawingsController');
 const siteChatRoutes = require('./routes/siteChatRoutes');
 const unitProgressRoutes = require('./routes/unitProgressRoutes');
 const { runSiteChatAgentReminders } = require('./controllers/siteChatController');
@@ -142,6 +144,7 @@ app.use('/api/site-snags', siteSnagsRoutes);
 
 // Drawing Gallery (plans per project; requires create_drawing_gallery_tables.sql)
 app.use('/api/drawing-gallery', drawingGalleryRoutes);
+app.use('/api/my-drawings', myDrawingsRoutes);
 
 // Site chat (project room, material requests, notifications)
 app.use('/api/site-chat', siteChatRoutes);
@@ -198,6 +201,12 @@ app.listen(PORT, HOST, async () => {
     dbName,
     dbError: dbStatus.error || null,
   });
+
+  if (dbStatus.ok) {
+    ensureMyDrawingsSchema().catch((err) => {
+      console.error('My Drawings schema:', err && err.message ? err.message : err);
+    });
+  }
 
   const agentPollMs = Math.max(15000, parseInt(process.env.SITE_CHAT_AGENT_POLL_MS || '30000', 10));
   setInterval(() => {
