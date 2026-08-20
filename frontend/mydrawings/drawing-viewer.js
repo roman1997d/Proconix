@@ -3,12 +3,18 @@
   'use strict';
 
   var MIN_SCALE = 1;
-  var MAX_SCALE = 8;
-  var TAP_ZOOM = 2.75;
+  var MAX_SCALE = 28;
+  var TAP_ZOOM = 5.5;
+  var TAP_ZOOM_2 = 14;
   var HIDE_MS = 3400;
   var MAX_CANVAS = 4096;
-  var TAP_MOVE = 10;
+  var TAP_MOVE = 8;
   var DOUBLE_MS = 300;
+  var PAN_GAIN = 1.35;
+  var RUBBER = 80;
+  var FRICTION = 0.94;
+  var INERTIA_MIN = 0.18;
+  var MAX_V = 3.6;
 
   function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
 
@@ -63,6 +69,14 @@
     this.resizeTimer = null;
     this.active = false;
     this.drawing = null;
+    this.vx = 0;
+    this.vy = 0;
+    this.lastPanX = 0;
+    this.lastPanY = 0;
+    this.lastPanT = 0;
+    this.inertiaId = 0;
+    this.transformRaf = 0;
+    this.softPan = false;
 
     this._onPtrDown = this.onPtrDown.bind(this);
     this._onPtrMove = this.onPtrMove.bind(this);
@@ -96,10 +110,10 @@
 
     var root = this.root;
     root.querySelector('[data-dv-zoom-in]').addEventListener('click', function () {
-      self.bumpScale(1.25); self.pokeChrome();
+      self.bumpScale(1.4); self.pokeChrome();
     });
     root.querySelector('[data-dv-zoom-out]').addEventListener('click', function () {
-      self.bumpScale(1 / 1.25); self.pokeChrome();
+      self.bumpScale(1 / 1.4); self.pokeChrome();
     });
     root.querySelector('[data-dv-fit]').addEventListener('click', function () {
       self.fit(); self.pokeChrome();
@@ -124,6 +138,9 @@
     this.tx = 0;
     this.ty = 0;
     this.pageNum = 1;
+    this.vx = 0;
+    this.vy = 0;
+    this.stopInertia();
     this.setStatus('Opening drawing…');
     this.plane.style.visibility = 'hidden';
     this.pokeChrome();
@@ -154,6 +171,7 @@
   DrawingViewer.prototype.close = function () {
     this.active = false;
     this.clearHide();
+    this.stopInertia();
     if (this.qualityTimer) clearTimeout(this.qualityTimer);
     if (this.detailTimer) clearTimeout(this.detailTimer);
     if (this.detailTask && this.detailTask.cancel) {
@@ -205,7 +223,7 @@
     this.hideDetail();
     this.page = await this.pdf.getPage(this.pageNum);
     if (fit) this.fit(true);
-    else this.applyTransform();
+    else this.applyTransform(true);
     await this.paintBase(true);
     this.setStatus('');
     this.plane.style.visibility = 'visible';
@@ -231,12 +249,26 @@
     this.tx = (this.stage.clientWidth - this.pageCssW) / 2;
     this.ty = (this.stage.clientHeight - this.pageCssH) / 2;
     this.hideDetail();
-    this.applyTransform();
+    this.applyTransform(true);
     if (!skipPaint) this.paintBase();
   };
 
-  DrawingViewer.prototype.applyTransform = function () {
-    this.clampPan();
+  DrawingViewer.prototype.applyTransform = function (immediate) {
+    this.clampPan(this.softPan);
+    if (immediate) {
+      this.flushTransform();
+      return;
+    }
+    if (this.transformRaf) return;
+    var self = this;
+    this.transformRaf = requestAnimationFrame(function () {
+      self.transformRaf = 0;
+      self.flushTransform();
+    });
+  };
+
+  DrawingViewer.prototype.flushTransform = function () {
+    this.clampPan(this.softPan);
     this.plane.style.width = this.pageCssW + 'px';
     this.plane.style.height = this.pageCssH + 'px';
     this.plane.style.transform = 'translate3d(' + this.tx + 'px,' + this.ty + 'px,0) scale(' + this.scale + ')';
@@ -254,7 +286,7 @@
   DrawingViewer.prototype.syncDetailPan = function () {
     if (!this.detail || this.detail.hidden || !this.detailAtScale) return;
     var k = this.scale / this.detailAtScale;
-    if (Math.abs(k - 1) > 0.012) {
+    if (Math.abs(k - 1) > 0.02) {
       this.hideDetail();
       return;
     }
@@ -263,15 +295,109 @@
     this.detail.style.transform = 'translate3d(' + dx + 'px,' + dy + 'px,0)';
   };
 
-  DrawingViewer.prototype.clampPan = function () {
+  DrawingViewer.prototype.clampPan = function (soft) {
     var sw = this.stage.clientWidth;
     var sh = this.stage.clientHeight;
     var w = this.pageCssW * this.scale;
     var h = this.pageCssH * this.scale;
+    var extra = soft ? RUBBER : 0;
     if (w <= sw) this.tx = (sw - w) / 2;
-    else this.tx = clamp(this.tx, sw - w, 0);
+    else this.tx = clamp(this.tx, sw - w - extra, extra);
     if (h <= sh) this.ty = (sh - h) / 2;
-    else this.ty = clamp(this.ty, sh - h, 0);
+    else this.ty = clamp(this.ty, sh - h - extra, extra);
+  };
+
+  DrawingViewer.prototype.hardBounds = function () {
+    var sw = this.stage.clientWidth;
+    var sh = this.stage.clientHeight;
+    var w = this.pageCssW * this.scale;
+    var h = this.pageCssH * this.scale;
+    var minX = w <= sw ? (sw - w) / 2 : sw - w;
+    var maxX = w <= sw ? (sw - w) / 2 : 0;
+    var minY = h <= sh ? (sh - h) / 2 : sh - h;
+    var maxY = h <= sh ? (sh - h) / 2 : 0;
+    return { minX: minX, maxX: maxX, minY: minY, maxY: maxY };
+  };
+
+  DrawingViewer.prototype.stopInertia = function () {
+    if (this.inertiaId) {
+      cancelAnimationFrame(this.inertiaId);
+      this.inertiaId = 0;
+    }
+    this.vx = 0;
+    this.vy = 0;
+  };
+
+  DrawingViewer.prototype.startInertia = function () {
+    var self = this;
+    var vx = clamp(this.vx, -MAX_V, MAX_V);
+    var vy = clamp(this.vy, -MAX_V, MAX_V);
+    this.stopInertia();
+    this.vx = vx;
+    this.vy = vy;
+    var speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    if (speed < INERTIA_MIN) {
+      this.softPan = false;
+      this.flushTransform();
+      this.scheduleDetail();
+      return;
+    }
+    this.softPan = true;
+    var last = performance.now();
+    var tick = function (now) {
+      if (!self.active) return;
+      var dt = Math.min(32, now - last);
+      last = now;
+      self.tx += self.vx * dt;
+      self.ty += self.vy * dt;
+      var b = self.hardBounds();
+      var out = self.tx < b.minX || self.tx > b.maxX || self.ty < b.minY || self.ty > b.maxY;
+      var friction = out ? 0.82 : FRICTION;
+      self.vx *= friction;
+      self.vy *= friction;
+      self.flushTransform();
+      var sp = Math.sqrt(self.vx * self.vx + self.vy * self.vy);
+      if (sp < 0.035) {
+        self.inertiaId = 0;
+        self.settleEdges();
+        return;
+      }
+      self.inertiaId = requestAnimationFrame(tick);
+    };
+    this.inertiaId = requestAnimationFrame(tick);
+  };
+
+  DrawingViewer.prototype.settleEdges = function () {
+    var self = this;
+    this.softPan = false;
+    var b = this.hardBounds();
+    var tx = clamp(this.tx, b.minX, b.maxX);
+    var ty = clamp(this.ty, b.minY, b.maxY);
+    if (Math.abs(tx - this.tx) < 0.5 && Math.abs(ty - this.ty) < 0.5) {
+      this.tx = tx;
+      this.ty = ty;
+      this.flushTransform();
+      this.scheduleDetail();
+      return;
+    }
+    var startX = this.tx;
+    var startY = this.ty;
+    var t0 = performance.now();
+    var dur = 180;
+    var step = function (now) {
+      var t = Math.min(1, (now - t0) / dur);
+      var e = 1 - Math.pow(1 - t, 3);
+      self.tx = startX + (tx - startX) * e;
+      self.ty = startY + (ty - startY) * e;
+      self.flushTransform();
+      if (t < 1) {
+        self.inertiaId = requestAnimationFrame(step);
+        return;
+      }
+      self.inertiaId = 0;
+      self.scheduleDetail();
+    };
+    this.inertiaId = requestAnimationFrame(step);
   };
 
   DrawingViewer.prototype.zoomAt = function (clientX, clientY, nextScale) {
@@ -284,7 +410,7 @@
     this.scale = ns;
     this.tx = x - dx * this.scale;
     this.ty = y - dy * this.scale;
-    this.applyTransform();
+    this.applyTransform(true);
   };
 
   DrawingViewer.prototype.bumpScale = function (factor) {
@@ -409,7 +535,7 @@
     if (this.detailTimer) clearTimeout(this.detailTimer);
     this.detailTimer = setTimeout(function () {
       self.paintDetail().catch(function () {});
-    }, 140);
+    }, 90);
   };
 
   DrawingViewer.prototype.touchPoints = function (e) {
@@ -422,8 +548,8 @@
   };
 
   DrawingViewer.prototype.beginGesture = function (pts) {
+    this.stopInertia();
     if (pts.length >= 2) {
-      this.hideDetail();
       this.gesture = {
         mode: 'two',
         dist: Math.max(1, dist(pts[0], pts[1])),
@@ -432,9 +558,16 @@
         tx: this.tx,
         ty: this.ty
       };
+      this.softPan = true;
       return;
     }
     if (pts.length === 1) {
+      this.softPan = true;
+      this.lastPanX = pts[0].x;
+      this.lastPanY = pts[0].y;
+      this.lastPanT = performance.now();
+      this.vx = 0;
+      this.vy = 0;
       this.gesture = {
         mode: 'one',
         x: pts[0].x,
@@ -450,7 +583,9 @@
     if (!g || g.mode !== 'two' || pts.length < 2) return;
     var mid = midpoint(pts[0], pts[1]);
     var d = Math.max(1, dist(pts[0], pts[1]));
-    var newScale = clamp(g.scale * (d / g.dist), MIN_SCALE, MAX_SCALE);
+    var pinch = Math.pow(d / g.dist, 1.18);
+    var newScale = clamp(g.scale * pinch, MIN_SCALE, MAX_SCALE);
+    if (Math.abs(newScale / this.scale - 1) > 0.03) this.hideDetail();
     var rect = this.stage.getBoundingClientRect();
     var worldX = (g.mid.x - rect.left - g.tx) / g.scale;
     var worldY = (g.mid.y - rect.top - g.ty) / g.scale;
@@ -463,21 +598,33 @@
   DrawingViewer.prototype.applyOneFinger = function (pt) {
     var g = this.gesture;
     if (!g || g.mode !== 'one') return;
-    var dx = pt.x - g.x;
-    var dy = pt.y - g.y;
-    if (Math.abs(dx) > TAP_MOVE || Math.abs(dy) > TAP_MOVE) this.moved = true;
-    this.tx = g.tx + dx;
-    this.ty = g.ty + dy;
+    var now = performance.now();
+    var rawX = pt.x - g.x;
+    var rawY = pt.y - g.y;
+    if (Math.abs(rawX) > TAP_MOVE || Math.abs(rawY) > TAP_MOVE) this.moved = true;
+    var gain = this.scale > 1.4 ? PAN_GAIN : 1.15;
+    this.tx = g.tx + rawX * gain;
+    this.ty = g.ty + rawY * gain;
+    var dt = now - this.lastPanT;
+    if (dt > 0 && dt < 64) {
+      this.vx = (pt.x - this.lastPanX) * gain / dt;
+      this.vy = (pt.y - this.lastPanY) * gain / dt;
+    }
+    this.lastPanX = pt.x;
+    this.lastPanY = pt.y;
+    this.lastPanT = now;
     this.applyTransform();
   };
 
   DrawingViewer.prototype.finishGesture = function (clientX, clientY) {
     this.gesture = null;
     if (!this.moved) {
+      this.softPan = false;
       var now = Date.now();
       if (now - this.lastTap < DOUBLE_MS && Math.abs(clientX - this.lastTapX) < 28 && Math.abs(clientY - this.lastTapY) < 28) {
         this.lastTap = 0;
-        if (this.scale > 1.35) this.fit();
+        if (this.scale > 9) this.fit();
+        else if (this.scale > 3.2) this.zoomAt(clientX, clientY, TAP_ZOOM_2);
         else this.zoomAt(clientX, clientY, TAP_ZOOM);
         this.scheduleDetail();
         this.pokeChrome();
@@ -489,7 +636,12 @@
       this.toggleChrome();
       return;
     }
-    this.scheduleDetail();
+    var stale = performance.now() - this.lastPanT > 50;
+    if (stale) {
+      this.vx = 0;
+      this.vy = 0;
+    }
+    this.startInertia();
     this.pokeChrome();
   };
 
@@ -579,7 +731,7 @@
   DrawingViewer.prototype.onWheel = function (e) {
     if (!this.active) return;
     e.preventDefault();
-    var factor = e.deltaY < 0 ? 1.08 : 0.92;
+    var factor = e.deltaY < 0 ? 1.16 : 0.86;
     this.zoomAt(e.clientX, e.clientY, this.scale * factor);
     this.scheduleDetail();
     this.pokeChrome();
@@ -595,7 +747,7 @@
         var size = self.fitSize(self.page);
         self.pageCssW = size.cssW;
         self.pageCssH = size.cssH;
-        self.applyTransform();
+        self.applyTransform(true);
         self.paintBase(true);
         self.scheduleDetail();
       }

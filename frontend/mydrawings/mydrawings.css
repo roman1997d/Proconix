@@ -523,6 +523,9 @@ img { max-width: 100%; }
   pointer-events: none;
   z-index: 1;
   transform-origin: 0 0;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   background: transparent;
 }
 .dv-status {
