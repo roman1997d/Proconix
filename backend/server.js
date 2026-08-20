@@ -168,6 +168,12 @@ app.get(['/about', '/about-us'], (req, res) => {
   res.sendFile(aboutHtmlPath);
 });
 
+// My Drawings PWA (mobile drawing viewer)
+const myDrawingsHtmlPath = path.join(frontendDir, 'mydrawings', 'index.html');
+app.get(['/mydrawings', '/mydrawings/'], (req, res) => {
+  res.sendFile(myDrawingsHtmlPath);
+});
+
 // Static frontend (index.html, favicon.ico, register_company.html, css/, js/, etc.)
 app.use(express.static(frontendDir));
 

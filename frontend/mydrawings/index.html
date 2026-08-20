@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <meta name="theme-color" content="#070b14">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="My Drawings">
+  <meta name="description" content="View project drawings on your phone. Search, open PDFs, and keep copies offline.">
+  <title>My Drawings</title>
+  <link rel="manifest" href="/mydrawings/manifest.webmanifest">
+  <link rel="icon" href="/favicon_io/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="apple-touch-icon" href="/favicon_io/apple-touch-icon.png">
+  <link rel="stylesheet" href="/mydrawings/mydrawings.css">
+</head>
+<body>
+  <div class="md-boot" id="md-boot">
+    <div class="md-boot-mark" aria-hidden="true">MD</div>
+    <p>My Drawings</p>
+    <div class="md-spin" aria-hidden="true"></div>
+  </div>
+
+  <div class="md-app" id="md-app">
+    <section class="md-screen md-pin" id="screen-pin" aria-label="Access">
+      <p class="md-pin-brand">My Drawings</p>
+      <h2>Enter access key</h2>
+      <p class="md-pin-hint">4-digit project key</p>
+      <div class="md-pin-dots" id="pin-dots" aria-hidden="true">
+        <span class="md-dot"></span>
+        <span class="md-dot"></span>
+        <span class="md-dot"></span>
+        <span class="md-dot"></span>
+      </div>
+      <div class="md-pin-wrap">
+        <div class="md-pin-tap" id="pin-tap">Tap to enter key</div>
+        <input
+          id="pin-input"
+          class="md-pin-input"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          maxlength="4"
+          autocomplete="one-time-code"
+          enterkeyhint="done"
+          autofocus
+          aria-label="4-digit access key"
+        >
+      </div>
+      <p class="md-error" id="pin-error" role="alert"></p>
+      <button type="button" class="md-btn md-btn-primary" id="pin-continue" disabled>Continue</button>
+      <p class="md-demo" id="pin-demo"></p>
+    </section>
+
+    <section class="md-screen" id="screen-list" aria-label="Drawings">
+      <header class="md-header">
+        <div class="md-header-text">
+          <h1 class="md-header-title">My Drawings</h1>
+          <p class="md-header-sub" id="project-name">Project</p>
+        </div>
+        <span class="md-offline" id="offline-pill" aria-live="polite"><i></i> Offline</span>
+        <button type="button" class="md-icon-btn" id="btn-menu" aria-label="More">
+          <svg class="md-icon md-icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none"/></svg>
+        </button>
+      </header>
+      <div class="md-main">
+        <label class="md-search">
+          <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="search" type="search" placeholder="Search drawings..." enterkeyhint="search" autocapitalize="off" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="md-cats" id="cats" role="tablist" aria-label="Categories"></div>
+        <p class="md-count" id="list-count"></p>
+        <div class="md-list" id="list"></div>
+        <div class="md-install" id="install-bar">
+          <p><strong>Add to Home Screen</strong>Launch My Drawings like an app.</p>
+          <button type="button" class="md-btn md-btn-ghost" id="btn-install">Install</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="md-screen md-viewer" id="screen-viewer" aria-label="PDF viewer">
+      <header class="md-header">
+        <button type="button" class="md-icon-btn" id="btn-back" aria-label="Back to drawings">
+          <svg class="md-icon md-icon-lg" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <div class="md-header-text">
+          <h1 class="md-header-title" id="viewer-number">Drawing</h1>
+          <p class="md-header-sub" id="viewer-title"></p>
+        </div>
+        <button type="button" class="md-icon-btn" id="btn-viewer-more" aria-label="Drawing actions">
+          <svg class="md-icon md-icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none"/></svg>
+        </button>
+      </header>
+      <div class="md-viewer-stage" id="viewer-stage">
+        <div class="md-viewer-pages" id="viewer-pages"></div>
+      </div>
+      <footer class="md-viewer-bar">
+        <button type="button" class="md-icon-btn" id="btn-zoom-out" aria-label="Zoom out">
+          <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6"/></svg>
+        </button>
+        <span class="md-zoom-label" id="zoom-label">100%</span>
+        <button type="button" class="md-icon-btn" id="btn-zoom-in" aria-label="Zoom in">
+          <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M11 8v6M8 11h6"/></svg>
+        </button>
+        <button type="button" class="md-icon-btn" id="btn-fullscreen" aria-label="Fullscreen">
+          <svg class="md-icon" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        </button>
+      </footer>
+    </section>
+  </div>
+
+  <div class="md-backdrop" id="backdrop"></div>
+  <div class="md-sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"></div>
+
+  <script src="/mydrawings/mydrawings.js"></script>
+</body>
+</html>
