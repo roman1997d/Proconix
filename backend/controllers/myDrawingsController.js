@@ -11,7 +11,7 @@ const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
 const { createTransport } = require('../lib/sendCallbackRequestEmail');
 
 const ACCESS_PIN = String(process.env.MY_DRAWINGS_ACCESS_PIN || '2580');
-const ADMIN_PIN = String(process.env.MY_DRAWINGS_ADMIN_PIN || '1470');
+const ADMIN_PIN = '2026';
 const UPLOAD_DIR = path.join(UPLOADS_ROOT, 'mydrawings');
 const DEFAULT_PROJECT_NAME = 'My Drawings';
 const RESERVED_PINS = new Set([ACCESS_PIN, ADMIN_PIN, '0000']);
@@ -143,6 +143,18 @@ async function ensureSchemaInner() {
       [DEFAULT_PROJECT_NAME, accessHash, adminHash]
     );
     return;
+  }
+
+  const stored = await pool.query(
+    'SELECT id, admin_pin_hash FROM my_drawings_workspace WHERE id = $1',
+    [existing.rows[0].id]
+  );
+  if (stored.rows[0] && !(await bcrypt.compare(ADMIN_PIN, stored.rows[0].admin_pin_hash))) {
+    const adminHash = await bcrypt.hash(ADMIN_PIN, 10);
+    await pool.query('UPDATE my_drawings_workspace SET admin_pin_hash = $2 WHERE id = $1', [
+      stored.rows[0].id,
+      adminHash,
+    ]);
   }
 
   if (!existing.rows[0].demo_cleared_at) {

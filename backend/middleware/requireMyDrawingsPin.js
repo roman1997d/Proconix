@@ -20,6 +20,14 @@ function readPin(req) {
 
 async function requireMyDrawingsPin(req, res, next) {
   try {
+    const pin = readPin(req);
+    if (/^\d{4}$/.test(pin)) {
+      const byPin = await resolveWorkspaceByPin(pin);
+      if (byPin && byPin.role === 'admin') {
+        req.myDrawings = byPin;
+        return next();
+      }
+    }
     const device = readDevice(req);
     if (device) {
       const resolved = await resolveDeviceToken(device);
@@ -29,16 +37,7 @@ async function requireMyDrawingsPin(req, res, next) {
       req.myDrawings = resolved;
       return next();
     }
-    const pin = readPin(req);
-    if (!/^\d{4}$/.test(pin)) {
-      return res.status(401).json({ success: false, message: 'Incorrect access key' });
-    }
-    const resolved = await resolveWorkspaceByPin(pin);
-    if (!resolved || resolved.role !== 'admin') {
-      return res.status(401).json({ success: false, message: 'Incorrect access key' });
-    }
-    req.myDrawings = resolved;
-    return next();
+    return res.status(401).json({ success: false, message: 'Incorrect access key' });
   } catch (err) {
     console.error('requireMyDrawingsPin:', err);
     return res.status(500).json({ success: false, message: 'Access check failed.' });

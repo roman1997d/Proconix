@@ -40,7 +40,9 @@
     downloadAllProgress: null,
     manageMode: null,
     role: 'worker',
-    pinMode: 'worker'
+    pinMode: 'worker',
+    adminPin: '',
+    pinFrom: ''
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -212,9 +214,11 @@
 
   function pinHeaders(extra) {
     var headers = extra ? Object.assign({}, extra) : {};
+    var adminPin = state.adminPin || (state.role === 'admin' ? sessionPin() : '');
     var device = sessionDevice();
     var pin = sessionPin();
-    if (device) headers['X-MyDrawings-Device'] = device;
+    if (adminPin) headers['X-MyDrawings-Pin'] = adminPin;
+    else if (device) headers['X-MyDrawings-Device'] = device;
     else if (pin) headers['X-MyDrawings-Pin'] = pin;
     return headers;
   }
@@ -423,8 +427,7 @@
         lastName: extra && extra.lastName != null ? extra.lastName : prev.lastName || '',
         email: extra && extra.email != null ? extra.email : prev.email || ''
       };
-      if (payload.role === 'admin') payload.deviceToken = '';
-      else payload.pin = '';
+      if (payload.role !== 'admin') payload.pin = '';
       localStorage.setItem(DEVICE_KEY, JSON.stringify(payload));
       sessionStorage.removeItem(SESSION_KEY);
     } catch (e) {}
@@ -491,10 +494,10 @@
     state.pinMode = mode === 'admin' ? 'admin' : 'worker';
     var pending = pendingDetails();
     var worker = state.pinMode === 'worker';
-    $('pin-title').textContent = worker ? 'Enter your access key' : 'Enter admin key';
+    $('pin-title').textContent = worker ? 'Enter your access key' : 'Enter administration key';
     $('pin-hint').textContent = worker
       ? (pending.email ? 'We sent a 4-digit key to ' + pending.email : 'We sent a 4-digit key to your email')
-      : '4-digit admin key';
+      : '4-digit administration key';
     $('pin-worker-actions').hidden = !worker;
     $('pin-admin-back-wrap').hidden = worker;
     $('pin-error').textContent = '';
@@ -523,12 +526,17 @@
   }
 
   function backFromPin() {
+    if (state.pinFrom === 'menu') {
+      showScreen('screen-list');
+      return;
+    }
     var pending = pendingDetails();
     if (pending.from === 'login') showLogin();
     else showRegister();
   }
 
-  function showPin(mode) {
+  function showPin(mode, from) {
+    state.pinFrom = from || '';
     configurePinScreen(mode);
     showScreen('screen-pin');
     setTimeout(function () { $('pin-input').focus(); }, 200);
@@ -657,7 +665,15 @@
       var extra;
       if (state.pinMode === 'admin') {
         data = await fetchRemoteCatalog({ pin: pin });
-        extra = { pin: pin, role: 'admin' };
+        state.adminPin = pin;
+        extra = {
+          pin: sessionDevice() ? '' : pin,
+          role: 'admin',
+          deviceToken: sessionDevice()
+        };
+        await enterApp(data, extra);
+        openManage();
+        return;
       } else {
         var pending = pendingDetails();
         if (!pending.email) {
@@ -1214,17 +1230,14 @@
     var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
     var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
     var installItem = standalone ? '' : '<button type="button" class="md-sheet-item" data-sheet="install"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Add to Home Screen</button>';
-    var manageItem = state.role === 'admin'
-      ? '<button type="button" class="md-sheet-item" data-sheet="manage"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2"/></svg>Manage</button>'
-      : '';
     openSheet(
       '<h3 id="sheet-title">My Drawings</h3>' +
+      '<button type="button" class="md-sheet-item" data-sheet="administration"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2"/></svg>Administration</button>' +
       '<button type="button" class="md-sheet-item" data-sheet="download-all"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Download all drawings</button>' +
       installItem +
       '<button type="button" class="md-sheet-item" data-sheet="clear-offline"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 14h10l1-14"/></svg>Remove all offline copies</button>' +
-      manageItem +
       (state.role === 'admin'
-        ? '<button type="button" class="md-sheet-item is-danger" data-sheet="lock"><svg class="md-icon" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Lock</button>'
+        ? '<button type="button" class="md-sheet-item is-danger" data-sheet="lock"><svg class="md-icon" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Exit administration</button>'
         : '') +
       (ios && !standalone ? '<p class="md-sheet-note">On iPhone: Share → Add to Home Screen.</p>' : '')
     );
@@ -1268,6 +1281,14 @@
       return;
     }
     closeSheet();
+    if (act === 'administration') {
+      if (state.role === 'admin') {
+        openManage();
+        return;
+      }
+      showPin('admin', 'menu');
+      return;
+    }
     if (act === 'download-all') {
       downloadAllDrawings();
       return;
@@ -1277,13 +1298,26 @@
       return;
     }
     if (act === 'lock') {
-      writeSession(false);
-      writePending(null);
-      $('pin-input').value = '';
-      renderPinDots();
+      state.adminPin = '';
       hideManageForm();
       closeViewerQuiet();
-      showPin('admin');
+      if (sessionDevice()) {
+        var s = readSession() || {};
+        writeSession(true, {
+          role: 'worker',
+          pin: '',
+          deviceToken: sessionDevice(),
+          firstName: s.firstName || '',
+          lastName: s.lastName || '',
+          email: s.email || ''
+        });
+        state.role = 'worker';
+        showScreen('screen-list');
+      } else {
+        writeSession(false);
+        writePending(null);
+        showRegister();
+      }
       return;
     }
     if (act === 'clear-offline') {
@@ -1431,11 +1465,11 @@
   on($('login-form'), 'submit', submitLogin);
   on($('btn-have-account'), 'click', showLogin);
   on($('btn-create-account'), 'click', showRegister);
-  on($('btn-admin-login'), 'click', function () { showPin('admin'); });
-  on($('btn-admin-login-2'), 'click', function () { showPin('admin'); });
+  on($('btn-admin-login'), 'click', function () { showPin('admin', 'login'); });
+  on($('btn-admin-login-2'), 'click', function () { showPin('admin', 'login'); });
   on($('pin-resend'), 'click', resendKey);
   on($('pin-change'), 'click', backFromPin);
-  on($('pin-admin-back'), 'click', showRegister);
+  on($('pin-admin-back'), 'click', backFromPin);
 
   on($('search'), 'input', function () {
     state.query = $('search').value || '';
