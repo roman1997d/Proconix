@@ -37,7 +37,8 @@
     downloadCtl: {},
     pendingRemoveId: null,
     downloadingAll: false,
-    downloadAllProgress: null
+    downloadAllProgress: null,
+    manageMode: null
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -149,43 +150,97 @@
     });
   }
 
+  function todayIso() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function slugId(number) {
+    var base = String(number || 'dwg').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'dwg';
+    if (!drawingById(base)) return base;
+    var n = 2;
+    while (drawingById(base + '-' + n)) n += 1;
+    return base + '-' + n;
+  }
+
+  function nextRevision(rev) {
+    var r = String(rev || 'A').trim().toUpperCase();
+    if (!r) return 'A';
+    if (/^[A-Y]$/.test(r)) return String.fromCharCode(r.charCodeAt(0) + 1);
+    if (r === 'Z') return 'AA';
+    var m = r.match(/^(.*?)(\d+)$/);
+    if (m) return m[1] + String(Number(m[2]) + 1);
+    return r + '+';
+  }
+
+  function isPdfFile(file) {
+    if (!file) return false;
+    var name = String(file.name || '').toLowerCase();
+    return file.type === 'application/pdf' || name.endsWith('.pdf');
+  }
+
+  function blobFromPdf(file) {
+    return file.arrayBuffer().then(function (buf) {
+      return new Blob([buf], { type: 'application/pdf' });
+    });
+  }
+
+  function seedCatalog() {
+    return {
+      project: CATALOG.project,
+      categories: CATALOG.categories.slice(),
+      drawings: CATALOG.drawings.map(function (d) { return Object.assign({}, d); })
+    };
+  }
+
   /* ---------- Catalog (replace this block with API calls) ---------- */
   async function fetchCatalog(pin) {
     var cached = await idbGet('meta', 'catalog');
-    if (isOnline()) {
-      if (DEMO) {
-        if (String(pin) !== DEMO_PIN) {
-          var err = new Error('Incorrect access key');
-          err.code = 'bad_pin';
-          throw err;
-        }
-        var data = {
-          project: CATALOG.project,
-          categories: CATALOG.categories.slice(),
-          drawings: CATALOG.drawings.map(function (d) { return Object.assign({}, d); })
-        };
-        var hash = await sha256('mydrawings:' + pin);
-        await idbSet('meta', 'catalog', { pinHash: hash, data: data, savedAt: Date.now() });
-        return data;
-      }
+    var hash = await sha256('mydrawings:' + pin);
+    if (DEMO && String(pin) !== DEMO_PIN) {
+      var bad = new Error('Incorrect access key');
+      bad.code = 'bad_pin';
+      throw bad;
     }
     if (cached && cached.data) {
-      var ok = await sha256('mydrawings:' + pin);
-      if (cached.pinHash && cached.pinHash !== ok) {
-        var err2 = new Error('Incorrect access key');
-        err2.code = 'bad_pin';
-        throw err2;
+      if (cached.pinHash && cached.pinHash !== hash) {
+        var mismatch = new Error('Incorrect access key');
+        mismatch.code = 'bad_pin';
+        throw mismatch;
+      }
+      if (!cached.pinHash) {
+        await idbSet('meta', 'catalog', { pinHash: hash, data: cached.data, savedAt: Date.now() });
       }
       return cached.data;
+    }
+    if (isOnline() && DEMO && String(pin) === DEMO_PIN) {
+      var data = seedCatalog();
+      await idbSet('meta', 'catalog', { pinHash: hash, data: data, savedAt: Date.now() });
+      return data;
     }
     var offlineErr = new Error(isOnline() ? 'Incorrect access key' : 'No drawings stored on this device yet.');
     offlineErr.code = 'bad_pin';
     throw offlineErr;
   }
 
+  async function saveCatalog() {
+    var cached = await idbGet('meta', 'catalog');
+    var data = {
+      project: state.project,
+      categories: state.categories.slice(),
+      drawings: state.drawings.map(function (d) { return Object.assign({}, d); })
+    };
+    await idbSet('meta', 'catalog', {
+      pinHash: cached && cached.pinHash ? cached.pinHash : null,
+      data: data,
+      savedAt: Date.now()
+    });
+  }
+
   async function fetchDrawingFile(drawing, onProgress) {
     var local = await idbGet('files', drawing.id);
     if (local && local.blob) return local.blob;
+    if (!drawing.fileUrl) throw new Error('This drawing has no file on this device. Open Manage and add the PDF again.');
     if (!isOnline()) throw new Error('This drawing is not available offline.');
     var res = await fetch(drawing.fileUrl, { credentials: 'same-origin' });
     if (!res.ok) throw new Error('Could not load drawing.');
@@ -226,7 +281,7 @@
 
   /* ---------- Screens ---------- */
   function showScreen(id) {
-    ['screen-pin', 'screen-list', 'screen-viewer'].forEach(function (sid) {
+    ['screen-pin', 'screen-list', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
       var el = $(sid);
       if (el) el.classList.toggle('is-active', sid === id);
     });
@@ -562,6 +617,265 @@
     }
   }
 
+  /* ---------- Manage ---------- */
+  function openManage() {
+    closeSheet();
+    hideManageForm();
+    showScreen('screen-manage');
+    renderManage();
+  }
+
+  function closeManage() {
+    hideManageForm();
+    showScreen('screen-list');
+    renderCats();
+    renderList();
+  }
+
+  function hideManageForm() {
+    state.manageMode = null;
+    if ($('mg-form')) $('mg-form').hidden = true;
+    if ($('mg-home')) $('mg-home').hidden = false;
+    if ($('mg-file')) $('mg-file').value = '';
+    if ($('mg-error')) $('mg-error').textContent = '';
+    if ($('mg-file-name')) $('mg-file-name').textContent = 'No file selected';
+  }
+
+  function fillCategorySelect(selected) {
+    var sel = $('mg-category');
+    var cats = state.categories.slice();
+    if (!cats.length) cats = ['Uncategorised'];
+    sel.innerHTML = cats.map(function (c) {
+      var on = c === selected ? ' selected' : '';
+      return '<option value="' + escapeHtml(c) + '"' + on + '>' + escapeHtml(c) + '</option>';
+    }).join('');
+  }
+
+  function renderManage() {
+    var host = $('mg-cats');
+    if (!state.categories.length) {
+      host.innerHTML = '<p class="mg-form-note">No categories yet.</p>';
+    } else {
+      host.innerHTML = state.categories.map(function (c) {
+        return '<span class="mg-cat">' + escapeHtml(c) +
+          '<button type="button" data-mg-del-cat="' + escapeHtml(c) + '" aria-label="Delete ' + escapeHtml(c) + '">&times;</button></span>';
+      }).join('');
+    }
+
+    var list = $('mg-list');
+    if (!state.drawings.length) {
+      list.innerHTML = '<p class="mg-form-note">No drawings yet. Add one to get started.</p>';
+      return;
+    }
+    var rows = state.drawings.slice().sort(function (a, b) {
+      return String(a.number).localeCompare(String(b.number));
+    });
+    list.innerHTML = rows.map(function (d) {
+      var off = state.offlineIds[d.id] ? ' · Offline' : '';
+      return '<article class="mg-item" data-id="' + escapeHtml(d.id) + '">' +
+        '<p class="mg-item-num">' + escapeHtml(d.number) + '</p>' +
+        '<p class="mg-item-title">' + escapeHtml(d.title) + '</p>' +
+        '<p class="mg-item-meta">Rev ' + escapeHtml(d.revision || '—') + ' · ' + escapeHtml(d.category) + off + '</p>' +
+        '<div class="mg-item-actions">' +
+          '<button type="button" class="is-update" data-mg="update">Update</button>' +
+          '<button type="button" data-mg="edit">Edit</button>' +
+          '<button type="button" class="is-danger" data-mg="delete">Delete</button>' +
+        '</div></article>';
+    }).join('');
+  }
+
+  function showManageForm(mode) {
+    state.manageMode = mode;
+    var main = document.querySelector('#screen-manage .md-main');
+    if (main) main.scrollTop = 0;
+    $('mg-home').hidden = true;
+    $('mg-form').hidden = false;
+    $('mg-error').textContent = '';
+    $('mg-file').value = '';
+    $('mg-file-name').textContent = 'No file selected';
+    var d = mode.id ? drawingById(mode.id) : null;
+    fillCategorySelect(d ? d.category : state.categories[0]);
+    $('mg-number').disabled = false;
+    $('mg-title').disabled = false;
+    $('mg-category').disabled = false;
+    $('mg-rev').disabled = false;
+    $('mg-file-wrap').hidden = false;
+    $('mg-file').required = false;
+
+    if (mode.type === 'add') {
+      $('mg-form-title').textContent = 'Add drawing';
+      $('mg-form-note').textContent = 'The PDF is stored on this phone. It appears in the list as soon as you save.';
+      $('mg-number').value = '';
+      $('mg-title').value = '';
+      $('mg-rev').value = 'A';
+      $('mg-file-label').textContent = 'PDF file';
+      $('mg-file').required = true;
+      $('btn-mg-save').textContent = 'Add drawing';
+    } else if (mode.type === 'edit') {
+      $('mg-form-title').textContent = 'Edit drawing';
+      $('mg-form-note').textContent = 'Change number, title, category or revision. Leave the file empty to keep the current PDF.';
+      $('mg-number').value = d.number;
+      $('mg-title').value = d.title;
+      $('mg-rev').value = d.revision || '';
+      $('mg-file-label').textContent = 'Replace PDF (optional)';
+      $('btn-mg-save').textContent = 'Save changes';
+    } else if (mode.type === 'update') {
+      $('mg-form-title').textContent = 'Update drawing';
+      $('mg-form-note').textContent = 'The new PDF replaces the old copy. Opening this drawing will show the new revision.';
+      $('mg-number').value = d.number;
+      $('mg-title').value = d.title;
+      $('mg-rev').value = nextRevision(d.revision);
+      $('mg-number').disabled = true;
+      $('mg-category').disabled = true;
+      $('mg-file-label').textContent = 'New PDF (replaces the old file)';
+      $('mg-file').required = true;
+      $('btn-mg-save').textContent = 'Replace drawing';
+    }
+  }
+
+  async function addCategory() {
+    var name = ($('mg-cat-input').value || '').trim();
+    if (!name) return;
+    var exists = state.categories.some(function (c) {
+      return c.toLowerCase() === name.toLowerCase();
+    });
+    if (exists) {
+      alert('That category already exists.');
+      return;
+    }
+    state.categories.push(name);
+    $('mg-cat-input').value = '';
+    await saveCatalog();
+    renderCats();
+    renderManage();
+  }
+
+  async function deleteCategory(name) {
+    var used = state.drawings.filter(function (d) { return d.category === name; }).length;
+    var msg = used
+      ? 'Delete “' + name + '”? ' + used + ' drawing(s) will move to Uncategorised.'
+      : 'Delete category “' + name + '”?';
+    if (!confirm(msg)) return;
+    state.categories = state.categories.filter(function (c) { return c !== name; });
+    var fallback = state.categories[0] || 'Uncategorised';
+    if (used && state.categories.indexOf(fallback) === -1) {
+      state.categories.push(fallback);
+    }
+    state.drawings.forEach(function (d) {
+      if (d.category === name) d.category = fallback;
+    });
+    if (state.category === name) state.category = 'All';
+    await saveCatalog();
+    renderCats();
+    renderManage();
+  }
+
+  async function deleteDrawing(id) {
+    var d = drawingById(id);
+    if (!d) return;
+    if (!confirm('Delete ' + d.number + ' and its offline copy?')) return;
+    state.drawings = state.drawings.filter(function (x) { return x.id !== id; });
+    await idbDel('files', id);
+    delete state.offlineIds[id];
+    await saveCatalog();
+    await refreshOfflineMap();
+    renderManage();
+    renderList();
+  }
+
+  async function submitManageForm(e) {
+    e.preventDefault();
+    var mode = state.manageMode;
+    if (!mode) return;
+    $('mg-error').textContent = '';
+    var number = ($('mg-number').value || '').trim();
+    var title = ($('mg-title').value || '').trim();
+    var category = $('mg-category').value;
+    var revision = ($('mg-rev').value || '').trim().toUpperCase() || 'A';
+    var file = $('mg-file').files && $('mg-file').files[0];
+    if (!number || !title) {
+      $('mg-error').textContent = 'Number and title are required.';
+      return;
+    }
+    try {
+      if (mode.type === 'add') {
+        if (!isPdfFile(file)) {
+          $('mg-error').textContent = 'Choose a PDF file.';
+          return;
+        }
+        var dup = state.drawings.some(function (d) {
+          return d.number.toLowerCase() === number.toLowerCase();
+        });
+        if (dup) {
+          $('mg-error').textContent = 'A drawing with that number already exists. Use Update to replace it.';
+          return;
+        }
+        if (category && state.categories.indexOf(category) === -1) state.categories.push(category);
+        var id = slugId(number);
+        state.drawings.push({
+          id: id,
+          number: number,
+          title: title,
+          category: category || 'Uncategorised',
+          revision: revision,
+          updatedAt: todayIso(),
+          sizeBytes: file.size,
+          fileUrl: ''
+        });
+        await idbSet('files', id, { blob: await blobFromPdf(file), size: file.size, at: Date.now() });
+        await saveCatalog();
+        await refreshOfflineMap();
+      } else if (mode.type === 'edit') {
+        var d = drawingById(mode.id);
+        if (!d) return;
+        var clash = state.drawings.some(function (x) {
+          return x.id !== d.id && x.number.toLowerCase() === number.toLowerCase();
+        });
+        if (clash) {
+          $('mg-error').textContent = 'Another drawing already uses that number.';
+          return;
+        }
+        if (file && !isPdfFile(file)) {
+          $('mg-error').textContent = 'Choose a PDF file.';
+          return;
+        }
+        d.number = number;
+        d.title = title;
+        d.category = category || d.category;
+        d.revision = revision;
+        d.updatedAt = todayIso();
+        if (file) {
+          await idbSet('files', d.id, { blob: await blobFromPdf(file), size: file.size, at: Date.now() });
+          d.sizeBytes = file.size;
+          d.fileUrl = '';
+        }
+        await saveCatalog();
+        await refreshOfflineMap();
+      } else if (mode.type === 'update') {
+        var u = drawingById(mode.id);
+        if (!u) return;
+        if (!isPdfFile(file)) {
+          $('mg-error').textContent = 'Choose the new PDF to replace the old one.';
+          return;
+        }
+        await idbSet('files', u.id, { blob: await blobFromPdf(file), size: file.size, at: Date.now() });
+        u.title = title || u.title;
+        u.revision = revision;
+        u.updatedAt = todayIso();
+        u.sizeBytes = file.size;
+        u.fileUrl = '';
+        await saveCatalog();
+        await refreshOfflineMap();
+      }
+      hideManageForm();
+      renderManage();
+      renderCats();
+      renderList();
+    } catch (err) {
+      $('mg-error').textContent = err && err.message ? err.message : 'Could not save.';
+    }
+  }
+
   /* ---------- Sheets ---------- */
   function openSheet(html) {
     var sheet = $('sheet');
@@ -584,6 +898,7 @@
       '<button type="button" class="md-sheet-item" data-sheet="download-all"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Download all drawings</button>' +
       installItem +
       '<button type="button" class="md-sheet-item" data-sheet="clear-offline"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 14h10l1-14"/></svg>Remove all offline copies</button>' +
+      '<button type="button" class="md-sheet-item" data-sheet="manage"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1.1 1.5 1.2H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Manage</button>' +
       '<button type="button" class="md-sheet-item is-danger" data-sheet="lock"><svg class="md-icon" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Lock</button>' +
       (ios && !standalone ? '<p class="md-sheet-note">On iPhone: Share → Add to Home Screen.</p>' : '')
     );
@@ -631,10 +946,15 @@
       downloadAllDrawings();
       return;
     }
+    if (act === 'manage') {
+      openManage();
+      return;
+    }
     if (act === 'lock') {
       writeSession(false);
       $('pin-input').value = '';
       renderPinDots();
+      hideManageForm();
       showScreen('screen-pin');
       closeViewerQuiet();
       $('pin-input').focus();
@@ -768,6 +1088,35 @@
 
   on($('btn-menu'), 'click', openMainMenu);
   on($('btn-download-all'), 'click', downloadAllDrawings);
+  on($('btn-manage-back'), 'click', closeManage);
+  on($('btn-mg-add-cat'), 'click', addCategory);
+  on($('mg-cat-input'), 'keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCategory();
+    }
+  });
+  on($('btn-mg-add'), 'click', function () { showManageForm({ type: 'add' }); });
+  on($('btn-mg-cancel'), 'click', hideManageForm);
+  on($('mg-form'), 'submit', submitManageForm);
+  on($('mg-file'), 'change', function () {
+    var f = $('mg-file').files && $('mg-file').files[0];
+    $('mg-file-name').textContent = f ? f.name : 'No file selected';
+  });
+  on($('mg-cats'), 'click', function (e) {
+    var btn = e.target.closest('[data-mg-del-cat]');
+    if (btn) deleteCategory(btn.getAttribute('data-mg-del-cat'));
+  });
+  on($('mg-list'), 'click', function (e) {
+    var item = e.target.closest('.mg-item');
+    var act = e.target.closest('[data-mg]');
+    if (!item || !act) return;
+    var id = item.getAttribute('data-id');
+    var which = act.getAttribute('data-mg');
+    if (which === 'update') showManageForm({ type: 'update', id: id });
+    else if (which === 'edit') showManageForm({ type: 'edit', id: id });
+    else if (which === 'delete') deleteDrawing(id);
+  });
   on($('btn-viewer-more'), 'click', openViewerMenu);
   on($('btn-back'), 'click', function () {
     if (history.state && history.state.md === 'view') history.back();

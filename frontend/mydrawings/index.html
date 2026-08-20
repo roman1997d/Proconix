@@ -87,6 +87,72 @@
       </div>
     </section>
 
+    <section class="md-screen" id="screen-manage" aria-label="Manage drawings">
+      <header class="md-header">
+        <button type="button" class="md-icon-btn" id="btn-manage-back" aria-label="Back to drawings">
+          <svg class="md-icon md-icon-lg" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <div class="md-header-text">
+          <h1 class="md-header-title">Manage</h1>
+          <p class="md-header-sub">Drawings &amp; categories</p>
+        </div>
+      </header>
+      <div class="md-main mg-main">
+        <div id="mg-home">
+          <section class="mg-block">
+            <div class="mg-block-head">
+              <h2>Categories</h2>
+            </div>
+            <div class="mg-cats" id="mg-cats"></div>
+            <div class="mg-add-row">
+              <input id="mg-cat-input" type="text" maxlength="80" placeholder="New category name" autocomplete="off">
+              <button type="button" class="md-btn md-btn-ghost" id="btn-mg-add-cat">Add</button>
+            </div>
+          </section>
+          <section class="mg-block">
+            <div class="mg-block-head">
+              <h2>Drawings</h2>
+              <button type="button" class="mg-add-dwg" id="btn-mg-add">
+                <svg class="md-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                Add drawing
+              </button>
+            </div>
+            <div id="mg-list"></div>
+          </section>
+        </div>
+        <form id="mg-form" class="mg-form" hidden>
+          <h2 id="mg-form-title">Add drawing</h2>
+          <p class="mg-form-note" id="mg-form-note"></p>
+          <label class="mg-field">
+            <span>Drawing number</span>
+            <input id="mg-number" type="text" maxlength="40" placeholder="A-102" autocomplete="off" required>
+          </label>
+          <label class="mg-field">
+            <span>Title</span>
+            <input id="mg-title" type="text" maxlength="200" placeholder="Ground Floor Plan" autocomplete="off" required>
+          </label>
+          <label class="mg-field">
+            <span>Category</span>
+            <select id="mg-category"></select>
+          </label>
+          <label class="mg-field">
+            <span>Revision</span>
+            <input id="mg-rev" type="text" maxlength="12" placeholder="A" autocomplete="off">
+          </label>
+          <label class="mg-field" id="mg-file-wrap">
+            <span id="mg-file-label">PDF file</span>
+            <input id="mg-file" type="file" accept="application/pdf,.pdf">
+            <span class="mg-file-name" id="mg-file-name">No file selected</span>
+          </label>
+          <p class="md-error" id="mg-error"></p>
+          <div class="mg-form-actions">
+            <button type="button" class="md-btn md-btn-ghost" id="btn-mg-cancel">Cancel</button>
+            <button type="submit" class="md-btn md-btn-primary" id="btn-mg-save">Save</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
     <section class="md-screen md-viewer" id="screen-viewer" aria-label="Drawing viewer">
       <header class="dv-top" id="dv-top">
         <button type="button" class="md-icon-btn" id="btn-back" aria-label="Back to drawings">
