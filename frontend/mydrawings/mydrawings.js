@@ -370,9 +370,49 @@
     if (!isOnline() || !sessionSecret()) return;
     try {
       var data = await apiJson('/catalog');
+      var keepAdmin = !!state.adminPin;
       await applyRemoteCatalog(data);
+      if (keepAdmin) state.role = 'admin';
       renderList();
     } catch (e) {}
+  }
+
+  async function updateDrawingsList() {
+    var btn = $('btn-update');
+    if (!isOnline()) {
+      alert('Connect to the internet to update drawings.');
+      return;
+    }
+    if (!sessionSecret() && !state.adminPin) {
+      alert('Sign in to update drawings.');
+      return;
+    }
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Updating…';
+    }
+    var before = {};
+    (state.drawings || []).forEach(function (d) { before[d.id] = true; });
+    try {
+      var data = await apiJson('/catalog');
+      var keepAdmin = !!state.adminPin;
+      await applyRemoteCatalog(data);
+      if (keepAdmin) state.role = 'admin';
+      renderList();
+      var added = 0;
+      (state.drawings || []).forEach(function (d) {
+        if (!before[d.id]) added += 1;
+      });
+      if (btn) btn.textContent = added ? (added + ' new') : 'Up to date';
+    } catch (err) {
+      if (btn) btn.textContent = 'Update';
+      alert(err && err.message ? err.message : 'Could not update drawings.');
+    }
+    setTimeout(function () {
+      if (!btn) return;
+      btn.textContent = 'Update';
+      btn.disabled = false;
+    }, 1600);
   }
 
   async function fetchDrawingFile(drawing, onProgress) {
@@ -1564,6 +1604,7 @@
   });
 
   on($('btn-menu'), 'click', openMainMenu);
+  on($('btn-update'), 'click', updateDrawingsList);
   on($('btn-download-all'), 'click', downloadAllDrawings);
   on($('btn-activity-back'), 'click', closeActivity);
   on($('btn-manage-back'), 'click', closeManage);
