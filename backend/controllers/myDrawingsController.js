@@ -11,19 +11,7 @@ const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
 const ACCESS_PIN = String(process.env.MY_DRAWINGS_ACCESS_PIN || '2580');
 const ADMIN_PIN = String(process.env.MY_DRAWINGS_ADMIN_PIN || '1470');
 const UPLOAD_DIR = path.join(UPLOADS_ROOT, 'mydrawings');
-const SAMPLES_DIR = path.resolve(__dirname, '../../frontend/mydrawings/samples');
-
-const SEED_CATEGORIES = ['Architectural', 'Structural', 'MEP', 'Electrical'];
-const SEED_DRAWINGS = [
-  { number: 'A-102', title: 'Ground Floor Plan', category: 'Architectural', revision: 'C', file: 'a-102.pdf' },
-  { number: 'A-201', title: 'First Floor Plan', category: 'Architectural', revision: 'B', file: 'a-201.pdf' },
-  { number: 'A-301', title: 'Typical Room Layout', category: 'Architectural', revision: 'A', file: 'a-301.pdf' },
-  { number: 'S-101', title: 'Foundation Plan', category: 'Structural', revision: 'D', file: 's-101.pdf' },
-  { number: 'S-210', title: 'Steel Frame Level 2', category: 'Structural', revision: 'B', file: 's-210.pdf' },
-  { number: 'M-401', title: 'HVAC Ground Floor', category: 'MEP', revision: 'C', file: 'm-401.pdf' },
-  { number: 'E-110', title: 'Lighting Layout Ground', category: 'Electrical', revision: 'A', file: 'e-110.pdf' },
-  { number: 'E-220', title: 'Fire Alarm Schematic', category: 'Electrical', revision: 'B', file: 'e-220.pdf' },
-];
+const DEFAULT_PROJECT_NAME = 'My Drawings';
 
 let schemaReady = null;
 
@@ -97,50 +85,54 @@ async function ensureSchemaInner() {
       CONSTRAINT uq_my_drawings_item_number UNIQUE (workspace_id, number)
     )
   `);
-
-  const existing = await pool.query('SELECT id FROM my_drawings_workspace ORDER BY id ASC LIMIT 1');
-  if (existing.rows[0]) return;
+  await pool.query(`
+    ALTER TABLE my_drawings_workspace
+    ADD COLUMN IF NOT EXISTS demo_cleared_at TIMESTAMPTZ
+  `);
 
   ensureUploadDir();
-  const accessHash = await bcrypt.hash(ACCESS_PIN, 10);
-  const adminHash = await bcrypt.hash(ADMIN_PIN, 10);
-  const ws = await pool.query(
-    'INSERT INTO my_drawings_workspace (name, access_pin_hash, admin_pin_hash) VALUES ($1, $2, $3) RETURNING id, name',
-    ['Riverside Tower — Phase 2', accessHash, adminHash]
+  let existing = await pool.query(
+    'SELECT id, name, demo_cleared_at FROM my_drawings_workspace ORDER BY id ASC LIMIT 1'
   );
-  const workspaceId = ws.rows[0].id;
-  const catIds = {};
-  for (let i = 0; i < SEED_CATEGORIES.length; i += 1) {
-    const name = SEED_CATEGORIES[i];
-    const row = await pool.query(
-      'INSERT INTO my_drawings_category (workspace_id, name, sort_order) VALUES ($1, $2, $3) RETURNING id, name',
-      [workspaceId, name, i]
+  if (!existing.rows[0]) {
+    const accessHash = await bcrypt.hash(ACCESS_PIN, 10);
+    const adminHash = await bcrypt.hash(ADMIN_PIN, 10);
+    existing = await pool.query(
+      `INSERT INTO my_drawings_workspace (name, access_pin_hash, admin_pin_hash, demo_cleared_at)
+       VALUES ($1, $2, $3, NOW()) RETURNING id, name, demo_cleared_at`,
+      [DEFAULT_PROJECT_NAME, accessHash, adminHash]
     );
-    catIds[name] = row.rows[0].id;
+    return;
   }
-  for (const item of SEED_DRAWINGS) {
-    const src = path.join(SAMPLES_DIR, item.file);
-    if (!fs.existsSync(src)) continue;
-    const stored = `md-seed-${item.file}`;
-    const dest = path.join(UPLOAD_DIR, stored);
-    fs.copyFileSync(src, dest);
-    const stat = fs.statSync(dest);
+
+  if (!existing.rows[0].demo_cleared_at) {
+    await clearWorkspaceCatalog(existing.rows[0].id);
     await pool.query(
-      `INSERT INTO my_drawings_item
-        (workspace_id, category_id, number, title, revision, size_bytes, stored_filename, relative_path, mime_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'application/pdf')`,
-      [
-        workspaceId,
-        catIds[item.category] || null,
-        item.number,
-        item.title,
-        item.revision,
-        stat.size,
-        stored,
-        relativeFromAbs(dest),
-      ]
+      `UPDATE my_drawings_workspace
+       SET demo_cleared_at = NOW(), name = CASE WHEN name = 'Riverside Tower — Phase 2' THEN $2 ELSE name END
+       WHERE id = $1`,
+      [existing.rows[0].id, DEFAULT_PROJECT_NAME]
     );
   }
+}
+
+async function clearWorkspaceCatalog(workspaceId) {
+  const files = await pool.query(
+    'SELECT relative_path FROM my_drawings_item WHERE workspace_id = $1',
+    [workspaceId]
+  );
+  files.rows.forEach((row) => removeStoredFile(row.relative_path));
+  await pool.query('DELETE FROM my_drawings_item WHERE workspace_id = $1', [workspaceId]);
+  await pool.query('DELETE FROM my_drawings_category WHERE workspace_id = $1', [workspaceId]);
+  try {
+    if (fs.existsSync(UPLOAD_DIR)) {
+      fs.readdirSync(UPLOAD_DIR).forEach((name) => {
+        if (String(name).startsWith('md-seed-')) {
+          try { fs.unlinkSync(path.join(UPLOAD_DIR, name)); } catch (_) {}
+        }
+      });
+    }
+  } catch (_) {}
 }
 
 function ensureSchema() {

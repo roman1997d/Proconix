@@ -7,8 +7,12 @@ CREATE TABLE IF NOT EXISTS my_drawings_workspace (
   name TEXT NOT NULL,
   access_pin_hash TEXT NOT NULL,
   admin_pin_hash TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  demo_cleared_at TIMESTAMPTZ
 );
+
+ALTER TABLE my_drawings_workspace
+  ADD COLUMN IF NOT EXISTS demo_cleared_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS my_drawings_category (
   id SERIAL PRIMARY KEY,
