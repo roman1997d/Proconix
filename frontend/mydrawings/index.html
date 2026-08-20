@@ -72,7 +72,13 @@
           <input id="search" type="search" placeholder="Search drawings..." enterkeyhint="search" autocapitalize="off" autocomplete="off" spellcheck="false">
         </label>
         <div class="md-cats" id="cats" role="tablist" aria-label="Categories"></div>
-        <p class="md-count" id="list-count"></p>
+        <div class="md-list-tools">
+          <p class="md-count" id="list-count"></p>
+          <button type="button" class="md-btn-all" id="btn-download-all" aria-label="Download all drawings">
+            <svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>
+            <span id="btn-download-all-label">Download all drawings</span>
+          </button>
+        </div>
         <div class="md-list" id="list"></div>
         <div class="md-install" id="install-bar">
           <p><strong>Add to Home Screen</strong>Launch My Drawings like an app.</p>

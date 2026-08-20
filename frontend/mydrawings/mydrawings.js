@@ -35,7 +35,9 @@
     installPrompt: null,
     pushingView: false,
     downloadCtl: {},
-    pendingRemoveId: null
+    pendingRemoveId: null,
+    downloadingAll: false,
+    downloadAllProgress: null
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -317,6 +319,7 @@
     $('list-count').textContent = items.length + (items.length === 1 ? ' drawing' : ' drawings');
     if (!items.length) {
       host.innerHTML = '<div class="md-empty"><h3>No drawings</h3><p>Try another search or category.</p></div>';
+      updateDownloadAllBtn();
       return;
     }
     host.innerHTML = items.map(function (d) {
@@ -337,6 +340,39 @@
         '</article>'
       );
     }).join('');
+    updateDownloadAllBtn();
+  }
+
+  function pendingDownloads() {
+    return state.drawings.filter(function (d) { return !state.offlineIds[d.id]; });
+  }
+
+  function updateDownloadAllBtn() {
+    var btn = $('btn-download-all');
+    var label = $('btn-download-all-label');
+    if (!btn || !label) return;
+    var pending = pendingDownloads();
+    btn.classList.remove('is-ready', 'is-busy');
+    btn.disabled = false;
+    if (state.downloadingAll) {
+      var p = state.downloadAllProgress;
+      btn.classList.add('is-busy');
+      btn.disabled = true;
+      label.textContent = p ? ('Downloading ' + p.current + ' / ' + p.total) : 'Downloading…';
+      return;
+    }
+    if (!state.drawings.length) {
+      btn.disabled = true;
+      label.textContent = 'Download all drawings';
+      return;
+    }
+    if (!pending.length) {
+      btn.classList.add('is-ready');
+      label.textContent = 'All drawings offline';
+      btn.disabled = true;
+      return;
+    }
+    label.textContent = 'Download all drawings';
   }
 
   async function refreshOfflineMap() {
@@ -352,18 +388,9 @@
     renderList();
   }
 
-  async function toggleOffline(id) {
+  async function downloadDrawing(id) {
     var d = drawingById(id);
-    if (!d) return;
-    if (state.offlineIds[id]) {
-      state.pendingRemoveId = id;
-      openSheet(
-        '<h3 id="sheet-title">Remove offline copy</h3>' +
-        '<p class="md-sheet-note">Remove this drawing from offline storage?</p>' +
-        '<button type="button" class="md-sheet-item is-danger" data-sheet="confirm-remove">Remove offline copy</button>'
-      );
-      return;
-    }
+    if (!d || state.offlineIds[id]) return;
     if (state.downloadCtl[id] && state.downloadCtl[id].status === 'downloading') return;
     state.downloadCtl[id] = { status: 'downloading', ratio: 0 };
     renderList();
@@ -379,10 +406,57 @@
       await idbSet('files', id, { blob: blob, size: blob.size, at: Date.now() });
       state.offlineIds[id] = true;
     } catch (err) {
+      throw err;
+    } finally {
+      delete state.downloadCtl[id];
+      renderList();
+    }
+  }
+
+  async function toggleOffline(id) {
+    var d = drawingById(id);
+    if (!d) return;
+    if (state.offlineIds[id]) {
+      state.pendingRemoveId = id;
+      openSheet(
+        '<h3 id="sheet-title">Remove offline copy</h3>' +
+        '<p class="md-sheet-note">Remove this drawing from offline storage?</p>' +
+        '<button type="button" class="md-sheet-item is-danger" data-sheet="confirm-remove">Remove offline copy</button>'
+      );
+      return;
+    }
+    try {
+      await downloadDrawing(id);
+    } catch (err) {
       alert(err && err.message ? err.message : 'Download failed.');
     }
-    delete state.downloadCtl[id];
-    renderList();
+  }
+
+  async function downloadAllDrawings() {
+    if (state.downloadingAll) return;
+    var pending = pendingDownloads();
+    if (!pending.length) return;
+    if (!isOnline()) {
+      alert('Connect to the internet to download drawings that are not yet offline.');
+      return;
+    }
+    state.downloadingAll = true;
+    var failed = [];
+    for (var i = 0; i < pending.length; i++) {
+      state.downloadAllProgress = { current: i + 1, total: pending.length };
+      updateDownloadAllBtn();
+      try {
+        await downloadDrawing(pending[i].id);
+      } catch (err) {
+        failed.push(pending[i].number || pending[i].id);
+      }
+    }
+    state.downloadingAll = false;
+    state.downloadAllProgress = null;
+    updateDownloadAllBtn();
+    if (failed.length) {
+      alert('Could not download: ' + failed.join(', '));
+    }
   }
 
   /* ---------- Drawing Viewer ---------- */
@@ -507,6 +581,7 @@
     var installItem = standalone ? '' : '<button type="button" class="md-sheet-item" data-sheet="install"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Add to Home Screen</button>';
     openSheet(
       '<h3 id="sheet-title">My Drawings</h3>' +
+      '<button type="button" class="md-sheet-item" data-sheet="download-all"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Download all drawings</button>' +
       installItem +
       '<button type="button" class="md-sheet-item" data-sheet="clear-offline"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 14h10l1-14"/></svg>Remove all offline copies</button>' +
       '<button type="button" class="md-sheet-item is-danger" data-sheet="lock"><svg class="md-icon" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Lock</button>' +
@@ -552,6 +627,10 @@
       return;
     }
     closeSheet();
+    if (act === 'download-all') {
+      downloadAllDrawings();
+      return;
+    }
     if (act === 'lock') {
       writeSession(false);
       $('pin-input').value = '';
@@ -688,6 +767,7 @@
   });
 
   on($('btn-menu'), 'click', openMainMenu);
+  on($('btn-download-all'), 'click', downloadAllDrawings);
   on($('btn-viewer-more'), 'click', openViewerMenu);
   on($('btn-back'), 'click', function () {
     if (history.state && history.state.md === 'view') history.back();
