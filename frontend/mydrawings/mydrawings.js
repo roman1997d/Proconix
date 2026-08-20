@@ -7,8 +7,8 @@
   var SESSION_KEY = 'proconix_mydrawings_session';
   var DB_NAME = 'proconix-mydrawings';
   var DB_VER = 1;
-  var PDFJS_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-  var PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  var PDFJS_SRC = '/mydrawings/lib/pdf.min.js';
+  var PDFJS_WORKER = '/mydrawings/lib/pdf.worker.min.js';
 
   var CATALOG = {
     project: { id: 'riverside-p2', name: 'Riverside Tower — Phase 2' },
@@ -390,23 +390,68 @@
     renderList();
   }
 
-  /* ---------- PDF.js ---------- */
+  /* ---------- PDF.js (same-origin; blob worker avoids Safari iOS SW + Worker bugs) ---------- */
   var pdfJsReady = null;
-  function loadPdfJs() {
-    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
-    if (pdfJsReady) return pdfJsReady;
-    pdfJsReady = new Promise(function (resolve, reject) {
+  var workerBlobUrl = null;
+
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
       var s = document.createElement('script');
-      s.src = PDFJS_SRC;
-      s.onload = function () {
-        if (!window.pdfjsLib) return reject(new Error('PDF engine missing.'));
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
-        resolve(window.pdfjsLib);
-      };
+      s.src = src;
+      s.async = false;
+      s.onload = function () { resolve(); };
       s.onerror = function () { reject(new Error('Could not load PDF engine.')); };
       document.head.appendChild(s);
     });
+  }
+
+  function setupPdfWorker(lib) {
+    return fetch(PDFJS_WORKER, { credentials: 'same-origin' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('worker');
+        return res.blob();
+      })
+      .then(function (blob) {
+        if (workerBlobUrl) {
+          try { URL.revokeObjectURL(workerBlobUrl); } catch (e) {}
+        }
+        workerBlobUrl = URL.createObjectURL(blob);
+        lib.GlobalWorkerOptions.workerSrc = workerBlobUrl;
+        return lib;
+      })
+      .catch(function () {
+        lib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+        return lib;
+      });
+  }
+
+  function loadPdfJs() {
+    if (pdfJsReady) return pdfJsReady;
+    pdfJsReady = Promise.resolve()
+      .then(function () {
+        if (window.pdfjsLib) return;
+        return loadScript(PDFJS_SRC);
+      })
+      .then(function () {
+        if (!window.pdfjsLib) throw new Error('Could not load PDF engine.');
+        return setupPdfWorker(window.pdfjsLib);
+      });
     return pdfJsReady;
+  }
+
+  function openPdfDocument(lib, bytes) {
+    var opts = {
+      data: bytes,
+      disableStream: true,
+      disableRange: true,
+      disableAutoFetch: true,
+      isEvalSupported: false,
+      useSystemFonts: false
+    };
+    return lib.getDocument(opts).promise.catch(function () {
+      try { lib.disableWorker = true; } catch (e) {}
+      return lib.getDocument(opts).promise;
+    });
   }
 
   function fitWidthScale(page) {
@@ -424,7 +469,7 @@
     if (state.pdfDoc && state.pdfDoc.destroy) {
       try { state.pdfDoc.destroy(); } catch (e) {}
     }
-    var pdf = await lib.getDocument({ data: new Uint8Array(buf) }).promise;
+    var pdf = await openPdfDocument(lib, new Uint8Array(buf));
     state.pdfDoc = pdf;
     host.innerHTML = '';
     state.pageBase = [];

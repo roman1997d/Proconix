@@ -1,11 +1,13 @@
 /* My Drawings PWA — cache the app shell only. PDFs are stored in IndexedDB on demand. */
-var CACHE = 'mydrawings-shell-v1';
+var CACHE = 'mydrawings-shell-v2';
 var PRECACHE = [
   '/mydrawings/',
   '/mydrawings/index.html',
   '/mydrawings/mydrawings.css',
   '/mydrawings/mydrawings.js',
-  '/mydrawings/manifest.webmanifest'
+  '/mydrawings/manifest.webmanifest',
+  '/mydrawings/lib/pdf.min.js',
+  '/mydrawings/lib/pdf.worker.min.js'
 ];
 
 self.addEventListener('install', function (event) {
@@ -35,23 +37,26 @@ self.addEventListener('fetch', function (event) {
   if (req.method !== 'GET') return;
 
   var url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+
+  /* Safari iOS breaks Worker scripts intercepted by a service worker. */
+  if (req.destination === 'worker' || url.pathname.indexOf('/mydrawings/lib/pdf.worker') === 0) {
+    return;
+  }
+
   var isSamplePdf = url.pathname.indexOf('/mydrawings/samples/') === 0;
   if (isSamplePdf) {
     event.respondWith(fetch(req).catch(function () { return caches.match(req); }));
     return;
   }
 
-  var isShell = url.pathname.indexOf('/mydrawings/') === 0 ||
-    url.href.indexOf('cdnjs.cloudflare.com/ajax/libs/pdf.js/') !== -1 ||
-    url.pathname.indexOf('/favicon_io/') === 0;
-
-  if (!isShell) return;
+  if (url.pathname.indexOf('/mydrawings/') !== 0) return;
 
   event.respondWith(
     caches.match(req).then(function (cached) {
       if (cached) return cached;
       return fetch(req).then(function (res) {
-        if (res && res.ok && res.type !== 'opaque') {
+        if (res && res.ok) {
           var copy = res.clone();
           caches.open(CACHE).then(function (cache) { cache.put(req, copy); });
         }
