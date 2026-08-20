@@ -391,6 +391,26 @@ async function registerWorker(req, res) {
   }
 }
 
+async function openWorkerDevice(workspace, worker) {
+  const deviceToken = crypto.randomBytes(32).toString('hex');
+  await pool.query(
+    `INSERT INTO my_drawings_device (worker_id, token_hash) VALUES ($1, $2)`,
+    [worker.id, tokenSha(deviceToken)]
+  );
+  await pool.query(
+    `UPDATE my_drawings_worker SET verified_at = COALESCE(verified_at, NOW()) WHERE id = $1`,
+    [worker.id]
+  );
+  const catalog = await loadCatalog(workspace, 'worker');
+  return {
+    ...catalog,
+    deviceToken,
+    firstName: worker.first_name,
+    lastName: worker.last_name,
+    email: worker.email,
+  };
+}
+
 async function loginWorker(req, res) {
   try {
     const email = cleanEmail(req.body && req.body.email);
@@ -415,31 +435,10 @@ async function loginWorker(req, res) {
     if (!worker) {
       return res.status(404).json({ success: false, message: 'No account found for that email.' });
     }
-    const { pin, sha } = await issueUniquePin(workspace.id);
-    const pinHash = await bcrypt.hash(pin, 10);
-    await pool.query(
-      `UPDATE my_drawings_worker
-       SET pin_hash = $2, pin_sha = $3, pin_expires_at = NOW() + INTERVAL '24 hours'
-       WHERE id = $1`,
-      [worker.id, pinHash, sha]
-    );
-    await sendPasskeyEmail({ to: worker.email, firstName: worker.first_name, pin });
-    return res.json({
-      success: true,
-      email: worker.email,
-      firstName: worker.first_name,
-      lastName: worker.last_name,
-      message: 'We sent a 4-digit key to your email.',
-    });
+    return res.json(await openWorkerDevice(workspace, worker));
   } catch (err) {
     console.error('myDrawings login:', err);
-    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
-      return res.status(503).json({ success: false, message: err.message });
-    }
-    if (err && err.code === 'PIN_ALLOC') {
-      return res.status(500).json({ success: false, message: err.message });
-    }
-    return res.status(500).json({ success: false, message: 'Could not send your access key.' });
+    return res.status(500).json({ success: false, message: 'Could not sign in.' });
   }
 }
 
@@ -472,35 +471,13 @@ async function verifyWorker(req, res) {
     if (!ok) {
       return res.status(401).json({ success: false, message: 'Incorrect access key' });
     }
-    const deviceToken = crypto.randomBytes(32).toString('hex');
-    await pool.query(
-      `INSERT INTO my_drawings_device (worker_id, token_hash) VALUES ($1, $2)`,
-      [worker.id, tokenSha(deviceToken)]
-    );
     await pool.query(
       `UPDATE my_drawings_worker
-       SET pin_hash = NULL, pin_sha = NULL, pin_expires_at = NULL, verified_at = NOW()
+       SET pin_hash = NULL, pin_sha = NULL, pin_expires_at = NULL
        WHERE id = $1`,
       [worker.id]
     );
-    req.myDrawings = {
-      workspace,
-      role: 'worker',
-      worker: {
-        id: worker.id,
-        firstName: worker.first_name,
-        lastName: worker.last_name,
-        email: worker.email,
-      },
-    };
-    const catalog = await loadCatalog(workspace, 'worker');
-    return res.json({
-      ...catalog,
-      deviceToken,
-      firstName: worker.first_name,
-      lastName: worker.last_name,
-      email: worker.email,
-    });
+    return res.json(await openWorkerDevice(workspace, worker));
   } catch (err) {
     console.error('myDrawings verify:', err);
     return res.status(500).json({ success: false, message: 'Could not verify access key.' });

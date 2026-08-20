@@ -540,6 +540,7 @@
     $('pin-input').value = '';
     renderPinDots();
     applyCatalog(data);
+    await cacheCatalog(data, (extra && extra.deviceToken) || (extra && extra.pin) || sessionSecret());
     await dropStaleOfflineCopies();
     showScreen('screen-list');
     renderList();
@@ -606,13 +607,13 @@
     $('login-continue').disabled = true;
     try {
       var data = await postJson('/login', { email: email });
-      writePending({
+      await enterApp(data, {
+        deviceToken: data.deviceToken,
+        role: 'worker',
         firstName: data.firstName || '',
         lastName: data.lastName || '',
-        email: data.email || email,
-        from: 'login'
+        email: data.email || email
       });
-      showPin('worker');
     } catch (err) {
       $('login-error').textContent = err && err.message ? err.message : 'No account found for that email.';
     }
@@ -628,14 +629,14 @@
     $('pin-error').textContent = '';
     try {
       if (pending.from === 'login') {
-        await postJson('/login', { email: pending.email });
-      } else {
-        await postJson('/register', {
-          firstName: pending.firstName || '',
-          lastName: pending.lastName || '',
-          email: pending.email
-        });
+        showLogin();
+        return;
       }
+      await postJson('/register', {
+        firstName: pending.firstName || '',
+        lastName: pending.lastName || '',
+        email: pending.email
+      });
       $('pin-hint').textContent = 'We sent a new 4-digit key to ' + pending.email;
     } catch (err) {
       $('pin-error').textContent = err && err.message ? err.message : 'Could not resend the key.';
@@ -1402,12 +1403,13 @@
         }
       } else {
         var pending = readPending();
-        if (pending && pending.email) showPin('worker');
+        if (pending && pending.email && pending.from !== 'login') showPin('worker');
+        else if (pending && pending.from === 'login') showLogin();
         else showRegister();
       }
     } catch (err) {
       var pendingFail = readPending();
-      if (pendingFail && pendingFail.email) showPin('worker');
+      if (pendingFail && pendingFail.email && pendingFail.from !== 'login') showPin('worker');
       else showRegister();
     }
     $('md-boot').classList.add('is-done');
