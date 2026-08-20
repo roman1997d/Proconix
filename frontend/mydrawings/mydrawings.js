@@ -398,6 +398,143 @@
     updateDownloadAllBtn();
   }
 
+  async function refreshDrawingsList() {
+    setOfflineUi();
+    var cached = await idbGet('meta', 'catalog');
+    if (cached && cached.data) applyCatalog(cached.data);
+    await refreshOfflineMap();
+    renderList();
+    if ('serviceWorker' in navigator && isOnline()) {
+      try {
+        var reg = await navigator.serviceWorker.getRegistration('/mydrawings/');
+        if (reg) await reg.update();
+      } catch (e) {}
+    }
+  }
+
+  function bindPullToRefresh() {
+    var main = $('list-main');
+    var el = $('ptr');
+    var ring = $('ptr-ring');
+    var label = $('ptr-label');
+    if (!main || !el) return;
+
+    var THRESHOLD = 68;
+    var ptr = {
+      armed: false,
+      pulling: false,
+      refreshing: false,
+      startY: 0,
+      startX: 0,
+      dy: 0
+    };
+
+    function setHeight(h, animate) {
+      el.style.transition = animate ? 'height 0.22s ease' : 'none';
+      el.style.height = Math.max(0, h) + 'px';
+    }
+
+    function setLabel(text) {
+      if (label.textContent !== text) label.textContent = text;
+    }
+
+    function applyPull(h) {
+      ptr.dy = h;
+      setHeight(h, false);
+      var ready = h >= THRESHOLD;
+      el.classList.toggle('is-ready', ready);
+      if (!ptr.refreshing) {
+        ring.style.transform = 'rotate(' + Math.round((h / THRESHOLD) * 280) + 'deg)';
+        setLabel(ready ? 'Release to refresh' : 'Pull to refresh');
+      }
+    }
+
+    function resetPull() {
+      ptr.armed = false;
+      ptr.pulling = false;
+      ptr.dy = 0;
+      if (ptr.refreshing) return;
+      el.classList.remove('is-ready', 'is-spin');
+      setHeight(0, true);
+      ring.style.transform = '';
+    }
+
+    async function runRefresh() {
+      ptr.refreshing = true;
+      ptr.pulling = false;
+      ptr.armed = false;
+      el.classList.add('is-spin');
+      el.classList.remove('is-ready');
+      setHeight(56, true);
+      setLabel('Updating…');
+      ring.style.transform = '';
+      vibrate(12);
+      var started = Date.now();
+      try {
+        await refreshDrawingsList();
+      } catch (e) {}
+      var wait = 520 - (Date.now() - started);
+      if (wait > 0) await new Promise(function (r) { setTimeout(r, wait); });
+      ptr.refreshing = false;
+      el.classList.remove('is-spin');
+      setHeight(0, true);
+      setLabel('Pull to refresh');
+    }
+
+    on(main, 'touchstart', function (e) {
+      if (ptr.refreshing) return;
+      if (e.touches.length !== 1) return;
+      if (!$('screen-list') || !$('screen-list').classList.contains('is-active')) return;
+      if ($('backdrop') && $('backdrop').classList.contains('is-on')) return;
+      if (main.scrollTop > 1) return;
+      ptr.armed = true;
+      ptr.pulling = false;
+      ptr.startY = e.touches[0].clientY;
+      ptr.startX = e.touches[0].clientX;
+      ptr.dy = 0;
+    }, { passive: true });
+
+    on(main, 'touchmove', function (e) {
+      if (!ptr.armed || ptr.refreshing) return;
+      if (e.touches.length !== 1) {
+        resetPull();
+        return;
+      }
+      var x = e.touches[0].clientX;
+      var y = e.touches[0].clientY;
+      var dx = x - ptr.startX;
+      var raw = y - ptr.startY;
+      if (!ptr.pulling) {
+        if (Math.abs(dx) > 12 && Math.abs(dx) > raw) {
+          ptr.armed = false;
+          return;
+        }
+        if (raw < 10) return;
+        if (main.scrollTop > 1) {
+          ptr.armed = false;
+          return;
+        }
+        ptr.pulling = true;
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      }
+      if (raw <= 0) {
+        applyPull(0);
+        return;
+      }
+      e.preventDefault();
+      applyPull(Math.min(108, raw * 0.42));
+    }, { passive: false });
+
+    function endPull() {
+      if (ptr.refreshing) return;
+      if (ptr.pulling && ptr.dy >= THRESHOLD) runRefresh();
+      else resetPull();
+    }
+
+    on(main, 'touchend', endPull);
+    on(main, 'touchcancel', endPull);
+  }
+
   function pendingDownloads() {
     return state.drawings.filter(function (d) { return !state.offlineIds[d.id]; });
   }
@@ -1060,6 +1197,7 @@
   on($('pin-tap'), 'click', function () { $('pin-input').focus(); });
   on($('pin-dots'), 'click', function () { $('pin-input').focus(); });
   on($('pin-continue'), 'click', submitPin);
+  bindPullToRefresh();
 
   on($('search'), 'input', function () {
     state.query = $('search').value || '';

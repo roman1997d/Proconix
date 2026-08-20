@@ -302,9 +302,41 @@ img { max-width: 100%; }
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
   padding: 12px var(--md-pad) calc(20px + var(--md-safe-b));
   padding-left: calc(var(--md-pad) + var(--md-safe-l));
   padding-right: calc(var(--md-pad) + var(--md-safe-r));
+}
+.md-ptr {
+  height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+.md-ptr-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-height: 56px;
+  padding-bottom: 8px;
+}
+.md-ptr-ring {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2.5px solid rgba(148, 163, 184, 0.22);
+  border-top-color: var(--md-accent);
+}
+.md-ptr.is-spin .md-ptr-ring { animation: md-spin 0.7s linear infinite; }
+.md-ptr-label {
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--md-muted);
 }
 
 .md-search {
