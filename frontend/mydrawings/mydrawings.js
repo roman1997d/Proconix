@@ -318,6 +318,7 @@
   }
 
   async function refreshCatalogFromServer() {
+    if ($('screen-viewer') && $('screen-viewer').classList.contains('is-active')) return;
     if (!isOnline() || !sessionPin()) return;
     try {
       var data = await apiJson('/catalog');

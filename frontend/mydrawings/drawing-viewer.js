@@ -27,6 +27,7 @@
     this.stage = root.querySelector('[data-dv-stage]');
     this.plane = root.querySelector('[data-dv-plane]');
     this.canvas = root.querySelector('[data-dv-canvas]');
+    this.detail = root.querySelector('[data-dv-detail]');
     this.status = root.querySelector('[data-dv-status]');
     this.pageEl = root.querySelector('[data-dv-page]');
     this.prevBtn = root.querySelector('[data-dv-prev]');
@@ -52,6 +53,13 @@
     this.lastTapY = 0;
     this.moved = false;
     this.qualityTimer = null;
+    this.detailTimer = null;
+    this.detailToken = 0;
+    this.detailTask = null;
+    this.detailAtTx = 0;
+    this.detailAtTy = 0;
+    this.detailAtScale = 1;
+    this.basePaintKey = '';
     this.resizeTimer = null;
     this.active = false;
     this.drawing = null;
@@ -147,6 +155,12 @@
     this.active = false;
     this.clearHide();
     if (this.qualityTimer) clearTimeout(this.qualityTimer);
+    if (this.detailTimer) clearTimeout(this.detailTimer);
+    if (this.detailTask && this.detailTask.cancel) {
+      try { this.detailTask.cancel(); } catch (e) {}
+    }
+    this.detailTask = null;
+    this.hideDetail();
     if (this.renderTask && this.renderTask.cancel) {
       try { this.renderTask.cancel(); } catch (e) {}
     }
@@ -175,12 +189,12 @@
     return { cssW: vp.width * s, cssH: vp.height * s, pdfW: vp.width, pdfH: vp.height };
   };
 
-  DrawingViewer.prototype.maxRenderScale = function (cssW, cssH, pdfW) {
+  DrawingViewer.prototype.maxBaseScale = function (cssW, cssH, pdfW) {
     var dpr = Math.min(3, window.devicePixelRatio || 1);
     var pdfH = pdfW * (cssH / cssW);
-    var want = (cssW / pdfW) * this.scale * dpr * 1.4;
+    var want = (cssW / pdfW) * dpr * 2;
     var maxByCanvas = MAX_CANVAS / Math.max(pdfW, pdfH);
-    return clamp(want, 0.35, maxByCanvas);
+    return clamp(want, 0.5, maxByCanvas);
   };
 
   DrawingViewer.prototype.showPage = async function (num, fit) {
@@ -188,10 +202,11 @@
     this.pageNum = clamp(num, 1, this.pageCount);
     this.updatePager();
     this.setStatus('Opening drawing…');
+    this.hideDetail();
     this.page = await this.pdf.getPage(this.pageNum);
     if (fit) this.fit(true);
     else this.applyTransform();
-    await this.paint(true);
+    await this.paintBase(true);
     this.setStatus('');
     this.plane.style.visibility = 'visible';
   };
@@ -215,8 +230,9 @@
     this.scale = 1;
     this.tx = (this.stage.clientWidth - this.pageCssW) / 2;
     this.ty = (this.stage.clientHeight - this.pageCssH) / 2;
+    this.hideDetail();
     this.applyTransform();
-    if (!skipPaint) this.schedulePaint();
+    if (!skipPaint) this.paintBase();
   };
 
   DrawingViewer.prototype.applyTransform = function () {
@@ -224,6 +240,27 @@
     this.plane.style.width = this.pageCssW + 'px';
     this.plane.style.height = this.pageCssH + 'px';
     this.plane.style.transform = 'translate3d(' + this.tx + 'px,' + this.ty + 'px,0) scale(' + this.scale + ')';
+    this.syncDetailPan();
+  };
+
+  DrawingViewer.prototype.hideDetail = function () {
+    if (this.detail) {
+      this.detail.hidden = true;
+      this.detail.style.transform = '';
+    }
+    this.detailAtScale = 0;
+  };
+
+  DrawingViewer.prototype.syncDetailPan = function () {
+    if (!this.detail || this.detail.hidden || !this.detailAtScale) return;
+    var k = this.scale / this.detailAtScale;
+    if (Math.abs(k - 1) > 0.012) {
+      this.hideDetail();
+      return;
+    }
+    var dx = this.tx - this.detailAtTx;
+    var dy = this.ty - this.detailAtTy;
+    this.detail.style.transform = 'translate3d(' + dx + 'px,' + dy + 'px,0)';
   };
 
   DrawingViewer.prototype.clampPan = function () {
@@ -253,22 +290,31 @@
   DrawingViewer.prototype.bumpScale = function (factor) {
     var rect = this.stage.getBoundingClientRect();
     this.zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, this.scale * factor);
-    this.schedulePaint();
+    this.scheduleDetail();
   };
 
-  DrawingViewer.prototype.paint = async function () {
+  DrawingViewer.prototype.paintBase = async function (force) {
     if (!this.page || !this.active) return;
-    var token = ++this.renderToken;
-    var size = { cssW: this.pageCssW, cssH: this.pageCssH };
     var pdfW = this.page.getViewport({ scale: 1 }).width;
-    var rs = this.maxRenderScale(size.cssW, size.cssH, pdfW);
+    var rs = this.maxBaseScale(this.pageCssW, this.pageCssH, pdfW);
+    var key = this.pageNum + ':' + Math.round(this.pageCssW) + 'x' + Math.round(this.pageCssH) + ':' + rs.toFixed(3);
+    if (!force && key === this.basePaintKey) return;
+    var token = ++this.renderToken;
     var viewport = this.page.getViewport({ scale: rs });
     var canvas = this.canvas;
+    var w = Math.max(1, Math.round(viewport.width));
+    var h = Math.max(1, Math.round(viewport.height));
     var ctx = canvas.getContext('2d', { alpha: false });
-    canvas.width = Math.max(1, Math.round(viewport.width));
-    canvas.height = Math.max(1, Math.round(viewport.height));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    } else {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, h);
+    }
     canvas.style.width = '100%';
     canvas.style.height = '100%';
+    ctx.imageSmoothingEnabled = false;
     if (this.renderTask && this.renderTask.cancel) {
       try { this.renderTask.cancel(); } catch (e) {}
     }
@@ -281,12 +327,89 @@
     }
     if (token !== this.renderToken) return;
     this.renderTask = null;
+    this.basePaintKey = key;
   };
 
-  DrawingViewer.prototype.schedulePaint = function () {
+  DrawingViewer.prototype.paintDetail = async function () {
+    if (!this.page || !this.active || !this.detail) return;
+    if (this.scale <= 1.08) {
+      this.hideDetail();
+      return;
+    }
+    var token = ++this.detailToken;
+    var sw = Math.max(1, this.stage.clientWidth);
+    var sh = Math.max(1, this.stage.clientHeight);
+    var dpr = Math.min(3, window.devicePixelRatio || 1);
+    var outW = Math.max(1, Math.round(sw * dpr));
+    var outH = Math.max(1, Math.round(sh * dpr));
+    var cap = MAX_CANVAS;
+    var fit = Math.min(1, cap / Math.max(outW, outH));
+    outW = Math.max(1, Math.round(outW * fit));
+    outH = Math.max(1, Math.round(outH * fit));
+
+    var vp1 = this.page.getViewport({ scale: 1 });
+    var visLeft = (0 - this.tx) / this.scale;
+    var visTop = (0 - this.ty) / this.scale;
+    var visW = sw / this.scale;
+    var visH = sh / this.scale;
+    var pdfLeft = visLeft / this.pageCssW * vp1.width;
+    var pdfTop = visTop / this.pageCssH * vp1.height;
+    var pdfVisW = visW / this.pageCssW * vp1.width;
+    var pdfVisH = visH / this.pageCssH * vp1.height;
+    if (pdfVisW < 1 || pdfVisH < 1) return;
+
+    var renderScale = outW / pdfVisW;
+    var viewport = this.page.getViewport({ scale: renderScale });
+
+    var off = document.createElement('canvas');
+    off.width = outW;
+    off.height = outH;
+    var ctx = off.getContext('2d', { alpha: false });
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, outW, outH);
+    ctx.imageSmoothingEnabled = false;
+
+    if (this.detailTask && this.detailTask.cancel) {
+      try { this.detailTask.cancel(); } catch (e) {}
+    }
+    this.detailTask = this.page.render({
+      canvasContext: ctx,
+      viewport: viewport,
+      transform: [1, 0, 0, 1, -pdfLeft * renderScale, -pdfTop * renderScale],
+      intent: 'display',
+      background: 'rgb(255,255,255)'
+    });
+    try {
+      await this.detailTask.promise;
+    } catch (e) {
+      if (e && e.name === 'RenderingCancelledException') return;
+      throw e;
+    }
+    if (token !== this.detailToken || !this.active) return;
+    this.detailTask = null;
+
+    var shown = this.detail;
+    if (shown.width !== outW || shown.height !== outH) {
+      shown.width = outW;
+      shown.height = outH;
+    }
+    shown.style.width = sw + 'px';
+    shown.style.height = sh + 'px';
+    var dest = shown.getContext('2d', { alpha: false });
+    dest.drawImage(off, 0, 0);
+    this.detailAtTx = this.tx;
+    this.detailAtTy = this.ty;
+    this.detailAtScale = this.scale;
+    shown.style.transform = 'translate3d(0,0,0)';
+    shown.hidden = false;
+  };
+
+  DrawingViewer.prototype.scheduleDetail = function () {
     var self = this;
-    if (this.qualityTimer) clearTimeout(this.qualityTimer);
-    this.qualityTimer = setTimeout(function () { self.paint(); }, 160);
+    if (this.detailTimer) clearTimeout(this.detailTimer);
+    this.detailTimer = setTimeout(function () {
+      self.paintDetail().catch(function () {});
+    }, 140);
   };
 
   DrawingViewer.prototype.touchPoints = function (e) {
@@ -300,6 +423,7 @@
 
   DrawingViewer.prototype.beginGesture = function (pts) {
     if (pts.length >= 2) {
+      this.hideDetail();
       this.gesture = {
         mode: 'two',
         dist: Math.max(1, dist(pts[0], pts[1])),
@@ -355,7 +479,7 @@
         this.lastTap = 0;
         if (this.scale > 1.35) this.fit();
         else this.zoomAt(clientX, clientY, TAP_ZOOM);
-        this.schedulePaint();
+        this.scheduleDetail();
         this.pokeChrome();
         return;
       }
@@ -365,7 +489,7 @@
       this.toggleChrome();
       return;
     }
-    this.schedulePaint();
+    this.scheduleDetail();
     this.pokeChrome();
   };
 
@@ -457,7 +581,7 @@
     e.preventDefault();
     var factor = e.deltaY < 0 ? 1.08 : 0.92;
     this.zoomAt(e.clientX, e.clientY, this.scale * factor);
-    this.schedulePaint();
+    this.scheduleDetail();
     this.pokeChrome();
   };
 
@@ -472,7 +596,8 @@
         self.pageCssW = size.cssW;
         self.pageCssH = size.cssH;
         self.applyTransform();
-        self.paint();
+        self.paintBase(true);
+        self.scheduleDetail();
       }
     }, 120);
   };
