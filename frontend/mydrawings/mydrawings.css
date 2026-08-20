@@ -513,7 +513,6 @@ img { max-width: 100%; }
   display: block;
   width: 100%;
   height: 100%;
-  image-rendering: -webkit-optimize-contrast;
 }
 .dv-detail {
   position: absolute;
@@ -522,12 +521,11 @@ img { max-width: 100%; }
   height: 100%;
   pointer-events: none;
   z-index: 1;
-  transform-origin: 0 0;
-  will-change: transform;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  background: transparent;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+  background: #fff;
 }
+.dv-detail.is-on { opacity: 1; }
 .dv-status {
   position: absolute;
   inset: 0;

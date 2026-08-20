@@ -272,27 +272,15 @@
     this.plane.style.width = this.pageCssW + 'px';
     this.plane.style.height = this.pageCssH + 'px';
     this.plane.style.transform = 'translate3d(' + this.tx + 'px,' + this.ty + 'px,0) scale(' + this.scale + ')';
-    this.syncDetailPan();
   };
 
   DrawingViewer.prototype.hideDetail = function () {
     if (this.detail) {
+      this.detail.classList.remove('is-on');
       this.detail.hidden = true;
       this.detail.style.transform = '';
     }
     this.detailAtScale = 0;
-  };
-
-  DrawingViewer.prototype.syncDetailPan = function () {
-    if (!this.detail || this.detail.hidden || !this.detailAtScale) return;
-    var k = this.scale / this.detailAtScale;
-    if (Math.abs(k - 1) > 0.02) {
-      this.hideDetail();
-      return;
-    }
-    var dx = this.tx - this.detailAtTx;
-    var dy = this.ty - this.detailAtTy;
-    this.detail.style.transform = 'translate3d(' + dx + 'px,' + dy + 'px,0)';
   };
 
   DrawingViewer.prototype.clampPan = function (soft) {
@@ -410,6 +398,7 @@
     this.scale = ns;
     this.tx = x - dx * this.scale;
     this.ty = y - dy * this.scale;
+    this.hideDetail();
     this.applyTransform(true);
   };
 
@@ -526,8 +515,11 @@
     this.detailAtTx = this.tx;
     this.detailAtTy = this.ty;
     this.detailAtScale = this.scale;
-    shown.style.transform = 'translate3d(0,0,0)';
+    shown.style.transform = '';
     shown.hidden = false;
+    requestAnimationFrame(function () {
+      shown.classList.add('is-on');
+    });
   };
 
   DrawingViewer.prototype.scheduleDetail = function () {
@@ -550,6 +542,7 @@
   DrawingViewer.prototype.beginGesture = function (pts) {
     this.stopInertia();
     if (pts.length >= 2) {
+      this.hideDetail();
       this.gesture = {
         mode: 'two',
         dist: Math.max(1, dist(pts[0], pts[1])),
@@ -585,7 +578,7 @@
     var d = Math.max(1, dist(pts[0], pts[1]));
     var pinch = Math.pow(d / g.dist, 1.18);
     var newScale = clamp(g.scale * pinch, MIN_SCALE, MAX_SCALE);
-    if (Math.abs(newScale / this.scale - 1) > 0.03) this.hideDetail();
+    this.hideDetail();
     var rect = this.stage.getBoundingClientRect();
     var worldX = (g.mid.x - rect.left - g.tx) / g.scale;
     var worldY = (g.mid.y - rect.top - g.ty) / g.scale;
@@ -601,7 +594,10 @@
     var now = performance.now();
     var rawX = pt.x - g.x;
     var rawY = pt.y - g.y;
-    if (Math.abs(rawX) > TAP_MOVE || Math.abs(rawY) > TAP_MOVE) this.moved = true;
+    if (Math.abs(rawX) > TAP_MOVE || Math.abs(rawY) > TAP_MOVE) {
+      this.moved = true;
+      this.hideDetail();
+    }
     var gain = this.scale > 1.4 ? PAN_GAIN : 1.15;
     this.tx = g.tx + rawX * gain;
     this.ty = g.ty + rawY * gain;
