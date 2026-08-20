@@ -45,7 +45,28 @@
         <p class="md-error" id="reg-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="reg-continue">Continue</button>
       </form>
+      <p class="md-pin-actions">
+        <button type="button" class="md-link" id="btn-have-account">Already have an account?</button>
+      </p>
       <p class="md-admin-link"><button type="button" id="btn-admin-login">Admin</button></p>
+    </section>
+
+    <section class="md-screen md-pin md-register" id="screen-login" aria-label="Sign in with email">
+      <p class="md-pin-brand">My Drawings</p>
+      <h2>Welcome back</h2>
+      <p class="md-pin-hint">Enter the email you used before. We will send a 4-digit key if the account exists.</p>
+      <form class="md-reg-form" id="login-form" autocomplete="on">
+        <label class="mg-field">
+          <span>Email</span>
+          <input id="login-email" type="email" maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email" required>
+        </label>
+        <p class="md-error" id="login-error" role="alert"></p>
+        <button type="submit" class="md-btn md-btn-primary" id="login-continue">Continue</button>
+      </form>
+      <p class="md-pin-actions">
+        <button type="button" class="md-link" id="btn-create-account">Create an account</button>
+      </p>
+      <p class="md-admin-link"><button type="button" id="btn-admin-login-2">Admin</button></p>
     </section>
 
     <section class="md-screen md-pin" id="screen-pin" aria-label="Access">

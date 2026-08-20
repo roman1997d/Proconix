@@ -446,7 +446,7 @@
 
   /* ---------- Screens ---------- */
   function showScreen(id) {
-    ['screen-register', 'screen-pin', 'screen-list', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
+    ['screen-register', 'screen-login', 'screen-pin', 'screen-list', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
       var el = $(sid);
       if (el) el.classList.toggle('is-active', sid === id);
     });
@@ -511,6 +511,23 @@
     }, 200);
   }
 
+  function showLogin() {
+    var pending = readPending() || {};
+    if ($('login-email')) $('login-email').value = pending.email || '';
+    if ($('login-error')) $('login-error').textContent = '';
+    showScreen('screen-login');
+    setTimeout(function () {
+      var email = $('login-email');
+      if (email) email.focus();
+    }, 200);
+  }
+
+  function backFromPin() {
+    var pending = pendingDetails();
+    if (pending.from === 'login') showLogin();
+    else showRegister();
+  }
+
   function showPin(mode) {
     configurePinScreen(mode);
     showScreen('screen-pin');
@@ -566,7 +583,7 @@
     $('reg-continue').disabled = true;
     try {
       await postJson('/register', { firstName: firstName, lastName: lastName, email: email });
-      writePending({ firstName: firstName, lastName: lastName, email: email });
+      writePending({ firstName: firstName, lastName: lastName, email: email, from: 'register' });
       showPin('worker');
     } catch (err) {
       $('reg-error').textContent = err && err.message ? err.message : 'Could not send your access key.';
@@ -574,19 +591,51 @@
     $('reg-continue').disabled = false;
   }
 
+  async function submitLogin(e) {
+    if (e) e.preventDefault();
+    var email = ($('login-email').value || '').trim().toLowerCase();
+    $('login-error').textContent = '';
+    if (!isOnline()) {
+      $('login-error').textContent = 'Connect to the internet to sign in.';
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      $('login-error').textContent = 'Enter a valid email address.';
+      return;
+    }
+    $('login-continue').disabled = true;
+    try {
+      var data = await postJson('/login', { email: email });
+      writePending({
+        firstName: data.firstName || '',
+        lastName: data.lastName || '',
+        email: data.email || email,
+        from: 'login'
+      });
+      showPin('worker');
+    } catch (err) {
+      $('login-error').textContent = err && err.message ? err.message : 'No account found for that email.';
+    }
+    $('login-continue').disabled = false;
+  }
+
   async function resendKey() {
     var pending = pendingDetails();
     if (!pending.email) {
-      showRegister();
+      backFromPin();
       return;
     }
     $('pin-error').textContent = '';
     try {
-      await postJson('/register', {
-        firstName: pending.firstName || '',
-        lastName: pending.lastName || '',
-        email: pending.email
-      });
+      if (pending.from === 'login') {
+        await postJson('/login', { email: pending.email });
+      } else {
+        await postJson('/register', {
+          firstName: pending.firstName || '',
+          lastName: pending.lastName || '',
+          email: pending.email
+        });
+      }
       $('pin-hint').textContent = 'We sent a new 4-digit key to ' + pending.email;
     } catch (err) {
       $('pin-error').textContent = err && err.message ? err.message : 'Could not resend the key.';
@@ -611,7 +660,7 @@
       } else {
         var pending = pendingDetails();
         if (!pending.email) {
-          showRegister();
+          backFromPin();
           return;
         }
         data = await fetchRemoteCatalog({ verify: true, email: pending.email, pin: pin });
@@ -1377,9 +1426,13 @@
   on($('pin-dots'), 'click', function () { $('pin-input').focus(); });
   on($('pin-continue'), 'click', submitPin);
   on($('register-form'), 'submit', submitRegister);
+  on($('login-form'), 'submit', submitLogin);
+  on($('btn-have-account'), 'click', showLogin);
+  on($('btn-create-account'), 'click', showRegister);
   on($('btn-admin-login'), 'click', function () { showPin('admin'); });
+  on($('btn-admin-login-2'), 'click', function () { showPin('admin'); });
   on($('pin-resend'), 'click', resendKey);
-  on($('pin-change'), 'click', showRegister);
+  on($('pin-change'), 'click', backFromPin);
   on($('pin-admin-back'), 'click', showRegister);
 
   on($('search'), 'input', function () {

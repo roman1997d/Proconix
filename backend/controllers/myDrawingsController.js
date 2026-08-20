@@ -391,6 +391,58 @@ async function registerWorker(req, res) {
   }
 }
 
+async function loginWorker(req, res) {
+  try {
+    const email = cleanEmail(req.body && req.body.email);
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+    }
+    if (!allowRate('email:' + email, REGISTER_EMAIL_MAX, REGISTER_WINDOW_MS)
+        || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
+      return res.status(429).json({ success: false, message: 'Too many requests. Try again later.' });
+    }
+    const workspace = await defaultWorkspace();
+    if (!workspace) {
+      return res.status(500).json({ success: false, message: 'Drawings workspace is not ready.' });
+    }
+    const found = await pool.query(
+      `SELECT id, first_name, last_name, email
+       FROM my_drawings_worker
+       WHERE workspace_id = $1 AND email = $2`,
+      [workspace.id, email]
+    );
+    const worker = found.rows[0];
+    if (!worker) {
+      return res.status(404).json({ success: false, message: 'No account found for that email.' });
+    }
+    const { pin, sha } = await issueUniquePin(workspace.id);
+    const pinHash = await bcrypt.hash(pin, 10);
+    await pool.query(
+      `UPDATE my_drawings_worker
+       SET pin_hash = $2, pin_sha = $3, pin_expires_at = NOW() + INTERVAL '24 hours'
+       WHERE id = $1`,
+      [worker.id, pinHash, sha]
+    );
+    await sendPasskeyEmail({ to: worker.email, firstName: worker.first_name, pin });
+    return res.json({
+      success: true,
+      email: worker.email,
+      firstName: worker.first_name,
+      lastName: worker.last_name,
+      message: 'We sent a 4-digit key to your email.',
+    });
+  } catch (err) {
+    console.error('myDrawings login:', err);
+    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({ success: false, message: err.message });
+    }
+    if (err && err.code === 'PIN_ALLOC') {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+    return res.status(500).json({ success: false, message: 'Could not send your access key.' });
+  }
+}
+
 async function verifyWorker(req, res) {
   try {
     await ensureSchema();
@@ -767,6 +819,7 @@ module.exports = {
   resolveWorkspaceByPin,
   resolveDeviceToken,
   registerWorker,
+  loginWorker,
   verifyWorker,
   unlock,
   getCatalog,
