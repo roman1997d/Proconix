@@ -392,12 +392,37 @@
     return drawingViewer;
   }
 
+  function loadScriptOnce(src) {
+    return new Promise(function (resolve, reject) {
+      var existing = document.querySelector('script[src="' + src + '"]');
+      if (existing && ((src.indexOf('pdf.min.js') !== -1 && window.pdfjsLib) || (src.indexOf('pdf.worker') !== -1 && window.pdfjsWorker))) {
+        resolve();
+        return;
+      }
+      var s = document.createElement('script');
+      s.src = src;
+      s.async = false;
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error('Could not load PDF engine.')); };
+      document.head.appendChild(s);
+    });
+  }
+
   function ensurePdfJs() {
-    if (window.pdfjsLib) {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
-      return Promise.resolve(window.pdfjsLib);
-    }
-    return Promise.reject(new Error('Could not load PDF engine.'));
+    return Promise.resolve()
+      .then(function () {
+        if (window.pdfjsLib) return;
+        return loadScriptOnce('/mydrawings/lib/pdf.min.js');
+      })
+      .then(function () {
+        if (window.pdfjsWorker && window.pdfjsWorker.WorkerMessageHandler) return;
+        return loadScriptOnce(PDFJS_WORKER);
+      })
+      .then(function () {
+        if (!window.pdfjsLib) throw new Error('Could not load PDF engine.');
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+        return window.pdfjsLib;
+      });
   }
 
   async function openViewer(id, push) {

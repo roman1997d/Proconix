@@ -1,5 +1,5 @@
 /* My Drawings PWA — cache the app shell only. PDFs are stored in IndexedDB on demand. */
-var CACHE = 'mydrawings-shell-v4';
+var CACHE = 'mydrawings-shell-v5';
 var PRECACHE = [
   '/mydrawings/',
   '/mydrawings/index.html',
@@ -33,6 +33,19 @@ self.addEventListener('activate', function (event) {
   );
 });
 
+function cacheFirst(req) {
+  return caches.match(req).then(function (cached) {
+    if (cached) return cached;
+    return fetch(req).then(function (res) {
+      if (res && res.ok) {
+        var copy = res.clone();
+        caches.open(CACHE).then(function (cache) { cache.put(req, copy); });
+      }
+      return res;
+    }).catch(function () { return cached; });
+  });
+}
+
 self.addEventListener('fetch', function (event) {
   var req = event.request;
   if (req.method !== 'GET') return;
@@ -40,10 +53,8 @@ self.addEventListener('fetch', function (event) {
   var url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  /* Safari iOS breaks Worker/script loads intercepted by a service worker. */
-  if (req.destination === 'worker' || url.pathname.indexOf('/mydrawings/lib/') === 0) {
-    return;
-  }
+  /* Safari iOS: do not intercept Web Worker construction. Classic <script> loads are fine. */
+  if (req.destination === 'worker') return;
 
   var isSamplePdf = url.pathname.indexOf('/mydrawings/samples/') === 0;
   if (isSamplePdf) {
@@ -54,18 +65,10 @@ self.addEventListener('fetch', function (event) {
   if (url.pathname.indexOf('/mydrawings/') !== 0) return;
 
   event.respondWith(
-    caches.match(req).then(function (cached) {
-      if (cached) return cached;
-      return fetch(req).then(function (res) {
-        if (res && res.ok) {
-          var copy = res.clone();
-          caches.open(CACHE).then(function (cache) { cache.put(req, copy); });
-        }
-        return res;
-      }).catch(function () {
-        if (req.mode === 'navigate') return caches.match('/mydrawings/index.html');
-        return cached;
-      });
+    cacheFirst(req).then(function (res) {
+      if (res) return res;
+      if (req.mode === 'navigate') return caches.match('/mydrawings/index.html');
+      return res;
     })
   );
 });
