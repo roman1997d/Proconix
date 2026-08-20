@@ -7,14 +7,13 @@
   var SESSION_KEY = 'proconix_mydrawings_session';
   var DB_NAME = 'proconix-mydrawings';
   var DB_VER = 1;
-  var PDFJS_SRC = '/mydrawings/lib/pdf.min.js';
   var PDFJS_WORKER = '/mydrawings/lib/pdf.worker.min.js';
 
   var CATALOG = {
     project: { id: 'riverside-p2', name: 'Riverside Tower — Phase 2' },
     categories: ['Architectural', 'Structural', 'MEP', 'Electrical'],
     drawings: [
-      { id: 'a-102', number: 'A-102', title: 'Ground Floor Plan', category: 'Architectural', revision: 'C', updatedAt: '2026-08-18', sizeBytes: 4140, fileUrl: '/mydrawings/samples/a-102.pdf' },
+      { id: 'a-102', number: 'A-102', title: 'Ground Floor Plan', category: 'Architectural', revision: 'C', updatedAt: '2026-08-18', sizeBytes: 11355, fileUrl: '/mydrawings/samples/a-102.pdf' },
       { id: 'a-201', number: 'A-201', title: 'First Floor Plan', category: 'Architectural', revision: 'B', updatedAt: '2026-08-12', sizeBytes: 4135, fileUrl: '/mydrawings/samples/a-201.pdf' },
       { id: 'a-301', number: 'A-301', title: 'Typical Room Layout', category: 'Architectural', revision: 'A', updatedAt: '2026-08-04', sizeBytes: 2616, fileUrl: '/mydrawings/samples/a-301.pdf' },
       { id: 's-101', number: 'S-101', title: 'Foundation Plan', category: 'Structural', revision: 'D', updatedAt: '2026-08-16', sizeBytes: 4118, fileUrl: '/mydrawings/samples/s-101.pdf' },
@@ -33,11 +32,6 @@
     category: 'All',
     offlineIds: {},
     viewing: null,
-    zoom: 1,
-    pdfDoc: null,
-    nativePdfUrl: null,
-    pageBase: [],
-    pinch: null,
     installPrompt: null,
     pushingView: false,
     downloadCtl: {},
@@ -238,8 +232,10 @@
 
   function setOfflineUi() {
     var on = !isOnline();
-    var pill = $('offline-pill');
-    if (pill) pill.classList.toggle('is-on', on);
+    ['offline-pill', 'viewer-offline'].forEach(function (id) {
+      var el = $(id);
+      if (el) el.classList.toggle('is-on', on);
+    });
   }
 
   /* ---------- PIN ---------- */
@@ -312,15 +308,8 @@
     });
   }
 
-  function offlineLabel(d) {
-    var prog = state.downloadCtl[d.id];
-    if (prog && prog.status === 'downloading') {
-      var pct = Math.round((prog.ratio || 0) * 100);
-      return 'Downloading ' + formatBytes(d.sizeBytes) + '… ' + pct + '%';
-    }
-    if (state.offlineIds[d.id]) return 'Available offline ✓';
-    return 'Download for offline';
-  }
+  var ICON_DL = '<svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>';
+  var ICON_OK = '<svg class="md-icon" viewBox="0 0 24 24"><path d="M5 12l5 5 9-9"/></svg>';
 
   function renderList() {
     var items = filteredDrawings();
@@ -333,16 +322,18 @@
     host.innerHTML = items.map(function (d) {
       var ready = !!state.offlineIds[d.id];
       var busy = state.downloadCtl[d.id] && state.downloadCtl[d.id].status === 'downloading';
-      var offCls = 'md-btn-off' + (ready ? ' is-ready' : '') + (busy ? ' is-busy' : '');
+      var pct = busy ? Math.round((state.downloadCtl[d.id].ratio || 0) * 100) : 0;
+      var offCls = 'md-dl' + (ready ? ' is-ready' : '') + (busy ? ' is-busy' : '');
+      var offLabel = ready ? 'Available offline' : (busy ? 'Downloading ' + pct + '%' : 'Download for offline');
+      var offInner = busy ? (pct + '%') : (ready ? ICON_OK : ICON_DL);
       return (
         '<article class="md-card" data-id="' + escapeHtml(d.id) + '">' +
-          '<p class="md-card-num">' + escapeHtml(d.number) + '</p>' +
-          '<p class="md-card-title">' + escapeHtml(d.title) + '</p>' +
-          '<p class="md-card-meta">Rev ' + escapeHtml(d.revision) + ' · Updated ' + escapeHtml(formatDate(d.updatedAt)) + ' · PDF · ' + escapeHtml(formatBytes(d.sizeBytes)) + '</p>' +
-          '<div class="md-card-actions">' +
-            '<button type="button" class="md-btn-view" data-act="view">View</button>' +
-            '<button type="button" class="' + offCls + '" data-act="offline">' + escapeHtml(offlineLabel(d)) + '</button>' +
+          '<div class="md-card-body">' +
+            '<p class="md-card-num">' + escapeHtml(d.number) + '</p>' +
+            '<p class="md-card-title">' + escapeHtml(d.title) + '</p>' +
+            '<p class="md-card-meta">Rev ' + escapeHtml(d.revision) + ' · Updated ' + escapeHtml(formatDate(d.updatedAt)) + ' · PDF · ' + escapeHtml(formatBytes(d.sizeBytes)) + '</p>' +
           '</div>' +
+          '<button type="button" class="' + offCls + '" data-act="offline" aria-label="' + escapeHtml(offLabel) + '">' + offInner + '</button>' +
         '</article>'
       );
     }).join('');
@@ -368,7 +359,7 @@
       state.pendingRemoveId = id;
       openSheet(
         '<h3 id="sheet-title">Remove offline copy</h3>' +
-        '<p class="md-sheet-note">' + escapeHtml(d.number) + ' will be removed from this phone. You can download it again when you have a connection.</p>' +
+        '<p class="md-sheet-note">Remove this drawing from offline storage?</p>' +
         '<button type="button" class="md-sheet-item is-danger" data-sheet="confirm-remove">Remove offline copy</button>'
       );
       return;
@@ -380,7 +371,10 @@
       var blob = await fetchDrawingFile(d, function (ratio) {
         state.downloadCtl[id] = { status: 'downloading', ratio: ratio };
         var btn = qs('.md-card[data-id="' + id + '"] [data-act="offline"]');
-        if (btn) btn.textContent = 'Downloading… ' + Math.round(ratio * 100) + '%';
+        if (btn) {
+          btn.classList.add('is-busy');
+          btn.textContent = Math.round(ratio * 100) + '%';
+        }
       });
       await idbSet('files', id, { blob: blob, size: blob.size, at: Date.now() });
       state.offlineIds[id] = true;
@@ -391,154 +385,28 @@
     renderList();
   }
 
-  /* ---------- PDF.js: Safari iOS cannot load pdf.worker as a Worker script ---------- */
-  var pdfJsReady = null;
-
-  function loadScript(src) {
-    return new Promise(function (resolve, reject) {
-      var s = document.createElement('script');
-      s.src = src;
-      s.async = false;
-      s.onload = function () { resolve(); };
-      s.onerror = function () { reject(new Error('Could not load PDF engine.')); };
-      document.head.appendChild(s);
-    });
+  /* ---------- Drawing Viewer ---------- */
+  var drawingViewer = null;
+  function getViewer() {
+    if (!drawingViewer) drawingViewer = new window.DrawingViewer($('screen-viewer'));
+    return drawingViewer;
   }
 
-  function hasMainThreadWorker() {
-    try {
-      return !!(globalThis.pdfjsWorker && globalThis.pdfjsWorker.WorkerMessageHandler);
-    } catch (e) {
-      return false;
+  function ensurePdfJs() {
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+      return Promise.resolve(window.pdfjsLib);
     }
-  }
-
-  function setupPdfWorker(lib) {
-    lib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
-    if (hasMainThreadWorker()) return Promise.resolve(lib);
-    return loadScript(PDFJS_WORKER).then(function () { return lib; }).catch(function () { return lib; });
-  }
-
-  function loadPdfJs() {
-    if (pdfJsReady) return pdfJsReady;
-    pdfJsReady = Promise.resolve()
-      .then(function () {
-        if (window.pdfjsLib) return;
-        return loadScript(PDFJS_SRC);
-      })
-      .then(function () {
-        if (!window.pdfjsLib) throw new Error('Could not load PDF engine.');
-        return setupPdfWorker(window.pdfjsLib);
-      });
-    return pdfJsReady;
-  }
-
-  function openPdfDocument(lib, bytes) {
-    var opts = {
-      data: bytes,
-      disableStream: true,
-      disableRange: true,
-      disableAutoFetch: true,
-      isEvalSupported: false,
-      useSystemFonts: false
-    };
-    return lib.getDocument(opts).promise;
-  }
-
-  function clearNativePdf() {
-    if (state.nativePdfUrl) {
-      try { URL.revokeObjectURL(state.nativePdfUrl); } catch (e) {}
-      state.nativePdfUrl = null;
-    }
-    var bar = document.querySelector('#screen-viewer .md-viewer-bar');
-    if (bar) bar.style.display = '';
-  }
-
-  function renderNativePdf(blob) {
-    var host = $('viewer-pages');
-    clearNativePdf();
-    state.nativePdfUrl = URL.createObjectURL(blob);
-    host.className = 'md-viewer-pages is-native';
-    host.innerHTML = '<iframe class="md-pdf-native" title="Drawing PDF" src="' + state.nativePdfUrl + '"></iframe>';
-    var bar = document.querySelector('#screen-viewer .md-viewer-bar');
-    if (bar) bar.style.display = 'none';
-  }
-
-  function fitWidthScale(page) {
-    var stage = $('viewer-stage');
-    var avail = Math.max(280, (stage.clientWidth || window.innerWidth) - 16);
-    var vp = page.getViewport({ scale: 1 });
-    return avail / vp.width;
-  }
-
-  async function renderPdfPages(blob) {
-    var host = $('viewer-pages');
-    host.className = 'md-viewer-pages';
-    host.innerHTML = '<p class="md-viewer-status">Opening drawing…</p>';
-    clearNativePdf();
-    try {
-      var lib = await loadPdfJs();
-      if (!hasMainThreadWorker()) {
-        renderNativePdf(blob);
-        return;
-      }
-      var buf = await blob.arrayBuffer();
-      if (state.pdfDoc && state.pdfDoc.destroy) {
-        try { state.pdfDoc.destroy(); } catch (e) {}
-      }
-      var pdf = await openPdfDocument(lib, new Uint8Array(buf));
-      state.pdfDoc = pdf;
-      host.innerHTML = '';
-      state.pageBase = [];
-      var first = await pdf.getPage(1);
-      var cssScale = fitWidthScale(first);
-      var outputScale = Math.min(2, window.devicePixelRatio || 1);
-      for (var i = 1; i <= pdf.numPages; i++) {
-        var page = i === 1 ? first : await pdf.getPage(i);
-        var viewport = page.getViewport({ scale: cssScale * outputScale });
-        var canvas = document.createElement('canvas');
-        canvas.className = 'md-page';
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        canvas.dataset.baseW = String(viewport.width / outputScale);
-        canvas.dataset.baseH = String(viewport.height / outputScale);
-        canvas.style.width = canvas.dataset.baseW + 'px';
-        canvas.style.height = canvas.dataset.baseH + 'px';
-        host.appendChild(canvas);
-        await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
-        state.pageBase.push({ w: Number(canvas.dataset.baseW), h: Number(canvas.dataset.baseH) });
-      }
-      applyZoom();
-    } catch (err) {
-      renderNativePdf(blob);
-    }
-  }
-
-  function applyZoom() {
-    var z = state.zoom;
-    $('zoom-label').textContent = Math.round(z * 100) + '%';
-    var canvases = $('viewer-pages').querySelectorAll('canvas');
-    for (var i = 0; i < canvases.length; i++) {
-      var base = state.pageBase[i];
-      if (!base) continue;
-      canvases[i].style.width = (base.w * z) + 'px';
-      canvases[i].style.height = (base.h * z) + 'px';
-    }
-  }
-
-  function setZoom(next) {
-    state.zoom = Math.max(0.5, Math.min(4, next));
-    applyZoom();
+    return Promise.reject(new Error('Could not load PDF engine.'));
   }
 
   async function openViewer(id, push) {
     var d = drawingById(id);
     if (!d) return;
     state.viewing = d;
-    state.zoom = 1;
     $('viewer-number').textContent = d.number;
-    $('viewer-title').textContent = d.title;
     showScreen('screen-viewer');
+    setOfflineUi();
     if (push !== false) {
       state.pushingView = true;
       try {
@@ -547,26 +415,18 @@
       state.pushingView = false;
     }
     try {
+      await ensurePdfJs();
       var blob = await fetchDrawingFile(d, null);
-      if (state.viewing && state.viewing.id === id) await renderPdfPages(blob);
+      if (state.viewing && state.viewing.id === id) await getViewer().open(blob, d);
     } catch (err) {
-      $('viewer-pages').innerHTML = '<p class="md-viewer-status">' + escapeHtml(err.message || 'Could not open drawing.') + '</p>';
+      getViewer().setStatus(err.message || 'Could not open drawing.');
     }
   }
 
   function closeViewer() {
     state.viewing = null;
-    $('viewer-pages').innerHTML = '';
-    $('viewer-pages').className = 'md-viewer-pages';
-    clearNativePdf();
-    if (state.pdfDoc && state.pdfDoc.destroy) {
-      try { state.pdfDoc.destroy(); } catch (e) {}
-    }
-    state.pdfDoc = null;
+    getViewer().close();
     document.getElementById('md-app').classList.remove('is-fs');
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(function () {});
-    }
     showScreen('screen-list');
     if (new URLSearchParams(location.search).get('d')) {
       try { history.replaceState({ md: 'list' }, '', '/mydrawings/'); } catch (e) {}
@@ -633,17 +493,39 @@
     var d = state.viewing;
     if (!d) return;
     var off = state.offlineIds[d.id]
-      ? '<button type="button" class="md-sheet-item" data-sheet="remove-off">Remove offline copy</button>'
-      : '<button type="button" class="md-sheet-item" data-sheet="save-off">Download for offline</button>';
+      ? '<button type="button" class="md-sheet-item" data-sheet="remove-off"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 14h10l1-14"/></svg>Remove offline copy</button>'
+      : '<button type="button" class="md-sheet-item" data-sheet="save-off"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Download</button>';
     openSheet(
       '<h3 id="sheet-title">' + escapeHtml(d.number) + '</h3>' +
+      '<button type="button" class="md-sheet-item" data-sheet="info"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 8h.01"/></svg>Drawing information</button>' +
       '<button type="button" class="md-sheet-item" data-sheet="share"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v14"/></svg>Share</button>' +
-      '<button type="button" class="md-sheet-item" data-sheet="download"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Download PDF</button>' +
+      '<button type="button" class="md-sheet-item" data-sheet="download"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Download</button>' +
       off
     );
   }
 
+  function openDrawingInfo() {
+    var d = state.viewing;
+    if (!d) return;
+    var pages = drawingViewer && drawingViewer.pageCount ? drawingViewer.pageCount : '—';
+    openSheet(
+      '<h3 id="sheet-title">Drawing information</h3>' +
+      '<dl class="md-sheet-dl">' +
+        '<dt>Drawing</dt><dd>' + escapeHtml(d.number) + '</dd>' +
+        '<dt>Title</dt><dd>' + escapeHtml(d.title) + '</dd>' +
+        '<dt>Revision</dt><dd>' + escapeHtml(d.revision) + '</dd>' +
+        '<dt>Updated</dt><dd>' + escapeHtml(formatDate(d.updatedAt)) + '</dd>' +
+        '<dt>File</dt><dd>PDF · ' + escapeHtml(formatBytes(d.sizeBytes)) + '</dd>' +
+        '<dt>Pages</dt><dd>' + escapeHtml(String(pages)) + '</dd>' +
+      '</dl>'
+    );
+  }
+
   async function handleSheet(act) {
+    if (act === 'info') {
+      openDrawingInfo();
+      return;
+    }
     closeSheet();
     if (act === 'lock') {
       writeSession(false);
@@ -684,9 +566,7 @@
 
   function closeViewerQuiet() {
     state.viewing = null;
-    $('viewer-pages').innerHTML = '';
-    $('viewer-pages').className = 'md-viewer-pages';
-    clearNativePdf();
+    if (drawingViewer) drawingViewer.close();
     document.getElementById('md-app').classList.remove('is-fs');
   }
 
@@ -708,33 +588,6 @@
         ? 'Tap the Share button in Safari, then choose Add to Home Screen.'
         : 'Use your browser menu and choose Install app or Add to Home Screen.') + '</p>'
     );
-  }
-
-  /* ---------- Gestures ---------- */
-  function bindViewerGestures() {
-    var stage = $('viewer-stage');
-    on(stage, 'touchstart', function (e) {
-      if (e.touches.length === 2) {
-        var dx = e.touches[0].clientX - e.touches[1].clientX;
-        var dy = e.touches[0].clientY - e.touches[1].clientY;
-        state.pinch = { dist: Math.sqrt(dx * dx + dy * dy), zoom: state.zoom };
-      }
-    }, { passive: true });
-    on(stage, 'touchmove', function (e) {
-      if (e.touches.length === 2 && state.pinch) {
-        e.preventDefault();
-        var dx = e.touches[0].clientX - e.touches[1].clientX;
-        var dy = e.touches[0].clientY - e.touches[1].clientY;
-        var dist = Math.sqrt(dx * dx + dy * dy);
-        if (state.pinch.dist > 0) setZoom(state.pinch.zoom * (dist / state.pinch.dist));
-      }
-    }, { passive: false });
-    on(stage, 'touchend', function () { state.pinch = null; }, { passive: true });
-    on(stage, 'wheel', function (e) {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      e.preventDefault();
-      setZoom(state.zoom * (e.deltaY < 0 ? 1.08 : 0.92));
-    }, { passive: false });
   }
 
   /* ---------- Init ---------- */
@@ -815,25 +668,6 @@
     if (history.state && history.state.md === 'view') history.back();
     else closeViewer();
   });
-  on($('btn-zoom-in'), 'click', function () { setZoom(state.zoom + 0.2); });
-  on($('btn-zoom-out'), 'click', function () { setZoom(state.zoom - 0.2); });
-  on($('btn-fullscreen'), 'click', function () {
-    var app = $('md-app');
-    var target = $('screen-viewer');
-    if (app.classList.contains('is-fs')) {
-      app.classList.remove('is-fs');
-      if (document.fullscreenElement && document.exitFullscreen) {
-        document.exitFullscreen().catch(function () {});
-      }
-      return;
-    }
-    app.classList.add('is-fs');
-    var req = target.requestFullscreen || target.webkitRequestFullscreen;
-    if (req) req.call(target).catch(function () {});
-  });
-  on(document, 'fullscreenchange', function () {
-    if (!document.fullscreenElement) $('md-app').classList.remove('is-fs');
-  });
 
   on($('backdrop'), 'click', closeSheet);
   on($('sheet'), 'click', function (e) {
@@ -857,8 +691,6 @@
     var standalone = window.matchMedia('(display-mode: standalone)').matches;
     if (!standalone) $('install-bar').classList.add('is-on');
   });
-
-  bindViewerGestures();
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/mydrawings/sw.js', { scope: '/mydrawings/' }).catch(function () {});

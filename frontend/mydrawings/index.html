@@ -81,32 +81,45 @@
       </div>
     </section>
 
-    <section class="md-screen md-viewer" id="screen-viewer" aria-label="PDF viewer">
-      <header class="md-header">
+    <section class="md-screen md-viewer" id="screen-viewer" aria-label="Drawing viewer">
+      <header class="dv-top" id="dv-top">
         <button type="button" class="md-icon-btn" id="btn-back" aria-label="Back to drawings">
           <svg class="md-icon md-icon-lg" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
         </button>
-        <div class="md-header-text">
+        <div class="dv-top-text">
           <h1 class="md-header-title" id="viewer-number">Drawing</h1>
-          <p class="md-header-sub" id="viewer-title"></p>
         </div>
+        <span class="md-offline" id="viewer-offline" aria-live="polite"><i></i> Offline</span>
         <button type="button" class="md-icon-btn" id="btn-viewer-more" aria-label="Drawing actions">
           <svg class="md-icon md-icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none"/></svg>
         </button>
       </header>
-      <div class="md-viewer-stage" id="viewer-stage">
-        <div class="md-viewer-pages" id="viewer-pages"></div>
+      <div class="dv-stage" id="dv-stage" data-dv-stage>
+        <p class="dv-status" data-dv-status hidden>Opening drawing…</p>
+        <div class="dv-plane" data-dv-plane>
+          <canvas data-dv-canvas></canvas>
+        </div>
       </div>
-      <footer class="md-viewer-bar">
-        <button type="button" class="md-icon-btn" id="btn-zoom-out" aria-label="Zoom out">
+      <footer class="dv-bar" id="dv-bar">
+        <button type="button" class="md-icon-btn" data-dv-zoom-out aria-label="Zoom out">
           <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6"/></svg>
         </button>
-        <span class="md-zoom-label" id="zoom-label">100%</span>
-        <button type="button" class="md-icon-btn" id="btn-zoom-in" aria-label="Zoom in">
+        <button type="button" class="md-icon-btn" data-dv-zoom-in aria-label="Zoom in">
           <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M11 8v6M8 11h6"/></svg>
         </button>
-        <button type="button" class="md-icon-btn" id="btn-fullscreen" aria-label="Fullscreen">
+        <button type="button" class="md-icon-btn" data-dv-fit aria-label="Fit to page">
+          <svg class="md-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 5v5h5"/></svg>
+        </button>
+        <button type="button" class="md-icon-btn" data-dv-fs aria-label="Fullscreen">
           <svg class="md-icon" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        </button>
+        <span class="dv-bar-spacer"></span>
+        <button type="button" class="md-icon-btn" data-dv-prev aria-label="Previous page">
+          <svg class="md-icon" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <span class="dv-page" data-dv-page>1 / 1</span>
+        <button type="button" class="md-icon-btn" data-dv-next aria-label="Next page">
+          <svg class="md-icon" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
         </button>
       </footer>
     </section>
@@ -117,6 +130,7 @@
 
   <script src="/mydrawings/lib/pdf.min.js"></script>
   <script src="/mydrawings/lib/pdf.worker.min.js"></script>
+  <script src="/mydrawings/drawing-viewer.js"></script>
   <script src="/mydrawings/mydrawings.js"></script>
 </body>
 </html>
