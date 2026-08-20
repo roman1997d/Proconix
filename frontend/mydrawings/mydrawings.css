@@ -492,6 +492,8 @@ img { max-width: 100%; }
   overflow: hidden;
   touch-action: none;
   overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
   background:
     linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px) 0 0 / 28px 28px,
     linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px) 0 0 / 28px 28px,
@@ -502,6 +504,8 @@ img { max-width: 100%; }
   top: 0; left: 0;
   transform-origin: 0 0;
   will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   background: #fff;
 }

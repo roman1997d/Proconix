@@ -42,7 +42,7 @@
     this.tx = 0;
     this.ty = 0;
     this.pointers = {};
-    this.pinch = null;
+    this.gesture = null;
     this.pan = null;
     this.renderTask = null;
     this.renderToken = 0;
@@ -59,6 +59,9 @@
     this._onPtrDown = this.onPtrDown.bind(this);
     this._onPtrMove = this.onPtrMove.bind(this);
     this._onPtrUp = this.onPtrUp.bind(this);
+    this._onTouchStart = this.onTouchStart.bind(this);
+    this._onTouchMove = this.onTouchMove.bind(this);
+    this._onTouchEnd = this.onTouchEnd.bind(this);
     this._onWheel = this.onWheel.bind(this);
     this._onResize = this.onResize.bind(this);
 
@@ -72,10 +75,14 @@
     stage.addEventListener('pointermove', this._onPtrMove, { passive: false });
     stage.addEventListener('pointerup', this._onPtrUp);
     stage.addEventListener('pointercancel', this._onPtrUp);
+    stage.addEventListener('touchstart', this._onTouchStart, { passive: false });
+    stage.addEventListener('touchmove', this._onTouchMove, { passive: false });
+    stage.addEventListener('touchend', this._onTouchEnd, { passive: false });
+    stage.addEventListener('touchcancel', this._onTouchEnd, { passive: false });
     stage.addEventListener('wheel', this._onWheel, { passive: false });
     stage.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-    stage.addEventListener('touchmove', function (e) { e.preventDefault(); }, { passive: false });
     stage.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+    stage.addEventListener('gesturechange', function (e) { e.preventDefault(); });
     window.addEventListener('resize', this._onResize);
     window.addEventListener('orientationchange', this._onResize);
 
@@ -150,7 +157,7 @@
     this.pdf = null;
     this.page = null;
     this.pointers = {};
-    this.pinch = null;
+    this.gesture = null;
     this.pan = null;
     this.root.classList.remove('is-fs', 'is-chrome-hidden');
     if (document.fullscreenElement) {
@@ -216,7 +223,7 @@
     this.clampPan();
     this.plane.style.width = this.pageCssW + 'px';
     this.plane.style.height = this.pageCssH + 'px';
-    this.plane.style.transform = 'translate(' + this.tx + 'px,' + this.ty + 'px) scale(' + this.scale + ')';
+    this.plane.style.transform = 'translate3d(' + this.tx + 'px,' + this.ty + 'px,0) scale(' + this.scale + ')';
   };
 
   DrawingViewer.prototype.clampPan = function () {
@@ -282,6 +289,123 @@
     this.qualityTimer = setTimeout(function () { self.paint(); }, 160);
   };
 
+  DrawingViewer.prototype.touchPoints = function (e) {
+    var out = [];
+    var n = Math.min(e.touches.length, 2);
+    for (var i = 0; i < n; i++) {
+      out.push({ x: e.touches[i].clientX, y: e.touches[i].clientY });
+    }
+    return out;
+  };
+
+  DrawingViewer.prototype.beginGesture = function (pts) {
+    if (pts.length >= 2) {
+      this.gesture = {
+        mode: 'two',
+        dist: Math.max(1, dist(pts[0], pts[1])),
+        mid: midpoint(pts[0], pts[1]),
+        scale: this.scale,
+        tx: this.tx,
+        ty: this.ty
+      };
+      return;
+    }
+    if (pts.length === 1) {
+      this.gesture = {
+        mode: 'one',
+        x: pts[0].x,
+        y: pts[0].y,
+        tx: this.tx,
+        ty: this.ty
+      };
+    }
+  };
+
+  DrawingViewer.prototype.applyTwoFinger = function (pts) {
+    var g = this.gesture;
+    if (!g || g.mode !== 'two' || pts.length < 2) return;
+    var mid = midpoint(pts[0], pts[1]);
+    var d = Math.max(1, dist(pts[0], pts[1]));
+    var newScale = clamp(g.scale * (d / g.dist), MIN_SCALE, MAX_SCALE);
+    var rect = this.stage.getBoundingClientRect();
+    var worldX = (g.mid.x - rect.left - g.tx) / g.scale;
+    var worldY = (g.mid.y - rect.top - g.ty) / g.scale;
+    this.scale = newScale;
+    this.tx = (mid.x - rect.left) - worldX * newScale;
+    this.ty = (mid.y - rect.top) - worldY * newScale;
+    this.applyTransform();
+  };
+
+  DrawingViewer.prototype.applyOneFinger = function (pt) {
+    var g = this.gesture;
+    if (!g || g.mode !== 'one') return;
+    var dx = pt.x - g.x;
+    var dy = pt.y - g.y;
+    if (Math.abs(dx) > TAP_MOVE || Math.abs(dy) > TAP_MOVE) this.moved = true;
+    this.tx = g.tx + dx;
+    this.ty = g.ty + dy;
+    this.applyTransform();
+  };
+
+  DrawingViewer.prototype.finishGesture = function (clientX, clientY) {
+    this.gesture = null;
+    if (!this.moved) {
+      var now = Date.now();
+      if (now - this.lastTap < DOUBLE_MS && Math.abs(clientX - this.lastTapX) < 28 && Math.abs(clientY - this.lastTapY) < 28) {
+        this.lastTap = 0;
+        if (this.scale > 1.35) this.fit();
+        else this.zoomAt(clientX, clientY, TAP_ZOOM);
+        this.schedulePaint();
+        this.pokeChrome();
+        return;
+      }
+      this.lastTap = now;
+      this.lastTapX = clientX;
+      this.lastTapY = clientY;
+      this.toggleChrome();
+      return;
+    }
+    this.schedulePaint();
+    this.pokeChrome();
+  };
+
+  DrawingViewer.prototype.onTouchStart = function (e) {
+    if (!this.active) return;
+    e.preventDefault();
+    var pts = this.touchPoints(e);
+    if (pts.length === 1 && !this.gesture) this.moved = false;
+    this.beginGesture(pts);
+  };
+
+  DrawingViewer.prototype.onTouchMove = function (e) {
+    if (!this.active) return;
+    e.preventDefault();
+    var pts = this.touchPoints(e);
+    if (pts.length >= 2) {
+      if (!this.gesture || this.gesture.mode !== 'two') this.beginGesture(pts);
+      this.applyTwoFinger(pts);
+      this.moved = true;
+      return;
+    }
+    if (pts.length === 1) {
+      if (!this.gesture || this.gesture.mode !== 'one') this.beginGesture(pts);
+      this.applyOneFinger(pts[0]);
+    }
+  };
+
+  DrawingViewer.prototype.onTouchEnd = function (e) {
+    if (!this.active) return;
+    e.preventDefault();
+    var pts = this.touchPoints(e);
+    var x = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : this.lastTapX;
+    var y = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : this.lastTapY;
+    if (pts.length >= 1) {
+      this.beginGesture(pts);
+      return;
+    }
+    this.finishGesture(x, y);
+  };
+
   DrawingViewer.prototype.ptrList = function () {
     var keys = Object.keys(this.pointers);
     var out = [];
@@ -291,73 +415,41 @@
 
   DrawingViewer.prototype.onPtrDown = function (e) {
     if (!this.active) return;
+    if (e.pointerType === 'touch') return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     this.stage.setPointerCapture(e.pointerId);
     this.pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
     this.moved = false;
-    var pts = this.ptrList();
-    if (pts.length === 2) {
-      this.pinch = { dist: dist(pts[0], pts[1]), scale: this.scale, mid: midpoint(pts[0], pts[1]) };
-      this.pan = null;
-    } else if (pts.length === 1) {
-      this.pan = { x: e.clientX, y: e.clientY, tx: this.tx, ty: this.ty };
-      this.pinch = null;
-    }
+    this.beginGesture(this.ptrList());
   };
 
   DrawingViewer.prototype.onPtrMove = function (e) {
+    if (e.pointerType === 'touch') return;
     if (!this.pointers[e.pointerId]) return;
     e.preventDefault();
     this.pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
     var pts = this.ptrList();
-    if (pts.length >= 2 && this.pinch) {
-      var d = dist(pts[0], pts[1]);
-      var mid = midpoint(pts[0], pts[1]);
-      if (this.pinch.dist > 0) this.zoomAt(mid.x, mid.y, this.pinch.scale * (d / this.pinch.dist));
+    if (pts.length >= 2) {
+      if (!this.gesture || this.gesture.mode !== 'two') this.beginGesture(pts);
+      this.applyTwoFinger(pts);
       this.moved = true;
       return;
     }
-    if (pts.length === 1 && this.pan) {
-      var dx = e.clientX - this.pan.x;
-      var dy = e.clientY - this.pan.y;
-      if (Math.abs(dx) > TAP_MOVE || Math.abs(dy) > TAP_MOVE) this.moved = true;
-      this.tx = this.pan.tx + dx;
-      this.ty = this.pan.ty + dy;
-      this.applyTransform();
-    }
+    if (pts.length === 1) this.applyOneFinger(pts[0]);
   };
 
   DrawingViewer.prototype.onPtrUp = function (e) {
+    if (e.pointerType === 'touch') return;
     if (!this.pointers[e.pointerId]) return;
     var x = e.clientX, y = e.clientY;
     delete this.pointers[e.pointerId];
     var pts = this.ptrList();
-    if (pts.length < 2) this.pinch = null;
-    if (pts.length === 1) {
-      this.pan = { x: pts[0].x, y: pts[0].y, tx: this.tx, ty: this.ty };
-    } else {
-      this.pan = null;
-    }
-
-    if (!this.moved && pts.length === 0) {
-      var now = Date.now();
-      if (now - this.lastTap < DOUBLE_MS && Math.abs(x - this.lastTapX) < 28 && Math.abs(y - this.lastTapY) < 28) {
-        this.lastTap = 0;
-        if (this.scale > 1.35) this.fit();
-        else this.zoomAt(x, y, TAP_ZOOM);
-        this.schedulePaint();
-        this.pokeChrome();
-        return;
-      }
-      this.lastTap = now;
-      this.lastTapX = x;
-      this.lastTapY = y;
-      this.toggleChrome();
-    } else if (this.moved) {
-      this.schedulePaint();
-      this.pokeChrome();
-    }
     try { this.stage.releasePointerCapture(e.pointerId); } catch (err) {}
+    if (pts.length >= 1) {
+      this.beginGesture(pts);
+      return;
+    }
+    this.finishGesture(x, y);
   };
 
   DrawingViewer.prototype.onWheel = function (e) {

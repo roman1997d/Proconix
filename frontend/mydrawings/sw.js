@@ -1,5 +1,5 @@
 /* My Drawings PWA — cache the app shell only. PDFs are stored in IndexedDB on demand. */
-var CACHE = 'mydrawings-shell-v6';
+var CACHE = 'mydrawings-shell-v7';
 var PRECACHE = [
   '/mydrawings/',
   '/mydrawings/index.html',
