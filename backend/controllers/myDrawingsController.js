@@ -33,6 +33,45 @@ function isoDate(value) {
   return `${y}-${m}-${day}`;
 }
 
+const FLOOR_IDS = new Set(['ground', '1', '2', '3', '4', '5']);
+
+function normalizeFloorId(raw) {
+  let v = String(raw == null ? '' : raw).trim().toLowerCase();
+  if (!v) return null;
+  v = v.replace(/^floor\s+/, '');
+  if (v === '0' || v === 'gf' || v === 'g' || v === 'ground floor' || v === 'groundfloor') return 'ground';
+  if (FLOOR_IDS.has(v)) return v;
+  return null;
+}
+
+/** Parse floors from JSON array, CSV string, or form field. Empty/missing => null (all floors). */
+function parseFloors(raw) {
+  if (raw == null || raw === '') return null;
+  let arr = raw;
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (!s) return null;
+    try {
+      arr = JSON.parse(s);
+    } catch (e) {
+      arr = s.split(/[,|;]+/);
+    }
+  }
+  if (!Array.isArray(arr)) arr = [arr];
+  const out = [];
+  for (let i = 0; i < arr.length; i++) {
+    const id = normalizeFloorId(arr[i]);
+    if (id && out.indexOf(id) === -1) out.push(id);
+  }
+  return out.length ? out : null;
+}
+
+function floorsForClient(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map(normalizeFloorId).filter(Boolean);
+  return parseFloors(value) || [];
+}
+
 function ensureUploadDir() {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   return UPLOAD_DIR;
@@ -141,6 +180,10 @@ async function ensureSchemaInner() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_my_drawings_activity_ws ON my_drawings_activity(workspace_id, created_at DESC)`);
+  await pool.query(`
+    ALTER TABLE my_drawings_item
+    ADD COLUMN IF NOT EXISTS floors TEXT[]
+  `);
 
   ensureUploadDir();
   let existing = await pool.query(
@@ -514,7 +557,7 @@ async function loadCatalog(workspace, role) {
     [workspace.id]
   );
   const items = await pool.query(
-    `SELECT i.id, i.number, i.title, i.revision, i.size_bytes, i.updated_at, c.name AS category
+    `SELECT i.id, i.number, i.title, i.revision, i.size_bytes, i.updated_at, i.floors, c.name AS category
      FROM my_drawings_item i
      LEFT JOIN my_drawings_category c ON c.id = i.category_id
      WHERE i.workspace_id = $1
@@ -532,6 +575,7 @@ async function loadCatalog(workspace, role) {
       title: d.title,
       category: d.category || 'Uncategorised',
       revision: d.revision,
+      floors: floorsForClient(d.floors),
       updatedAt: isoDate(d.updated_at),
       sizeBytes: Number(d.size_bytes) || 0,
       fileUrl: `/api/my-drawings/drawings/${d.id}/file`,
@@ -713,6 +757,7 @@ async function addDrawing(req, res) {
     const title = String((req.body && req.body.title) || '').trim().slice(0, 200);
     const revision = String((req.body && req.body.revision) || 'A').trim().toUpperCase().slice(0, 12) || 'A';
     const categoryName = String((req.body && req.body.category) || '').trim();
+    const floors = parseFloors(req.body && req.body.floors);
     if (!number || !title) {
       removeStoredFile(relativeFromAbs(req.file.path));
       return res.status(400).json({ success: false, message: 'Number and title are required.' });
@@ -730,9 +775,9 @@ async function addDrawing(req, res) {
     const meta = fileMeta(req.file);
     await pool.query(
       `INSERT INTO my_drawings_item
-        (workspace_id, category_id, number, title, revision, size_bytes, stored_filename, relative_path, mime_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [workspaceId, cat && cat.id, number, title, revision, meta.size_bytes, meta.stored_filename, meta.relative_path, meta.mime_type]
+        (workspace_id, category_id, number, title, revision, size_bytes, stored_filename, relative_path, mime_type, floors)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [workspaceId, cat && cat.id, number, title, revision, meta.size_bytes, meta.stored_filename, meta.relative_path, meta.mime_type, floors]
     );
     await logActivity(req, 'added', title, number);
     return catalogResponse(req, res);
@@ -764,6 +809,10 @@ async function editDrawing(req, res) {
     const title = String((req.body && req.body.title) || item.title).trim().slice(0, 200);
     const revision = String((req.body && req.body.revision) || item.revision).trim().toUpperCase().slice(0, 12) || 'A';
     const categoryName = String((req.body && req.body.category) || '').trim();
+    const floors =
+      req.body && Object.prototype.hasOwnProperty.call(req.body, 'floors')
+        ? parseFloors(req.body.floors)
+        : item.floors || null;
     if (!number || !title) {
       if (req.file) removeStoredFile(relativeFromAbs(req.file.path));
       return res.status(400).json({ success: false, message: 'Number and title are required.' });
@@ -790,9 +839,9 @@ async function editDrawing(req, res) {
     await pool.query(
       `UPDATE my_drawings_item
        SET category_id = $1, number = $2, title = $3, revision = $4,
-           size_bytes = $5, stored_filename = $6, relative_path = $7, mime_type = $8, updated_at = NOW()
-       WHERE id = $9`,
-      [cat && cat.id, number, title, revision, meta.size_bytes, meta.stored_filename, meta.relative_path, meta.mime_type, item.id]
+           size_bytes = $5, stored_filename = $6, relative_path = $7, mime_type = $8, floors = $9, updated_at = NOW()
+       WHERE id = $10`,
+      [cat && cat.id, number, title, revision, meta.size_bytes, meta.stored_filename, meta.relative_path, meta.mime_type, floors, item.id]
     );
     await logActivity(req, 'updated', title, number);
     return catalogResponse(req, res);

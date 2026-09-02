@@ -570,8 +570,11 @@
     state.pendingDeepLink = null;
     updateHeaderFloor();
     showScreen('screen-list');
+    renderCats();
     renderList();
-    if (deep && drawingById(deep)) openViewer(deep, false);
+    if (deep && drawingById(deep) && drawingOnFloor(drawingById(deep), state.floor && state.floor.id)) {
+      openViewer(deep, false);
+    }
   }
 
   function ensureFloorThenHome(opts) {
@@ -856,9 +859,25 @@
   }
 
   /* ---------- List ---------- */
+  function drawingOnFloor(d, floorId) {
+    if (!floorId) return true;
+    var floors = d && d.floors;
+    if (!floors || !floors.length) return true;
+    return floors.indexOf(floorId) !== -1;
+  }
+
+  function drawingsForSelectedFloor() {
+    var floorId = state.floor && state.floor.id;
+    return state.drawings.filter(function (d) { return drawingOnFloor(d, floorId); });
+  }
+
   function renderCats() {
     var host = $('cats');
-    var cats = ['All'].concat(state.categories);
+    var onFloor = drawingsForSelectedFloor();
+    var present = {};
+    for (var i = 0; i < onFloor.length; i++) present[onFloor[i].category] = true;
+    var cats = ['All'].concat(state.categories.filter(function (c) { return present[c]; }));
+    if (state.category !== 'All' && cats.indexOf(state.category) === -1) state.category = 'All';
     host.innerHTML = cats.map(function (c) {
       var onCls = c === state.category ? ' is-on' : '';
       return '<button type="button" class="md-chip' + onCls + '" data-cat="' + escapeHtml(c) + '" role="tab" aria-selected="' + (c === state.category) + '">' + escapeHtml(c) + '</button>';
@@ -867,7 +886,7 @@
 
   function filteredDrawings() {
     var q = (state.query || '').trim().toLowerCase();
-    return state.drawings.filter(function (d) {
+    return drawingsForSelectedFloor().filter(function (d) {
       if (state.category !== 'All' && d.category !== state.category) return false;
       if (!q) return true;
       return (d.number + ' ' + d.title + ' ' + d.category + ' ' + (d.revision || '')).toLowerCase().indexOf(q) !== -1;
@@ -882,7 +901,8 @@
     var host = $('list');
     $('list-count').textContent = items.length + (items.length === 1 ? ' drawing' : ' drawings');
     if (!items.length) {
-      host.innerHTML = '<div class="md-empty"><h3>No drawings</h3><p>Try another search or category.</p></div>';
+      var floorHint = state.floor ? ' for ' + escapeHtml(state.floor.label) : '';
+      host.innerHTML = '<div class="md-empty"><h3>No drawings' + floorHint + '</h3><p>Try another search, category, or floor.</p></div>';
       updateDownloadAllBtn();
       return;
     }
@@ -1252,6 +1272,25 @@
     }).join('');
   }
 
+  function selectedManageFloors() {
+    var host = $('mg-floors');
+    if (!host) return [];
+    return Array.prototype.map.call(host.querySelectorAll('input[type="checkbox"]:checked'), function (el) {
+      return el.value;
+    });
+  }
+
+  function setManageFloors(floors) {
+    var host = $('mg-floors');
+    if (!host) return;
+    var set = {};
+    (floors || []).forEach(function (f) { set[f] = true; });
+    Array.prototype.forEach.call(host.querySelectorAll('input[type="checkbox"]'), function (el) {
+      el.checked = !!set[el.value];
+      el.disabled = false;
+    });
+  }
+
   function showManageForm(mode) {
     state.manageMode = mode;
     var main = document.querySelector('#screen-manage .md-main');
@@ -1269,6 +1308,7 @@
     $('mg-rev').disabled = false;
     $('mg-file-wrap').hidden = false;
     $('mg-file').required = false;
+    if ($('mg-floors-wrap')) $('mg-floors-wrap').hidden = false;
 
     if (mode.type === 'add') {
       $('mg-form-title').textContent = 'Add drawing';
@@ -1276,15 +1316,17 @@
       $('mg-number').value = '';
       $('mg-title').value = '';
       $('mg-rev').value = 'A';
+      setManageFloors([]);
       $('mg-file-label').textContent = 'PDF file';
       $('mg-file').required = true;
       $('btn-mg-save').textContent = 'Add drawing';
     } else if (mode.type === 'edit') {
       $('mg-form-title').textContent = 'Edit drawing';
-      $('mg-form-note').textContent = 'Change number, title, category or revision. Leave the file empty to keep the current PDF.';
+      $('mg-form-note').textContent = 'Change number, title, category, floors or revision. Leave the file empty to keep the current PDF.';
       $('mg-number').value = d.number;
       $('mg-title').value = d.title;
       $('mg-rev').value = d.revision || '';
+      setManageFloors(d.floors || []);
       $('mg-file-label').textContent = 'Replace PDF (optional)';
       $('btn-mg-save').textContent = 'Save changes';
     } else if (mode.type === 'update') {
@@ -1293,8 +1335,10 @@
       $('mg-number').value = d.number;
       $('mg-title').value = d.title;
       $('mg-rev').value = nextRevision(d.revision);
+      setManageFloors(d.floors || []);
       $('mg-number').disabled = true;
       $('mg-category').disabled = true;
+      if ($('mg-floors-wrap')) $('mg-floors-wrap').hidden = true;
       $('mg-file-label').textContent = 'New PDF (replaces the old file)';
       $('mg-file').required = true;
       $('btn-mg-save').textContent = 'Replace drawing';
@@ -1365,6 +1409,7 @@
     var title = ($('mg-title').value || '').trim();
     var category = $('mg-category').value;
     var revision = ($('mg-rev').value || '').trim().toUpperCase() || 'A';
+    var floors = selectedManageFloors();
     var file = $('mg-file').files && $('mg-file').files[0];
     if (!number || !title) {
       $('mg-error').textContent = 'Number and title are required.';
@@ -1379,7 +1424,13 @@
         }
         data = await apiJson('/drawings', {
           method: 'POST',
-          body: drawingFormData({ number: number, title: title, category: category, revision: revision }, file)
+          body: drawingFormData({
+            number: number,
+            title: title,
+            category: category,
+            revision: revision,
+            floors: floors.join(',')
+          }, file)
         });
       } else if (mode.type === 'edit') {
         if (file && !isPdfFile(file)) {
@@ -1388,7 +1439,13 @@
         }
         data = await apiJson('/drawings/' + encodeURIComponent(mode.id), {
           method: 'PUT',
-          body: drawingFormData({ number: number, title: title, category: category, revision: revision }, file)
+          body: drawingFormData({
+            number: number,
+            title: title,
+            category: category,
+            revision: revision,
+            floors: floors.join(',')
+          }, file)
         });
       } else if (mode.type === 'update') {
         if (!isPdfFile(file)) {

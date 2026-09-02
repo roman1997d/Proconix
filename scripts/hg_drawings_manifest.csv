@@ -1,0 +1,58 @@
+include,confidence,number,title,category,floors,revision,level,file,pages,notes
+yes,medium,194231,Deluxe Studio - Type B (Pattress and Sockets Setting Out),Pattress,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,P01,ZZ,100-JMA-XX-ZZ-DR-A-194231.pdf,1,
+yes,high,001200,Grid Line Setting Out,Setting Out,Ground Floor,C01,00,100-JMA-ZZ-00-DR-A-001200.pdf,1,
+yes,medium,132200,Level 00 Door Plan,GA,Ground Floor,C04,00,100-JMA-ZZ-00-DR-A-132200.pdf,1,manual title tweak
+yes,medium,132200M,Level 00M Door Plan,GA,Ground Floor,C03,00,100-JMA-ZZ-00-DR-A-132200M.pdf,1,manual title tweak
+yes,high,061201,Level 01 Partition Setting Out,Setting Out,Floor 1,C01,01,100-JMA-ZZ-01-DR-A-061201.pdf,1,
+yes,high,062201,Level 01 Wall Types Plan,Setting Out,Floor 1,C03,01,100-JMA-ZZ-01-DR-A-062201.pdf,1,
+yes,high,132201,Level 01 - Door Plan,GA,Floor 1,C04,01,100-JMA-ZZ-01-DR-A-132201.pdf,1,
+yes,high,022202,Level 02 GA Plan,GA,Floor 2,C04,02,100-JMA-ZZ-02-DR-A-022202.pdf,1,
+yes,high,033202,Level 02 Reflected Ceiling Plan,RCP,Floor 2 | Floor 4,C01,02,100-JMA-ZZ-02-DR-A-033202.pdf,1,floors from Applicable-to note
+NO,high,061202,Level 02 Partition Setting Out,Setting Out,Floor 2 | Floor 4,C03,02,100-JMA-ZZ-02-DR-A-061202 (1).pdf,1,duplicate skipped · floors from Applicable-to note
+yes,high,061202,Level 02 Partition Setting Out,Setting Out,Floor 2 | Floor 4,C04,02,100-JMA-ZZ-02-DR-A-061202 (2).pdf,1,duplicate skipped · preferred dup (rev C04) · floors from Applicable-to note
+yes,high,062202,Level 02 Wall Types Plan,Setting Out,Floor 2 | Floor 4,C06,02,100-JMA-ZZ-02-DR-A-062202 (1).pdf,1,floors from Applicable-to note
+yes,high,132202,Level 02 - Door Plan,GA,Floor 2 | Floor 4,C05,02,100-JMA-ZZ-02-DR-A-132202 (2).pdf,1,duplicate skipped · preferred dup (rev C05) · floors from Applicable-to note
+NO,high,132202,Level 02 - Door Plan,GA,Floor 2 | Floor 4,C02,02,100-JMA-ZZ-02-DR-A-132202.pdf,1,duplicate skipped · floors from Applicable-to note
+yes,high,191202,Level 02 Pattress Scoping Out Plan,Pattress,Floor 2,C01,02,100-JMA-ZZ-02-DR-A-191202.pdf,1,
+yes,high,212202,Level 02 Fire Strategy Plan,Fire,Floor 2 | Floor 4,C03,02,100-JMA-ZZ-02-DR-A-212202.pdf,1,floors from Applicable-to note
+yes,high,033203,Level 03 Reflected Ceiling Plan,RCP,Floor 3 | Floor 5,C01,03,100-JMA-ZZ-03-DR-A-033203.pdf,1,floors from Applicable-to note
+yes,high,061203,Level 03 Partition Setting Out,Setting Out,Floor 3 | Floor 5,C02,03,100-JMA-ZZ-03-DR-A-061203.pdf,1,floors from Applicable-to note
+yes,high,062203,Level 03 Wall Types Plan,Setting Out,Floor 3 | Floor 5,C03,03,100-JMA-ZZ-03-DR-A-062203.pdf,1,floors from Applicable-to note
+yes,high,132203,Level 03 - Door Plan,GA,Floor 3 | Floor 5,C02,03,100-JMA-ZZ-03-DR-A-132203.pdf,1,floors from Applicable-to note
+yes,high,212203,Level 03 Fire Strategy Plan,Fire,Floor 3 | Floor 5,C03,03,100-JMA-ZZ-03-DR-A-212203.pdf,1,floors from Applicable-to note
+yes,medium,066100,Internal Partition Section Details,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C02,XX,100-JMA-ZZ-XX-DR-A-066100.pdf,1,
+yes,medium,066200,Internal Partition WT03C Penetration Section Details,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066200.pdf,1,
+yes,medium,066201,Internal Partition WT10A Penetration Section Details,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066201.pdf,1,
+yes,medium,066202,Internal Partition WT20A Penetration Section Details Sheet 01,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066202.pdf,1,
+yes,medium,066203,Internal Partition WT20A Penetration Section Details Sheet 02,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066203.pdf,1,
+yes,medium,066301,Typical Blockwork and Windpost Details,Details,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066301.pdf,1,
+yes,medium,066401,Partition Plan Detail 01,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066401.pdf,1,
+yes,medium,066402,Partition Plan Detail 02,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066402.pdf,1,
+yes,medium,066403,Partition Plan Detail 03,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066403.pdf,1,
+yes,medium,066404,Partition Plan Detail 04,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066404.pdf,1,
+yes,medium,066406,Partition Plan Detail 06,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066406.pdf,1,
+yes,medium,066407,Partition Plan Detail 07,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066407.pdf,1,
+yes,medium,066408,Partition Plan Detail 08,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066408.pdf,1,
+yes,medium,066409A,Partition Plan Detail 09A,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066409A.pdf,1,
+yes,medium,066409B,Partition Plan Detail 09B,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066409B.pdf,1,
+yes,medium,066410,Partition Plan Detail 10,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066410.pdf,1,
+yes,medium,066411,Partition Plan Detail 11,Partitions,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-066411.pdf,1,
+yes,medium,136011,Internal Door Details (Sheet 02),Details,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,XX,100-JMA-ZZ-XX-DR-A-136011.pdf,1,
+yes,medium,195000,Typical Pattress Elevation Setting Out,Pattress,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,P01,XX,100-JMA-ZZ-XX-DR-A-195000 (1).pdf,1,duplicate skipped · preferred dup (rev P01)
+NO,medium,195000,Typical Pattress Elevation Setting Out,Pattress,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,P01,XX,100-JMA-ZZ-XX-DR-A-195000.pdf,1,duplicate skipped
+yes,medium,130000,Internal Door Schedule,Schedules,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C02,XX,100-JMA-ZZ-XX-SH-A-130000.pdf,32,
+yes,medium,A15486-00,A15486-00,General,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,A,XX,A15486-00.pdf,1,manual title tweak
+yes,medium,A15486-01,A15486-01,General,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,A,XX,A15486-01.pdf,1,manual title tweak
+yes,medium,50102,Standard Studio Type B — M&E GA,GA,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,ZZ,OMS-CAD-XX-ZZ-DR-Z-50102.pdf,1,manual title tweak
+yes,medium,50105,Deluxe Studio Type B — M&E GA,GA,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,ZZ,OMS-CAD-XX-ZZ-DR-Z-50105.pdf,1,manual title tweak
+yes,medium,50120,Twodio Type A — M&E GA,GA,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,ZZ,OMS-CAD-XX-ZZ-DR-Z-50120.pdf,1,manual title tweak
+yes,medium,50160,Threedio M&E services,MEP,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,ZZ,OMS-CAD-XX-ZZ-DR-Z-50160.pdf,1,manual title tweak
+yes,medium,50161,Threedio M&E services,MEP,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,ZZ,OMS-CAD-XX-ZZ-DR-Z-50161.pdf,1,manual title tweak
+yes,medium,50170,Threedio M&E services,MEP,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,ZZ,OMS-CAD-XX-ZZ-DR-Z-50170.pdf,1,manual title tweak
+yes,medium,50171,Threedio M&E services,MEP,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C01,ZZ,OMS-CAD-XX-ZZ-DR-Z-50171.pdf,1,manual title tweak
+yes,medium,90001,Typical corridor section — electrical riser,Sections,Floor 2 | Floor 3 | Floor 4 | Floor 5,P04,ZZ,OMS-CAD-XX-ZZ-DR-Z-90001 (1).pdf,1,duplicate skipped · preferred dup (rev P04) · manual title tweak
+NO,medium,90001,Typical corridor section — electrical riser,Sections,Floor 2 | Floor 3 | Floor 4 | Floor 5,P03,ZZ,OMS-CAD-XX-ZZ-DR-Z-90001.pdf,1,duplicate skipped · manual title tweak
+yes,medium,90002,Typical corridor section — 7 bed cluster,Sections,Floor 2 | Floor 3 | Floor 4 | Floor 5,P02,ZZ,OMS-CAD-XX-ZZ-DR-Z-90002 (1).pdf,1,duplicate skipped · preferred dup (rev P02) · manual title tweak
+NO,medium,90002,Typical corridor section — 7 bed cluster,Sections,Floor 2 | Floor 3 | Floor 4 | Floor 5,P01,ZZ,OMS-CAD-XX-ZZ-DR-Z-90002.pdf,1,duplicate skipped · manual title tweak
+yes,medium,00103,Electrical riser — Level 02 to 10 typical,MEP,Floor 2 | Floor 3 | Floor 4 | Floor 5,C02,ZZ,P644-VEN-ZZ-ZZ-DR-Y-00103.pdf,1,floors from Applicable-to note · manual title tweak
+yes,medium,00201,Ventilation section,Sections,Ground Floor | Floor 1 | Floor 2 | Floor 3 | Floor 4 | Floor 5,C10,ZZ,P644-VEN-ZZ-ZZ-DR-Y-00201.pdf,1,manual title tweak

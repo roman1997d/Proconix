@@ -203,6 +203,18 @@
             <span>Revision</span>
             <input id="mg-rev" type="text" maxlength="12" placeholder="A" autocomplete="off">
           </label>
+          <fieldset class="mg-field mg-floors" id="mg-floors-wrap">
+            <span>Floors</span>
+            <div class="mg-floor-checks" id="mg-floors">
+              <label><input type="checkbox" value="ground"> Ground Floor</label>
+              <label><input type="checkbox" value="1"> Floor 1</label>
+              <label><input type="checkbox" value="2"> Floor 2</label>
+              <label><input type="checkbox" value="3"> Floor 3</label>
+              <label><input type="checkbox" value="4"> Floor 4</label>
+              <label><input type="checkbox" value="5"> Floor 5</label>
+            </div>
+            <span class="mg-floors-hint">Leave all unchecked to show on every floor.</span>
+          </fieldset>
           <label class="mg-field" id="mg-file-wrap">
             <span id="mg-file-label">PDF file</span>
             <input id="mg-file" type="file" accept="application/pdf,.pdf">

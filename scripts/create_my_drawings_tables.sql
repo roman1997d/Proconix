@@ -35,10 +35,14 @@ CREATE TABLE IF NOT EXISTS my_drawings_item (
   stored_filename VARCHAR(500),
   relative_path VARCHAR(1200),
   mime_type VARCHAR(200) DEFAULT 'application/pdf',
+  floors TEXT[],
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT uq_my_drawings_item_number UNIQUE (workspace_id, number)
 );
+
+ALTER TABLE my_drawings_item
+  ADD COLUMN IF NOT EXISTS floors TEXT[];
 
 CREATE INDEX IF NOT EXISTS idx_my_drawings_item_ws ON my_drawings_item(workspace_id);
 
