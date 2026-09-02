@@ -599,7 +599,7 @@
 
   /* ---------- Screens ---------- */
   function showScreen(id) {
-    ['screen-register', 'screen-login', 'screen-pin', 'screen-floor', 'screen-list', 'screen-activity', 'screen-wall-types', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
+    ['screen-register', 'screen-login', 'screen-pin', 'screen-floor', 'screen-list', 'screen-activity', 'screen-wall-types', 'screen-wall-type-detail', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
       var el = $(sid);
       if (el) el.classList.toggle('is-active', sid === id);
     });
@@ -1213,16 +1213,25 @@
   /* ---------- Wall Types catalog (Siniat Project Pack) ---------- */
   var wallTypesCache = null;
   var wallTypesQuery = '';
+  var activeWallTypeId = '';
 
   async function loadWallTypesData() {
     if (wallTypesCache) return wallTypesCache;
     var res = await fetch('/mydrawings/data/medlock-wall-types.json', {
       credentials: 'same-origin',
-      cache: 'force-cache'
+      cache: 'no-cache'
     });
     if (!res.ok) throw new Error('Could not load wall types.');
     wallTypesCache = await res.json();
     return wallTypesCache;
+  }
+
+  function wallTypeById(id) {
+    var list = (wallTypesCache && wallTypesCache.wallTypes) || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === id) return list[i];
+    }
+    return null;
   }
 
   function filteredWallTypes(data) {
@@ -1231,7 +1240,8 @@
     if (!q) return list;
     return list.filter(function (wt) {
       return String(wt.code || '').toLowerCase().indexOf(q) !== -1 ||
-        String(wt.name || '').toLowerCase().indexOf(q) !== -1;
+        String(wt.name || '').toLowerCase().indexOf(q) !== -1 ||
+        String(wt.systemRef || '').toLowerCase().indexOf(q) !== -1;
     });
   }
 
@@ -1254,15 +1264,110 @@
     }
     host.innerHTML = list.map(function (wt) {
       var lining = wt.kind === 'lining';
-      return '<article class="wt-card" data-wt-id="' + escapeHtml(wt.id) + '">' +
+      return '<button type="button" class="wt-card" data-wt-id="' + escapeHtml(wt.id) + '">' +
         '<span class="wt-code' + (lining ? ' is-lining' : '') + '">' + escapeHtml(wt.code) + '</span>' +
         '<p class="wt-name">' + escapeHtml(wt.name) + '</p>' +
-        '</article>';
+        '<svg class="wt-card-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>' +
+        '</button>';
     }).join('');
+  }
+
+  function wtOrDash(v) {
+    var s = String(v == null ? '' : v).trim();
+    return s || '—';
+  }
+
+  function renderWallTypeDetail(wt) {
+    var host = $('wall-type-detail');
+    if (!host || !wt) return;
+    var perf = wt.performance || {};
+    var buildup = wt.buildup || {};
+    var layers = buildup.layers || [];
+    var lining = wt.kind === 'lining';
+    var layerHtml = layers.length
+      ? layers.map(function (layer) {
+          return '<div><dt>' + escapeHtml(layer.side || 'Board') + '</dt><dd>' +
+            escapeHtml(layer.board || '') + '</dd></div>';
+        }).join('')
+      : '<div><dt>Boarding</dt><dd>—</dd></div>';
+
+    var pageNote = '';
+    if (wt.packPages && wt.packPages.detail) {
+      pageNote = 'Pack page ' + wt.packPages.detail;
+    }
+
+    host.innerHTML =
+      '<div class="wt-detail-meta">' +
+        '<span class="wt-code' + (lining ? ' is-lining' : '') + '">' + escapeHtml(wt.code) + '</span>' +
+        (wt.systemRef ? '<span class="wt-pill is-system">' + escapeHtml(wt.systemRef) + '</span>' : '') +
+        (wt.systemType ? '<span class="wt-pill">' + escapeHtml(wt.systemType) + '</span>' : '') +
+      '</div>' +
+      '<section class="wt-section">' +
+        '<h2>Performance</h2>' +
+        '<dl class="wt-perf-grid">' +
+          '<div class="wt-perf-item"><dt>Fire</dt><dd>' +
+            escapeHtml(perf.fireMinutes ? (perf.fireMinutes + ' min' + (perf.fireClass ? ' · ' + perf.fireClass : '')) : '—') +
+          '</dd></div>' +
+          '<div class="wt-perf-item"><dt>Acoustic</dt><dd>' + escapeHtml(wtOrDash(perf.acoustic)) + '</dd></div>' +
+          '<div class="wt-perf-item"><dt>Thickness</dt><dd>' + escapeHtml(wtOrDash(perf.thickness)) + '</dd></div>' +
+          '<div class="wt-perf-item"><dt>Max height</dt><dd>' +
+            escapeHtml(perf.maxHeightM ? (perf.maxHeightM + ' m') : '—') +
+          '</dd></div>' +
+          '<div class="wt-perf-item"><dt>Duty</dt><dd>' + escapeHtml(wtOrDash(perf.duty)) + '</dd></div>' +
+        '</dl>' +
+      '</section>' +
+      '<section class="wt-section">' +
+        '<h2>Construction</h2>' +
+        '<dl class="wt-build-list">' +
+          layerHtml +
+          '<div><dt>Studs / framing</dt><dd>' + escapeHtml(wtOrDash(buildup.studs)) + '</dd></div>' +
+          '<div><dt>Insulation</dt><dd>' + escapeHtml(wtOrDash(buildup.insulation)) + '</dd></div>' +
+        '</dl>' +
+      '</section>' +
+      (wt.detailImage
+        ? '<button type="button" class="wt-detail-figure" data-wt-image="' + escapeHtml(wt.detailImage) + '" aria-label="Open construction detail drawing">' +
+            '<img src="' + escapeHtml(wt.detailImage) + '" alt="Construction detail for ' + escapeHtml(wt.code) + '" loading="eager">' +
+            '<span class="wt-detail-caption">Construction detail' + (pageNote ? ' · ' + escapeHtml(pageNote) : '') + ' · Tap to enlarge</span>' +
+          '</button>'
+        : '');
+  }
+
+  function openWallTypeDetail(id) {
+    var wt = wallTypeById(id);
+    if (!wt) return;
+    activeWallTypeId = id;
+    if ($('wt-detail-code')) $('wt-detail-code').textContent = wt.code || 'Wall Type';
+    if ($('wt-detail-name')) $('wt-detail-name').textContent = wt.name || '';
+    renderWallTypeDetail(wt);
+    showScreen('screen-wall-type-detail');
+    var main = $('wall-type-detail');
+    if (main && main.parentElement) main.parentElement.scrollTop = 0;
+  }
+
+  function closeWallTypeDetail() {
+    activeWallTypeId = '';
+    closeWallTypeLightbox();
+    showScreen('screen-wall-types');
+  }
+
+  function openWallTypeLightbox(src) {
+    var box = $('wt-lightbox');
+    var img = $('wt-lightbox-img');
+    if (!box || !img || !src) return;
+    img.src = src;
+    box.hidden = false;
+  }
+
+  function closeWallTypeLightbox() {
+    var box = $('wt-lightbox');
+    var img = $('wt-lightbox-img');
+    if (img) img.removeAttribute('src');
+    if (box) box.hidden = true;
   }
 
   async function openWallTypes() {
     closeSheet();
+    closeWallTypeLightbox();
     showScreen('screen-wall-types');
     wallTypesQuery = '';
     if ($('wall-types-search')) $('wall-types-search').value = '';
@@ -1284,6 +1389,8 @@
   }
 
   function closeWallTypes() {
+    closeWallTypeLightbox();
+    activeWallTypeId = '';
     showScreen('screen-list');
     renderCats();
     renderList();
@@ -1962,9 +2069,24 @@
   on($('btn-download-all'), 'click', downloadAllDrawings);
   on($('btn-activity-back'), 'click', closeActivity);
   on($('btn-wall-types-back'), 'click', closeWallTypes);
+  on($('btn-wall-type-detail-back'), 'click', closeWallTypeDetail);
   on($('wall-types-search'), 'input', function () {
     wallTypesQuery = ($('wall-types-search').value || '');
     renderWallTypes();
+  });
+  on($('wall-types-list'), 'click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-wt-id]') : null;
+    if (!btn) return;
+    openWallTypeDetail(btn.getAttribute('data-wt-id'));
+  });
+  on($('wall-type-detail'), 'click', function (e) {
+    var fig = e.target && e.target.closest ? e.target.closest('[data-wt-image]') : null;
+    if (!fig) return;
+    openWallTypeLightbox(fig.getAttribute('data-wt-image'));
+  });
+  on($('wt-lightbox-close'), 'click', closeWallTypeLightbox);
+  on($('wt-lightbox'), 'click', function (e) {
+    if (e.target === $('wt-lightbox')) closeWallTypeLightbox();
   });
   on($('btn-manage-back'), 'click', closeManage);
   on($('btn-mg-add-cat'), 'click', addCategory);

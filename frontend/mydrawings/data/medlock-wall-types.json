@@ -10,34 +10,1113 @@
     "pages": 234
   },
   "wallTypes": [
-    { "id": "wt01b", "code": "WT01B", "kind": "wall", "name": "Bedroom to corridor / kitchen to corridor" },
-    { "id": "wt01c", "code": "WT01C", "kind": "wall", "name": "Bedroom to Bedroom (Cluster)" },
-    { "id": "wt03c", "code": "WT03C", "kind": "wall", "name": "Main Separating Wall around Flats & Studios" },
-    { "id": "wt05b", "code": "WT05B", "kind": "wall", "name": "Bedroom to Kitchen / Bedroom to Bedroom / Separating Wall with cols" },
-    { "id": "wt07", "code": "WT07", "kind": "wall", "name": "WCA bathrooms" },
-    { "id": "wt08a-svp", "code": "WT08A", "kind": "wall", "name": "SVP enclosures" },
-    { "id": "wt08a-svp-36", "code": "WT08A", "kind": "wall", "name": "SVP Enclosure (Max Height 3.6m)" },
-    { "id": "wt08d", "code": "WT08D", "kind": "wall", "name": "Pod Wall Lining (Max Height 3.5m)" },
-    { "id": "wt08e", "code": "WT08E", "kind": "wall", "name": "RWP Enclosures" },
-    { "id": "wt09", "code": "WT09", "kind": "wall", "name": "WCA Bathrooms" },
-    { "id": "wt10a", "code": "WT10A", "kind": "wall", "name": "Riser Shaftwalls" },
-    { "id": "wt10b", "code": "WT10B", "kind": "wall", "name": "Smoke Shaft 3" },
-    { "id": "wt20a", "code": "WT20A", "kind": "lining", "name": "Lining to concrete columns & shear walls" },
-    { "id": "wt20b", "code": "WT20B", "kind": "lining", "name": "Lining to concrete columns and shear walls" },
-    { "id": "wt21", "code": "WT21", "kind": "lining", "name": "Facade Lining" },
-    { "id": "wt21a", "code": "WT21A", "kind": "lining", "name": "Facade Lining" },
-    { "id": "wt23", "code": "WT23", "kind": "wall", "name": "Ground Floor Amenity" },
-    { "id": "wt24", "code": "WT24", "kind": "wall", "name": "Bulkhead above GF post room" },
-    { "id": "wt24a", "code": "WT24A", "kind": "wall", "name": "Wall Nibs" },
-    { "id": "wt25", "code": "WT25", "kind": "wall", "name": "Level 01 between Yoga, Gym Room and Cinema Room" },
-    { "id": "wt26", "code": "WT26", "kind": "wall", "name": "Level 01 amenity corridors" },
-    { "id": "wt26a", "code": "WT26A", "kind": "wall", "name": "Level 01 amenity corridors (twin frame)" },
-    { "id": "wt27", "code": "WT27", "kind": "wall", "name": "Level 01 amenity WCs" },
-    { "id": "wt28", "code": "WT28", "kind": "wall", "name": "Level 37 corridors" },
-    { "id": "wt29", "code": "WT29", "kind": "wall", "name": "Level 11 partition between plant and amenity" },
-    { "id": "wt31", "code": "WT31", "kind": "wall", "name": "Level 11 corridors" },
-    { "id": "wt32", "code": "WT32", "kind": "wall", "name": "Level 11 amenity" },
-    { "id": "wt33", "code": "WT33", "kind": "wall", "name": "Level 11 amenity" },
-    { "id": "wt34", "code": "WT34", "kind": "wall", "name": "GF Amenity Reception" }
+    {
+      "id": "wt01b",
+      "code": "WT01B",
+      "kind": "wall",
+      "name": "Bedroom to corridor / kitchen to corridor",
+      "systemRef": "CS50R-215dB-25G",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "90",
+        "fireClass": "",
+        "acoustic": "55",
+        "thickness": "110mm",
+        "maxHeightM": "4.1",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "A outer",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "B inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "B outer",
+            "board": "15mm Siniat dB Board"
+          }
+        ],
+        "studs": "50mm Siniat C Studs CS50/Rx at 600mm centres",
+        "insulation": "Glass Mineral Wool · 25mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt01b.jpg",
+      "packPages": {
+        "specStart": 5,
+        "specEnd": 7,
+        "detail": 7
+      }
+    },
+    {
+      "id": "wt01c",
+      "code": "WT01C",
+      "kind": "wall",
+      "name": "Bedroom to Bedroom (Cluster)",
+      "systemRef": "RAS70P-215dB-50G",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "90",
+        "fireClass": "",
+        "acoustic": "58, -8Ctr",
+        "thickness": "130mm",
+        "maxHeightM": "4",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "A outer",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "B inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "B outer",
+            "board": "15mm Siniat dB Board"
+          }
+        ],
+        "studs": "70mm Siniat Resilient Acoustic Studs RAS70/P at 600mm centres",
+        "insulation": "Glass Mineral Wool · 50mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt01c.jpg",
+      "packPages": {
+        "specStart": 8,
+        "specEnd": 10,
+        "detail": 10
+      }
+    },
+    {
+      "id": "wt03c",
+      "code": "WT03C",
+      "kind": "wall",
+      "name": "Main Separating Wall around Flats & Studios",
+      "systemRef": "RAS90P-215dB-100G",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "90",
+        "fireClass": "",
+        "acoustic": "60, -7",
+        "thickness": "150mm",
+        "maxHeightM": "4",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "A outer",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "B inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "B outer",
+            "board": "15mm Siniat dB Board"
+          }
+        ],
+        "studs": "90mm Siniat Resilient Acoustic Studs RAS90/P at 600mm centres",
+        "insulation": "Glass Mineral Wool · 100mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt03c.jpg",
+      "packPages": {
+        "specStart": 11,
+        "specEnd": 13,
+        "detail": 13
+      }
+    },
+    {
+      "id": "wt05b",
+      "code": "WT05B",
+      "kind": "wall",
+      "name": "Bedroom to Kitchen / Bedroom to Bedroom / Separating Wall with cols",
+      "systemRef": "Twin(AB)-CS50R-215dB-50G",
+      "systemType": "Twin Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "90",
+        "fireClass": "",
+        "acoustic": "63, -8Ctr",
+        "thickness": "200mm",
+        "maxHeightM": "4",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "A outer",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "B inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "B outer",
+            "board": "15mm Siniat dB Board"
+          }
+        ],
+        "studs": "Twin Rows of 50mm Siniat C Studs CS50/Rx at 600mm centres",
+        "insulation": "Glass Mineral Wool · 50mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt05b.jpg",
+      "packPages": {
+        "specStart": 14,
+        "specEnd": 17,
+        "detail": 17
+      }
+    },
+    {
+      "id": "wt07",
+      "code": "WT07",
+      "kind": "wall",
+      "name": "WCA bathrooms",
+      "systemRef": "IS50R-12MR#0",
+      "systemType": "Independent Wall Lining System",
+      "performance": {
+        "fireMinutes": "",
+        "fireClass": "",
+        "acoustic": "",
+        "thickness": "62.5mm",
+        "maxHeightM": "3.5",
+        "duty": ""
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "Outer",
+            "board": "12.5mm Siniat Moisture Board"
+          }
+        ],
+        "studs": "50mm Siniat I Studs IS50/Rx at 300mm centres",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt07.jpg",
+      "packPages": {
+        "specStart": 18,
+        "specEnd": 20,
+        "detail": 20
+      }
+    },
+    {
+      "id": "wt08a-svp",
+      "code": "WT08A",
+      "kind": "wall",
+      "name": "SVP enclosures",
+      "systemRef": "IS50R-212St#0-25G",
+      "systemType": "Linings - Independent Wall",
+      "performance": {
+        "fireMinutes": "",
+        "fireClass": "",
+        "acoustic": "27 (23)",
+        "thickness": "75mm",
+        "maxHeightM": "2.8",
+        "duty": ""
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "Inner",
+            "board": "12.5mm Siniat Standard Board"
+          },
+          {
+            "side": "Outer",
+            "board": "12.5mm Siniat Standard Board"
+          }
+        ],
+        "studs": "50mm GTEC I Stud IS50/Rx at 600mm centres",
+        "insulation": "Glass Mineral wool · 25mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt08a-svp.jpg",
+      "packPages": {
+        "specStart": 21,
+        "specEnd": 23,
+        "detail": 23
+      }
+    },
+    {
+      "id": "wt08a-svp-36",
+      "code": "WT08A",
+      "kind": "wall",
+      "name": "SVP Enclosure (Max Height 3.6m)",
+      "systemRef": "IS60B-212St#0-25G",
+      "systemType": "Linings - Independent Wall",
+      "performance": {
+        "fireMinutes": "",
+        "fireClass": "",
+        "acoustic": "27 (23)",
+        "thickness": "85mm · lining only",
+        "maxHeightM": "3.6",
+        "duty": ""
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "Inner",
+            "board": "12.5mm Siniat Standard Board"
+          },
+          {
+            "side": "Outer",
+            "board": "12.5mm Siniat Standard Board"
+          }
+        ],
+        "studs": "60mm GTEC I Stud IS60/B at 600mm centres.",
+        "insulation": "Glass Mineral wool · 25mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt08a-svp-36.jpg",
+      "packPages": {
+        "specStart": 24,
+        "specEnd": 26,
+        "detail": 26
+      }
+    },
+    {
+      "id": "wt08d",
+      "code": "WT08D",
+      "kind": "wall",
+      "name": "Pod Wall Lining (Max Height 3.5m)",
+      "systemRef": "IS60B-12St#0",
+      "systemType": "Linings - Independent Wall",
+      "performance": {
+        "fireMinutes": "",
+        "fireClass": "",
+        "acoustic": "27 (23)",
+        "thickness": "72.5mm · lining only",
+        "maxHeightM": "3.6",
+        "duty": ""
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "Outer",
+            "board": "12.5mm Siniat Standard Board"
+          }
+        ],
+        "studs": "60mm GTEC I Stud IS60/B at 600mm centres.",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt08d.jpg",
+      "packPages": {
+        "specStart": 27,
+        "specEnd": 29,
+        "detail": 29
+      }
+    },
+    {
+      "id": "wt08e",
+      "code": "WT08E",
+      "kind": "wall",
+      "name": "RWP Enclosures",
+      "systemRef": "IS60B-12St#0-25G",
+      "systemType": "Independent Wall Lining System",
+      "performance": {
+        "fireMinutes": "",
+        "fireClass": "",
+        "acoustic": "",
+        "thickness": "72.5mm",
+        "maxHeightM": "3.5",
+        "duty": ""
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "Outer",
+            "board": "12.5mm Siniat Standard Board"
+          }
+        ],
+        "studs": "60mm Siniat I Studs IS60/B at 600mm centres",
+        "insulation": "Glass Mineral Wool · 25mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt08e.jpg",
+      "packPages": {
+        "specStart": 30,
+        "specEnd": 32,
+        "detail": 32
+      }
+    },
+    {
+      "id": "wt09",
+      "code": "WT09",
+      "kind": "wall",
+      "name": "WCA Bathrooms",
+      "systemRef": "CS70R-12St#12MR",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "",
+        "fireClass": "",
+        "acoustic": "37",
+        "thickness": "95mm",
+        "maxHeightM": "3.2",
+        "duty": "Medium"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A outer",
+            "board": "12.5mm Siniat Standard Board"
+          },
+          {
+            "side": "B outer",
+            "board": "12.5mm Siniat Moisture Board"
+          }
+        ],
+        "studs": "70mm Siniat C Studs CS70/Rx at 600mm centres",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt09.jpg",
+      "packPages": {
+        "specStart": 33,
+        "specEnd": 35,
+        "detail": 35
+      }
+    },
+    {
+      "id": "wt10a",
+      "code": "WT10A",
+      "kind": "wall",
+      "name": "Riser Shaftwalls",
+      "systemRef": "RNS 121",
+      "systemType": "Vertical Shaftwall Systems",
+      "performance": {
+        "fireMinutes": "120",
+        "fireClass": "",
+        "acoustic": "44",
+        "thickness": "105mm",
+        "maxHeightM": "5.4",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "Inner",
+            "board": "15mm GTEC Fire Board"
+          },
+          {
+            "side": "Outer",
+            "board": "15mm GTEC Fire Board"
+          }
+        ],
+        "studs": "GTEC CHS1960/B CH-Studs at 600mm centres",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt10a.jpg",
+      "packPages": {
+        "specStart": 36,
+        "specEnd": 38,
+        "detail": 38
+      }
+    },
+    {
+      "id": "wt10b",
+      "code": "WT10B",
+      "kind": "wall",
+      "name": "Smoke Shaft 3",
+      "systemRef": "CS70R-212WD",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "120",
+        "fireClass": "",
+        "acoustic": "50",
+        "thickness": "120mm",
+        "maxHeightM": "4.6",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A inner",
+            "board": "12.5mm Weather Defence Board"
+          },
+          {
+            "side": "A outer",
+            "board": "12.5mm Weather Defence Board"
+          },
+          {
+            "side": "B inner",
+            "board": "12.5mm Weather Defence Board"
+          },
+          {
+            "side": "B outer",
+            "board": "12.5mm Weather Defence Board"
+          }
+        ],
+        "studs": "70mm Siniat C Studs CS70/Rx at 600mm centres",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt10b.jpg",
+      "packPages": {
+        "specStart": 39,
+        "specEnd": 41,
+        "detail": 41
+      }
+    },
+    {
+      "id": "wt20a",
+      "code": "WT20A",
+      "kind": "lining",
+      "name": "Lining to concrete columns & shear walls",
+      "systemRef": "DL-15St",
+      "systemType": "Dryliner Linings",
+      "performance": {
+        "fireMinutes": "",
+        "fireClass": "",
+        "acoustic": "",
+        "thickness": "25–130mm cavity (brackets)",
+        "maxHeightM": "",
+        "duty": ""
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "Outer",
+            "board": "15mm Siniat Standard Plasterboard"
+          }
+        ],
+        "studs": "RD1 Dryliner Channels @ 400mm · RD2 brackets @ 800mm",
+        "insulation": "TBC if required"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt20a.jpg",
+      "packPages": {
+        "specStart": 42,
+        "specEnd": 44,
+        "detail": 44
+      }
+    },
+    {
+      "id": "wt20b",
+      "code": "WT20B",
+      "kind": "lining",
+      "name": "Lining to concrete columns and shear walls",
+      "systemRef": "DB-15St",
+      "systemType": "Direct Bond",
+      "performance": {
+        "fireMinutes": "",
+        "fireClass": "",
+        "acoustic": "",
+        "thickness": "",
+        "maxHeightM": "",
+        "duty": ""
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "Board",
+            "board": "15mm Siniat Standard Board"
+          }
+        ],
+        "studs": "Direct bond · Siniat Universal Bonding Compound",
+        "insulation": ""
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt20b.jpg",
+      "packPages": {
+        "specStart": 45,
+        "specEnd": 47,
+        "detail": 47
+      }
+    },
+    {
+      "id": "wt21",
+      "code": "WT21",
+      "kind": "lining",
+      "name": "Facade Lining",
+      "systemRef": "IS70B-15St15V#0-70G",
+      "systemType": "Linings - Independent Wall",
+      "performance": {
+        "fireMinutes": "",
+        "fireClass": "",
+        "acoustic": "28 (25)",
+        "thickness": "100mm · lining only",
+        "maxHeightM": "4",
+        "duty": ""
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "Inner",
+            "board": "15mm Standard Vapour Board"
+          },
+          {
+            "side": "Outer",
+            "board": "15mm Siniat Standard Board"
+          }
+        ],
+        "studs": "70mm GTEC I Stud IS70/B at 600mm centres.",
+        "insulation": "Glass Mineral Wool · 70mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt21.jpg",
+      "packPages": {
+        "specStart": 48,
+        "specEnd": 50,
+        "detail": 50
+      }
+    },
+    {
+      "id": "wt21a",
+      "code": "WT21A",
+      "kind": "lining",
+      "name": "Facade Lining",
+      "systemRef": "IS70B-215dB#0-50G",
+      "systemType": "Independent Wall Lining System",
+      "performance": {
+        "fireMinutes": "",
+        "fireClass": "",
+        "acoustic": "",
+        "thickness": "100mm · lining only",
+        "maxHeightM": "4",
+        "duty": ""
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "Inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "Outer",
+            "board": "15mm Siniat dB Board"
+          }
+        ],
+        "studs": "70mm Siniat I Studs IS70/B at 600mm centres",
+        "insulation": "Glass Mineral Wool · 50mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt21a.jpg",
+      "packPages": {
+        "specStart": 51,
+        "specEnd": 53,
+        "detail": 53
+      }
+    },
+    {
+      "id": "wt23",
+      "code": "WT23",
+      "kind": "wall",
+      "name": "Ground Floor Amenity",
+      "systemRef": "CS90Y-15Un",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "60",
+        "fireClass": "",
+        "acoustic": "41",
+        "thickness": "120mm",
+        "maxHeightM": "5.7",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A outer",
+            "board": "15mm Siniat Universal Board"
+          },
+          {
+            "side": "B outer",
+            "board": "15mm Siniat Universal Board"
+          }
+        ],
+        "studs": "90mm Siniat C Studs CS90/Y at 600mm centres",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt23.jpg",
+      "packPages": {
+        "specStart": 54,
+        "specEnd": 56,
+        "detail": 56
+      }
+    },
+    {
+      "id": "wt24",
+      "code": "WT24",
+      "kind": "wall",
+      "name": "Bulkhead above GF post room",
+      "systemRef": "CS90R-12St",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "30",
+        "fireClass": "",
+        "acoustic": "38",
+        "thickness": "115mm",
+        "maxHeightM": "3.9",
+        "duty": "Medium"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A outer",
+            "board": "12.5mm Siniat Standard Board"
+          },
+          {
+            "side": "B outer",
+            "board": "12.5mm Siniat Standard Board"
+          }
+        ],
+        "studs": "90mm Siniat C Studs CS90/Rx at 600mm centres",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt24.jpg",
+      "packPages": {
+        "specStart": 57,
+        "specEnd": 59,
+        "detail": 59
+      }
+    },
+    {
+      "id": "wt24a",
+      "code": "WT24A",
+      "kind": "wall",
+      "name": "Wall Nibs",
+      "systemRef": "CS70R-12St",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "30",
+        "fireClass": "",
+        "acoustic": "37",
+        "thickness": "95mm",
+        "maxHeightM": "3.2",
+        "duty": "Medium"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A outer",
+            "board": "12.5mm Siniat Standard Board"
+          },
+          {
+            "side": "B outer",
+            "board": "12.5mm Siniat Standard Board"
+          }
+        ],
+        "studs": "70mm Siniat C Studs CS70/Rx at 600mm centres",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt24a.jpg",
+      "packPages": {
+        "specStart": 60,
+        "specEnd": 62,
+        "detail": 62
+      }
+    },
+    {
+      "id": "wt25",
+      "code": "WT25",
+      "kind": "wall",
+      "name": "Level 01 between Yoga, Gym Room and Cinema Room",
+      "systemRef": "CS70R-215dB-25G",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "90",
+        "fireClass": "",
+        "acoustic": "57",
+        "thickness": "130mm",
+        "maxHeightM": "5",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "A outer",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "B inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "B outer",
+            "board": "15mm Siniat dB Board"
+          }
+        ],
+        "studs": "70mm Siniat C Studs CS70/Rx at 600mm centres",
+        "insulation": "Glass Mineral Wool · 25mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt25.jpg",
+      "packPages": {
+        "specStart": 63,
+        "specEnd": 65,
+        "detail": 65
+      }
+    },
+    {
+      "id": "wt26",
+      "code": "WT26",
+      "kind": "wall",
+      "name": "Level 01 amenity corridors",
+      "systemRef": "CS70R-15Un",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "60",
+        "fireClass": "",
+        "acoustic": "41",
+        "thickness": "100mm",
+        "maxHeightM": "3.75",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A outer",
+            "board": "15mm Siniat Universal Board"
+          },
+          {
+            "side": "B outer",
+            "board": "15mm Siniat Universal Board"
+          }
+        ],
+        "studs": "70mm Siniat C Studs CS70/Rx at 600mm centres",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt26.jpg",
+      "packPages": {
+        "specStart": 66,
+        "specEnd": 68,
+        "detail": 68
+      }
+    },
+    {
+      "id": "wt26a",
+      "code": "WT26A",
+      "kind": "wall",
+      "name": "Level 01 amenity corridors (twin frame)",
+      "systemRef": "Twin(AB)-CS50R-15Un",
+      "systemType": "Twin Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "60",
+        "fireClass": "",
+        "acoustic": "45",
+        "thickness": "170mm",
+        "maxHeightM": "4",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A outer",
+            "board": "15mm Siniat Universal Board"
+          },
+          {
+            "side": "B outer",
+            "board": "15mm Siniat Universal Board"
+          }
+        ],
+        "studs": "Twin Rows of 50mm Siniat C Studs CS50/Rx at 600mm centres",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt26a.jpg",
+      "packPages": {
+        "specStart": 69,
+        "specEnd": 71,
+        "detail": 71
+      }
+    },
+    {
+      "id": "wt27",
+      "code": "WT27",
+      "kind": "wall",
+      "name": "Level 01 amenity WCs",
+      "systemRef": "CS70R-15Un-25G",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "60",
+        "fireClass": "",
+        "acoustic": "47",
+        "thickness": "100mm",
+        "maxHeightM": "3.75",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A outer",
+            "board": "15mm Siniat Universal Board"
+          },
+          {
+            "side": "B outer",
+            "board": "15mm Siniat Universal Board"
+          }
+        ],
+        "studs": "70mm Siniat C Studs CS70/Rx at 600mm centres",
+        "insulation": "Glass Mineral Wool · 25mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt27.jpg",
+      "packPages": {
+        "specStart": 72,
+        "specEnd": 74,
+        "detail": 74
+      }
+    },
+    {
+      "id": "wt28",
+      "code": "WT28",
+      "kind": "wall",
+      "name": "Level 37 corridors",
+      "systemRef": "CS60R-212Un",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "120",
+        "fireClass": "",
+        "acoustic": "50",
+        "thickness": "110mm",
+        "maxHeightM": "4.1",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A inner",
+            "board": "12.5mm Siniat Universal Board"
+          },
+          {
+            "side": "A outer",
+            "board": "12.5mm Siniat Universal Board"
+          },
+          {
+            "side": "B inner",
+            "board": "12.5mm Siniat Universal Board"
+          },
+          {
+            "side": "B outer",
+            "board": "12.5mm Siniat Universal Board"
+          }
+        ],
+        "studs": "60mm Siniat C Studs CS60/Rx at 600mm centres",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt28.jpg",
+      "packPages": {
+        "specStart": 75,
+        "specEnd": 77,
+        "detail": 77
+      }
+    },
+    {
+      "id": "wt29",
+      "code": "WT29",
+      "kind": "wall",
+      "name": "Level 11 partition between plant and amenity",
+      "systemRef": "CS70R-15Un15dB-25G",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "120",
+        "fireClass": "",
+        "acoustic": "57",
+        "thickness": "130mm",
+        "maxHeightM": "4",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "A outer",
+            "board": "15mm Siniat Universal Board"
+          },
+          {
+            "side": "B inner",
+            "board": "15mm Siniat dB Board"
+          },
+          {
+            "side": "B outer",
+            "board": "15mm Siniat Universal Board"
+          }
+        ],
+        "studs": "70mm Siniat C Studs CS70/Rx at 600mm centres",
+        "insulation": "Glass Mineral Wool · 25mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt29.jpg",
+      "packPages": {
+        "specStart": 78,
+        "specEnd": 80,
+        "detail": 80
+      }
+    },
+    {
+      "id": "wt31",
+      "code": "WT31",
+      "kind": "wall",
+      "name": "Level 11 corridors",
+      "systemRef": "CS70R-212F",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "120",
+        "fireClass": "",
+        "acoustic": "49",
+        "thickness": "120mm",
+        "maxHeightM": "4",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A inner",
+            "board": "12.5mm Siniat Fire Board"
+          },
+          {
+            "side": "A outer",
+            "board": "12.5mm Siniat Fire Board"
+          },
+          {
+            "side": "B inner",
+            "board": "12.5mm Siniat Fire Board"
+          },
+          {
+            "side": "B outer",
+            "board": "12.5mm Siniat Fire Board"
+          }
+        ],
+        "studs": "70mm Siniat C Studs CS70/Rx at 600mm centres",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt31.jpg",
+      "packPages": {
+        "specStart": 81,
+        "specEnd": 83,
+        "detail": 83
+      }
+    },
+    {
+      "id": "wt32",
+      "code": "WT32",
+      "kind": "wall",
+      "name": "Level 11 amenity",
+      "systemRef": "CS60R-15Un12St-25G",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "90",
+        "fireClass": "",
+        "acoustic": "53",
+        "thickness": "115mm",
+        "maxHeightM": "4.35",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A inner",
+            "board": "12.5mm Siniat Standard Board"
+          },
+          {
+            "side": "A outer",
+            "board": "15mm Siniat Universal Board"
+          },
+          {
+            "side": "B inner",
+            "board": "12.5mm Siniat Standard Board"
+          },
+          {
+            "side": "B outer",
+            "board": "15mm Siniat Universal Board"
+          }
+        ],
+        "studs": "60mm Siniat C Studs CS60/Rx at 600mm centres",
+        "insulation": "Glass Mineral Wool · 25mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt32.jpg",
+      "packPages": {
+        "specStart": 84,
+        "specEnd": 86,
+        "detail": 86
+      }
+    },
+    {
+      "id": "wt33",
+      "code": "WT33",
+      "kind": "wall",
+      "name": "Level 11 amenity",
+      "systemRef": "IS90B-15Un#0",
+      "systemType": "Independent Wall Lining System",
+      "performance": {
+        "fireMinutes": "",
+        "fireClass": "",
+        "acoustic": "",
+        "thickness": "105mm",
+        "maxHeightM": "6",
+        "duty": ""
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "Outer",
+            "board": "15mm Siniat Universal Board"
+          }
+        ],
+        "studs": "90mm Siniat I Studs IS90/B at 600mm centres",
+        "insulation": "None"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt33.jpg",
+      "packPages": {
+        "specStart": 87,
+        "specEnd": 89,
+        "detail": 89
+      }
+    },
+    {
+      "id": "wt34",
+      "code": "WT34",
+      "kind": "wall",
+      "name": "GF Amenity Reception",
+      "systemRef": "CS90R-56C-50G",
+      "systemType": "Single Frame Metal Stud Partition",
+      "performance": {
+        "fireMinutes": "",
+        "fireClass": "",
+        "acoustic": "40",
+        "thickness": "150mm",
+        "maxHeightM": "5.55",
+        "duty": "Severe"
+      },
+      "buildup": {
+        "layers": [
+          {
+            "side": "A inner",
+            "board": "2 x 6mm Siniat Contour Board"
+          },
+          {
+            "side": "A outer",
+            "board": "1 x 6mm Siniat Contour Board"
+          },
+          {
+            "side": "B inner",
+            "board": "2 x 6mm Siniat Contour Board"
+          },
+          {
+            "side": "B outer",
+            "board": "1 x 6mm Siniat Contour Board"
+          }
+        ],
+        "studs": "90mm Siniat C Studs CS90/Rx at 150mm centres",
+        "insulation": "Glass Mineral Wool · 50mm"
+      },
+      "detailImage": "/mydrawings/data/wall-types/wt34.jpg",
+      "packPages": {
+        "specStart": 90,
+        "specEnd": 93,
+        "detail": 92
+      }
+    }
   ]
 }
