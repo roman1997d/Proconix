@@ -777,8 +777,21 @@
       var y = Math.min(drag.y0, drag.y1);
       var w = Math.abs(drag.x1 - drag.x0);
       var h = Math.abs(drag.y1 - drag.y0);
-      if (this.moved && w > 8 && h > 8 && typeof this.opts.onSelectEnd === 'function') {
-        try { this.opts.onSelectEnd({ x: x, y: y, width: w, height: h }); } catch (e) {}
+      /* Allow thin marks / straight lines — reject only near-zero length taps. */
+      var len = Math.sqrt((w * w) + (h * h));
+      if (this.moved && len > 10 && typeof this.opts.onSelectEnd === 'function') {
+        try {
+          this.opts.onSelectEnd({
+            x: x,
+            y: y,
+            width: w,
+            height: h,
+            x0: drag.x0,
+            y0: drag.y0,
+            x1: drag.x1,
+            y1: drag.y1
+          });
+        } catch (e) {}
       } else if (typeof this.opts.onSelectCancel === 'function') {
         try { this.opts.onSelectCancel(); } catch (e) {}
       }

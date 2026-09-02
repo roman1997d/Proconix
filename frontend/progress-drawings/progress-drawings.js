@@ -31,7 +31,7 @@
     activeWorkTypeId: null,
     layerCount: 1,
     selectedLocationId: null,
-    draftRect: null,
+    draftLine: null,
     pendingAnnotations: [],
     visibleTypes: {},
     undoStack: [],
@@ -274,10 +274,28 @@
     return 'Add ' + short;
   }
 
+  function strokeLineHtml(cls, x0, y0, x1, y1, colour, width) {
+    return '<line class="' + cls + '" x1="' + x0 + '" y1="' + y0 + '" x2="' + x1 + '" y2="' + y1 +
+      '" stroke="' + escapeHtml(colour) + '" stroke-width="' + width +
+      '" stroke-linecap="butt" stroke-linejoin="miter"/>';
+  }
+
   function strokeRectHtml(cls, x, y, w, h, colour, width) {
     return '<rect class="' + cls + '" x="' + x + '" y="' + y + '" width="' + w +
       '" height="' + h + '" fill="transparent" stroke="' + escapeHtml(colour) +
       '" stroke-width="' + width + '" stroke-linejoin="miter" stroke-linecap="butt"/>';
+  }
+
+  function lineFromLocCss(loc, css) {
+    if ((loc.markKind || 'rect') === 'line') {
+      return {
+        x0: css.x,
+        y0: css.y,
+        x1: css.x + css.width,
+        y1: css.y + css.height
+      };
+    }
+    return null;
   }
 
   function renderAnnotations() {
@@ -290,7 +308,7 @@
     svg.setAttribute('width', m.pageCssW);
     svg.setAttribute('height', m.pageCssH);
 
-    /* Clean straight outlines only — no hatch fill, shadow, or extra border. */
+    /* Straight coloured strokes only — no fill, shadow, or extra rectangle. */
     var html = '';
     var locs = (state.booking && state.booking.locations) || [];
     locs.forEach(function (loc) {
@@ -303,21 +321,22 @@
         ? (workTypeById(anns[0].workTypeId) || { colour: anns[0].colour })
         : null;
       var colour = markColour(primary, '#2563eb');
+      var sw = selected ? 3.4 : 2.6;
       html += '<g class="pd-loc' + (selected ? ' is-selected' : '') + '" data-loc-id="' + escapeHtml(loc.id) + '">';
-      html += strokeRectHtml('pd-mark', css.x, css.y, css.width, css.height, colour, selected ? 3.25 : 2.4);
+      var line = lineFromLocCss(loc, css);
+      if (line) {
+        html += strokeLineHtml('pd-mark-hit', line.x0, line.y0, line.x1, line.y1, 'transparent', 18);
+        html += strokeLineHtml('pd-mark', line.x0, line.y0, line.x1, line.y1, colour, sw);
+      } else {
+        html += strokeRectHtml('pd-mark', css.x, css.y, css.width, css.height, colour, sw);
+      }
       html += '</g>';
     });
 
-    if (state.draftRect) {
-      var d = state.draftRect;
-      var previewWt = activeWorkType();
-      var draftColour = markColour(previewWt, '#2563eb');
-      html += strokeRectHtml(
-        'pd-draft-mark',
-        d.x, d.y, d.width, d.height,
-        draftColour,
-        2.6
-      );
+    if (state.draftLine) {
+      var d = state.draftLine;
+      var draftColour = markColour(activeWorkType(), '#2563eb');
+      html += strokeLineHtml('pd-draft-mark', d.x0, d.y0, d.x1, d.y1, draftColour, 2.8);
     }
 
     svg.innerHTML = html;
@@ -342,7 +361,7 @@
     }
 
     var wt = activeWorkType();
-    var canSave = !!(state.draftRect || state.selectedLocationId);
+    var canSave = !!(state.draftLine || state.selectedLocationId);
     if ($('btn-save-location')) {
       $('btn-save-location').disabled = !canSave || !state.activeWorkTypeId;
       $('btn-save-location').textContent = addButtonLabel(wt);
@@ -388,33 +407,28 @@
       drawingViewer = new window.DrawingViewer($('screen-viewer'), {
         onTransform: function () { renderAnnotations(); },
         onSelectStart: function (drag) {
-          state.draftRect = {
-            x: Math.min(drag.x0, drag.x1),
-            y: Math.min(drag.y0, drag.y1),
-            width: Math.abs(drag.x1 - drag.x0),
-            height: Math.abs(drag.y1 - drag.y0)
-          };
+          state.draftLine = { x0: drag.x0, y0: drag.y0, x1: drag.x1, y1: drag.y1 };
           state.selectedLocationId = null;
           renderAnnotations();
           updateChrome();
         },
         onSelectMove: function (drag) {
-          state.draftRect = {
-            x: Math.min(drag.x0, drag.x1),
-            y: Math.min(drag.y0, drag.y1),
-            width: Math.abs(drag.x1 - drag.x0),
-            height: Math.abs(drag.y1 - drag.y0)
-          };
+          state.draftLine = { x0: drag.x0, y0: drag.y0, x1: drag.x1, y1: drag.y1 };
           renderAnnotations();
         },
         onSelectEnd: function (rect) {
-          state.draftRect = rect;
+          state.draftLine = {
+            x0: rect.x0 != null ? rect.x0 : rect.x,
+            y0: rect.y0 != null ? rect.y0 : rect.y,
+            x1: rect.x1 != null ? rect.x1 : (rect.x + rect.width),
+            y1: rect.y1 != null ? rect.y1 : (rect.y + rect.height)
+          };
           state.selectedLocationId = null;
           renderAnnotations();
           updateChrome();
         },
         onSelectCancel: function () {
-          state.draftRect = null;
+          state.draftLine = null;
           renderAnnotations();
           updateChrome();
         }
@@ -447,7 +461,7 @@
     }
     if (!d || !state.floor) return;
     state.viewing = d;
-    state.draftRect = null;
+    state.draftLine = null;
     state.selectedLocationId = null;
     state.undoStack = [];
     state.redoStack = [];
@@ -480,7 +494,7 @@
   function closeViewer() {
     state.viewing = null;
     state.booking = null;
-    state.draftRect = null;
+    state.draftLine = null;
     state.selectedLocationId = null;
     if (drawingViewer) {
       drawingViewer.setInteractionMode('pan');
@@ -505,21 +519,21 @@
     if (!state.booking) return;
     var viewer = getViewer();
     try {
-      if (state.draftRect) {
-        var pdf = viewer.pageCssToPdf(
-          state.draftRect.x, state.draftRect.y, state.draftRect.width, state.draftRect.height
-        );
-        if (!pdf) throw new Error('Drawing metrics missing.');
+      if (state.draftLine) {
+        var p0 = viewer.pageCssToPdf(state.draftLine.x0, state.draftLine.y0);
+        var p1 = viewer.pageCssToPdf(state.draftLine.x1, state.draftLine.y1);
+        if (!p0 || !p1) throw new Error('Drawing metrics missing.');
         var anns = currentAnnotationPayload();
         if (!anns.length) throw new Error('Choose a work type.');
         var data = await apiJson('/bookings/' + encodeURIComponent(state.booking.id) + '/locations', {
           method: 'POST',
           body: {
-            pageIndex: pdf.pageIndex,
-            x: pdf.x,
-            y: pdf.y,
-            width: pdf.width,
-            height: pdf.height,
+            pageIndex: p0.pageIndex,
+            x: p0.x,
+            y: p0.y,
+            width: p1.x - p0.x,
+            height: p1.y - p0.y,
+            markKind: 'line',
             annotations: anns
           }
         });
@@ -528,7 +542,7 @@
           if (l.id === data.locationId) savedLoc = JSON.parse(JSON.stringify(l));
         });
         pushUndo({ type: 'add', locationId: data.locationId, location: savedLoc });
-        state.draftRect = null;
+        state.draftLine = null;
         state.selectedLocationId = null;
         applyBooking(data.booking);
         setMode('select');
@@ -597,6 +611,7 @@
             y: loc.y,
             width: loc.width,
             height: loc.height,
+            markKind: loc.markKind || 'line',
             annotations: (loc.annotations || []).map(function (a) {
               return { workTypeId: a.workTypeId, layerCount: a.layerCount || 1 };
             })
@@ -643,6 +658,7 @@
             y: loc.y,
             width: loc.width,
             height: loc.height,
+            markKind: loc.markKind || 'line',
             annotations: (loc.annotations || []).map(function (a) {
               return { workTypeId: a.workTypeId, layerCount: a.layerCount || 1 };
             })
@@ -811,7 +827,7 @@
     if (!g) return;
     e.stopPropagation();
     state.selectedLocationId = g.getAttribute('data-loc-id');
-    state.draftRect = null;
+    state.draftLine = null;
     var loc = null;
     ((state.booking && state.booking.locations) || []).forEach(function (l) {
       if (l.id === state.selectedLocationId) loc = l;

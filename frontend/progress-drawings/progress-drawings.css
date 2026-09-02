@@ -108,17 +108,19 @@
 }
 .pd-anno .pd-loc { pointer-events: auto; cursor: pointer; }
 .pd-anno .pd-mark,
-.pd-anno .pd-draft-mark {
-  fill: transparent;
+.pd-anno .pd-draft-mark,
+.pd-anno .pd-mark-hit {
+  fill: none;
   stroke-linejoin: miter;
   stroke-linecap: butt;
   vector-effect: non-scaling-stroke;
   filter: none;
 }
-.pd-anno .pd-mark { pointer-events: auto; }
+.pd-anno .pd-mark,
+.pd-anno .pd-mark-hit { pointer-events: stroke; }
 .pd-anno .pd-draft-mark { pointer-events: none; }
 .pd-anno .pd-loc.is-selected .pd-mark {
-  stroke-width: 3.25;
+  stroke-width: 3.4;
 }
 
 .md-viewer.is-select-mode,

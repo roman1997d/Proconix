@@ -89,6 +89,11 @@ async function ensureSchemaInner() {
     )`);
 
   await pool.query(`
+    ALTER TABLE progress_locations
+    ADD COLUMN IF NOT EXISTS mark_kind TEXT NOT NULL DEFAULT 'rect'
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS progress_annotations (
       id SERIAL PRIMARY KEY,
       location_id INT NOT NULL REFERENCES progress_locations(id) ON DELETE CASCADE,
@@ -310,10 +315,19 @@ function mapLocation(row, annotations) {
     y: Number(row.y),
     width: Number(row.width),
     height: Number(row.height),
+    markKind: row.mark_kind === 'line' ? 'line' : 'rect',
     createdBy: row.created_by || '',
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
     annotations: annotations || [],
   };
+}
+
+function isValidMarkCoords(x, y, width, height, markKind) {
+  if (![x, y, width, height].every((n) => Number.isFinite(n))) return false;
+  if (markKind === 'line') {
+    return Math.sqrt((width * width) + (height * height)) >= 1;
+  }
+  return width > 0 && height > 0;
 }
 
 async function loadBookingDetail(bookingId) {
@@ -326,7 +340,7 @@ async function loadBookingDetail(bookingId) {
   if (!booking.rows[0]) return null;
   const b = booking.rows[0];
   const locs = await pool.query(
-    `SELECT id, page_index, x, y, width, height, created_by, created_at
+    `SELECT id, page_index, x, y, width, height, mark_kind, created_by, created_at
      FROM progress_locations WHERE booking_id = $1 ORDER BY id ASC`,
     [bookingId]
   );
@@ -489,10 +503,11 @@ async function addLocation(req, res) {
     const y = Number(req.body && req.body.y);
     const width = Number(req.body && req.body.width);
     const height = Number(req.body && req.body.height);
+    const markKind = String((req.body && req.body.markKind) || 'line') === 'rect' ? 'rect' : 'line';
     const pageIndex = Math.max(0, parseInt((req.body && req.body.pageIndex), 10) || 0);
     const annotations = Array.isArray(req.body && req.body.annotations) ? req.body.annotations : [];
-    if (![x, y, width, height].every((n) => Number.isFinite(n)) || width <= 0 || height <= 0) {
-      return res.status(400).json({ success: false, message: 'Valid rectangle coordinates are required.' });
+    if (!isValidMarkCoords(x, y, width, height, markKind)) {
+      return res.status(400).json({ success: false, message: 'Valid mark coordinates are required.' });
     }
     if (!annotations.length) {
       return res.status(400).json({ success: false, message: 'At least one work type is required.' });
@@ -500,9 +515,9 @@ async function addLocation(req, res) {
 
     await client.query('BEGIN');
     const loc = await client.query(
-      `INSERT INTO progress_locations (booking_id, page_index, x, y, width, height, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [bookingId, pageIndex, x, y, width, height, actorName(req)]
+      `INSERT INTO progress_locations (booking_id, page_index, x, y, width, height, mark_kind, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+      [bookingId, pageIndex, x, y, width, height, markKind, actorName(req)]
     );
     await replaceAnnotations(client, loc.rows[0].id, annotations);
     await client.query('UPDATE progress_bookings SET updated_at = NOW() WHERE id = $1', [bookingId]);
@@ -534,9 +549,10 @@ async function updateLocation(req, res) {
 
     const body = req.body || {};
     await client.query('BEGIN');
-    if (body.x != null || body.y != null || body.width != null || body.height != null || body.pageIndex != null) {
+    if (body.x != null || body.y != null || body.width != null || body.height != null ||
+        body.pageIndex != null || body.markKind != null) {
       const cur = await client.query(
-        'SELECT page_index, x, y, width, height FROM progress_locations WHERE id = $1',
+        'SELECT page_index, x, y, width, height, mark_kind FROM progress_locations WHERE id = $1',
         [locationId]
       );
       const c = cur.rows[0];
@@ -544,16 +560,19 @@ async function updateLocation(req, res) {
       const y = body.y != null ? Number(body.y) : Number(c.y);
       const width = body.width != null ? Number(body.width) : Number(c.width);
       const height = body.height != null ? Number(body.height) : Number(c.height);
+      const markKind = body.markKind != null
+        ? (String(body.markKind) === 'rect' ? 'rect' : 'line')
+        : (c.mark_kind === 'line' ? 'line' : 'rect');
       const pageIndex = body.pageIndex != null ? Math.max(0, parseInt(body.pageIndex, 10) || 0) : c.page_index;
-      if (![x, y, width, height].every((n) => Number.isFinite(n)) || width <= 0 || height <= 0) {
+      if (!isValidMarkCoords(x, y, width, height, markKind)) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ success: false, message: 'Valid rectangle coordinates are required.' });
+        return res.status(400).json({ success: false, message: 'Valid mark coordinates are required.' });
       }
       await client.query(
         `UPDATE progress_locations
-         SET page_index = $1, x = $2, y = $3, width = $4, height = $5, updated_at = NOW()
-         WHERE id = $6`,
-        [pageIndex, x, y, width, height, locationId]
+         SET page_index = $1, x = $2, y = $3, width = $4, height = $5, mark_kind = $6, updated_at = NOW()
+         WHERE id = $7`,
+        [pageIndex, x, y, width, height, markKind, locationId]
       );
     }
     if (Array.isArray(body.annotations)) {
