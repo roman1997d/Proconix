@@ -1,6 +1,6 @@
 /* Progress Drawings PWA — cache the app shell + shared PDF viewer assets.
    Drawing PDFs and annotation mutations live in IndexedDB (see pd-offline.js). */
-var CACHE = 'progress-drawings-shell-v1';
+var CACHE = 'progress-drawings-shell-v2';
 var PRECACHE = [
   '/progress-drawings/',
   '/progress-drawings/index.html',

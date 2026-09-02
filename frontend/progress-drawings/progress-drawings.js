@@ -648,10 +648,10 @@
   }
 
   function onEditDocPointerCancel(e) {
+    /* Re-rendering SVG mid-gesture can emit pointercancel — keep the drag alive. */
     if (!state.editDrag) return;
     e.preventDefault();
     e.stopPropagation();
-    cancelEditDrag();
   }
 
   function onEditDocTouchMove(e) {
@@ -672,7 +672,39 @@
     if (!state.editDrag) return;
     e.preventDefault();
     e.stopPropagation();
-    cancelEditDrag();
+  }
+
+  function paintEditPreview(drag) {
+    if (!drag || !drag.preview) return false;
+    var svg = $('pd-anno');
+    if (!svg) return false;
+    var g = svg.querySelector('.pd-loc[data-loc-id="' + drag.locId + '"]');
+    if (!g) return false;
+    var p = drag.preview;
+    g.classList.add('is-editing', 'is-selected');
+    var line = g.querySelector('line.pd-mark');
+    var hit = g.querySelector('line.pd-mark-hit');
+    if (line) {
+      line.setAttribute('x1', p.x0);
+      line.setAttribute('y1', p.y0);
+      line.setAttribute('x2', p.x1);
+      line.setAttribute('y2', p.y1);
+    }
+    if (hit) {
+      hit.setAttribute('x1', p.x0);
+      hit.setAttribute('y1', p.y0);
+      hit.setAttribute('x2', p.x1);
+      hit.setAttribute('y2', p.y1);
+    }
+    g.querySelectorAll('[data-anchor="a"]').forEach(function (el) {
+      el.setAttribute('cx', p.x0);
+      el.setAttribute('cy', p.y0);
+    });
+    g.querySelectorAll('[data-anchor="b"]').forEach(function (el) {
+      el.setAttribute('cx', p.x1);
+      el.setAttribute('cy', p.y1);
+    });
+    return true;
   }
 
   function beginEditDrag(kind, locId, end, pagePt, pointerId) {
@@ -702,6 +734,9 @@
     state.selectedLocationId = String(locId);
     state.draftLine = null;
     bindEditDocListeners();
+    /* Do not rebuild SVG here — destroying the pointer target cancels the gesture. */
+    var g = $('pd-anno') && $('pd-anno').querySelector('.pd-loc[data-loc-id="' + locId + '"]');
+    if (g) g.classList.add('is-editing', 'is-selected');
     return true;
   }
 
@@ -735,7 +770,7 @@
         y1: drag.base.y1 + dy
       };
     }
-    renderAnnotations();
+    if (!paintEditPreview(drag)) renderAnnotations();
   }
 
   async function finishEditDrag() {
@@ -1484,7 +1519,6 @@
       if (!beginEditDrag('end', locId, anchor.getAttribute('data-anchor'), pagePt, e.pointerId)) {
         return;
       }
-      renderAnnotations();
       updateChrome();
       return;
     }
@@ -1496,7 +1530,6 @@
     if (loc && (loc.markKind || 'rect') === 'line') {
       var pt = eventPagePoint(e);
       if (!beginEditDrag('move', loc.id, null, pt, e.pointerId)) return;
-      renderAnnotations();
       updateChrome();
     }
   }
