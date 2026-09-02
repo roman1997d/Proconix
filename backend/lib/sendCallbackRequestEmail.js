@@ -1308,6 +1308,65 @@ async function sendSignedDocumentEmail(o) {
 }
 
 /**
+ * Email a Progress Drawings PDF (marks + colour legend) to an address the user enters.
+ * @param {{ to: string, pdfBuffer: Buffer, filename?: string, drawingNumber?: string, projectName?: string }} o
+ */
+async function sendProgressDrawingEmail(o) {
+  const to = String(o.to || '').trim();
+  if (!to || !EMAIL_RE.test(to)) {
+    const err = new Error('Enter a valid email address.');
+    err.code = 'INVALID_EMAIL';
+    throw err;
+  }
+  const transport = createTransport();
+  if (!transport) {
+    const err = new Error('SMTP_HOST is not set; cannot send email.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const drawing = o.drawingNumber || 'drawing';
+  const project = o.projectName || 'Progress Drawings';
+  const attachName = o.filename || `Progress_${String(drawing).replace(/[^\w.-]+/g, '_')}.pdf`;
+  const subject = `Proconix — Progress drawing: ${drawing}`;
+  const text = [
+    'Hello,',
+    '',
+    `Attached is the progress drawing for ${project} (${drawing}), including the colour legend.`,
+    '',
+    '— Proconix',
+  ].join('\n');
+
+  const html = buildProconixEmailHtml({
+    preheader: `Progress drawing PDF attached — ${drawing}`,
+    badge: 'Progress Drawings',
+    title: 'Progress drawing',
+    subtitle:
+      'The attached PDF includes marked work types and a colour legend in the top-left corner.',
+    rows: [
+      { label: 'Project', value: project },
+      { label: 'Drawing', value: drawing },
+      { label: 'Sent to', value: to },
+    ],
+  });
+
+  await transport.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html,
+    attachments: [
+      {
+        filename: attachName,
+        content: o.pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ],
+  });
+}
+
+/**
  * Invoice-style summary to the company (typically head manager email) after operative submits a work log.
  * @param {{
  *   to: string,
@@ -1601,6 +1660,7 @@ module.exports = {
   sendPlatformAdminClientEmail,
   sendDemoTenantWelcomeEmail,
   sendSignedDocumentEmail,
+  sendProgressDrawingEmail,
   sendWorkLogInvoiceCopyEmail,
   sendDailyRecordWorklogEmail,
   sendUnitDeleteVerificationEmail,

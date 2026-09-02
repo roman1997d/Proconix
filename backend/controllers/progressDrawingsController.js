@@ -5,6 +5,10 @@
 
 const { pool } = require('../db/pool');
 const { ensureSchema: ensureMyDrawingsSchema } = require('./myDrawingsController');
+const { buildProgressDrawingPdf } = require('../lib/buildProgressDrawingPdf');
+const { sendProgressDrawingEmail } = require('../lib/sendCallbackRequestEmail');
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const FLOORS = [
   { id: 'ground', label: 'Ground Floor' },
@@ -111,7 +115,7 @@ async function ensureSchemaInner() {
 
 /** Canonical work-type legend for Progress Drawings (name → colour + hatch). */
 const PROGRESS_WORK_TYPES = [
-  { name: 'Boarding', colour: '#2563eb', pattern: 'solid', supportsLayers: false, sortOrder: 0 },
+  { name: 'PlasterBoard', colour: '#2563eb', pattern: 'solid', supportsLayers: false, sortOrder: 0 },
   { name: 'Insulation', colour: '#eab308', pattern: 'solid', supportsLayers: false, sortOrder: 1 },
   { name: 'Metal', colour: '#111827', pattern: 'solid', supportsLayers: false, sortOrder: 2 },
   { name: 'Angle & Insulation', colour: '#16a34a', pattern: 'solid', supportsLayers: false, sortOrder: 3 },
@@ -126,6 +130,13 @@ async function syncProgressWorkTypes() {
      SET name = 'Angle & Insulation'
      WHERE name = 'Tape & Joint'
        AND NOT EXISTS (SELECT 1 FROM progress_work_types WHERE name = 'Angle & Insulation')`
+  );
+
+  await pool.query(
+    `UPDATE progress_work_types
+     SET name = 'PlasterBoard'
+     WHERE name = 'Boarding'
+       AND NOT EXISTS (SELECT 1 FROM progress_work_types WHERE name = 'PlasterBoard')`
   );
 
   for (const wt of PROGRESS_WORK_TYPES) {
@@ -617,6 +628,117 @@ async function deleteLocation(req, res) {
   }
 }
 
+function safePdfFilename(detail) {
+  const num = String((detail && detail.drawingNumber) || 'drawing')
+    .replace(/[^\w\s.-]+/g, '_')
+    .replace(/\s+/g, '_')
+    .slice(0, 60);
+  return `Progress_${num || 'drawing'}.pdf`;
+}
+
+async function assertBookingInWorkspace(req, bookingId) {
+  const row = await pool.query('SELECT workspace_id FROM progress_bookings WHERE id = $1', [bookingId]);
+  if (!row.rows[0]) return { error: { status: 404, message: 'Booking not found.' } };
+  if (Number(row.rows[0].workspace_id) !== Number(req.myDrawings.workspace.id)) {
+    return { error: { status: 403, message: 'Booking not in this workspace.' } };
+  }
+  return { ok: true };
+}
+
+async function buildBookingPdfBuffer(bookingId, workspaceId) {
+  const detail = await loadBookingDetail(bookingId);
+  if (!detail) {
+    const err = new Error('Booking not found.');
+    err.status = 404;
+    throw err;
+  }
+  if (!detail.drawingId) {
+    const err = new Error('This booking has no drawing.');
+    err.status = 400;
+    throw err;
+  }
+  const drawing = await pool.query(
+    'SELECT relative_path FROM my_drawings_item WHERE id = $1 AND workspace_id = $2',
+    [detail.drawingId, workspaceId]
+  );
+  if (!drawing.rows[0] || !drawing.rows[0].relative_path) {
+    const err = new Error('Original drawing PDF was not found.');
+    err.status = 404;
+    err.code = 'DRAWING_FILE_MISSING';
+    throw err;
+  }
+  const workTypes = await pool.query(
+    `SELECT id, name, colour, sort_order
+     FROM progress_work_types
+     WHERE active = true
+     ORDER BY sort_order ASC, name ASC`
+  );
+  const buffer = await buildProgressDrawingPdf({
+    drawingRelativePath: drawing.rows[0].relative_path,
+    locations: detail.locations,
+    workTypes: workTypes.rows.map((w) => ({
+      id: String(w.id),
+      name: w.name,
+      colour: w.colour,
+      sortOrder: w.sort_order,
+    })),
+    projectName: detail.projectName,
+    drawingNumber: detail.drawingNumber,
+  });
+  return { buffer, detail, filename: safePdfFilename(detail) };
+}
+
+/** GET /bookings/:id/pdf */
+async function downloadBookingPdf(req, res) {
+  try {
+    await ensureSchema();
+    const bookingId = parseInt(req.params.id, 10);
+    const check = await assertBookingInWorkspace(req, bookingId);
+    if (check.error) return res.status(check.error.status).json({ success: false, message: check.error.message });
+    const built = await buildBookingPdfBuffer(bookingId, req.myDrawings.workspace.id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${built.filename.replace(/"/g, '')}"`);
+    return res.status(200).send(built.buffer);
+  } catch (err) {
+    const status = err.status || (err.code === 'DRAWING_FILE_MISSING' ? 404 : 500);
+    console.error('progressDrawings downloadBookingPdf:', err);
+    return res.status(status).json({ success: false, message: err.message || 'Could not build PDF.' });
+  }
+}
+
+/** POST /bookings/:id/email  body: { to } */
+async function emailBookingPdf(req, res) {
+  try {
+    await ensureSchema();
+    const bookingId = parseInt(req.params.id, 10);
+    const check = await assertBookingInWorkspace(req, bookingId);
+    if (check.error) return res.status(check.error.status).json({ success: false, message: check.error.message });
+    const to = String((req.body && req.body.to) || '').trim();
+    if (!EMAIL_RE.test(to)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+    }
+    const built = await buildBookingPdfBuffer(bookingId, req.myDrawings.workspace.id);
+    await sendProgressDrawingEmail({
+      to,
+      pdfBuffer: built.buffer,
+      filename: built.filename,
+      drawingNumber: built.detail.drawingNumber,
+      projectName: built.detail.projectName,
+    });
+    return res.json({ success: true, message: 'Sent.' });
+  } catch (err) {
+    if (err && err.code === 'INVALID_EMAIL') {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({ success: false, message: 'Email is not configured on this server.' });
+    }
+    const status = err.status || (err.code === 'DRAWING_FILE_MISSING' ? 404 : 500);
+    console.error('progressDrawings emailBookingPdf:', err);
+    return res.status(status).json({ success: false, message: err.message || 'Could not send email.' });
+  }
+}
+
 module.exports = {
   ensureSchema,
   getBootstrap,
@@ -625,5 +747,7 @@ module.exports = {
   addLocation,
   updateLocation,
   deleteLocation,
+  downloadBookingPdf,
+  emailBookingPdf,
 };
 

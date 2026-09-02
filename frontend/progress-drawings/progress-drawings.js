@@ -243,7 +243,7 @@
 
   function workTypeCode(wt) {
     var name = String((wt && wt.name) || '').toLowerCase();
-    if (name.indexOf('board') === 0) return 'B';
+    if (/board/.test(name) && !/letter/.test(name)) return 'B';
     if (name.indexOf('insul') === 0) return 'I';
     if (name.indexOf('metal') === 0) return 'M';
     if (name.indexOf('angle') === 0) return 'A';
@@ -254,7 +254,7 @@
 
   function workTypeShortLabel(wt) {
     var name = String((wt && wt.name) || '');
-    if (/board/i.test(name)) return 'Board';
+    if (/board/i.test(name)) return 'Plaster';
     if (/insul/i.test(name) && !/angle/i.test(name)) return 'Insul';
     if (/metal/i.test(name)) return 'Metal';
     if (/angle/i.test(name)) return 'Angle';
@@ -374,6 +374,7 @@
     if ($('btn-delete-location')) {
       $('btn-delete-location').hidden = !state.selectedLocationId;
     }
+    if ($('btn-share')) $('btn-share').disabled = !state.booking;
   }
 
   function setMode(mode) {
@@ -688,6 +689,149 @@
     updateChrome();
   }
 
+  function toast(msg) {
+    var el = $('pd-toast');
+    if (!el) {
+      alert(msg);
+      return;
+    }
+    el.textContent = msg;
+    el.hidden = false;
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { el.hidden = true; }, 2800);
+  }
+
+  function closeSheet() {
+    if ($('pd-backdrop')) $('pd-backdrop').classList.remove('is-on');
+    if ($('pd-sheet')) $('pd-sheet').classList.remove('is-on');
+  }
+
+  function openSheet(html) {
+    var sheet = $('pd-sheet');
+    if (!sheet || !$('pd-backdrop')) return;
+    sheet.innerHTML = '<div class="md-sheet-handle"></div>' + html;
+    $('pd-backdrop').classList.add('is-on');
+    sheet.classList.add('is-on');
+  }
+
+  function closeEmailModal() {
+    if ($('pd-email')) $('pd-email').hidden = true;
+    if ($('pd-email-err')) $('pd-email-err').textContent = '';
+  }
+
+  function openEmailModal() {
+    closeSheet();
+    if (!state.booking) return;
+    if ($('pd-email-to')) $('pd-email-to').value = '';
+    if ($('pd-email-err')) $('pd-email-err').textContent = '';
+    if ($('pd-email')) $('pd-email').hidden = false;
+    setTimeout(function () {
+      if ($('pd-email-to')) $('pd-email-to').focus();
+    }, 40);
+  }
+
+  function openShareSheet() {
+    if (!state.booking) {
+      toast('Open a drawing first.');
+      return;
+    }
+    openSheet(
+      '<h3 id="pd-sheet-title">Share</h3>' +
+      '<button type="button" class="md-sheet-item" data-share="email">' +
+        '<svg class="md-icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>' +
+        'Send via email</button>' +
+      '<button type="button" class="md-sheet-item" data-share="files">' +
+        '<svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>' +
+        'Save in Files</button>'
+    );
+  }
+
+  function filenameFromDisposition(header, fallback) {
+    if (!header) return fallback;
+    var star = /filename\*=UTF-8''([^;]+)/i.exec(header);
+    if (star) {
+      try { return decodeURIComponent(star[1]); } catch (e) {}
+    }
+    var m = /filename="([^"]+)"/i.exec(header) || /filename=([^;]+)/i.exec(header);
+    return m ? m[1].trim() : fallback;
+  }
+
+  async function fetchBookingPdf() {
+    if (!state.booking) throw new Error('No booking open.');
+    var res = await fetch('/api/progress-drawings/bookings/' + encodeURIComponent(state.booking.id) + '/pdf', {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: authHeaders()
+    });
+    if (!res.ok) {
+      var data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      throw new Error((data && data.message) || 'Could not build PDF.');
+    }
+    var blob = await res.blob();
+    var fallback = 'Progress_drawing.pdf';
+    if (state.booking.drawingNumber) {
+      fallback = 'Progress_' + String(state.booking.drawingNumber).replace(/[^\w.-]+/g, '_') + '.pdf';
+    }
+    return {
+      blob: blob,
+      filename: filenameFromDisposition(res.headers.get('Content-Disposition'), fallback)
+    };
+  }
+
+  async function saveInFiles() {
+    closeSheet();
+    try {
+      var file = await fetchBookingPdf();
+      var nativeFile = new File([file.blob], file.filename, { type: 'application/pdf' });
+      var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      if (ios && navigator.canShare && navigator.canShare({ files: [nativeFile] })) {
+        try {
+          await navigator.share({ files: [nativeFile], title: file.filename });
+          return;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return;
+        }
+      }
+      var url = URL.createObjectURL(file.blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = file.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2500);
+      toast('Saved. Check Files or Downloads.');
+    } catch (err) {
+      alert(err.message || 'Could not save PDF.');
+    }
+  }
+
+  async function sendEmail() {
+    if (!state.booking) return;
+    var to = ($('pd-email-to').value || '').trim();
+    var errEl = $('pd-email-err');
+    if (errEl) errEl.textContent = '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      if (errEl) errEl.textContent = 'Enter a valid email address.';
+      return;
+    }
+    var sendBtn = $('pd-email-send');
+    if (sendBtn) sendBtn.disabled = true;
+    try {
+      await apiJson('/bookings/' + encodeURIComponent(state.booking.id) + '/email', {
+        method: 'POST',
+        body: { to: to }
+      });
+      closeEmailModal();
+      toast('Sent to ' + to);
+    } catch (err) {
+      if (errEl) errEl.textContent = err.message || 'Could not send email.';
+    } finally {
+      if (sendBtn) sendBtn.disabled = false;
+    }
+  }
+
   async function enterApp() {
     try {
       await loadBootstrap();
@@ -817,8 +961,25 @@
   on($('btn-undo'), 'click', undo);
   on($('btn-redo'), 'click', redo);
   on($('btn-pan'), 'click', function () { setMode('pan'); });
+  on($('btn-share'), 'click', openShareSheet);
   on($('btn-save-location'), 'click', saveLocation);
   on($('btn-delete-location'), 'click', deleteSelectedLocation);
+  on($('pd-backdrop'), 'click', closeSheet);
+  on($('pd-sheet'), 'click', function (e) {
+    var btn = e.target.closest('[data-share]');
+    if (!btn) return;
+    var kind = btn.getAttribute('data-share');
+    if (kind === 'email') openEmailModal();
+    else if (kind === 'files') saveInFiles();
+  });
+  on($('pd-email-cancel'), 'click', closeEmailModal);
+  on($('pd-email-send'), 'click', sendEmail);
+  on($('pd-email-to'), 'keydown', function (e) {
+    if (e.key === 'Enter') sendEmail();
+  });
+  on($('pd-email'), 'click', function (e) {
+    if (e.target === $('pd-email')) closeEmailModal();
+  });
 
   on($('pd-worktypes'), 'click', function (e) {
     var btn = e.target.closest('[data-wt]');
