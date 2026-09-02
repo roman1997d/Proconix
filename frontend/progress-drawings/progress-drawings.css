@@ -92,11 +92,11 @@
   stroke: #38bdf8;
   stroke-width: 2.5;
 }
-.pd-anno .pd-draft-border {
-  fill: rgba(56, 189, 248, 0.08);
-  stroke: #38bdf8;
-  stroke-width: 1.5;
-  stroke-dasharray: 6 4;
+.pd-anno .pd-draft-fill { pointer-events: none; }
+.pd-anno .pd-draft-border { pointer-events: none; }
+
+.pd-actions .md-btn-primary {
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .md-viewer.is-select-mode { cursor: crosshair; }

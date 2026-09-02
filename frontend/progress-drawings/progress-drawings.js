@@ -253,14 +253,24 @@
         var colour = wt.colour || '#ef4444';
         var size = layer >= 2 ? 14 : 10;
         var paths;
-        if (wt.pattern === 'cross' || layer >= 2) {
+        if (wt.pattern === 'cross') {
+          /* Insulation — dense yellow X hatch, easy to spot on white drawings */
+          size = 12;
+          paths =
+            '<rect width="' + size + '" height="' + size + '" fill="' + colour + '" fill-opacity="0.18"/>' +
+            '<path d="M0 ' + size + ' L' + size + ' 0" stroke="' + colour + '" stroke-width="2.2"/>' +
+            '<path d="M0 0 L' + size + ' ' + size + '" stroke="' + colour + '" stroke-width="2.2"/>' +
+            '<path d="M0 6 L' + size + ' 6" stroke="' + colour + '" stroke-width="1.1" opacity="0.7"/>';
+        } else if (layer >= 2) {
           paths =
             '<path d="M0 ' + size + ' L' + size + ' 0" stroke="' + colour + '" stroke-width="1.4"/>' +
             '<path d="M0 0 L' + size + ' ' + size + '" stroke="' + colour + '" stroke-width="1.2" opacity="0.85"/>';
         } else if (wt.pattern === 'hatch') {
+          /* Metal — vertical hatch on a light tint */
           paths =
-            '<path d="M0 0 L0 ' + size + '" stroke="' + colour + '" stroke-width="1.6"/>' +
-            '<path d="M5 0 L5 ' + size + '" stroke="' + colour + '" stroke-width="1.1" opacity="0.7"/>';
+            '<rect width="' + size + '" height="' + size + '" fill="' + colour + '" fill-opacity="0.12"/>' +
+            '<path d="M0 0 L0 ' + size + '" stroke="' + colour + '" stroke-width="1.8"/>' +
+            '<path d="M5 0 L5 ' + size + '" stroke="' + colour + '" stroke-width="1.2" opacity="0.8"/>';
         } else if (wt.pattern === 'lines') {
           paths = '<path d="M0 5 L' + size + ' 5" stroke="' + colour + '" stroke-width="1.6"/>';
         } else {
@@ -271,6 +281,13 @@
       }
     });
     return out + '</defs>';
+  }
+
+  function addButtonLabel(wt) {
+    if (!wt) return 'Add work type';
+    var short = wt.name || 'work type';
+    if (state.selectedLocationId) return 'Update ' + short;
+    return 'Add ' + short;
   }
 
   function locationVisible(loc) {
@@ -314,8 +331,18 @@
 
     if (state.draftRect) {
       var d = state.draftRect;
-      html += '<rect class="pd-draft-border" x="' + d.x + '" y="' + d.y + '" width="' + d.width +
-        '" height="' + d.height + '"/>';
+      var previewWt = activeWorkType();
+      var layers = previewWt && previewWt.supportsLayers ? state.layerCount : 1;
+      if (previewWt) {
+        html += '<rect class="pd-draft-fill" x="' + d.x + '" y="' + d.y + '" width="' + d.width +
+          '" height="' + d.height + '" fill="url(#' + patternId(previewWt, layers) + ')" fill-opacity="0.9"/>';
+        html += '<rect class="pd-draft-border" x="' + d.x + '" y="' + d.y + '" width="' + d.width +
+          '" height="' + d.height + '" fill="none" stroke="' + escapeHtml(previewWt.colour || '#38bdf8') +
+          '" stroke-width="2" stroke-dasharray="6 4"/>';
+      } else {
+        html += '<rect class="pd-draft-border" x="' + d.x + '" y="' + d.y + '" width="' + d.width +
+          '" height="' + d.height + '" fill="rgba(56,189,248,0.08)" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="6 4"/>';
+      }
     }
 
     svg.innerHTML = html;
@@ -381,7 +408,14 @@
     var canSave = !!(state.draftRect || state.selectedLocationId);
     if ($('btn-save-location')) {
       $('btn-save-location').disabled = !canSave || !state.activeWorkTypeId;
-      $('btn-save-location').textContent = state.selectedLocationId ? 'Update location' : 'Save location';
+      $('btn-save-location').textContent = addButtonLabel(wt);
+      if (wt && wt.colour) {
+        $('btn-save-location').style.borderColor = wt.colour;
+        $('btn-save-location').style.boxShadow = 'inset 3px 0 0 ' + wt.colour;
+      } else {
+        $('btn-save-location').style.borderColor = '';
+        $('btn-save-location').style.boxShadow = '';
+      }
     }
     if ($('btn-delete-location')) {
       $('btn-delete-location').hidden = !state.selectedLocationId;
@@ -831,6 +865,8 @@
     state.activeWorkTypeId = btn.getAttribute('data-wt');
     var wt = activeWorkType();
     if (wt && !wt.supportsLayers) state.layerCount = 1;
+    /* Instant pattern preview on the selected rectangle */
+    renderAnnotations();
     updateChrome();
   });
 
@@ -838,6 +874,7 @@
     var btn = e.target.closest('[data-layer]');
     if (!btn) return;
     state.layerCount = parseInt(btn.getAttribute('data-layer'), 10) || 1;
+    renderAnnotations();
     updateChrome();
   });
 

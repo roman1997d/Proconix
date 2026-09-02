@@ -15,7 +15,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="apple-touch-icon" href="/favicon_io/apple-touch-icon.png">
   <link rel="stylesheet" href="/mydrawings/mydrawings.css">
-  <link rel="stylesheet" href="/progress-drawings/progress-drawings.css">
+  <link rel="stylesheet" href="/progress-drawings/progress-drawings.css?v=p2d">
 </head>
 <body>
   <div class="md-boot" id="pd-boot">
@@ -59,7 +59,7 @@
     <section class="md-screen md-pin md-floor" id="screen-floor" aria-label="Select level">
       <p class="md-pin-brand">Progress Drawings</p>
       <h2>Select level</h2>
-      <p class="md-pin-hint"Choose the floor you are booking this week.</p>
+      <p class="md-pin-hint">Choose the floor you are booking this week.</p>
       <p class="pd-project-label" id="floor-project">Project</p>
       <div class="md-floor-grid" id="floor-grid" role="list"></div>
     </section>
@@ -123,7 +123,7 @@
         <div class="pd-layers" id="pd-layers" hidden></div>
         <div class="pd-visibility" id="pd-visibility"></div>
         <div class="pd-actions">
-          <button type="button" class="md-btn md-btn-primary" id="btn-save-location" disabled>Save location</button>
+          <button type="button" class="md-btn md-btn-primary" id="btn-save-location" disabled>Add work type</button>
           <button type="button" class="md-btn md-btn-ghost" id="btn-delete-location" hidden>Delete</button>
         </div>
       </div>
@@ -154,6 +154,6 @@
 
   <script src="/mydrawings/lib/pdf.min.js"></script>
   <script src="/mydrawings/drawing-viewer.js"></script>
-  <script src="/progress-drawings/progress-drawings.js"></script>
+  <script src="/progress-drawings/progress-drawings.js?v=p2d"></script>
 </body>
 </html>
