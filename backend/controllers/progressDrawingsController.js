@@ -122,7 +122,9 @@ const PROGRESS_WORK_TYPES = [
   { name: 'Angle & Insulation', colour: '#16a34a', pattern: 'solid', supportsLayers: false, sortOrder: 4 },
   { name: 'Patress', colour: '#a855f7', pattern: 'solid', supportsLayers: false, sortOrder: 5 },
   { name: 'Letterbox', colour: '#ef4444', pattern: 'solid', supportsLayers: false, sortOrder: 6 },
-  { name: 'Flatplate', colour: '#ec4899', pattern: 'solid', supportsLayers: false, sortOrder: 7 }
+  { name: 'Flatplate', colour: '#ec4899', pattern: 'solid', supportsLayers: false, sortOrder: 7 },
+  { name: 'TopDown_1', colour: '#84cc16', pattern: 'solid', supportsLayers: false, sortOrder: 8 },
+  { name: 'TopDown_2', colour: '#06b6d4', pattern: 'solid', supportsLayers: false, sortOrder: 9 }
 ];
 
 async function syncProgressWorkTypes() {

@@ -251,6 +251,8 @@
     if (name.indexOf('patress') === 0 || name.indexOf('pattress') === 0) return 'PT';
     if (name.indexOf('letter') === 0) return 'LB';
     if (name.indexOf('flat') === 0) return 'FP';
+    if (/topdown_?1|top\s*down\s*1/.test(name)) return 'T1';
+    if (/topdown_?2|top\s*down\s*2/.test(name)) return 'T2';
     return String((wt && wt.name) || '?').slice(0, 2).toUpperCase();
   }
 
@@ -264,6 +266,8 @@
     if (/patress|pattress/i.test(name)) return 'Patress';
     if (/letter/i.test(name)) return 'Letter';
     if (/flat/i.test(name)) return 'Flat';
+    if (/topdown_?1|top\s*down\s*1/i.test(name)) return 'TD1';
+    if (/topdown_?2|top\s*down\s*2/i.test(name)) return 'TD2';
     return name;
   }
 
