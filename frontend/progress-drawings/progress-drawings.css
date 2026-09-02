@@ -119,18 +119,7 @@
 .pd-anno .pd-mark,
 .pd-anno .pd-mark-hit { pointer-events: stroke; }
 .pd-anno .pd-draft-mark { pointer-events: none; }
-.pd-anno .pd-loc.is-selected .pd-mark-hit { cursor: move; }
-.pd-anno .pd-anchor-hit,
-.pd-anno .pd-anchor {
-  pointer-events: all;
-  cursor: grab;
-  touch-action: none;
-}
-.pd-anno .pd-anchor {
-  vector-effect: non-scaling-stroke;
-  stroke-width: 2.25px;
-}
-.pd-anno .pd-loc.is-editing .pd-anchor { cursor: grabbing; }
+.pd-anno .pd-loc.is-selected .pd-mark-hit { cursor: pointer; }
 
 .md-viewer.is-select-mode,
 .md-viewer.is-select-mode .dv-stage { cursor: crosshair; }

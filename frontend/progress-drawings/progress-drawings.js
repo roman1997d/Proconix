@@ -33,7 +33,6 @@
     layerCount: 1,
     selectedLocationId: null,
     draftLine: null,
-    editDrag: null,
     pendingAnnotations: [],
     visibleTypes: {},
     undoStack: [],
@@ -444,9 +443,6 @@
 
   function lineCssForLoc(loc, viewer) {
     if (!loc || !viewer) return null;
-    if (state.editDrag && state.editDrag.locId === loc.id && state.editDrag.preview) {
-      return state.editDrag.preview;
-    }
     var css = viewer.pdfToPageCss(loc);
     if (!css) return null;
     return lineFromLocCss(loc, css) || {
@@ -455,14 +451,6 @@
       x1: css.x + css.width,
       y1: css.y + css.height
     };
-  }
-
-  function anchorHtml(end, x, y, r, colour) {
-    var hitR = r * 2.2;
-    return '<circle class="pd-anchor-hit" data-anchor="' + end + '" cx="' + x + '" cy="' + y +
-      '" r="' + hitR + '" fill="transparent"/>' +
-      '<circle class="pd-anchor" data-anchor="' + end + '" cx="' + x + '" cy="' + y +
-      '" r="' + r + '" fill="#ffffff" stroke="' + escapeHtml(colour) + '"/>';
   }
 
   function renderAnnotations() {
@@ -478,11 +466,10 @@
     svg.style.height = m.pageCssH + 'px';
     svg.style.transform = 'translate3d(' + m.tx + 'px,' + m.ty + 'px,0) scale(' + m.scale + ')';
 
-    /* Straight coloured strokes; selected lines show endpoint anchors. */
+    /* Straight coloured strokes; click selects for Update / Delete only. */
     var html = '';
     var locs = (state.booking && state.booking.locations) || [];
     var scale = Math.max(0.2, m.scale || 1);
-    var anchorR = Math.max(4.5, 8 / scale);
     locs.forEach(function (loc) {
       if ((loc.pageIndex || 0) !== Math.max(0, (m.pageNum || 1) - 1)) return;
       var line = lineCssForLoc(loc, viewer);
@@ -495,16 +482,11 @@
       var colour = markColour(primary, '#2563eb');
       var sw = selected ? 1.7 : 1.15;
       var isLine = (loc.markKind || 'rect') === 'line';
-      var editing = !!(state.editDrag && state.editDrag.locId === loc.id);
       html += '<g class="pd-loc' + (selected ? ' is-selected' : '') +
-        (editing ? ' is-editing' : '') + '" data-loc-id="' + escapeHtml(loc.id) + '">';
+        '" data-loc-id="' + escapeHtml(loc.id) + '">';
       if (isLine) {
         html += strokeLineHtml('pd-mark-hit', line.x0, line.y0, line.x1, line.y1, 'transparent', Math.max(12, 14 / scale));
         html += strokeLineHtml('pd-mark', line.x0, line.y0, line.x1, line.y1, colour, sw);
-        if (selected) {
-          html += anchorHtml('a', line.x0, line.y0, anchorR, colour);
-          html += anchorHtml('b', line.x1, line.y1, anchorR, colour);
-        }
       } else {
         var css = viewer.pdfToPageCss(loc);
         if (css) {
@@ -570,256 +552,7 @@
     var wt = activeWorkType();
     if (wt && !wt.supportsLayers) state.layerCount = 1;
     state.selectedLocationId = null;
-    state.editDrag = null;
     setMode('select');
-    renderAnnotations();
-    updateChrome();
-  }
-
-  function lineLengthCss(line) {
-    if (!line) return 0;
-    var dx = line.x1 - line.x0;
-    var dy = line.y1 - line.y0;
-    return Math.sqrt((dx * dx) + (dy * dy));
-  }
-
-  async function persistLineGeometry(locId, lineCss) {
-    var viewer = getViewer();
-    var before = locById(locId);
-    if (!before || !viewer) return;
-    var p0 = viewer.pageCssToPdf(lineCss.x0, lineCss.y0);
-    var p1 = viewer.pageCssToPdf(lineCss.x1, lineCss.y1);
-    if (!p0 || !p1) throw new Error('Drawing metrics missing.');
-    var beforeCopy = JSON.parse(JSON.stringify(before));
-    var updated = await apiJson('/locations/' + encodeURIComponent(locId), {
-      method: 'PUT',
-      body: {
-        pageIndex: p0.pageIndex,
-        x: p0.x,
-        y: p0.y,
-        width: p1.x - p0.x,
-        height: p1.y - p0.y,
-        markKind: 'line'
-      }
-    });
-    pushUndo({ type: 'update', before: beforeCopy });
-    state.selectedLocationId = String(locId);
-    applyBooking(updated.booking);
-  }
-
-  function eventPagePoint(e) {
-    var viewer = getViewer();
-    if (!viewer) return null;
-    var clientX = e.clientX;
-    var clientY = e.clientY;
-    if ((clientX == null || clientY == null) && e.touches && e.touches[0]) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    }
-    if ((clientX == null || clientY == null) && e.changedTouches && e.changedTouches[0]) {
-      clientX = e.changedTouches[0].clientX;
-      clientY = e.changedTouches[0].clientY;
-    }
-    if (clientX == null || clientY == null) return null;
-    return viewer.clientToPageCss(clientX, clientY);
-  }
-
-  function unbindEditDocListeners() {
-    document.removeEventListener('pointermove', onEditDocPointerMove, true);
-    document.removeEventListener('pointerup', onEditDocPointerUp, true);
-    document.removeEventListener('pointercancel', onEditDocPointerCancel, true);
-    document.removeEventListener('touchmove', onEditDocTouchMove, true);
-    document.removeEventListener('touchend', onEditDocTouchEnd, true);
-    document.removeEventListener('touchcancel', onEditDocTouchCancel, true);
-  }
-
-  function bindEditDocListeners() {
-    document.addEventListener('pointermove', onEditDocPointerMove, true);
-    document.addEventListener('pointerup', onEditDocPointerUp, true);
-    document.addEventListener('pointercancel', onEditDocPointerCancel, true);
-    document.addEventListener('touchmove', onEditDocTouchMove, { capture: true, passive: false });
-    document.addEventListener('touchend', onEditDocTouchEnd, { capture: true, passive: false });
-    document.addEventListener('touchcancel', onEditDocTouchCancel, { capture: true, passive: false });
-  }
-
-  function onEditDocPointerMove(e) {
-    if (!state.editDrag) return;
-    if (e.pointerType === 'touch') return;
-    if (state.editDrag.pointerId != null && e.pointerId != null &&
-        state.editDrag.pointerId !== e.pointerId) return;
-    e.preventDefault();
-    e.stopPropagation();
-    updateEditDrag(eventPagePoint(e));
-  }
-
-  function onEditDocPointerUp(e) {
-    if (!state.editDrag) return;
-    if (e.pointerType === 'touch') return;
-    if (state.editDrag.pointerId != null && e.pointerId != null &&
-        state.editDrag.pointerId !== e.pointerId) return;
-    e.preventDefault();
-    e.stopPropagation();
-    finishEditDrag();
-  }
-
-  function onEditDocPointerCancel(e) {
-    /* Re-rendering SVG mid-gesture can emit pointercancel — keep the drag alive. */
-    if (!state.editDrag) return;
-    e.preventDefault();
-    e.stopPropagation();
-  }
-
-  function onEditDocTouchMove(e) {
-    if (!state.editDrag) return;
-    e.preventDefault();
-    e.stopPropagation();
-    updateEditDrag(eventPagePoint(e));
-  }
-
-  function onEditDocTouchEnd(e) {
-    if (!state.editDrag) return;
-    e.preventDefault();
-    e.stopPropagation();
-    finishEditDrag();
-  }
-
-  function onEditDocTouchCancel(e) {
-    if (!state.editDrag) return;
-    e.preventDefault();
-    e.stopPropagation();
-  }
-
-  function paintEditPreview(drag) {
-    if (!drag || !drag.preview) return false;
-    var svg = $('pd-anno');
-    if (!svg) return false;
-    var g = svg.querySelector('.pd-loc[data-loc-id="' + drag.locId + '"]');
-    if (!g) return false;
-    var p = drag.preview;
-    g.classList.add('is-editing', 'is-selected');
-    var line = g.querySelector('line.pd-mark');
-    var hit = g.querySelector('line.pd-mark-hit');
-    if (line) {
-      line.setAttribute('x1', p.x0);
-      line.setAttribute('y1', p.y0);
-      line.setAttribute('x2', p.x1);
-      line.setAttribute('y2', p.y1);
-    }
-    if (hit) {
-      hit.setAttribute('x1', p.x0);
-      hit.setAttribute('y1', p.y0);
-      hit.setAttribute('x2', p.x1);
-      hit.setAttribute('y2', p.y1);
-    }
-    g.querySelectorAll('[data-anchor="a"]').forEach(function (el) {
-      el.setAttribute('cx', p.x0);
-      el.setAttribute('cy', p.y0);
-    });
-    g.querySelectorAll('[data-anchor="b"]').forEach(function (el) {
-      el.setAttribute('cx', p.x1);
-      el.setAttribute('cy', p.y1);
-    });
-    return true;
-  }
-
-  function beginEditDrag(kind, locId, end, pagePt, pointerId) {
-    var viewer = getViewer();
-    var loc = locById(locId);
-    if (!viewer || !loc || !pagePt) return false;
-    if (state.editDrag) unbindEditDocListeners();
-    state.editDrag = null;
-    var css = viewer.pdfToPageCss(loc);
-    if (!css) return false;
-    var base = lineFromLocCss(loc, css) || {
-      x0: css.x,
-      y0: css.y,
-      x1: css.x + css.width,
-      y1: css.y + css.height
-    };
-    state.editDrag = {
-      kind: kind,
-      locId: String(locId),
-      end: end || null,
-      pointerId: pointerId,
-      startPage: { x: pagePt.x, y: pagePt.y },
-      base: { x0: base.x0, y0: base.y0, x1: base.x1, y1: base.y1 },
-      preview: { x0: base.x0, y0: base.y0, x1: base.x1, y1: base.y1 },
-      moved: false
-    };
-    state.selectedLocationId = String(locId);
-    state.draftLine = null;
-    bindEditDocListeners();
-    /* Do not rebuild SVG here — destroying the pointer target cancels the gesture. */
-    var g = $('pd-anno') && $('pd-anno').querySelector('.pd-loc[data-loc-id="' + locId + '"]');
-    if (g) g.classList.add('is-editing', 'is-selected');
-    return true;
-  }
-
-  function updateEditDrag(pagePt) {
-    var drag = state.editDrag;
-    if (!drag || !pagePt) return;
-    var dx = pagePt.x - drag.startPage.x;
-    var dy = pagePt.y - drag.startPage.y;
-    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) drag.moved = true;
-    if (drag.kind === 'end') {
-      if (drag.end === 'a') {
-        drag.preview = {
-          x0: drag.base.x0 + dx,
-          y0: drag.base.y0 + dy,
-          x1: drag.base.x1,
-          y1: drag.base.y1
-        };
-      } else {
-        drag.preview = {
-          x0: drag.base.x0,
-          y0: drag.base.y0,
-          x1: drag.base.x1 + dx,
-          y1: drag.base.y1 + dy
-        };
-      }
-    } else {
-      drag.preview = {
-        x0: drag.base.x0 + dx,
-        y0: drag.base.y0 + dy,
-        x1: drag.base.x1 + dx,
-        y1: drag.base.y1 + dy
-      };
-    }
-    if (!paintEditPreview(drag)) renderAnnotations();
-  }
-
-  async function finishEditDrag() {
-    var drag = state.editDrag;
-    if (!drag) return;
-    unbindEditDocListeners();
-    state.editDrag = null;
-    if (!drag.moved || !drag.preview) {
-      renderAnnotations();
-      updateChrome();
-      return;
-    }
-    var viewer = getViewer();
-    var m = viewer && viewer.getPageMetrics();
-    var scale = (m && m.scale) || 1;
-    if (lineLengthCss(drag.preview) * scale < 14) {
-      renderAnnotations();
-      updateChrome();
-      toast('Line too short.');
-      return;
-    }
-    try {
-      await persistLineGeometry(drag.locId, drag.preview);
-    } catch (err) {
-      renderAnnotations();
-      alert(err.message || 'Could not update line.');
-    }
-    updateChrome();
-  }
-
-  function cancelEditDrag() {
-    if (!state.editDrag) return;
-    unbindEditDocListeners();
-    state.editDrag = null;
     renderAnnotations();
     updateChrome();
   }
@@ -846,7 +579,6 @@
       drawingViewer = new window.DrawingViewer($('screen-viewer'), {
         onTransform: function () { renderAnnotations(); },
         onSelectStart: function (drag) {
-          if (state.editDrag) return;
           state.draftLine = { x0: drag.x0, y0: drag.y0, x1: drag.x1, y1: drag.y1 };
           state.selectedLocationId = null;
           renderAnnotations();
@@ -957,7 +689,6 @@
     state.viewing = null;
     state.booking = null;
     state.draftLine = null;
-    state.editDrag = null;
     state.selectedLocationId = null;
     if (drawingViewer) {
       drawingViewer.setInteractionMode('pan');
@@ -1052,7 +783,6 @@
       state.redoStack = [];
       state.selectedLocationId = null;
       state.draftLine = null;
-      state.editDrag = null;
       applyBooking(data.booking);
       toast('Drawing cleaned.');
     } catch (err) {
@@ -1541,42 +1271,18 @@
     if (e.type === 'pointerdown' && e.pointerType === 'mouse' && e.button !== 0) return;
     var target = e.target && e.target.closest ? e.target : (e.target && e.target.parentNode);
     if (!target || !target.closest) return;
-    var anchor = target.closest('[data-anchor]');
     var g = target.closest('[data-loc-id]');
     if (!g) return;
-    /* Existing marks are objects — do not start a new viewer stroke / pan. */
+    /* Keep taps on existing marks from starting a new stroke. */
     e.preventDefault();
     e.stopPropagation();
-    var locId = g.getAttribute('data-loc-id');
-    if (anchor) {
-      var pagePt = eventPagePoint(e);
-      if (!beginEditDrag('end', locId, anchor.getAttribute('data-anchor'), pagePt, e.pointerId)) {
-        return;
-      }
-      updateChrome();
-      return;
-    }
-    if (state.selectedLocationId !== locId) {
-      selectLocationById(locId);
-      return;
-    }
-    var loc = locById(locId);
-    if (loc && (loc.markKind || 'rect') === 'line') {
-      var pt = eventPagePoint(e);
-      if (!beginEditDrag('move', loc.id, null, pt, e.pointerId)) return;
-      updateChrome();
-    }
+    selectLocationById(g.getAttribute('data-loc-id'));
   }
 
   on($('pd-anno'), 'pointerdown', onAnnoPointerDown);
   on($('pd-anno'), 'touchstart', onAnnoPointerDown, { passive: false });
 
   on($('pd-anno'), 'click', function (e) {
-    if (state.editDrag) {
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
     var g = e.target.closest('[data-loc-id]');
     if (!g) return;
     e.stopPropagation();
