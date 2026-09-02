@@ -27,7 +27,7 @@
     role: 'worker',
     viewing: null,
     booking: null,
-    mode: 'pan',
+    mode: 'select',
     activeWorkTypeId: null,
     layerCount: 1,
     selectedLocationId: null,
@@ -370,12 +370,12 @@
     if ($('btn-undo')) $('btn-undo').disabled = !state.undoStack.length;
     if ($('btn-redo')) $('btn-redo').disabled = !state.redoStack.length;
     if ($('btn-pan')) $('btn-pan').classList.toggle('is-on', state.mode === 'pan');
-    if ($('btn-select')) $('btn-select').classList.toggle('is-on', state.mode === 'select');
 
     var wtHost = $('pd-worktypes');
     if (wtHost) {
       wtHost.innerHTML = state.workTypes.map(function (w) {
-        return '<button type="button" class="pd-wt' + (w.id === state.activeWorkTypeId ? ' is-on' : '') +
+        var drawing = state.mode === 'select' && w.id === state.activeWorkTypeId;
+        return '<button type="button" class="pd-wt' + (drawing ? ' is-on' : '') +
           '" data-wt="' + escapeHtml(w.id) + '" style="border-left-color:' + escapeHtml(w.colour) + '">' +
           escapeHtml(w.name) + '</button>';
       }).join('');
@@ -426,6 +426,17 @@
   function setMode(mode) {
     state.mode = mode === 'select' ? 'select' : 'pan';
     if (drawingViewer) drawingViewer.setInteractionMode(state.mode);
+    updateChrome();
+  }
+
+  /** Work-type chips are the draw tools — selecting one starts finger-marking. */
+  function selectWorkType(id) {
+    state.activeWorkTypeId = id;
+    var wt = activeWorkType();
+    if (wt && !wt.supportsLayers) state.layerCount = 1;
+    state.selectedLocationId = null;
+    setMode('select');
+    renderAnnotations();
     updateChrome();
   }
 
@@ -515,7 +526,7 @@
     showScreen('screen-viewer');
     if ($('pd-chrome')) $('pd-chrome').hidden = false;
     updateChrome();
-    setMode('pan');
+    setMode(state.activeWorkTypeId ? 'select' : 'pan');
     try {
       var draft = await apiJson('/bookings', {
         method: 'POST',
@@ -588,7 +599,7 @@
         });
         pushUndo({ type: 'add', locationId: data.locationId, location: savedLoc });
         state.draftRect = null;
-        state.selectedLocationId = data.locationId;
+        state.selectedLocationId = null;
         applyBooking(data.booking);
         setMode('select');
         return;
@@ -856,19 +867,13 @@
   on($('btn-undo'), 'click', undo);
   on($('btn-redo'), 'click', redo);
   on($('btn-pan'), 'click', function () { setMode('pan'); });
-  on($('btn-select'), 'click', function () { setMode('select'); });
   on($('btn-save-location'), 'click', saveLocation);
   on($('btn-delete-location'), 'click', deleteSelectedLocation);
 
   on($('pd-worktypes'), 'click', function (e) {
     var btn = e.target.closest('[data-wt]');
     if (!btn) return;
-    state.activeWorkTypeId = btn.getAttribute('data-wt');
-    var wt = activeWorkType();
-    if (wt && !wt.supportsLayers) state.layerCount = 1;
-    /* Instant pattern preview on the selected rectangle */
-    renderAnnotations();
-    updateChrome();
+    selectWorkType(btn.getAttribute('data-wt'));
   });
 
   on($('pd-layers'), 'click', function (e) {
