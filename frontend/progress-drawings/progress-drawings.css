@@ -407,3 +407,22 @@
   max-width: min(92vw, 360px);
 }
 .pd-toast[hidden] { display: none !important; }
+
+.pd-sync {
+  display: none;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 999px;
+  padding: 4px 8px;
+  margin-right: 2px;
+  white-space: nowrap;
+}
+.pd-sync.is-on { display: inline-flex; }
+#screen-viewer .md-offline {
+  margin-right: 8px;
+  flex-shrink: 0;
+}

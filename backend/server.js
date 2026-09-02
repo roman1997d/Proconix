@@ -185,6 +185,13 @@ const progressDrawingsHtmlPath = path.join(frontendDir, 'progress-drawings', 'in
 app.get(['/progress-drawings', '/progress-drawings/'], (req, res) => {
   res.sendFile(progressDrawingsHtmlPath);
 });
+/* Allow SW to cache shared /mydrawings viewer assets while serving Progress Drawings offline. */
+app.get('/progress-drawings/sw.js', (req, res) => {
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('application/javascript');
+  res.sendFile(path.join(frontendDir, 'progress-drawings', 'sw.js'));
+});
 
 // Static frontend (index.html, favicon.ico, register_company.html, css/, js/, etc.)
 app.use(express.static(frontendDir));

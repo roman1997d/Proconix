@@ -9,13 +9,14 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Progress Drawings">
-  <meta name="description" content="Mark weekly progress on general drawings and generate booking PDFs.">
+  <meta name="description" content="Mark weekly progress on general drawings. Works offline and syncs when you reconnect.">
   <title>Progress Drawings</title>
+  <link rel="manifest" href="/progress-drawings/manifest.webmanifest">
   <link rel="icon" href="/favicon_io/favicon.ico" sizes="any">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="apple-touch-icon" href="/favicon_io/apple-touch-icon.png">
   <link rel="stylesheet" href="/mydrawings/mydrawings.css">
-  <link rel="stylesheet" href="/progress-drawings/progress-drawings.css?v=p3g">
+  <link rel="stylesheet" href="/progress-drawings/progress-drawings.css?v=p3h">
 </head>
 <body>
   <div class="md-boot" id="pd-boot">
@@ -74,6 +75,8 @@
             <span id="project-name">Project</span>
           </p>
         </div>
+        <span class="md-offline" id="offline-pill" aria-live="polite"><i></i> Offline</span>
+        <span class="pd-sync" id="sync-pill" aria-live="polite" hidden>Pending sync</span>
         <button type="button" class="md-update-btn" id="btn-refresh" aria-label="Refresh">Refresh</button>
       </header>
       <div class="md-main">
@@ -102,6 +105,7 @@
           <h1 class="md-header-title" id="viewer-number">Drawing</h1>
           <p class="pd-viewer-sub" id="viewer-sub"></p>
         </div>
+        <span class="md-offline" id="viewer-offline" aria-live="polite"><i></i> Offline</span>
       </header>
       <div class="dv-stage" id="dv-stage" data-dv-stage>
         <p class="dv-status" data-dv-status hidden>Opening drawing…</p>
@@ -168,6 +172,7 @@
 
   <script src="/mydrawings/lib/pdf.min.js"></script>
   <script src="/mydrawings/drawing-viewer.js?v=p3f"></script>
-  <script src="/progress-drawings/progress-drawings.js?v=p3g"></script>
+  <script src="/progress-drawings/pd-offline.js?v=p3h"></script>
+  <script src="/progress-drawings/progress-drawings.js?v=p3h"></script>
 </body>
 </html>

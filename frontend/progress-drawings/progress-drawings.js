@@ -1,4 +1,4 @@
-/* Progress Drawings — Phase 1+2: viewer, select area, work types, save locations */
+/* Progress Drawings — offline-first PWA: viewer, marks, IndexedDB sync */
 (function () {
   'use strict';
 
@@ -6,6 +6,7 @@
   var SESSION_KEY = 'proconix_mydrawings_session';
   var FLOOR_KEY = 'proconix_progress_drawings_floor';
   var PDFJS_WORKER = '/mydrawings/lib/pdf.worker.min.js';
+  var Offline = window.PdOffline || null;
 
   var FLOORS = [
     { id: 'ground', label: 'Ground Floor' },
@@ -140,7 +141,22 @@
     $('pin-continue').disabled = n !== 4;
   }
 
-  async function apiJson(path, opts) {
+  function isOnline() {
+    return Offline ? Offline.isOnline() : (navigator.onLine !== false);
+  }
+
+  function offlineCtx() {
+    var drawing = state.viewing || null;
+    return {
+      booking: state.booking,
+      workTypes: state.workTypes,
+      drawing: drawing,
+      project: state.project,
+      floor: state.floor
+    };
+  }
+
+  async function networkApiJson(path, opts) {
     opts = opts || {};
     var headers = Object.assign({}, authHeaders(), opts.headers || {});
     var body = opts.body;
@@ -164,10 +180,33 @@
     return data;
   }
 
-  async function loadBootstrap() {
-    var floorId = state.floor ? state.floor.id : '';
-    var q = floorId ? ('?floor=' + encodeURIComponent(floorId)) : '';
-    var data = await apiJson('/bootstrap' + q);
+  async function apiJson(path, opts) {
+    opts = opts || {};
+    var method = String(opts.method || 'GET').toUpperCase();
+    var body = opts.body;
+
+    if (isOnline()) {
+      try {
+        var data = await networkApiJson(path, opts);
+        if (Offline) {
+          try { await Offline.cacheAfterSuccess(path, method, data); } catch (e) {}
+        }
+        updateOfflineUi();
+        return data;
+      } catch (err) {
+        if (err && err.status) throw err;
+        if (!Offline || !Offline.isNetworkError(err)) throw err;
+        /* fall through to offline handler */
+      }
+    }
+
+    if (!Offline) throw new Error('You are offline.');
+    var offlineData = await Offline.handleOffline(path, method, body, offlineCtx());
+    updateOfflineUi();
+    return offlineData;
+  }
+
+  function applyBootstrapData(data) {
     state.project = data.project || null;
     state.drawings = data.drawings || [];
     state.bookings = data.bookings || [];
@@ -180,7 +219,80 @@
     state.workTypes.forEach(function (w) {
       if (state.visibleTypes[w.id] == null) state.visibleTypes[w.id] = true;
     });
+  }
+
+  async function loadBootstrap() {
+    var floorId = state.floor ? state.floor.id : '';
+    var q = floorId ? ('?floor=' + encodeURIComponent(floorId)) : '';
+    var data = await apiJson('/bootstrap' + q);
+    applyBootstrapData(data);
     return data;
+  }
+
+  async function updateOfflineUi() {
+    var offline = !isOnline();
+    ['offline-pill', 'viewer-offline'].forEach(function (id) {
+      var el = $(id);
+      if (el) el.classList.toggle('is-on', offline);
+    });
+    var syncEl = $('sync-pill');
+    if (syncEl && Offline) {
+      try {
+        var n = await Offline.outboxCount();
+        syncEl.hidden = false;
+        syncEl.classList.toggle('is-on', n > 0);
+        syncEl.textContent = n > 0
+          ? (offline ? ('Saved locally · ' + n) : ('Pending sync · ' + n))
+          : 'Pending sync';
+        if (n === 0) syncEl.classList.remove('is-on');
+      } catch (e) {}
+    }
+  }
+
+  async function syncPending(opts) {
+    opts = opts || {};
+    if (!Offline || !isOnline() || Offline.isSyncing()) return;
+    var before = await Offline.outboxCount();
+    if (!before) {
+      updateOfflineUi();
+      return;
+    }
+    try {
+      var result = await Offline.flushOutbox(networkApiJson);
+      if (state.booking && result && result.idMap) {
+        var remapped = Offline.remapIdsInBooking(state.booking, result.idMap);
+        if (result.idMap[state.booking.id]) {
+          state.booking = remapped;
+        }
+        if (state.selectedLocationId && result.idMap[state.selectedLocationId]) {
+          state.selectedLocationId = result.idMap[state.selectedLocationId];
+        }
+      }
+      if (state.viewing && state.floor && isOnline()) {
+        try {
+          var draft = await networkApiJson('/bookings', {
+            method: 'POST',
+            body: { floorId: state.floor.id, drawingId: state.viewing.id }
+          });
+          if (draft && draft.booking) {
+            applyBooking(draft.booking);
+            try { await Offline.cacheAfterSuccess('/bookings', 'POST', draft); } catch (e) {}
+          }
+        } catch (e) {}
+      }
+      try { await loadBootstrap(); renderHome(); } catch (e) {}
+      var after = await Offline.outboxCount();
+      if (opts.toast !== false && before && after === 0) {
+        toast('Synced with server.');
+      }
+    } catch (err) {
+      if (opts.toast !== false) {
+        toast(err.message || 'Sync will retry when online.');
+      }
+    } finally {
+      updateOfflineUi();
+      updateChrome();
+    }
   }
 
   function workTypeById(id) {
@@ -671,8 +783,12 @@
 
   function applyBooking(booking) {
     state.booking = booking;
+    if (Offline && booking) {
+      Offline.putBooking(booking).catch(function () {});
+    }
     renderAnnotations();
     updateChrome();
+    updateOfflineUi();
   }
 
   function getViewer() {
@@ -712,12 +828,34 @@
   }
 
   async function fetchDrawingBlob(drawing) {
+    if (Offline) {
+      try {
+        var cached = await Offline.getPdf(drawing.id);
+        if (cached) {
+          if (isOnline()) {
+            /* Refresh cache in background when online. */
+            fetch(drawing.fileUrl, { credentials: 'same-origin', headers: authHeaders() })
+              .then(function (res) { return res.ok ? res.blob() : null; })
+              .then(function (blob) { if (blob) return Offline.putPdf(drawing.id, blob); })
+              .catch(function () {});
+          }
+          return cached;
+        }
+      } catch (e) {}
+    }
+    if (!isOnline()) {
+      throw new Error('This drawing is not available offline yet. Open it once while online.');
+    }
     var res = await fetch(drawing.fileUrl, {
       credentials: 'same-origin',
       headers: authHeaders()
     });
     if (!res.ok) throw new Error('Could not load drawing PDF.');
-    return res.blob();
+    var blob = await res.blob();
+    if (Offline) {
+      try { await Offline.putPdf(drawing.id, blob); } catch (e) {}
+    }
+    return blob;
   }
 
   async function ensurePdfJs() {
@@ -1024,10 +1162,21 @@
     }, 40);
   }
 
-  function openShareSheet() {
+  async function openShareSheet() {
     if (!state.booking) {
       toast('Open a drawing first.');
       return;
+    }
+    if (!isOnline()) {
+      toast('Connect to the internet to share or export.');
+      return;
+    }
+    if (Offline) {
+      var pending = await Offline.outboxCount();
+      if (pending > 0) {
+        toast('Syncing marks first…');
+        await syncPending({ toast: false });
+      }
     }
     openSheet(
       '<h3 id="pd-sheet-title">Share</h3>' +
@@ -1135,10 +1284,13 @@
         }
         renderFloorGrid();
         showScreen('screen-floor');
+        updateOfflineUi();
         return;
       }
       renderHome();
       showScreen('screen-home');
+      updateOfflineUi();
+      if (isOnline()) syncPending({ toast: false });
     } catch (err) {
       if (err && err.status === 401) {
         state.adminPin = '';
@@ -1168,6 +1320,9 @@
     $('auth-error').textContent = '';
     $('pin-continue').disabled = true;
     try {
+      if (!isOnline()) {
+        throw new Error('Connect once to sign in. Then Progress Drawings works offline.');
+      }
       var res = await fetch('/api/my-drawings/unlock', {
         method: 'POST',
         credentials: 'same-origin',
@@ -1192,8 +1347,14 @@
     }
   }
 
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/progress-drawings/sw.js', { scope: '/' }).catch(function () {});
+  }
+
   async function boot() {
     try {
+      registerServiceWorker();
       var session = readSession();
       if (session && session.ok && (session.deviceToken || (session.pin && session.role === 'admin'))) {
         if (session.role === 'admin' && session.pin) state.adminPin = session.pin;
@@ -1208,6 +1369,7 @@
       if ($('auth-error')) $('auth-error').textContent = err.message || 'Could not start.';
     } finally {
       $('pd-boot').classList.add('is-done');
+      updateOfflineUi();
     }
   }
 
@@ -1239,11 +1401,22 @@
 
   on($('btn-refresh'), 'click', async function () {
     try {
+      if (isOnline()) await syncPending({ toast: false });
       await loadBootstrap();
       renderHome();
+      updateOfflineUi();
     } catch (err) {
       alert(err.message || 'Could not refresh.');
     }
+  });
+
+  on(window, 'online', function () {
+    updateOfflineUi();
+    syncPending({ toast: true });
+  });
+  on(window, 'offline', function () {
+    updateOfflineUi();
+    toast('Offline — marks save on this device.');
   });
 
   on($('drawing-list'), 'click', function (e) {
