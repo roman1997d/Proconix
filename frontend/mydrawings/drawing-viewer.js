@@ -723,6 +723,16 @@
     this.applyTransform();
   };
 
+  DrawingViewer.prototype.beginSelectAt = function (clientX, clientY) {
+    if (this.interactionMode !== 'select' || this.selectDrag) return;
+    var cur = this.clientToPageCss(clientX, clientY);
+    if (!cur) return;
+    this.selectDrag = { x0: cur.x, y0: cur.y, x1: cur.x, y1: cur.y };
+    if (typeof this.opts.onSelectStart === 'function') {
+      try { this.opts.onSelectStart(this.selectDrag); } catch (e) {}
+    }
+  };
+
   DrawingViewer.prototype.applyOneFinger = function (pt) {
     var g = this.gesture;
     if (!g || g.mode !== 'one') return;
@@ -730,10 +740,7 @@
     if (this.interactionMode === 'select') {
       var cur = this.clientToPageCss(pt.x, pt.y);
       if (!this.selectDrag) {
-        this.selectDrag = { x0: cur.x, y0: cur.y, x1: cur.x, y1: cur.y };
-        if (typeof this.opts.onSelectStart === 'function') {
-          try { this.opts.onSelectStart(this.selectDrag); } catch (e) {}
-        }
+        this.beginSelectAt(pt.x, pt.y);
       } else {
         this.selectDrag.x1 = cur.x;
         this.selectDrag.y1 = cur.y;
@@ -778,10 +785,13 @@
       var y = Math.min(drag.y0, drag.y1);
       var w = Math.abs(drag.x1 - drag.x0);
       var h = Math.abs(drag.y1 - drag.y0);
-      /* Min length in screen px — page-space thresholds break at high zoom. */
+      /* Min length in screen px — page-space thresholds break at high zoom.
+         Do not require this.moved: iOS often ends the gesture via touchcancel
+         before the move flag is set, which used to wipe the stroke. */
       var pageLen = Math.sqrt((w * w) + (h * h));
       var screenLen = pageLen * this.scale;
-      if (this.moved && screenLen > 14 && typeof this.opts.onSelectEnd === 'function') {
+      if (screenLen > 14 && typeof this.opts.onSelectEnd === 'function') {
+        this.moved = true;
         try {
           this.opts.onSelectEnd({
             x: x,
@@ -836,6 +846,9 @@
     var pts = this.touchPoints(e);
     if (pts.length === 1 && !this.gesture) this.moved = false;
     this.beginGesture(pts);
+    if (pts.length === 1 && this.interactionMode === 'select') {
+      this.beginSelectAt(pts[0].x, pts[0].y);
+    }
   };
 
   DrawingViewer.prototype.onTouchMove = function (e) {
@@ -882,6 +895,9 @@
     this.pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
     this.moved = false;
     this.beginGesture(this.ptrList());
+    if (this.interactionMode === 'select') {
+      this.beginSelectAt(e.clientX, e.clientY);
+    }
   };
 
   DrawingViewer.prototype.onPtrMove = function (e) {

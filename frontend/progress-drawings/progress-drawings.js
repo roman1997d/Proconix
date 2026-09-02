@@ -505,6 +505,40 @@
     svg.innerHTML = html;
   }
 
+  /** Update draft stroke without rebuilding saved marks (avoids iOS touchcancel). */
+  function paintDraftLine() {
+    var svg = $('pd-anno');
+    if (!svg || !state.draftLine) return false;
+    var d = state.draftLine;
+    var colour = markColour(activeWorkType(), '#2563eb');
+    var line = svg.querySelector('line.pd-draft-mark');
+    if (!line) {
+      line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('class', 'pd-draft-mark');
+      line.setAttribute('stroke-linecap', 'butt');
+      line.setAttribute('stroke-linejoin', 'miter');
+      line.setAttribute('stroke-width', '1.25');
+      svg.appendChild(line);
+    }
+    line.setAttribute('x1', d.x0);
+    line.setAttribute('y1', d.y0);
+    line.setAttribute('x2', d.x1);
+    line.setAttribute('y2', d.y1);
+    line.setAttribute('stroke', colour);
+    return true;
+  }
+
+  function draftScreenLength() {
+    if (!state.draftLine || !drawingViewer) return 0;
+    var d = state.draftLine;
+    var len = Math.sqrt(
+      Math.pow((d.x1 || 0) - (d.x0 || 0), 2) +
+      Math.pow((d.y1 || 0) - (d.y0 || 0), 2)
+    );
+    var m = drawingViewer.getPageMetrics();
+    return len * ((m && m.scale) || 1);
+  }
+
   function updateChrome() {
     if ($('btn-undo')) $('btn-undo').disabled = !state.undoStack.length;
     if ($('btn-redo')) $('btn-redo').disabled = !state.redoStack.length;
@@ -581,12 +615,12 @@
         onSelectStart: function (drag) {
           state.draftLine = { x0: drag.x0, y0: drag.y0, x1: drag.x1, y1: drag.y1 };
           state.selectedLocationId = null;
-          renderAnnotations();
+          if (!paintDraftLine()) renderAnnotations();
           updateChrome();
         },
         onSelectMove: function (drag) {
           state.draftLine = { x0: drag.x0, y0: drag.y0, x1: drag.x1, y1: drag.y1 };
-          renderAnnotations();
+          if (!paintDraftLine()) renderAnnotations();
         },
         onSelectEnd: function (rect) {
           state.draftLine = {
@@ -596,26 +630,18 @@
             y1: rect.y1 != null ? rect.y1 : (rect.y + rect.height)
           };
           state.selectedLocationId = null;
-          /* Finger-up synthesizes a click that can hit another mark and wipe the draft. */
-          state.suppressAnnoSelectUntil = Date.now() + 600;
-          renderAnnotations();
+          /* Block ghost taps on other marks until the user Adds or starts a new stroke. */
+          state.suppressAnnoSelectUntil = Date.now() + 2500;
+          if (!paintDraftLine()) renderAnnotations();
           updateChrome();
         },
         onSelectCancel: function () {
-          /* Keep an in-progress draft if the stroke was already long enough to show. */
-          if (state.draftLine) {
-            var d = state.draftLine;
-            var len = Math.sqrt(
-              Math.pow((d.x1 || 0) - (d.x0 || 0), 2) +
-              Math.pow((d.y1 || 0) - (d.y0 || 0), 2)
-            );
-            var m = drawingViewer && drawingViewer.getPageMetrics();
-            var scale = (m && m.scale) || 1;
-            if (len * scale > 14) {
-              state.suppressAnnoSelectUntil = Date.now() + 600;
-              updateChrome();
-              return;
-            }
+          /* Never wipe a visible stroke on iOS touchcancel — only drop empty taps. */
+          if (state.draftLine && draftScreenLength() > 8) {
+            state.suppressAnnoSelectUntil = Date.now() + 2500;
+            if (!paintDraftLine()) renderAnnotations();
+            updateChrome();
+            return;
           }
           state.draftLine = null;
           renderAnnotations();
@@ -1252,9 +1278,10 @@
   });
 
   function selectLocationById(locId) {
+    /* A pending draft always wins — iOS ghost taps must not erase it. */
+    if (state.draftLine) return;
     if (Date.now() < (state.suppressAnnoSelectUntil || 0)) return;
     state.selectedLocationId = String(locId);
-    state.draftLine = null;
     var loc = locById(locId);
     if (loc && loc.annotations && loc.annotations[0]) {
       state.activeWorkTypeId = loc.annotations[0].workTypeId;
@@ -1267,7 +1294,7 @@
   function onAnnoPointerDown(e) {
     if (e.type === 'pointerdown' && e.pointerType === 'touch') return;
     if (e.type === 'pointerdown' && e.pointerType === 'mouse' && e.button !== 0) return;
-    if (Date.now() < (state.suppressAnnoSelectUntil || 0)) {
+    if (state.draftLine || Date.now() < (state.suppressAnnoSelectUntil || 0)) {
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -1286,7 +1313,7 @@
   on($('pd-anno'), 'touchstart', onAnnoPointerDown, { passive: false });
 
   on($('pd-anno'), 'click', function (e) {
-    if (Date.now() < (state.suppressAnnoSelectUntil || 0)) {
+    if (state.draftLine || Date.now() < (state.suppressAnnoSelectUntil || 0)) {
       e.preventDefault();
       e.stopPropagation();
       return;
