@@ -15,7 +15,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="apple-touch-icon" href="/favicon_io/apple-touch-icon.png">
   <link rel="stylesheet" href="/mydrawings/mydrawings.css">
-  <link rel="stylesheet" href="/progress-drawings/progress-drawings.css?v=p2g">
+  <link rel="stylesheet" href="/progress-drawings/progress-drawings.css?v=p2i">
 </head>
 <body>
   <div class="md-boot" id="pd-boot">
@@ -93,7 +93,7 @@
       </div>
     </section>
 
-    <section class="md-screen md-viewer" id="screen-viewer" aria-label="Drawing viewer">
+    <section class="md-screen md-viewer pd-viewer" id="screen-viewer" aria-label="Drawing viewer">
       <header class="dv-top" id="dv-top">
         <button type="button" class="md-icon-btn" id="btn-viewer-back" aria-label="Back">
           <svg class="md-icon md-icon-lg" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
@@ -112,47 +112,32 @@
         <canvas class="dv-detail" data-dv-detail hidden></canvas>
       </div>
       <div class="pd-chrome" id="pd-chrome" hidden>
-        <div class="pd-stats" id="pd-stats"></div>
+        <div class="pd-worktypes" id="pd-worktypes" role="toolbar" aria-label="Work types"></div>
+        <div class="pd-actions">
+          <button type="button" class="md-btn md-btn-primary" id="btn-save-location" disabled>Add work type</button>
+          <button type="button" class="md-btn md-btn-ghost pd-delete" id="btn-delete-location" hidden>Delete</button>
+        </div>
         <div class="pd-tools">
           <button type="button" class="pd-tool" data-tool="undo" id="btn-undo" disabled>Undo</button>
           <button type="button" class="pd-tool" data-tool="redo" id="btn-redo" disabled>Redo</button>
           <button type="button" class="pd-tool" data-tool="pan" id="btn-pan">Pan</button>
         </div>
-        <div class="pd-worktypes" id="pd-worktypes"></div>
-        <div class="pd-layers" id="pd-layers" hidden></div>
-        <div class="pd-visibility" id="pd-visibility"></div>
-        <div class="pd-actions">
-          <button type="button" class="md-btn md-btn-primary" id="btn-save-location" disabled>Add work type</button>
-          <button type="button" class="md-btn md-btn-ghost" id="btn-delete-location" hidden>Delete</button>
-        </div>
       </div>
-      <footer class="dv-bar" id="dv-bar">
-        <button type="button" class="md-icon-btn" data-dv-zoom-out aria-label="Zoom out">
-          <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6"/></svg>
-        </button>
-        <button type="button" class="md-icon-btn" data-dv-zoom-in aria-label="Zoom in">
-          <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M11 8v6M8 11h6"/></svg>
-        </button>
-        <button type="button" class="md-icon-btn" data-dv-fit aria-label="Fit to page">
-          <svg class="md-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 5v5h5"/></svg>
-        </button>
-        <button type="button" class="md-icon-btn" data-dv-fs aria-label="Fullscreen">
-          <svg class="md-icon" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
-        </button>
-        <span class="dv-bar-spacer"></span>
-        <button type="button" class="md-icon-btn" data-dv-prev aria-label="Previous page">
-          <svg class="md-icon" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
-        </button>
+      <!-- Kept for DrawingViewer bindings; hidden — pinch/pan/double-tap still work -->
+      <footer class="dv-bar" id="dv-bar" hidden aria-hidden="true">
+        <button type="button" class="md-icon-btn" data-dv-zoom-out aria-label="Zoom out"></button>
+        <button type="button" class="md-icon-btn" data-dv-zoom-in aria-label="Zoom in"></button>
+        <button type="button" class="md-icon-btn" data-dv-fit aria-label="Fit to page"></button>
+        <button type="button" class="md-icon-btn" data-dv-fs aria-label="Fullscreen"></button>
+        <button type="button" class="md-icon-btn" data-dv-prev aria-label="Previous page"></button>
         <span class="dv-page" data-dv-page>1 / 1</span>
-        <button type="button" class="md-icon-btn" data-dv-next aria-label="Next page">
-          <svg class="md-icon" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
-        </button>
+        <button type="button" class="md-icon-btn" data-dv-next aria-label="Next page"></button>
       </footer>
     </section>
   </div>
 
   <script src="/mydrawings/lib/pdf.min.js"></script>
   <script src="/mydrawings/drawing-viewer.js"></script>
-  <script src="/progress-drawings/progress-drawings.js?v=p2g"></script>
+  <script src="/progress-drawings/progress-drawings.js?v=p2i"></script>
 </body>
 </html>

@@ -246,40 +246,15 @@
   }
 
   function patternsHtml() {
+    /* All work types use the same continuous-line hatch; colour distinguishes them. */
     var out = '<defs>';
+    var size = 8;
     state.workTypes.forEach(function (wt) {
-      var maxL = wt.supportsLayers ? 3 : 1;
-      for (var layer = 1; layer <= maxL; layer++) {
-        var colour = wt.colour || '#ef4444';
-        var size = 10;
-        var paths;
-        if (wt.pattern === 'diagonal') {
-          /* Insulation — ////// */
-          size = 10;
-          paths =
-            '<path d="M-2 8 L8 -2" stroke="' + colour + '" stroke-width="2"/>' +
-            '<path d="M0 ' + size + ' L' + size + ' 0" stroke="' + colour + '" stroke-width="2"/>' +
-            '<path d="M2 ' + (size + 2) + ' L' + (size + 2) + ' 2" stroke="' + colour + '" stroke-width="2"/>';
-        } else if (wt.pattern === 'slashdash') {
-          /* Metal — -/-/-/ */
-          size = 12;
-          paths =
-            '<path d="M1 6 L5 6" stroke="' + colour + '" stroke-width="2.2" stroke-linecap="butt"/>' +
-            '<path d="M6 10 L11 2" stroke="' + colour + '" stroke-width="2" stroke-linecap="butt"/>';
-        } else if (wt.pattern === 'dashed') {
-          /* Angle & Insulation — - - - - - */
-          size = 14;
-          paths =
-            '<path d="M1 7 L8 7" stroke="' + colour + '" stroke-width="2.2" stroke-linecap="butt"/>';
-        } else {
-          /* solid _________ — Boarding / Patress / Letterbox (colour distinguishes) */
-          size = 8;
-          paths =
-            '<path d="M0 4 L' + size + ' 4" stroke="' + colour + '" stroke-width="2.4" stroke-linecap="butt"/>';
-        }
-        out += '<pattern id="' + patternId(wt, layer) + '" patternUnits="userSpaceOnUse" width="' +
-          size + '" height="' + size + '">' + paths + '</pattern>';
-      }
+      var colour = wt.colour || '#ef4444';
+      var paths =
+        '<path d="M0 4 L' + size + ' 4" stroke="' + colour + '" stroke-width="2.4" stroke-linecap="butt"/>';
+      out += '<pattern id="' + patternId(wt, 1) + '" patternUnits="userSpaceOnUse" width="' +
+        size + '" height="' + size + '">' + paths + '</pattern>';
     });
     return out + '</defs>';
   }
@@ -289,12 +264,6 @@
     var short = wt.name || 'work type';
     if (state.selectedLocationId) return 'Update ' + short;
     return 'Add ' + short;
-  }
-
-  function locationVisible(loc) {
-    var anns = loc.annotations || [];
-    if (!anns.length) return true;
-    return anns.some(function (a) { return state.visibleTypes[a.workTypeId] !== false; });
   }
 
   function renderAnnotations() {
@@ -311,18 +280,16 @@
     var locs = (state.booking && state.booking.locations) || [];
     locs.forEach(function (loc) {
       if ((loc.pageIndex || 0) !== Math.max(0, (m.pageNum || 1) - 1)) return;
-      if (!locationVisible(loc)) return;
       var css = viewer.pdfToPageCss(loc);
       if (!css) return;
       var selected = state.selectedLocationId === loc.id;
       html += '<g class="pd-loc' + (selected ? ' is-selected' : '') + '" data-loc-id="' + escapeHtml(loc.id) + '">';
       (loc.annotations || []).forEach(function (a, idx) {
-        if (state.visibleTypes[a.workTypeId] === false) return;
         var wt = workTypeById(a.workTypeId) || { id: a.workTypeId, colour: a.colour, pattern: a.pattern };
         var inset = idx * 3;
         html += '<rect x="' + (css.x + inset) + '" y="' + (css.y + inset) + '" width="' +
           Math.max(2, css.width - inset * 2) + '" height="' + Math.max(2, css.height - inset * 2) +
-          '" fill="url(#' + patternId(wt, a.layerCount || 1) + ')" fill-opacity="0.85" stroke="none"/>';
+          '" fill="url(#' + patternId(wt, 1) + ')" fill-opacity="0.85" stroke="none"/>';
       });
       html += '<rect class="pd-loc-border" x="' + css.x + '" y="' + css.y + '" width="' + css.width +
         '" height="' + css.height + '" fill="transparent" stroke="' +
@@ -333,10 +300,9 @@
     if (state.draftRect) {
       var d = state.draftRect;
       var previewWt = activeWorkType();
-      var layers = previewWt && previewWt.supportsLayers ? state.layerCount : 1;
       if (previewWt) {
         html += '<rect class="pd-draft-fill" x="' + d.x + '" y="' + d.y + '" width="' + d.width +
-          '" height="' + d.height + '" fill="url(#' + patternId(previewWt, layers) + ')" fill-opacity="0.9"/>';
+          '" height="' + d.height + '" fill="url(#' + patternId(previewWt, 1) + ')" fill-opacity="0.9"/>';
         html += '<rect class="pd-draft-border" x="' + d.x + '" y="' + d.y + '" width="' + d.width +
           '" height="' + d.height + '" fill="none" stroke="' + escapeHtml(previewWt.colour || '#38bdf8') +
           '" stroke-width="2" stroke-dasharray="6 4"/>';
@@ -349,24 +315,7 @@
     svg.innerHTML = html;
   }
 
-  function countStats() {
-    var locs = (state.booking && state.booking.locations) || [];
-    var counts = {};
-    state.workTypes.forEach(function (w) { counts[w.id] = 0; });
-    locs.forEach(function (loc) {
-      (loc.annotations || []).forEach(function (a) {
-        counts[a.workTypeId] = (counts[a.workTypeId] || 0) + 1;
-      });
-    });
-    var bits = ['Locations: ' + locs.length];
-    state.workTypes.forEach(function (w) {
-      if (counts[w.id]) bits.push(w.name + ': ' + counts[w.id]);
-    });
-    return bits.join(' · ');
-  }
-
   function updateChrome() {
-    if ($('pd-stats')) $('pd-stats').textContent = countStats();
     if ($('btn-undo')) $('btn-undo').disabled = !state.undoStack.length;
     if ($('btn-redo')) $('btn-redo').disabled = !state.redoStack.length;
     if ($('btn-pan')) $('btn-pan').classList.toggle('is-on', state.mode === 'pan');
@@ -376,36 +325,13 @@
       wtHost.innerHTML = state.workTypes.map(function (w) {
         var drawing = state.mode === 'select' && w.id === state.activeWorkTypeId;
         return '<button type="button" class="pd-wt' + (drawing ? ' is-on' : '') +
-          '" data-wt="' + escapeHtml(w.id) + '" style="border-left-color:' + escapeHtml(w.colour) + '">' +
+          '" data-wt="' + escapeHtml(w.id) + '" style="--pd-wt:' + escapeHtml(w.colour) +
+          ';border-left-color:' + escapeHtml(w.colour) + '">' +
           escapeHtml(w.name) + '</button>';
       }).join('');
     }
 
     var wt = activeWorkType();
-    var layers = $('pd-layers');
-    if (layers) {
-      if (wt && wt.supportsLayers) {
-        layers.hidden = false;
-        layers.innerHTML = [1, 2, 3].map(function (n) {
-          return '<button type="button" class="pd-layer' + (state.layerCount === n ? ' is-on' : '') +
-            '" data-layer="' + n + '">' + n + '×</button>';
-        }).join('');
-      } else {
-        layers.hidden = true;
-        layers.innerHTML = '';
-        state.layerCount = 1;
-      }
-    }
-
-    var vis = $('pd-visibility');
-    if (vis) {
-      vis.innerHTML = state.workTypes.map(function (w) {
-        var on = state.visibleTypes[w.id] !== false;
-        return '<button type="button" class="pd-vis' + (on ? '' : ' is-off') + '" data-vis="' +
-          escapeHtml(w.id) + '">' + (on ? '☑ ' : '☐ ') + escapeHtml(w.name) + '</button>';
-      }).join('');
-    }
-
     var canSave = !!(state.draftRect || state.selectedLocationId);
     if ($('btn-save-location')) {
       $('btn-save-location').disabled = !canSave || !state.activeWorkTypeId;
@@ -874,23 +800,6 @@
     var btn = e.target.closest('[data-wt]');
     if (!btn) return;
     selectWorkType(btn.getAttribute('data-wt'));
-  });
-
-  on($('pd-layers'), 'click', function (e) {
-    var btn = e.target.closest('[data-layer]');
-    if (!btn) return;
-    state.layerCount = parseInt(btn.getAttribute('data-layer'), 10) || 1;
-    renderAnnotations();
-    updateChrome();
-  });
-
-  on($('pd-visibility'), 'click', function (e) {
-    var btn = e.target.closest('[data-vis]');
-    if (!btn) return;
-    var id = btn.getAttribute('data-vis');
-    state.visibleTypes[id] = state.visibleTypes[id] === false;
-    renderAnnotations();
-    updateChrome();
   });
 
   on($('pd-anno'), 'click', function (e) {

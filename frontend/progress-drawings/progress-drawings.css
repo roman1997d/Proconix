@@ -1,4 +1,4 @@
-/* Progress Drawings — builds on My Drawings design tokens */
+/* Progress Drawings — compact mobile marking UI */
 
 .pd-project-label {
   margin: 0 0 14px;
@@ -68,14 +68,32 @@
 
 .pd-viewer-sub {
   margin: 2px 0 0;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: var(--md-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-#screen-viewer { position: relative; }
+#screen-viewer.pd-viewer { position: relative; }
+
+/* Hide My Drawings nav bar — pinch / pan / double-tap remain */
+#screen-viewer.pd-viewer .dv-bar {
+  display: none !important;
+}
+
+/* Compact top bar */
+#screen-viewer.pd-viewer .dv-top {
+  padding: calc(4px + var(--md-safe-t)) 4px 4px;
+  gap: 2px;
+}
+#screen-viewer.pd-viewer .dv-top .md-icon-btn {
+  width: 40px;
+  height: 40px;
+}
+#screen-viewer.pd-viewer .dv-top .md-header-title {
+  font-size: 0.95rem;
+}
 
 .pd-anno {
   position: absolute;
@@ -92,84 +110,130 @@
   stroke: #38bdf8;
   stroke-width: 2.5;
 }
-.pd-anno .pd-draft-fill { pointer-events: none; }
+.pd-anno .pd-draft-fill,
 .pd-anno .pd-draft-border { pointer-events: none; }
 
-.pd-actions .md-btn-primary {
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
-}
-
-.md-viewer.is-select-mode { cursor: crosshair; }
+.md-viewer.is-select-mode,
 .md-viewer.is-select-mode .dv-stage { cursor: crosshair; }
 
+/* Bottom palette — always visible, max compact */
 .pd-chrome {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(56px + var(--md-safe-b));
+  bottom: 0;
   z-index: 8;
-  padding: 8px var(--md-pad) 10px;
-  background: linear-gradient(180deg, transparent, rgba(7, 11, 20, 0.92) 28%);
+  padding: 6px 8px calc(8px + var(--md-safe-b));
+  padding-left: calc(8px + var(--md-safe-l));
+  padding-right: calc(8px + var(--md-safe-r));
+  background: linear-gradient(180deg, transparent, rgba(7, 11, 20, 0.88) 18%, rgba(7, 11, 20, 0.96));
   pointer-events: none;
 }
 .pd-chrome > * { pointer-events: auto; }
 
-.pd-stats {
-  margin: 0 0 8px;
-  font-size: 0.78rem;
-  font-weight: 650;
-  color: #e2e8f0;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+/* Keep palette visible when viewer auto-hides header */
+#screen-viewer.pd-viewer.is-chrome-hidden .pd-chrome {
+  opacity: 1;
+  transform: none;
+  pointer-events: none;
+}
+#screen-viewer.pd-viewer.is-chrome-hidden .pd-chrome > * {
+  pointer-events: auto;
 }
 
-.pd-tools,
-.pd-worktypes,
-.pd-layers,
-.pd-visibility {
+.pd-worktypes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.pd-wt {
+  flex: 1 1 calc(33.33% - 5px);
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--md-line);
+  border-left-width: 4px;
+  background: rgba(18, 26, 40, 0.94);
+  color: #cbd5e1;
+  font-size: 0.7rem;
+  font-weight: 750;
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pd-wt.is-on {
+  color: #f8fafc;
+  border-color: color-mix(in srgb, var(--pd-wt, #38bdf8) 55%, transparent);
+  background: color-mix(in srgb, var(--pd-wt, #38bdf8) 28%, rgba(18, 26, 40, 0.95));
+}
+
+.pd-actions {
   display: flex;
   gap: 6px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  margin-bottom: 8px;
-  padding-bottom: 2px;
+  margin-bottom: 6px;
 }
-.pd-tools::-webkit-scrollbar,
-.pd-worktypes::-webkit-scrollbar,
-.pd-layers::-webkit-scrollbar,
-.pd-visibility::-webkit-scrollbar { display: none; }
-
-.pd-tool,
-.pd-wt,
-.pd-layer,
-.pd-vis {
+.pd-actions .md-btn {
+  flex: 1;
+  min-height: 42px;
+  font-size: 0.9rem;
+  border-radius: 12px;
+}
+.pd-actions .md-btn:disabled { opacity: 0.4; }
+.pd-actions .pd-delete {
   flex: 0 0 auto;
-  min-height: 40px;
-  padding: 0 12px;
+  min-width: 72px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+/* md-btn uses display:flex, which overrides the HTML hidden attribute */
+.pd-actions .pd-delete[hidden] {
+  display: none !important;
+}
+.pd-actions .md-btn-primary {
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.pd-tools {
+  display: flex;
+  gap: 6px;
+}
+.pd-tool {
+  flex: 1;
+  min-height: 34px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--md-line);
   background: rgba(18, 26, 40, 0.92);
   color: var(--md-muted);
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 700;
-  white-space: nowrap;
 }
-.pd-tool.is-on,
-.pd-wt.is-on,
-.pd-layer.is-on {
+.pd-tool.is-on {
   color: #f8fafc;
   border-color: rgba(56, 189, 248, 0.45);
   background: rgba(56, 189, 248, 0.2);
 }
 .pd-tool:disabled { opacity: 0.35; }
-.pd-wt { border-left-width: 4px; }
-.pd-vis.is-off { opacity: 0.45; text-decoration: line-through; }
 
-.pd-actions {
-  display: flex;
-  gap: 8px;
+/* Give the drawing more room above the compact palette */
+#screen-viewer.pd-viewer .dv-stage {
+  bottom: 0;
 }
-.pd-actions .md-btn { flex: 1; min-height: 44px; }
-.pd-actions .md-btn:disabled { opacity: 0.4; }
 
-/* Keep marking tools visible while viewer chrome auto-hides */
+@media (min-width: 540px) {
+  .pd-wt {
+    flex: 0 1 auto;
+    min-width: 110px;
+    font-size: 0.76rem;
+    min-height: 36px;
+  }
+  .pd-chrome {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
