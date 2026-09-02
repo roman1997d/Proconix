@@ -113,15 +113,12 @@
   fill: none;
   stroke-linejoin: miter;
   stroke-linecap: butt;
-  vector-effect: non-scaling-stroke;
+  /* Scale with the drawing zoom — do not keep a fixed screen thickness */
   filter: none;
 }
 .pd-anno .pd-mark,
 .pd-anno .pd-mark-hit { pointer-events: stroke; }
 .pd-anno .pd-draft-mark { pointer-events: none; }
-.pd-anno .pd-loc.is-selected .pd-mark {
-  stroke-width: 3.4;
-}
 
 .md-viewer.is-select-mode,
 .md-viewer.is-select-mode .dv-stage { cursor: crosshair; }

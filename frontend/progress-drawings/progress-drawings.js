@@ -324,11 +324,12 @@
         ? (workTypeById(anns[0].workTypeId) || { colour: anns[0].colour })
         : null;
       var colour = markColour(primary, '#2563eb');
-      var sw = selected ? 3.4 : 2.6;
+      /* Page-space width — scales with zoom like the PDF lines */
+      var sw = selected ? 1.7 : 1.15;
       html += '<g class="pd-loc' + (selected ? ' is-selected' : '') + '" data-loc-id="' + escapeHtml(loc.id) + '">';
       var line = lineFromLocCss(loc, css);
       if (line) {
-        html += strokeLineHtml('pd-mark-hit', line.x0, line.y0, line.x1, line.y1, 'transparent', 18);
+        html += strokeLineHtml('pd-mark-hit', line.x0, line.y0, line.x1, line.y1, 'transparent', 10);
         html += strokeLineHtml('pd-mark', line.x0, line.y0, line.x1, line.y1, colour, sw);
       } else {
         html += strokeRectHtml('pd-mark', css.x, css.y, css.width, css.height, colour, sw);
@@ -339,7 +340,7 @@
     if (state.draftLine) {
       var d = state.draftLine;
       var draftColour = markColour(activeWorkType(), '#2563eb');
-      html += strokeLineHtml('pd-draft-mark', d.x0, d.y0, d.x1, d.y1, draftColour, 2.8);
+      html += strokeLineHtml('pd-draft-mark', d.x0, d.y0, d.x1, d.y1, draftColour, 1.25);
     }
 
     svg.innerHTML = html;
