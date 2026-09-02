@@ -29,7 +29,8 @@ router.get('/catalog', requireMyDrawingsPin, ctrl.getCatalog);
 router.get('/activity', requireMyDrawingsPin, ctrl.getActivity);
 
 router.post('/categories', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.addCategory);
-router.post('/categories/delete', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.deleteCategory);
+router.post('/categories/rename', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.renameCategory);
+router.post('/categories/reorder', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.reorderCategories);
 
 router.post(
   '/drawings',

@@ -54,7 +54,8 @@
     pinFrom: '',
     floor: null,
     floorFrom: '',
-    pendingDeepLink: null
+    pendingDeepLink: null,
+    manageQuery: ''
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -1157,6 +1158,7 @@
     if (row.action === 'added') return who + ' added drawing ' + bits + when;
     if (row.action === 'updated') return who + ' updated drawing ' + bits + when;
     if (row.action === 'added_category') return who + ' added category ' + (title || bits) + when;
+    if (row.action === 'renamed_category') return who + ' renamed category ' + (number ? number + ' to ' : '') + (title || bits) + when;
     if (row.action === 'deleted_category') return who + ' deleted category ' + (title || bits) + when;
     return who + ' ' + (row.action || 'updated') + (bits ? ' ' + bits : '') + when;
   }
@@ -1239,14 +1241,34 @@
     }).join('');
   }
 
+  function categoryTone(name) {
+    var s = String(name || '');
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    return Math.abs(h) % 8;
+  }
+
+  function manageDrawingMatches(d, q) {
+    if (!q) return true;
+    return (d.number + ' ' + d.title + ' ' + d.category + ' ' + (d.revision || '')).toLowerCase().indexOf(q) !== -1;
+  }
+
   function renderManage() {
     var host = $('mg-cats');
     if (!state.categories.length) {
       host.innerHTML = '<p class="mg-form-note">No categories yet.</p>';
     } else {
-      host.innerHTML = state.categories.map(function (c) {
-        return '<span class="mg-cat">' + escapeHtml(c) +
-          '<button type="button" data-mg-del-cat="' + escapeHtml(c) + '" aria-label="Delete ' + escapeHtml(c) + '">&times;</button></span>';
+      host.innerHTML = state.categories.map(function (c, idx) {
+        var tone = categoryTone(c);
+        var upDis = idx === 0 ? ' disabled' : '';
+        var downDis = idx === state.categories.length - 1 ? ' disabled' : '';
+        return '<div class="mg-cat-row" data-tone="' + tone + '" data-cat-name="' + escapeHtml(c) + '">' +
+          '<span class="mg-cat-name">' + escapeHtml(c) + '</span>' +
+          '<span class="mg-cat-actions">' +
+            '<button type="button" data-mg-cat="up" aria-label="Move ' + escapeHtml(c) + ' up"' + upDis + '>↑</button>' +
+            '<button type="button" data-mg-cat="down" aria-label="Move ' + escapeHtml(c) + ' down"' + downDis + '>↓</button>' +
+            '<button type="button" data-mg-cat="rename" aria-label="Rename ' + escapeHtml(c) + '">Edit</button>' +
+          '</span></div>';
       }).join('');
     }
 
@@ -1255,21 +1277,66 @@
       list.innerHTML = '<p class="mg-form-note">No drawings yet. Add one to get started.</p>';
       return;
     }
-    var rows = state.drawings.slice().sort(function (a, b) {
-      return String(a.number).localeCompare(String(b.number));
+
+    var q = (state.manageQuery || '').trim().toLowerCase();
+    var cats = state.categories.slice();
+    var grouped = {};
+    cats.forEach(function (c) { grouped[c] = []; });
+    var orphan = [];
+    state.drawings.forEach(function (d) {
+      if (!manageDrawingMatches(d, q)) return;
+      if (grouped[d.category]) grouped[d.category].push(d);
+      else orphan.push(d);
     });
-    list.innerHTML = rows.map(function (d) {
+
+    function sortDrawings(arr) {
+      return arr.slice().sort(function (a, b) {
+        return String(a.number).localeCompare(String(b.number));
+      });
+    }
+
+    function manageItemHtml(d, extraMeta) {
       var off = state.offlineIds[d.id] ? ' · Offline' : '';
+      var meta = extraMeta || ('Rev ' + escapeHtml(d.revision || '—') + off);
       return '<article class="mg-item" data-id="' + escapeHtml(d.id) + '">' +
         '<p class="mg-item-title">' + escapeHtml(d.title) + '</p>' +
         '<p class="mg-item-num">' + escapeHtml(d.number) + '</p>' +
-        '<p class="mg-item-meta">Rev ' + escapeHtml(d.revision || '—') + ' · ' + escapeHtml(d.category) + off + '</p>' +
+        '<p class="mg-item-meta">' + meta + '</p>' +
         '<div class="mg-item-actions">' +
           '<button type="button" class="is-update" data-mg="update">Update</button>' +
           '<button type="button" data-mg="edit">Edit</button>' +
           '<button type="button" class="is-danger" data-mg="delete">Delete</button>' +
         '</div></article>';
-    }).join('');
+    }
+
+    var html = '';
+    var shown = 0;
+    cats.forEach(function (c) {
+      var items = sortDrawings(grouped[c] || []);
+      if (!items.length) return;
+      shown += items.length;
+      html += '<section class="mg-group" data-tone="' + categoryTone(c) + '">' +
+        '<header class="mg-group-head"><h3>' + escapeHtml(c) + '</h3><span>' + items.length + '</span></header>' +
+        items.map(function (d) { return manageItemHtml(d); }).join('') +
+        '</section>';
+    });
+
+    if (orphan.length) {
+      var oitems = sortDrawings(orphan);
+      shown += oitems.length;
+      html += '<section class="mg-group" data-tone="7">' +
+        '<header class="mg-group-head"><h3>Other</h3><span>' + oitems.length + '</span></header>' +
+        oitems.map(function (d) {
+          return manageItemHtml(d, 'Rev ' + escapeHtml(d.revision || '—') + ' · ' + escapeHtml(d.category));
+        }).join('') +
+        '</section>';
+    }
+
+    if (!html || (q && !shown)) {
+      list.innerHTML = '<p class="mg-form-note">No drawings match “' + escapeHtml(state.manageQuery) + '”.</p>';
+      return;
+    }
+    list.innerHTML = html;
   }
 
   function selectedManageFloors() {
@@ -1353,26 +1420,52 @@
       $('mg-cat-input').value = '';
       await applyRemoteCatalog(data);
       renderManage();
+      renderCats();
       renderList();
     } catch (err) {
       alert(err && err.message ? err.message : 'Could not add category.');
     }
   }
 
-  async function deleteCategory(name) {
-    var used = state.drawings.filter(function (d) { return d.category === name; }).length;
-    var msg = used
-      ? 'Delete “' + name + '”? ' + used + ' drawing(s) will move to Uncategorised.'
-      : 'Delete category “' + name + '”?';
-    if (!confirm(msg)) return;
+  async function renameCategory(name) {
+    var next = window.prompt('Rename category', name);
+    if (next == null) return;
+    next = String(next).replace(/\s+/g, ' ').trim();
+    if (!next || next === name) return;
     try {
-      var data = await apiJson('/categories/delete', { method: 'POST', body: { name: name } });
-      if (state.category === name) state.category = 'All';
+      var data = await apiJson('/categories/rename', {
+        method: 'POST',
+        body: { from: name, to: next }
+      });
+      if (state.category === name) state.category = next;
       await applyRemoteCatalog(data);
       renderManage();
+      renderCats();
       renderList();
     } catch (err) {
-      alert(err && err.message ? err.message : 'Could not delete category.');
+      alert(err && err.message ? err.message : 'Could not rename category.');
+    }
+  }
+
+  async function moveCategory(name, dir) {
+    var cats = state.categories.slice();
+    var i = cats.indexOf(name);
+    var j = i + dir;
+    if (i < 0 || j < 0 || j >= cats.length) return;
+    var tmp = cats[i];
+    cats[i] = cats[j];
+    cats[j] = tmp;
+    try {
+      var data = await apiJson('/categories/reorder', {
+        method: 'POST',
+        body: { names: cats }
+      });
+      await applyRemoteCatalog(data);
+      renderManage();
+      renderCats();
+      renderList();
+    } catch (err) {
+      alert(err && err.message ? err.message : 'Could not reorder categories.');
     }
   }
 
@@ -1786,9 +1879,20 @@
     var f = $('mg-file').files && $('mg-file').files[0];
     $('mg-file-name').textContent = f ? f.name : 'No file selected';
   });
+  on($('mg-search'), 'input', function () {
+    state.manageQuery = $('mg-search').value || '';
+    renderManage();
+  });
   on($('mg-cats'), 'click', function (e) {
-    var btn = e.target.closest('[data-mg-del-cat]');
-    if (btn) deleteCategory(btn.getAttribute('data-mg-del-cat'));
+    var btn = e.target.closest('[data-mg-cat]');
+    if (!btn || btn.disabled) return;
+    var row = btn.closest('.mg-cat-row');
+    if (!row) return;
+    var name = row.getAttribute('data-cat-name');
+    var act = btn.getAttribute('data-mg-cat');
+    if (act === 'rename') renameCategory(name);
+    else if (act === 'up') moveCategory(name, -1);
+    else if (act === 'down') moveCategory(name, 1);
   });
   on($('mg-list'), 'click', function (e) {
     var item = e.target.closest('.mg-item');

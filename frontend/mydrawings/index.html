@@ -167,6 +167,7 @@
             <div class="mg-block-head">
               <h2>Categories</h2>
             </div>
+            <p class="mg-form-note">Rename or change display order. Categories cannot be deleted.</p>
             <div class="mg-cats" id="mg-cats"></div>
             <div class="mg-add-row">
               <input id="mg-cat-input" type="text" maxlength="80" placeholder="New category name" autocomplete="off">
@@ -181,6 +182,10 @@
                 Add drawing
               </button>
             </div>
+            <label class="md-search mg-search">
+              <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+              <input id="mg-search" type="search" placeholder="Search drawings to edit..." enterkeyhint="search" autocapitalize="off" autocomplete="off" spellcheck="false">
+            </label>
             <div id="mg-list"></div>
           </section>
         </div>

@@ -704,39 +704,86 @@ async function addCategory(req, res) {
   }
 }
 
-async function deleteCategory(req, res) {
+async function renameCategory(req, res) {
   try {
-    const name = String((req.body && req.body.name) || '').trim();
-    if (!name) return res.status(400).json({ success: false, message: 'Category name is required.' });
+    const from = String((req.body && req.body.from) || '').trim();
+    const to = String((req.body && req.body.to) || '').trim().slice(0, 80);
+    if (!from || !to) {
+      return res.status(400).json({ success: false, message: 'Current name and new name are required.' });
+    }
+    if (from.toLowerCase() === to.toLowerCase() && from !== to) {
+      /* case-only change — allow */
+    } else if (from === to) {
+      return catalogResponse(req, res);
+    }
     const workspaceId = req.myDrawings.workspace.id;
     const cat = await pool.query(
-      'SELECT id FROM my_drawings_category WHERE workspace_id = $1 AND name = $2',
-      [workspaceId, name]
+      'SELECT id, name FROM my_drawings_category WHERE workspace_id = $1 AND LOWER(name) = LOWER($2)',
+      [workspaceId, from]
     );
     if (!cat.rows[0]) return res.status(404).json({ success: false, message: 'Category not found.' });
-    let fallback = await pool.query(
-      `SELECT id FROM my_drawings_category
-       WHERE workspace_id = $1 AND name <> $2
-       ORDER BY sort_order ASC, name ASC LIMIT 1`,
-      [workspaceId, name]
+    const clash = await pool.query(
+      'SELECT id FROM my_drawings_category WHERE workspace_id = $1 AND LOWER(name) = LOWER($2) AND id <> $3',
+      [workspaceId, to, cat.rows[0].id]
     );
-    if (!fallback.rows[0]) {
-      fallback = await pool.query(
-        `INSERT INTO my_drawings_category (workspace_id, name, sort_order)
-         VALUES ($1, 'Uncategorised', 0) RETURNING id`,
-        [workspaceId]
-      );
+    if (clash.rows[0]) {
+      return res.status(400).json({ success: false, message: 'That category name already exists.' });
     }
-    await pool.query(
-      'UPDATE my_drawings_item SET category_id = $1, updated_at = NOW() WHERE workspace_id = $2 AND category_id = $3',
-      [fallback.rows[0].id, workspaceId, cat.rows[0].id]
-    );
-    await pool.query('DELETE FROM my_drawings_category WHERE id = $1', [cat.rows[0].id]);
-    await logActivity(req, 'deleted_category', name, '');
+    await pool.query('UPDATE my_drawings_category SET name = $1 WHERE id = $2', [to, cat.rows[0].id]);
+    await logActivity(req, 'renamed_category', to, from);
     return catalogResponse(req, res);
   } catch (err) {
-    console.error('myDrawings deleteCategory:', err);
-    return res.status(500).json({ success: false, message: 'Could not delete category.' });
+    console.error('myDrawings renameCategory:', err);
+    return res.status(500).json({ success: false, message: 'Could not rename category.' });
+  }
+}
+
+async function reorderCategories(req, res) {
+  try {
+    const names = Array.isArray(req.body && req.body.names) ? req.body.names : null;
+    if (!names || !names.length) {
+      return res.status(400).json({ success: false, message: 'Category order is required.' });
+    }
+    const workspaceId = req.myDrawings.workspace.id;
+    const existing = await pool.query(
+      'SELECT id, name FROM my_drawings_category WHERE workspace_id = $1',
+      [workspaceId]
+    );
+    const byName = new Map(existing.rows.map((r) => [r.name, r.id]));
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      let order = 0;
+      for (let i = 0; i < names.length; i++) {
+        const name = String(names[i] || '').trim();
+        const id = byName.get(name);
+        if (!id) continue;
+        await client.query(
+          'UPDATE my_drawings_category SET sort_order = $1 WHERE id = $2',
+          [order, id]
+        );
+        order += 1;
+        byName.delete(name);
+      }
+      /* Keep any missing names at the end */
+      for (const id of byName.values()) {
+        await client.query(
+          'UPDATE my_drawings_category SET sort_order = $1 WHERE id = $2',
+          [order, id]
+        );
+        order += 1;
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+    return catalogResponse(req, res);
+  } catch (err) {
+    console.error('myDrawings reorderCategories:', err);
+    return res.status(500).json({ success: false, message: 'Could not reorder categories.' });
   }
 }
 
@@ -931,7 +978,8 @@ module.exports = {
   getCatalog,
   getActivity,
   addCategory,
-  deleteCategory,
+  renameCategory,
+  reorderCategories,
   addDrawing,
   editDrawing,
   updateDrawingFile,
