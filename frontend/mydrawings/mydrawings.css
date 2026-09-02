@@ -636,6 +636,7 @@ img { max-width: 100%; }
   display: block;
   width: 100%;
   height: 100%;
+  image-rendering: auto;
 }
 .dv-detail {
   position: absolute;
@@ -646,10 +647,10 @@ img { max-width: 100%; }
   z-index: 1;
   opacity: 0;
   transform-origin: 0 0;
-  will-change: transform, opacity;
+  will-change: transform;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  background: #fff;
+  background: transparent;
 }
 .dv-detail.is-on { opacity: 1; }
 .dv-status {

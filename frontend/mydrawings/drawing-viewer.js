@@ -7,9 +7,12 @@
   var TAP_ZOOM = 5.5;
   var TAP_ZOOM_2 = 14;
   var HIDE_MS = 3400;
-  var MAX_CANVAS = 5120;
-  var DETAIL_SETTLE_MS = 70;
-  var DETAIL_REPAN_PX = 36;
+  var MAX_CANVAS = 6144;
+  /* HQ crop only for extreme zoom; normal pan uses a sharp full-page base. */
+  var DETAIL_MIN_SCALE = 7.5;
+  var DETAIL_SETTLE_MS = 120;
+  var DETAIL_REPAN_PX = 48;
+  var BASE_ZOOM_COVER = 8;
   var TAP_MOVE = 8;
   var DOUBLE_MS = 300;
   var PAN_GAIN = 1.35;
@@ -212,8 +215,12 @@
   DrawingViewer.prototype.maxBaseScale = function (cssW, cssH, pdfW) {
     var dpr = Math.min(3, window.devicePixelRatio || 1);
     var pdfH = pdfW * (cssH / cssW);
-    /* Sharper base so light zoom stays crisp without waiting for HQ crop. */
-    var want = (cssW / pdfW) * dpr * 2.75;
+    /*
+     * Render the whole page sharp enough for ~8× zoom.
+     * Pan/pinch then stay clear with CSS transforms — like Files — without
+     * blanking the page for a 1s HQ re-render on every finger move.
+     */
+    var want = (cssW / pdfW) * dpr * BASE_ZOOM_COVER;
     var maxByCanvas = MAX_CANVAS / Math.max(pdfW, pdfH);
     return clamp(want, 0.5, maxByCanvas);
   };
@@ -296,24 +303,30 @@
     this.detailAtScale = 0;
   };
 
-  /* Keep the last sharp crop on screen and slide it with the finger (Files-like). */
+  /* Slide/scale the last HQ crop with the gesture — never blank to a blurry base. */
   DrawingViewer.prototype.nudgeDetail = function () {
     if (!this.detail || this.detail.hidden || !this.detailAtScale) return;
-    var scaleRatio = this.scale / this.detailAtScale;
-    if (scaleRatio < 0.94 || scaleRatio > 1.06) {
+    if (this.scale < DETAIL_MIN_SCALE * 0.9) {
       this.detail.style.opacity = '0';
       return;
     }
+    var scaleRatio = this.scale / this.detailAtScale;
     var dx = this.tx - this.detailAtTx;
     var dy = this.ty - this.detailAtTy;
-    this.detail.style.transform = 'translate3d(' + dx + 'px,' + dy + 'px,0)';
+    if (Math.abs(scaleRatio - 1) < 0.002) {
+      this.detail.style.transform = 'translate3d(' + dx + 'px,' + dy + 'px,0)';
+    } else {
+      this.detail.style.transform =
+        'translate3d(' + dx + 'px,' + dy + 'px,0) scale(' + scaleRatio + ')';
+    }
     this.detail.style.opacity = '1';
     this.detail.classList.add('is-on');
   };
 
   DrawingViewer.prototype.detailNeedsRefresh = function () {
-    if (!this.detail || !this.detailAtScale || this.detail.hidden) return this.scale > 1.08;
-    if (Math.abs(this.scale / this.detailAtScale - 1) > 0.03) return true;
+    if (this.scale < DETAIL_MIN_SCALE) return false;
+    if (!this.detail || !this.detailAtScale || this.detail.hidden) return true;
+    if (Math.abs(this.scale / this.detailAtScale - 1) > 0.04) return true;
     var dx = this.tx - this.detailAtTx;
     var dy = this.ty - this.detailAtTy;
     return Math.sqrt(dx * dx + dy * dy) > DETAIL_REPAN_PX;
@@ -482,7 +495,7 @@
 
   DrawingViewer.prototype.paintDetail = async function () {
     if (!this.page || !this.active || !this.detail) return;
-    if (this.scale <= 1.08) {
+    if (this.scale < DETAIL_MIN_SCALE) {
       this.hideDetail();
       return;
     }
@@ -491,23 +504,25 @@
       return;
     }
     var token = ++this.detailToken;
+    /* Freeze the view we are rendering — do not stamp later finger position. */
+    var atTx = this.tx;
+    var atTy = this.ty;
+    var atScale = this.scale;
     var sw = Math.max(1, this.stage.clientWidth);
     var sh = Math.max(1, this.stage.clientHeight);
-    /* Cap detail DPR for speed — overlay only needs to look sharp, not print-ready. */
     var dpr = Math.min(2, window.devicePixelRatio || 1);
-    var boost = this.scale > 10 ? 1.15 : 1.35;
-    var outW = Math.max(1, Math.round(sw * dpr * boost));
-    var outH = Math.max(1, Math.round(sh * dpr * boost));
+    var outW = Math.max(1, Math.round(sw * dpr * 1.25));
+    var outH = Math.max(1, Math.round(sh * dpr * 1.25));
     var cap = MAX_CANVAS;
     var fit = Math.min(1, cap / Math.max(outW, outH));
     outW = Math.max(1, Math.round(outW * fit));
     outH = Math.max(1, Math.round(outH * fit));
 
     var vp1 = this.page.getViewport({ scale: 1 });
-    var visLeft = (0 - this.tx) / this.scale;
-    var visTop = (0 - this.ty) / this.scale;
-    var visW = sw / this.scale;
-    var visH = sh / this.scale;
+    var visLeft = (0 - atTx) / atScale;
+    var visTop = (0 - atTy) / atScale;
+    var visW = sw / atScale;
+    var visH = sh / atScale;
     var pdfLeft = visLeft / this.pageCssW * vp1.width;
     var pdfTop = visTop / this.pageCssH * vp1.height;
     var pdfVisW = visW / this.pageCssW * vp1.width;
@@ -556,18 +571,23 @@
     shown.style.height = sh + 'px';
     var dest = shown.getContext('2d', { alpha: false });
     dest.drawImage(off, 0, 0);
-    this.detailAtTx = this.tx;
-    this.detailAtTy = this.ty;
-    this.detailAtScale = this.scale;
+    this.detailAtTx = atTx;
+    this.detailAtTy = atTy;
+    this.detailAtScale = atScale;
     shown.style.transform = 'translate3d(0,0,0)';
     shown.style.opacity = '1';
     shown.hidden = false;
     shown.classList.add('is-on');
+    this.nudgeDetail();
   };
 
   DrawingViewer.prototype.scheduleDetail = function () {
     var self = this;
     if (this.detailTimer) clearTimeout(this.detailTimer);
+    if (this.scale < DETAIL_MIN_SCALE) {
+      if (this.detail && !this.detail.hidden) this.hideDetail();
+      return;
+    }
     if (!this.detailNeedsRefresh() && this.detail && this.detail.classList.contains('is-on')) {
       this.nudgeDetail();
       return;
