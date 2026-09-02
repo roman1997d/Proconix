@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <meta name="theme-color" content="#070b14">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Progress Drawings">
+  <meta name="description" content="Mark weekly progress on general drawings and generate booking PDFs.">
+  <title>Progress Drawings</title>
+  <link rel="icon" href="/favicon_io/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
+  <link rel="apple-touch-icon" href="/favicon_io/apple-touch-icon.png">
+  <link rel="stylesheet" href="/mydrawings/mydrawings.css">
+  <link rel="stylesheet" href="/progress-drawings/progress-drawings.css">
+</head>
+<body>
+  <div class="md-boot" id="pd-boot">
+    <div class="md-boot-mark" aria-hidden="true">PD</div>
+    <p>Progress Drawings</p>
+    <div class="md-spin" aria-hidden="true"></div>
+  </div>
+
+  <div class="md-app" id="pd-app">
+    <section class="md-screen md-pin" id="screen-auth" aria-label="Access">
+      <p class="md-pin-brand">Progress Drawings</p>
+      <h2>Sign in</h2>
+      <p class="md-pin-hint">Use the same My Drawings access on this device, or enter the administration key.</p>
+      <div class="md-pin-dots" id="pin-dots" aria-hidden="true">
+        <span class="md-dot"></span>
+        <span class="md-dot"></span>
+        <span class="md-dot"></span>
+        <span class="md-dot"></span>
+      </div>
+      <div class="md-pin-wrap">
+        <div class="md-pin-tap" id="pin-tap">Tap to enter admin key</div>
+        <input
+          id="pin-input"
+          class="md-pin-input"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          maxlength="4"
+          autocomplete="one-time-code"
+          enterkeyhint="done"
+          aria-label="4-digit administration key"
+        >
+      </div>
+      <p class="md-error" id="auth-error" role="alert"></p>
+      <button type="button" class="md-btn md-btn-primary" id="pin-continue" disabled>Continue</button>
+      <p class="md-pin-actions">
+        <a class="md-link" href="/mydrawings/">Open My Drawings to register</a>
+      </p>
+    </section>
+
+    <section class="md-screen md-pin md-floor" id="screen-floor" aria-label="Select level">
+      <p class="md-pin-brand">Progress Drawings</p>
+      <h2>Select level</h2>
+      <p class="md-pin-hint"Choose the floor you are booking this week.</p>
+      <p class="pd-project-label" id="floor-project">Project</p>
+      <div class="md-floor-grid" id="floor-grid" role="list"></div>
+    </section>
+
+    <section class="md-screen" id="screen-home" aria-label="Progress home">
+      <header class="md-header">
+        <div class="md-header-text">
+          <h1 class="md-header-title">Progress Drawings</h1>
+          <p class="md-header-sub">
+            <button type="button" class="md-floor-chip" id="btn-floor" aria-label="Change level">Level</button>
+            <span class="md-header-sep" aria-hidden="true">·</span>
+            <span id="project-name">Project</span>
+          </p>
+        </div>
+        <button type="button" class="md-update-btn" id="btn-refresh" aria-label="Refresh">Refresh</button>
+      </header>
+      <div class="md-main">
+        <section class="pd-block">
+          <div class="pd-block-head">
+            <h2>General drawings</h2>
+          </div>
+          <p class="pd-note" id="drawings-note">Setting Out / GA drawings for this level.</p>
+          <div id="drawing-list"></div>
+        </section>
+        <section class="pd-block">
+          <div class="pd-block-head">
+            <h2>Previous bookings</h2>
+          </div>
+          <div id="booking-list"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="md-screen md-viewer" id="screen-viewer" aria-label="Drawing viewer">
+      <header class="dv-top" id="dv-top">
+        <button type="button" class="md-icon-btn" id="btn-viewer-back" aria-label="Back">
+          <svg class="md-icon md-icon-lg" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <div class="dv-top-text">
+          <h1 class="md-header-title" id="viewer-number">Drawing</h1>
+          <p class="pd-viewer-sub" id="viewer-sub"></p>
+        </div>
+      </header>
+      <div class="dv-stage" id="dv-stage" data-dv-stage>
+        <p class="dv-status" data-dv-status hidden>Opening drawing…</p>
+        <div class="dv-plane" data-dv-plane>
+          <canvas data-dv-canvas></canvas>
+        </div>
+        <canvas class="dv-detail" data-dv-detail hidden></canvas>
+      </div>
+      <footer class="dv-bar" id="dv-bar">
+        <button type="button" class="md-icon-btn" data-dv-zoom-out aria-label="Zoom out">
+          <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6"/></svg>
+        </button>
+        <button type="button" class="md-icon-btn" data-dv-zoom-in aria-label="Zoom in">
+          <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M11 8v6M8 11h6"/></svg>
+        </button>
+        <button type="button" class="md-icon-btn" data-dv-fit aria-label="Fit to page">
+          <svg class="md-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 5v5h5"/></svg>
+        </button>
+        <button type="button" class="md-icon-btn" data-dv-fs aria-label="Fullscreen">
+          <svg class="md-icon" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        </button>
+        <span class="dv-bar-spacer"></span>
+        <button type="button" class="md-icon-btn" data-dv-prev aria-label="Previous page">
+          <svg class="md-icon" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <span class="dv-page" data-dv-page>1 / 1</span>
+        <button type="button" class="md-icon-btn" data-dv-next aria-label="Next page">
+          <svg class="md-icon" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </footer>
+      <div class="pd-toolbar" id="pd-toolbar" hidden>
+        <p class="pd-toolbar-note">Marking tools come in the next phase. Zoom and pan work now.</p>
+      </div>
+    </section>
+  </div>
+
+  <script src="/mydrawings/lib/pdf.min.js"></script>
+  <script src="/mydrawings/drawing-viewer.js"></script>
+  <script src="/progress-drawings/progress-drawings.js"></script>
+</body>
+</html>

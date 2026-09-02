@@ -33,6 +33,8 @@ const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
 const drawingGalleryRoutes = require('./routes/drawingGalleryRoutes');
 const myDrawingsRoutes = require('./routes/myDrawingsRoutes');
 const { ensureSchema: ensureMyDrawingsSchema } = require('./controllers/myDrawingsController');
+const progressDrawingsRoutes = require('./routes/progressDrawingsRoutes');
+const { ensureSchema: ensureProgressDrawingsSchema } = require('./controllers/progressDrawingsController');
 const siteChatRoutes = require('./routes/siteChatRoutes');
 const unitProgressRoutes = require('./routes/unitProgressRoutes');
 const { runSiteChatAgentReminders } = require('./controllers/siteChatController');
@@ -145,6 +147,7 @@ app.use('/api/site-snags', siteSnagsRoutes);
 // Drawing Gallery (plans per project; requires create_drawing_gallery_tables.sql)
 app.use('/api/drawing-gallery', drawingGalleryRoutes);
 app.use('/api/my-drawings', myDrawingsRoutes);
+app.use('/api/progress-drawings', progressDrawingsRoutes);
 
 // Site chat (project room, material requests, notifications)
 app.use('/api/site-chat', siteChatRoutes);
@@ -177,6 +180,12 @@ app.get(['/mydrawings', '/mydrawings/'], (req, res) => {
   res.sendFile(myDrawingsHtmlPath);
 });
 
+// Progress Drawings PWA (weekly digital booking)
+const progressDrawingsHtmlPath = path.join(frontendDir, 'progress-drawings', 'index.html');
+app.get(['/progress-drawings', '/progress-drawings/'], (req, res) => {
+  res.sendFile(progressDrawingsHtmlPath);
+});
+
 // Static frontend (index.html, favicon.ico, register_company.html, css/, js/, etc.)
 app.use(express.static(frontendDir));
 
@@ -205,6 +214,9 @@ app.listen(PORT, HOST, async () => {
   if (dbStatus.ok) {
     ensureMyDrawingsSchema().catch((err) => {
       console.error('My Drawings schema:', err && err.message ? err.message : err);
+    });
+    ensureProgressDrawingsSchema().catch((err) => {
+      console.error('Progress Drawings schema:', err && err.message ? err.message : err);
     });
   }
 

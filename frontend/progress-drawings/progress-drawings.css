@@ -1,0 +1,97 @@
+/* Progress Drawings — builds on My Drawings design tokens */
+
+.pd-project-label {
+  margin: 0 0 14px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--md-accent);
+}
+
+.pd-block { margin-bottom: 22px; }
+.pd-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.pd-block h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 750;
+}
+.pd-note {
+  margin: 0 0 12px;
+  color: var(--md-muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.pd-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--md-card);
+  border: 1px solid var(--md-line);
+  border-radius: var(--md-radius);
+  padding: 14px;
+  margin-bottom: 8px;
+  color: inherit;
+}
+.pd-card:active { background: var(--md-card-press); }
+.pd-card-title {
+  margin: 0 0 2px;
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+.pd-card-num {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+  color: var(--md-muted);
+}
+.pd-card-meta {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--md-faint);
+}
+
+.pd-empty {
+  padding: 18px 14px;
+  border-radius: var(--md-radius);
+  border: 1px dashed var(--md-line);
+  color: var(--md-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.pd-viewer-sub {
+  margin: 2px 0 0;
+  font-size: 0.72rem;
+  color: var(--md-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pd-toolbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(58px + var(--md-safe-b));
+  padding: 8px var(--md-pad);
+  pointer-events: none;
+}
+.pd-toolbar-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(7, 11, 20, 0.78);
+  border: 1px solid var(--md-line);
+  color: var(--md-muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+#screen-viewer { position: relative; }
