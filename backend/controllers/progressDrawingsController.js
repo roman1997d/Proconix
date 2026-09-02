@@ -101,16 +101,57 @@ async function ensureSchemaInner() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_progress_bookings_floor ON progress_bookings(floor_id, created_at DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_progress_locations_booking ON progress_locations(booking_id)`);
 
-  const seeded = await pool.query('SELECT id FROM progress_work_types LIMIT 1');
-  if (!seeded.rows[0]) {
-    await pool.query(
-      `INSERT INTO progress_work_types (name, colour, pattern, supports_layers, sort_order) VALUES
-        ('Boarding', '#ef4444', 'diagonal', true, 0),
-        ('Insulation', '#eab308', 'cross', false, 1),
-        ('Metal', '#111827', 'hatch', false, 2),
-        ('Tape & Joint', '#3b82f6', 'lines', false, 3)`
+  await syncProgressWorkTypes();
+}
+
+/** Canonical work-type legend for Progress Drawings (name → colour + hatch). */
+const PROGRESS_WORK_TYPES = [
+  { name: 'Boarding', colour: '#2563eb', pattern: 'solid', supportsLayers: false, sortOrder: 0 },
+  { name: 'Insulation', colour: '#eab308', pattern: 'diagonal', supportsLayers: false, sortOrder: 1 },
+  { name: 'Metal', colour: '#111827', pattern: 'slashdash', supportsLayers: false, sortOrder: 2 },
+  { name: 'Angle & Insulation', colour: '#16a34a', pattern: 'dashed', supportsLayers: false, sortOrder: 3 },
+  { name: 'Patress', colour: '#a855f7', pattern: 'solid', supportsLayers: false, sortOrder: 4 },
+  { name: 'Letterbox', colour: '#ef4444', pattern: 'solid', supportsLayers: false, sortOrder: 5 }
+];
+
+async function syncProgressWorkTypes() {
+  /* Rename legacy Tape & Joint so existing annotations keep their work_type_id. */
+  await pool.query(
+    `UPDATE progress_work_types
+     SET name = 'Angle & Insulation'
+     WHERE name = 'Tape & Joint'
+       AND NOT EXISTS (SELECT 1 FROM progress_work_types WHERE name = 'Angle & Insulation')`
+  );
+
+  for (const wt of PROGRESS_WORK_TYPES) {
+    const existing = await pool.query(
+      'SELECT id FROM progress_work_types WHERE name = $1 LIMIT 1',
+      [wt.name]
     );
+    if (existing.rows[0]) {
+      await pool.query(
+        `UPDATE progress_work_types
+         SET colour = $2, pattern = $3, supports_layers = $4, sort_order = $5, active = true
+         WHERE id = $1`,
+        [existing.rows[0].id, wt.colour, wt.pattern, wt.supportsLayers, wt.sortOrder]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO progress_work_types (name, colour, pattern, supports_layers, sort_order, active)
+         VALUES ($1, $2, $3, $4, $5, true)`,
+        [wt.name, wt.colour, wt.pattern, wt.supportsLayers, wt.sortOrder]
+      );
+    }
   }
+
+  /* Hide any leftover types that are not in the canonical legend. */
+  const keep = PROGRESS_WORK_TYPES.map((w) => w.name);
+  await pool.query(
+    `UPDATE progress_work_types
+     SET active = false
+     WHERE name <> ALL($1::text[])`,
+    [keep]
+  );
 }
 
 let schemaPromise = null;

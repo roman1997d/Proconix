@@ -251,30 +251,31 @@
       var maxL = wt.supportsLayers ? 3 : 1;
       for (var layer = 1; layer <= maxL; layer++) {
         var colour = wt.colour || '#ef4444';
-        var size = layer >= 2 ? 14 : 10;
+        var size = 10;
         var paths;
-        if (wt.pattern === 'cross') {
-          /* Insulation — dense yellow X hatch, easy to spot on white drawings */
+        if (wt.pattern === 'diagonal') {
+          /* Insulation — ////// */
+          size = 10;
+          paths =
+            '<path d="M-2 8 L8 -2" stroke="' + colour + '" stroke-width="2"/>' +
+            '<path d="M0 ' + size + ' L' + size + ' 0" stroke="' + colour + '" stroke-width="2"/>' +
+            '<path d="M2 ' + (size + 2) + ' L' + (size + 2) + ' 2" stroke="' + colour + '" stroke-width="2"/>';
+        } else if (wt.pattern === 'slashdash') {
+          /* Metal — -/-/-/ */
           size = 12;
           paths =
-            '<rect width="' + size + '" height="' + size + '" fill="' + colour + '" fill-opacity="0.18"/>' +
-            '<path d="M0 ' + size + ' L' + size + ' 0" stroke="' + colour + '" stroke-width="2.2"/>' +
-            '<path d="M0 0 L' + size + ' ' + size + '" stroke="' + colour + '" stroke-width="2.2"/>' +
-            '<path d="M0 6 L' + size + ' 6" stroke="' + colour + '" stroke-width="1.1" opacity="0.7"/>';
-        } else if (layer >= 2) {
+            '<path d="M1 6 L5 6" stroke="' + colour + '" stroke-width="2.2" stroke-linecap="butt"/>' +
+            '<path d="M6 10 L11 2" stroke="' + colour + '" stroke-width="2" stroke-linecap="butt"/>';
+        } else if (wt.pattern === 'dashed') {
+          /* Angle & Insulation — - - - - - */
+          size = 14;
           paths =
-            '<path d="M0 ' + size + ' L' + size + ' 0" stroke="' + colour + '" stroke-width="1.4"/>' +
-            '<path d="M0 0 L' + size + ' ' + size + '" stroke="' + colour + '" stroke-width="1.2" opacity="0.85"/>';
-        } else if (wt.pattern === 'hatch') {
-          /* Metal — vertical hatch on a light tint */
-          paths =
-            '<rect width="' + size + '" height="' + size + '" fill="' + colour + '" fill-opacity="0.12"/>' +
-            '<path d="M0 0 L0 ' + size + '" stroke="' + colour + '" stroke-width="1.8"/>' +
-            '<path d="M5 0 L5 ' + size + '" stroke="' + colour + '" stroke-width="1.2" opacity="0.8"/>';
-        } else if (wt.pattern === 'lines') {
-          paths = '<path d="M0 5 L' + size + ' 5" stroke="' + colour + '" stroke-width="1.6"/>';
+            '<path d="M1 7 L8 7" stroke="' + colour + '" stroke-width="2.2" stroke-linecap="butt"/>';
         } else {
-          paths = '<path d="M0 ' + size + ' L' + size + ' 0" stroke="' + colour + '" stroke-width="1.5"/>';
+          /* solid _________ — Boarding / Patress / Letterbox (colour distinguishes) */
+          size = 8;
+          paths =
+            '<path d="M0 4 L' + size + ' 4" stroke="' + colour + '" stroke-width="2.4" stroke-linecap="butt"/>';
         }
         out += '<pattern id="' + patternId(wt, layer) + '" patternUnits="userSpaceOnUse" width="' +
           size + '" height="' + size + '">' + paths + '</pattern>';
