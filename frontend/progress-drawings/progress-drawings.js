@@ -406,9 +406,7 @@
 
   function addButtonLabel(wt) {
     if (!wt) return 'Add work type';
-    var short = wt.name || workTypeShortLabel(wt);
-    if (state.selectedLocationId) return 'Update ' + short;
-    return 'Add ' + short;
+    return 'Add ' + (wt.name || workTypeShortLabel(wt));
   }
 
   function strokeLineHtml(cls, x0, y0, x1, y1, colour, width) {
@@ -468,7 +466,7 @@
     svg.style.height = m.pageCssH + 'px';
     svg.style.transform = 'translate3d(' + m.tx + 'px,' + m.ty + 'px,0) scale(' + m.scale + ')';
 
-    /* Straight coloured strokes; click selects for Update / Delete only. */
+    /* Straight coloured strokes; click selects for Delete only. */
     var html = '';
     var locs = (state.booking && state.booking.locations) || [];
     var scale = Math.max(0.2, m.scale || 1);
@@ -526,7 +524,7 @@
     }
 
     var wt = activeWorkType();
-    var canSave = !!(state.draftLine || state.selectedLocationId);
+    var canSave = !!state.draftLine;
     if ($('btn-save-location')) {
       $('btn-save-location').disabled = !canSave || !state.activeWorkTypeId;
       $('btn-save-location').textContent = addButtonLabel(wt);
@@ -756,30 +754,10 @@
         });
         pushUndo({ type: 'add', locationId: data.locationId, location: savedLoc });
         state.draftLine = null;
-        state.selectedLocationId = data.locationId ? String(data.locationId) : null;
+        state.selectedLocationId = null;
         applyBooking(data.booking);
         setMode('select');
         return;
-      }
-
-      if (state.selectedLocationId) {
-        var before = null;
-        (state.booking.locations || []).forEach(function (l) {
-          if (l.id === state.selectedLocationId) before = JSON.parse(JSON.stringify(l));
-        });
-        var merged = currentAnnotationPayload();
-        if (before && before.annotations && before.annotations.length) {
-          var map = {};
-          before.annotations.forEach(function (a) { map[a.workTypeId] = a; });
-          merged.forEach(function (a) { map[a.workTypeId] = a; });
-          merged = Object.keys(map).map(function (k) { return map[k]; });
-        }
-        var updated = await apiJson('/locations/' + encodeURIComponent(state.selectedLocationId), {
-          method: 'PUT',
-          body: { annotations: merged }
-        });
-        pushUndo({ type: 'update', before: before });
-        applyBooking(updated.booking);
       }
     } catch (err) {
       alert(err.message || 'Could not save location.');
