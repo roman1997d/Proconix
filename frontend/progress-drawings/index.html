@@ -107,8 +107,25 @@
         <p class="dv-status" data-dv-status hidden>Opening drawing…</p>
         <div class="dv-plane" data-dv-plane>
           <canvas data-dv-canvas></canvas>
+          <svg class="pd-anno" id="pd-anno" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
         <canvas class="dv-detail" data-dv-detail hidden></canvas>
+      </div>
+      <div class="pd-chrome" id="pd-chrome" hidden>
+        <div class="pd-stats" id="pd-stats"></div>
+        <div class="pd-tools">
+          <button type="button" class="pd-tool" data-tool="undo" id="btn-undo" disabled>Undo</button>
+          <button type="button" class="pd-tool" data-tool="redo" id="btn-redo" disabled>Redo</button>
+          <button type="button" class="pd-tool is-on" data-tool="pan" id="btn-pan">Pan</button>
+          <button type="button" class="pd-tool" data-tool="select" id="btn-select">Select Area</button>
+        </div>
+        <div class="pd-worktypes" id="pd-worktypes"></div>
+        <div class="pd-layers" id="pd-layers" hidden></div>
+        <div class="pd-visibility" id="pd-visibility"></div>
+        <div class="pd-actions">
+          <button type="button" class="md-btn md-btn-primary" id="btn-save-location" disabled>Save location</button>
+          <button type="button" class="md-btn md-btn-ghost" id="btn-delete-location" hidden>Delete</button>
+        </div>
       </div>
       <footer class="dv-bar" id="dv-bar">
         <button type="button" class="md-icon-btn" data-dv-zoom-out aria-label="Zoom out">
@@ -132,9 +149,6 @@
           <svg class="md-icon" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
         </button>
       </footer>
-      <div class="pd-toolbar" id="pd-toolbar" hidden>
-        <p class="pd-toolbar-note">Marking tools come in the next phase. Zoom and pan work now.</p>
-      </div>
     </section>
   </div>
 

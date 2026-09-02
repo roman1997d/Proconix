@@ -75,23 +75,101 @@
   text-overflow: ellipsis;
 }
 
-.pd-toolbar {
+#screen-viewer { position: relative; }
+
+.pd-anno {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 3;
+}
+.pd-anno .pd-loc { pointer-events: auto; cursor: pointer; }
+.pd-anno .pd-loc.is-selected .pd-loc-border {
+  stroke: #38bdf8;
+  stroke-width: 2.5;
+}
+.pd-anno .pd-draft-border {
+  fill: rgba(56, 189, 248, 0.08);
+  stroke: #38bdf8;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+
+.md-viewer.is-select-mode { cursor: crosshair; }
+.md-viewer.is-select-mode .dv-stage { cursor: crosshair; }
+
+.pd-chrome {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(58px + var(--md-safe-b));
-  padding: 8px var(--md-pad);
+  bottom: calc(56px + var(--md-safe-b));
+  z-index: 8;
+  padding: 8px var(--md-pad) 10px;
+  background: linear-gradient(180deg, transparent, rgba(7, 11, 20, 0.92) 28%);
   pointer-events: none;
 }
-.pd-toolbar-note {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(7, 11, 20, 0.78);
-  border: 1px solid var(--md-line);
-  color: var(--md-muted);
+.pd-chrome > * { pointer-events: auto; }
+
+.pd-stats {
+  margin: 0 0 8px;
   font-size: 0.78rem;
-  text-align: center;
+  font-weight: 650;
+  color: #e2e8f0;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.55);
 }
 
-#screen-viewer { position: relative; }
+.pd-tools,
+.pd-worktypes,
+.pd-layers,
+.pd-visibility {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  margin-bottom: 8px;
+  padding-bottom: 2px;
+}
+.pd-tools::-webkit-scrollbar,
+.pd-worktypes::-webkit-scrollbar,
+.pd-layers::-webkit-scrollbar,
+.pd-visibility::-webkit-scrollbar { display: none; }
+
+.pd-tool,
+.pd-wt,
+.pd-layer,
+.pd-vis {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--md-line);
+  background: rgba(18, 26, 40, 0.92);
+  color: var(--md-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.pd-tool.is-on,
+.pd-wt.is-on,
+.pd-layer.is-on {
+  color: #f8fafc;
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.2);
+}
+.pd-tool:disabled { opacity: 0.35; }
+.pd-wt { border-left-width: 4px; }
+.pd-vis.is-off { opacity: 0.45; text-decoration: line-through; }
+
+.pd-actions {
+  display: flex;
+  gap: 8px;
+}
+.pd-actions .md-btn { flex: 1; min-height: 44px; }
+.pd-actions .md-btn:disabled { opacity: 0.4; }
+
+/* Keep marking tools visible while viewer chrome auto-hides */

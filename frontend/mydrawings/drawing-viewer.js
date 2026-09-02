@@ -82,6 +82,8 @@
     this.inertiaId = 0;
     this.transformRaf = 0;
     this.softPan = false;
+    this.interactionMode = 'pan'; /* pan | select */
+    this.selectDrag = null;
 
     this._onPtrDown = this.onPtrDown.bind(this);
     this._onPtrMove = this.onPtrMove.bind(this);
@@ -283,6 +285,60 @@
     this.plane.style.height = this.pageCssH + 'px';
     this.plane.style.transform = 'translate3d(' + this.tx + 'px,' + this.ty + 'px,0) scale(' + this.scale + ')';
     this.nudgeDetail();
+    if (typeof this.opts.onTransform === 'function') {
+      try { this.opts.onTransform(this.getPageMetrics()); } catch (e) {}
+    }
+  };
+
+  DrawingViewer.prototype.setInteractionMode = function (mode) {
+    this.interactionMode = mode === 'select' ? 'select' : 'pan';
+    this.selectDrag = null;
+    this.root.classList.toggle('is-select-mode', this.interactionMode === 'select');
+  };
+
+  DrawingViewer.prototype.getPageMetrics = function () {
+    if (!this.page) return null;
+    var vp = this.page.getViewport({ scale: 1 });
+    return {
+      pageNum: this.pageNum,
+      pageCssW: this.pageCssW,
+      pageCssH: this.pageCssH,
+      pdfW: vp.width,
+      pdfH: vp.height,
+      scale: this.scale,
+      tx: this.tx,
+      ty: this.ty
+    };
+  };
+
+  DrawingViewer.prototype.clientToPageCss = function (clientX, clientY) {
+    var rect = this.stage.getBoundingClientRect();
+    var x = (clientX - rect.left - this.tx) / this.scale;
+    var y = (clientY - rect.top - this.ty) / this.scale;
+    return { x: x, y: y };
+  };
+
+  DrawingViewer.prototype.pageCssToPdf = function (x, y, w, h) {
+    var m = this.getPageMetrics();
+    if (!m) return null;
+    return {
+      x: (x / m.pageCssW) * m.pdfW,
+      y: (y / m.pageCssH) * m.pdfH,
+      width: w != null ? (w / m.pageCssW) * m.pdfW : undefined,
+      height: h != null ? (h / m.pageCssH) * m.pdfH : undefined,
+      pageIndex: Math.max(0, (m.pageNum || 1) - 1)
+    };
+  };
+
+  DrawingViewer.prototype.pdfToPageCss = function (pdf) {
+    var m = this.getPageMetrics();
+    if (!m || !pdf) return null;
+    return {
+      x: (pdf.x / m.pdfW) * m.pageCssW,
+      y: (pdf.y / m.pdfH) * m.pageCssH,
+      width: (pdf.width / m.pdfW) * m.pageCssW,
+      height: (pdf.height / m.pdfH) * m.pageCssH
+    };
   };
 
   DrawingViewer.prototype.hideDetail = function () {
@@ -617,6 +673,12 @@
       this.detailTask = null;
     }
     if (pts.length >= 2) {
+      if (this.selectDrag) {
+        this.selectDrag = null;
+        if (typeof this.opts.onSelectCancel === 'function') {
+          try { this.opts.onSelectCancel(); } catch (e) {}
+        }
+      }
       this.gesture = {
         mode: 'two',
         dist: Math.max(1, dist(pts[0], pts[1])),
@@ -664,6 +726,28 @@
   DrawingViewer.prototype.applyOneFinger = function (pt) {
     var g = this.gesture;
     if (!g || g.mode !== 'one') return;
+
+    if (this.interactionMode === 'select') {
+      var cur = this.clientToPageCss(pt.x, pt.y);
+      if (!this.selectDrag) {
+        this.selectDrag = { x0: cur.x, y0: cur.y, x1: cur.x, y1: cur.y };
+        if (typeof this.opts.onSelectStart === 'function') {
+          try { this.opts.onSelectStart(this.selectDrag); } catch (e) {}
+        }
+      } else {
+        this.selectDrag.x1 = cur.x;
+        this.selectDrag.y1 = cur.y;
+        if (Math.abs(this.selectDrag.x1 - this.selectDrag.x0) > 2 ||
+            Math.abs(this.selectDrag.y1 - this.selectDrag.y0) > 2) {
+          this.moved = true;
+        }
+        if (typeof this.opts.onSelectMove === 'function') {
+          try { this.opts.onSelectMove(this.selectDrag); } catch (e) {}
+        }
+      }
+      return;
+    }
+
     var now = performance.now();
     var rawX = pt.x - g.x;
     var rawY = pt.y - g.y;
@@ -685,6 +769,23 @@
   };
 
   DrawingViewer.prototype.finishGesture = function (clientX, clientY) {
+    if (this.interactionMode === 'select' && this.selectDrag) {
+      var drag = this.selectDrag;
+      this.selectDrag = null;
+      this.gesture = null;
+      var x = Math.min(drag.x0, drag.x1);
+      var y = Math.min(drag.y0, drag.y1);
+      var w = Math.abs(drag.x1 - drag.x0);
+      var h = Math.abs(drag.y1 - drag.y0);
+      if (this.moved && w > 8 && h > 8 && typeof this.opts.onSelectEnd === 'function') {
+        try { this.opts.onSelectEnd({ x: x, y: y, width: w, height: h }); } catch (e) {}
+      } else if (typeof this.opts.onSelectCancel === 'function') {
+        try { this.opts.onSelectCancel(); } catch (e) {}
+      }
+      this.pokeChrome();
+      return;
+    }
+
     this.gesture = null;
     if (!this.moved) {
       this.softPan = false;
@@ -824,7 +925,7 @@
 
   DrawingViewer.prototype.toggleFullscreen = function () {
     var el = this.root;
-    var app = document.getElementById('md-app');
+    var app = document.getElementById('md-app') || document.getElementById('pd-app');
     if (el.classList.contains('is-fs')) {
       el.classList.remove('is-fs');
       if (app) app.classList.remove('is-fs');

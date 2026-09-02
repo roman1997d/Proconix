@@ -1,4 +1,4 @@
-/* Progress Drawings — Phase 1: auth, floor, general drawings, PDF viewer */
+/* Progress Drawings — Phase 1+2: viewer, select area, work types, save locations */
 (function () {
   'use strict';
 
@@ -25,7 +25,17 @@
     floor: null,
     adminPin: '',
     role: 'worker',
-    viewing: null
+    viewing: null,
+    booking: null,
+    mode: 'pan',
+    activeWorkTypeId: null,
+    layerCount: 1,
+    selectedLocationId: null,
+    draftRect: null,
+    pendingAnnotations: [],
+    visibleTypes: {},
+    undoStack: [],
+    redoStack: []
   };
 
   var drawingViewer = null;
@@ -163,7 +173,24 @@
     state.workTypes = data.workTypes || [];
     state.role = data.role || state.role;
     if (data.floors && data.floors.length) state.floors = data.floors;
+    if (!state.activeWorkTypeId && state.workTypes.length) {
+      state.activeWorkTypeId = state.workTypes[0].id;
+    }
+    state.workTypes.forEach(function (w) {
+      if (state.visibleTypes[w.id] == null) state.visibleTypes[w.id] = true;
+    });
     return data;
+  }
+
+  function workTypeById(id) {
+    for (var i = 0; i < state.workTypes.length; i++) {
+      if (state.workTypes[i].id === String(id)) return state.workTypes[i];
+    }
+    return null;
+  }
+
+  function activeWorkType() {
+    return workTypeById(state.activeWorkTypeId);
   }
 
   function renderFloorGrid() {
@@ -202,7 +229,7 @@
       books.innerHTML = '<div class="pd-empty">No previous bookings yet. Generate one after marking progress.</div>';
     } else {
       books.innerHTML = state.bookings.map(function (b) {
-        var week = b.weekNumber != null ? ('Week ' + b.weekNumber) : 'Booking';
+        var week = b.weekNumber != null ? ('Week ' + b.weekNumber) : (b.status === 'draft' ? 'Draft' : 'Booking');
         return '<article class="pd-card">' +
           '<p class="pd-card-title">' + escapeHtml(week) + '</p>' +
           '<p class="pd-card-num">' + escapeHtml(b.drawingNumber || '—') +
@@ -214,9 +241,208 @@
     }
   }
 
+  function patternId(wt, layers) {
+    return 'pd-pat-' + wt.id + '-L' + layers;
+  }
+
+  function patternsHtml() {
+    var out = '<defs>';
+    state.workTypes.forEach(function (wt) {
+      var maxL = wt.supportsLayers ? 3 : 1;
+      for (var layer = 1; layer <= maxL; layer++) {
+        var colour = wt.colour || '#ef4444';
+        var size = layer >= 2 ? 14 : 10;
+        var paths;
+        if (wt.pattern === 'cross' || layer >= 2) {
+          paths =
+            '<path d="M0 ' + size + ' L' + size + ' 0" stroke="' + colour + '" stroke-width="1.4"/>' +
+            '<path d="M0 0 L' + size + ' ' + size + '" stroke="' + colour + '" stroke-width="1.2" opacity="0.85"/>';
+        } else if (wt.pattern === 'hatch') {
+          paths =
+            '<path d="M0 0 L0 ' + size + '" stroke="' + colour + '" stroke-width="1.6"/>' +
+            '<path d="M5 0 L5 ' + size + '" stroke="' + colour + '" stroke-width="1.1" opacity="0.7"/>';
+        } else if (wt.pattern === 'lines') {
+          paths = '<path d="M0 5 L' + size + ' 5" stroke="' + colour + '" stroke-width="1.6"/>';
+        } else {
+          paths = '<path d="M0 ' + size + ' L' + size + ' 0" stroke="' + colour + '" stroke-width="1.5"/>';
+        }
+        out += '<pattern id="' + patternId(wt, layer) + '" patternUnits="userSpaceOnUse" width="' +
+          size + '" height="' + size + '">' + paths + '</pattern>';
+      }
+    });
+    return out + '</defs>';
+  }
+
+  function locationVisible(loc) {
+    var anns = loc.annotations || [];
+    if (!anns.length) return true;
+    return anns.some(function (a) { return state.visibleTypes[a.workTypeId] !== false; });
+  }
+
+  function renderAnnotations() {
+    var svg = $('pd-anno');
+    var viewer = drawingViewer;
+    if (!svg || !viewer) return;
+    var m = viewer.getPageMetrics();
+    if (!m) return;
+    svg.setAttribute('viewBox', '0 0 ' + m.pageCssW + ' ' + m.pageCssH);
+    svg.setAttribute('width', m.pageCssW);
+    svg.setAttribute('height', m.pageCssH);
+
+    var html = patternsHtml();
+    var locs = (state.booking && state.booking.locations) || [];
+    locs.forEach(function (loc) {
+      if ((loc.pageIndex || 0) !== Math.max(0, (m.pageNum || 1) - 1)) return;
+      if (!locationVisible(loc)) return;
+      var css = viewer.pdfToPageCss(loc);
+      if (!css) return;
+      var selected = state.selectedLocationId === loc.id;
+      html += '<g class="pd-loc' + (selected ? ' is-selected' : '') + '" data-loc-id="' + escapeHtml(loc.id) + '">';
+      (loc.annotations || []).forEach(function (a, idx) {
+        if (state.visibleTypes[a.workTypeId] === false) return;
+        var wt = workTypeById(a.workTypeId) || { id: a.workTypeId, colour: a.colour, pattern: a.pattern };
+        var inset = idx * 3;
+        html += '<rect x="' + (css.x + inset) + '" y="' + (css.y + inset) + '" width="' +
+          Math.max(2, css.width - inset * 2) + '" height="' + Math.max(2, css.height - inset * 2) +
+          '" fill="url(#' + patternId(wt, a.layerCount || 1) + ')" fill-opacity="0.85" stroke="none"/>';
+      });
+      html += '<rect class="pd-loc-border" x="' + css.x + '" y="' + css.y + '" width="' + css.width +
+        '" height="' + css.height + '" fill="transparent" stroke="' +
+        (selected ? '#38bdf8' : 'rgba(15,23,42,0.55)') + '" stroke-width="' + (selected ? 2.5 : 1) + '"/>';
+      html += '</g>';
+    });
+
+    if (state.draftRect) {
+      var d = state.draftRect;
+      html += '<rect class="pd-draft-border" x="' + d.x + '" y="' + d.y + '" width="' + d.width +
+        '" height="' + d.height + '"/>';
+    }
+
+    svg.innerHTML = html;
+  }
+
+  function countStats() {
+    var locs = (state.booking && state.booking.locations) || [];
+    var counts = {};
+    state.workTypes.forEach(function (w) { counts[w.id] = 0; });
+    locs.forEach(function (loc) {
+      (loc.annotations || []).forEach(function (a) {
+        counts[a.workTypeId] = (counts[a.workTypeId] || 0) + 1;
+      });
+    });
+    var bits = ['Locations: ' + locs.length];
+    state.workTypes.forEach(function (w) {
+      if (counts[w.id]) bits.push(w.name + ': ' + counts[w.id]);
+    });
+    return bits.join(' · ');
+  }
+
+  function updateChrome() {
+    if ($('pd-stats')) $('pd-stats').textContent = countStats();
+    if ($('btn-undo')) $('btn-undo').disabled = !state.undoStack.length;
+    if ($('btn-redo')) $('btn-redo').disabled = !state.redoStack.length;
+    if ($('btn-pan')) $('btn-pan').classList.toggle('is-on', state.mode === 'pan');
+    if ($('btn-select')) $('btn-select').classList.toggle('is-on', state.mode === 'select');
+
+    var wtHost = $('pd-worktypes');
+    if (wtHost) {
+      wtHost.innerHTML = state.workTypes.map(function (w) {
+        return '<button type="button" class="pd-wt' + (w.id === state.activeWorkTypeId ? ' is-on' : '') +
+          '" data-wt="' + escapeHtml(w.id) + '" style="border-left-color:' + escapeHtml(w.colour) + '">' +
+          escapeHtml(w.name) + '</button>';
+      }).join('');
+    }
+
+    var wt = activeWorkType();
+    var layers = $('pd-layers');
+    if (layers) {
+      if (wt && wt.supportsLayers) {
+        layers.hidden = false;
+        layers.innerHTML = [1, 2, 3].map(function (n) {
+          return '<button type="button" class="pd-layer' + (state.layerCount === n ? ' is-on' : '') +
+            '" data-layer="' + n + '">' + n + '×</button>';
+        }).join('');
+      } else {
+        layers.hidden = true;
+        layers.innerHTML = '';
+        state.layerCount = 1;
+      }
+    }
+
+    var vis = $('pd-visibility');
+    if (vis) {
+      vis.innerHTML = state.workTypes.map(function (w) {
+        var on = state.visibleTypes[w.id] !== false;
+        return '<button type="button" class="pd-vis' + (on ? '' : ' is-off') + '" data-vis="' +
+          escapeHtml(w.id) + '">' + (on ? '☑ ' : '☐ ') + escapeHtml(w.name) + '</button>';
+      }).join('');
+    }
+
+    var canSave = !!(state.draftRect || state.selectedLocationId);
+    if ($('btn-save-location')) {
+      $('btn-save-location').disabled = !canSave || !state.activeWorkTypeId;
+      $('btn-save-location').textContent = state.selectedLocationId ? 'Update location' : 'Save location';
+    }
+    if ($('btn-delete-location')) {
+      $('btn-delete-location').hidden = !state.selectedLocationId;
+    }
+  }
+
+  function setMode(mode) {
+    state.mode = mode === 'select' ? 'select' : 'pan';
+    if (drawingViewer) drawingViewer.setInteractionMode(state.mode);
+    updateChrome();
+  }
+
+  function pushUndo(entry) {
+    state.undoStack.push(entry);
+    if (state.undoStack.length > 40) state.undoStack.shift();
+    state.redoStack = [];
+    updateChrome();
+  }
+
+  function applyBooking(booking) {
+    state.booking = booking;
+    renderAnnotations();
+    updateChrome();
+  }
+
   function getViewer() {
     if (!drawingViewer) {
-      drawingViewer = new window.DrawingViewer($('screen-viewer'), {});
+      drawingViewer = new window.DrawingViewer($('screen-viewer'), {
+        onTransform: function () { renderAnnotations(); },
+        onSelectStart: function (drag) {
+          state.draftRect = {
+            x: Math.min(drag.x0, drag.x1),
+            y: Math.min(drag.y0, drag.y1),
+            width: Math.abs(drag.x1 - drag.x0),
+            height: Math.abs(drag.y1 - drag.y0)
+          };
+          state.selectedLocationId = null;
+          renderAnnotations();
+          updateChrome();
+        },
+        onSelectMove: function (drag) {
+          state.draftRect = {
+            x: Math.min(drag.x0, drag.x1),
+            y: Math.min(drag.y0, drag.y1),
+            width: Math.abs(drag.x1 - drag.x0),
+            height: Math.abs(drag.y1 - drag.y0)
+          };
+          renderAnnotations();
+        },
+        onSelectEnd: function (rect) {
+          state.draftRect = rect;
+          state.selectedLocationId = null;
+          renderAnnotations();
+          updateChrome();
+        },
+        onSelectCancel: function () {
+          state.draftRect = null;
+          renderAnnotations();
+          updateChrome();
+        }
+      });
     }
     return drawingViewer;
   }
@@ -243,28 +469,227 @@
     for (var i = 0; i < state.drawings.length; i++) {
       if (state.drawings[i].id === id) { d = state.drawings[i]; break; }
     }
-    if (!d) return;
+    if (!d || !state.floor) return;
     state.viewing = d;
+    state.draftRect = null;
+    state.selectedLocationId = null;
+    state.undoStack = [];
+    state.redoStack = [];
     $('viewer-number').textContent = d.number;
     $('viewer-sub').textContent = (d.title || '') + (d.revision ? ' · Rev ' + d.revision : '');
     showScreen('screen-viewer');
-    var toolbar = $('pd-toolbar');
-    if (toolbar) toolbar.hidden = false;
+    if ($('pd-chrome')) $('pd-chrome').hidden = false;
+    updateChrome();
+    setMode('pan');
     try {
+      var draft = await apiJson('/bookings', {
+        method: 'POST',
+        body: { floorId: state.floor.id, drawingId: d.id }
+      });
+      applyBooking(draft.booking);
       await ensurePdfJs();
       getViewer().setStatus('Opening drawing…');
       var blob = await fetchDrawingBlob(d);
-      if (state.viewing && state.viewing.id === id) await getViewer().open(blob, d);
+      if (state.viewing && state.viewing.id === id) {
+        await getViewer().open(blob, d);
+        getViewer().setInteractionMode(state.mode);
+        renderAnnotations();
+      }
     } catch (err) {
       getViewer().setStatus(err.message || 'Could not open drawing.');
+      alert(err.message || 'Could not open drawing.');
     }
   }
 
   function closeViewer() {
     state.viewing = null;
-    if (drawingViewer) drawingViewer.close();
+    state.booking = null;
+    state.draftRect = null;
+    state.selectedLocationId = null;
+    if (drawingViewer) {
+      drawingViewer.setInteractionMode('pan');
+      drawingViewer.close();
+    }
     document.getElementById('pd-app').classList.remove('is-fs');
+    if ($('pd-chrome')) $('pd-chrome').hidden = true;
     showScreen('screen-home');
+    loadBootstrap().then(renderHome).catch(function () { renderHome(); });
+  }
+
+  function currentAnnotationPayload() {
+    var wt = activeWorkType();
+    if (!wt) return [];
+    return [{
+      workTypeId: wt.id,
+      layerCount: wt.supportsLayers ? state.layerCount : 1
+    }];
+  }
+
+  async function saveLocation() {
+    if (!state.booking) return;
+    var viewer = getViewer();
+    try {
+      if (state.draftRect) {
+        var pdf = viewer.pageCssToPdf(
+          state.draftRect.x, state.draftRect.y, state.draftRect.width, state.draftRect.height
+        );
+        if (!pdf) throw new Error('Drawing metrics missing.');
+        var anns = currentAnnotationPayload();
+        if (!anns.length) throw new Error('Choose a work type.');
+        var data = await apiJson('/bookings/' + encodeURIComponent(state.booking.id) + '/locations', {
+          method: 'POST',
+          body: {
+            pageIndex: pdf.pageIndex,
+            x: pdf.x,
+            y: pdf.y,
+            width: pdf.width,
+            height: pdf.height,
+            annotations: anns
+          }
+        });
+        var savedLoc = null;
+        (data.booking.locations || []).forEach(function (l) {
+          if (l.id === data.locationId) savedLoc = JSON.parse(JSON.stringify(l));
+        });
+        pushUndo({ type: 'add', locationId: data.locationId, location: savedLoc });
+        state.draftRect = null;
+        state.selectedLocationId = data.locationId;
+        applyBooking(data.booking);
+        setMode('select');
+        return;
+      }
+
+      if (state.selectedLocationId) {
+        var before = null;
+        (state.booking.locations || []).forEach(function (l) {
+          if (l.id === state.selectedLocationId) before = JSON.parse(JSON.stringify(l));
+        });
+        var merged = currentAnnotationPayload();
+        if (before && before.annotations && before.annotations.length) {
+          var map = {};
+          before.annotations.forEach(function (a) { map[a.workTypeId] = a; });
+          merged.forEach(function (a) { map[a.workTypeId] = a; });
+          merged = Object.keys(map).map(function (k) { return map[k]; });
+        }
+        var updated = await apiJson('/locations/' + encodeURIComponent(state.selectedLocationId), {
+          method: 'PUT',
+          body: { annotations: merged }
+        });
+        pushUndo({ type: 'update', before: before });
+        applyBooking(updated.booking);
+      }
+    } catch (err) {
+      alert(err.message || 'Could not save location.');
+    }
+  }
+
+  async function deleteSelectedLocation() {
+    if (!state.selectedLocationId || !state.booking) return;
+    if (!confirm('Delete this progress location?')) return;
+    var before = null;
+    (state.booking.locations || []).forEach(function (l) {
+      if (l.id === state.selectedLocationId) before = JSON.parse(JSON.stringify(l));
+    });
+    try {
+      var data = await apiJson('/locations/' + encodeURIComponent(state.selectedLocationId), {
+        method: 'DELETE'
+      });
+      pushUndo({ type: 'delete', location: before });
+      state.selectedLocationId = null;
+      applyBooking(data.booking);
+    } catch (err) {
+      alert(err.message || 'Could not delete location.');
+    }
+  }
+
+  async function undo() {
+    var op = state.undoStack.pop();
+    if (!op || !state.booking) return;
+    try {
+      if (op.type === 'add' && op.locationId) {
+        var del = await apiJson('/locations/' + encodeURIComponent(op.locationId), { method: 'DELETE' });
+        state.redoStack.push(op);
+        state.selectedLocationId = null;
+        applyBooking(del.booking);
+      } else if (op.type === 'delete' && op.location) {
+        var loc = op.location;
+        var restored = await apiJson('/bookings/' + encodeURIComponent(state.booking.id) + '/locations', {
+          method: 'POST',
+          body: {
+            pageIndex: loc.pageIndex || 0,
+            x: loc.x,
+            y: loc.y,
+            width: loc.width,
+            height: loc.height,
+            annotations: (loc.annotations || []).map(function (a) {
+              return { workTypeId: a.workTypeId, layerCount: a.layerCount || 1 };
+            })
+          }
+        });
+        op.locationId = restored.locationId;
+        state.redoStack.push(op);
+        state.selectedLocationId = restored.locationId;
+        applyBooking(restored.booking);
+      } else if (op.type === 'update' && op.before) {
+        var u = await apiJson('/locations/' + encodeURIComponent(op.before.id), {
+          method: 'PUT',
+          body: {
+            x: op.before.x,
+            y: op.before.y,
+            width: op.before.width,
+            height: op.before.height,
+            pageIndex: op.before.pageIndex || 0,
+            annotations: (op.before.annotations || []).map(function (a) {
+              return { workTypeId: a.workTypeId, layerCount: a.layerCount || 1 };
+            })
+          }
+        });
+        state.redoStack.push(op);
+        applyBooking(u.booking);
+      }
+    } catch (err) {
+      alert(err.message || 'Undo failed.');
+    }
+    updateChrome();
+  }
+
+  async function redo() {
+    var op = state.redoStack.pop();
+    if (!op || !state.booking) return;
+    try {
+      if (op.type === 'add' && op.location) {
+        var loc = op.location;
+        var restored = await apiJson('/bookings/' + encodeURIComponent(state.booking.id) + '/locations', {
+          method: 'POST',
+          body: {
+            pageIndex: loc.pageIndex || 0,
+            x: loc.x,
+            y: loc.y,
+            width: loc.width,
+            height: loc.height,
+            annotations: (loc.annotations || []).map(function (a) {
+              return { workTypeId: a.workTypeId, layerCount: a.layerCount || 1 };
+            })
+          }
+        });
+        op.locationId = restored.locationId;
+        op.location = null;
+        (restored.booking.locations || []).forEach(function (l) {
+          if (l.id === restored.locationId) op.location = JSON.parse(JSON.stringify(l));
+        });
+        state.undoStack.push(op);
+        state.selectedLocationId = restored.locationId;
+        applyBooking(restored.booking);
+      } else if (op.type === 'delete' && op.locationId) {
+        var del = await apiJson('/locations/' + encodeURIComponent(op.locationId), { method: 'DELETE' });
+        state.undoStack.push(op);
+        state.selectedLocationId = null;
+        applyBooking(del.booking);
+      }
+    } catch (err) {
+      alert(err.message || 'Redo failed.');
+    }
+    updateChrome();
   }
 
   async function enterApp() {
@@ -393,6 +818,55 @@
   });
 
   on($('btn-viewer-back'), 'click', closeViewer);
+  on($('btn-undo'), 'click', undo);
+  on($('btn-redo'), 'click', redo);
+  on($('btn-pan'), 'click', function () { setMode('pan'); });
+  on($('btn-select'), 'click', function () { setMode('select'); });
+  on($('btn-save-location'), 'click', saveLocation);
+  on($('btn-delete-location'), 'click', deleteSelectedLocation);
+
+  on($('pd-worktypes'), 'click', function (e) {
+    var btn = e.target.closest('[data-wt]');
+    if (!btn) return;
+    state.activeWorkTypeId = btn.getAttribute('data-wt');
+    var wt = activeWorkType();
+    if (wt && !wt.supportsLayers) state.layerCount = 1;
+    updateChrome();
+  });
+
+  on($('pd-layers'), 'click', function (e) {
+    var btn = e.target.closest('[data-layer]');
+    if (!btn) return;
+    state.layerCount = parseInt(btn.getAttribute('data-layer'), 10) || 1;
+    updateChrome();
+  });
+
+  on($('pd-visibility'), 'click', function (e) {
+    var btn = e.target.closest('[data-vis]');
+    if (!btn) return;
+    var id = btn.getAttribute('data-vis');
+    state.visibleTypes[id] = state.visibleTypes[id] === false;
+    renderAnnotations();
+    updateChrome();
+  });
+
+  on($('pd-anno'), 'click', function (e) {
+    var g = e.target.closest('[data-loc-id]');
+    if (!g) return;
+    e.stopPropagation();
+    state.selectedLocationId = g.getAttribute('data-loc-id');
+    state.draftRect = null;
+    var loc = null;
+    ((state.booking && state.booking.locations) || []).forEach(function (l) {
+      if (l.id === state.selectedLocationId) loc = l;
+    });
+    if (loc && loc.annotations && loc.annotations[0]) {
+      state.activeWorkTypeId = loc.annotations[0].workTypeId;
+      state.layerCount = loc.annotations[0].layerCount || 1;
+    }
+    renderAnnotations();
+    updateChrome();
+  });
 
   boot();
 })();
