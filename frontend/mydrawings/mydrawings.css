@@ -1025,6 +1025,53 @@ img { max-width: 100%; }
   line-height: 1.4;
 }
 
+/* ---------- Wall Types catalog ---------- */
+.wt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 24px;
+}
+.wt-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 12px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: var(--md-card);
+  border: 1px solid var(--md-line);
+  border-radius: var(--md-radius);
+  padding: 12px 14px;
+  color: inherit;
+}
+.wt-card:active { background: var(--md-card-press); }
+.wt-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  color: #7dd3fc;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.wt-code.is-lining {
+  background: rgba(167, 139, 250, 0.14);
+  border-color: rgba(167, 139, 250, 0.28);
+  color: #c4b5fd;
+}
+.wt-name {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
 /* ---------- Desktop / tablet expansion ---------- */
 @media (min-width: 768px) {
   .md-main { padding-top: 16px; }

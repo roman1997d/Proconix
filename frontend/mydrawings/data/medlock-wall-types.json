@@ -1,0 +1,43 @@
+{
+  "project": {
+    "name": "1 Medlock Street",
+    "sector": "Student Accommodation",
+    "architect": "Jon Matthews Architects"
+  },
+  "pack": {
+    "title": "Siniat Project Pack",
+    "revision": "C",
+    "pages": 234
+  },
+  "wallTypes": [
+    { "id": "wt01b", "code": "WT01B", "kind": "wall", "name": "Bedroom to corridor / kitchen to corridor" },
+    { "id": "wt01c", "code": "WT01C", "kind": "wall", "name": "Bedroom to Bedroom (Cluster)" },
+    { "id": "wt03c", "code": "WT03C", "kind": "wall", "name": "Main Separating Wall around Flats & Studios" },
+    { "id": "wt05b", "code": "WT05B", "kind": "wall", "name": "Bedroom to Kitchen / Bedroom to Bedroom / Separating Wall with cols" },
+    { "id": "wt07", "code": "WT07", "kind": "wall", "name": "WCA bathrooms" },
+    { "id": "wt08a-svp", "code": "WT08A", "kind": "wall", "name": "SVP enclosures" },
+    { "id": "wt08a-svp-36", "code": "WT08A", "kind": "wall", "name": "SVP Enclosure (Max Height 3.6m)" },
+    { "id": "wt08d", "code": "WT08D", "kind": "wall", "name": "Pod Wall Lining (Max Height 3.5m)" },
+    { "id": "wt08e", "code": "WT08E", "kind": "wall", "name": "RWP Enclosures" },
+    { "id": "wt09", "code": "WT09", "kind": "wall", "name": "WCA Bathrooms" },
+    { "id": "wt10a", "code": "WT10A", "kind": "wall", "name": "Riser Shaftwalls" },
+    { "id": "wt10b", "code": "WT10B", "kind": "wall", "name": "Smoke Shaft 3" },
+    { "id": "wt20a", "code": "WT20A", "kind": "lining", "name": "Lining to concrete columns & shear walls" },
+    { "id": "wt20b", "code": "WT20B", "kind": "lining", "name": "Lining to concrete columns and shear walls" },
+    { "id": "wt21", "code": "WT21", "kind": "lining", "name": "Facade Lining" },
+    { "id": "wt21a", "code": "WT21A", "kind": "lining", "name": "Facade Lining" },
+    { "id": "wt23", "code": "WT23", "kind": "wall", "name": "Ground Floor Amenity" },
+    { "id": "wt24", "code": "WT24", "kind": "wall", "name": "Bulkhead above GF post room" },
+    { "id": "wt24a", "code": "WT24A", "kind": "wall", "name": "Wall Nibs" },
+    { "id": "wt25", "code": "WT25", "kind": "wall", "name": "Level 01 between Yoga, Gym Room and Cinema Room" },
+    { "id": "wt26", "code": "WT26", "kind": "wall", "name": "Level 01 amenity corridors" },
+    { "id": "wt26a", "code": "WT26A", "kind": "wall", "name": "Level 01 amenity corridors (twin frame)" },
+    { "id": "wt27", "code": "WT27", "kind": "wall", "name": "Level 01 amenity WCs" },
+    { "id": "wt28", "code": "WT28", "kind": "wall", "name": "Level 37 corridors" },
+    { "id": "wt29", "code": "WT29", "kind": "wall", "name": "Level 11 partition between plant and amenity" },
+    { "id": "wt31", "code": "WT31", "kind": "wall", "name": "Level 11 corridors" },
+    { "id": "wt32", "code": "WT32", "kind": "wall", "name": "Level 11 amenity" },
+    { "id": "wt33", "code": "WT33", "kind": "wall", "name": "Level 11 amenity" },
+    { "id": "wt34", "code": "WT34", "kind": "wall", "name": "GF Amenity Reception" }
+  ]
+}

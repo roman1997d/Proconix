@@ -599,7 +599,7 @@
 
   /* ---------- Screens ---------- */
   function showScreen(id) {
-    ['screen-register', 'screen-login', 'screen-pin', 'screen-floor', 'screen-list', 'screen-activity', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
+    ['screen-register', 'screen-login', 'screen-pin', 'screen-floor', 'screen-list', 'screen-activity', 'screen-wall-types', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
       var el = $(sid);
       if (el) el.classList.toggle('is-active', sid === id);
     });
@@ -1210,6 +1210,85 @@
     renderList();
   }
 
+  /* ---------- Wall Types catalog (Siniat Project Pack) ---------- */
+  var wallTypesCache = null;
+  var wallTypesQuery = '';
+
+  async function loadWallTypesData() {
+    if (wallTypesCache) return wallTypesCache;
+    var res = await fetch('/mydrawings/data/medlock-wall-types.json', {
+      credentials: 'same-origin',
+      cache: 'force-cache'
+    });
+    if (!res.ok) throw new Error('Could not load wall types.');
+    wallTypesCache = await res.json();
+    return wallTypesCache;
+  }
+
+  function filteredWallTypes(data) {
+    var list = (data && data.wallTypes) || [];
+    var q = String(wallTypesQuery || '').trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(function (wt) {
+      return String(wt.code || '').toLowerCase().indexOf(q) !== -1 ||
+        String(wt.name || '').toLowerCase().indexOf(q) !== -1;
+    });
+  }
+
+  function renderWallTypes() {
+    var host = $('wall-types-list');
+    var countEl = $('wall-types-count');
+    if (!host) return;
+    if (!wallTypesCache) {
+      host.innerHTML = '<p class="md-activity-loading">Loading wall types…</p>';
+      if (countEl) countEl.textContent = '';
+      return;
+    }
+    var list = filteredWallTypes(wallTypesCache);
+    if (countEl) {
+      countEl.textContent = list.length + (list.length === 1 ? ' wall type' : ' wall types');
+    }
+    if (!list.length) {
+      host.innerHTML = '<div class="md-empty"><h3>No matches</h3><p>Try another search.</p></div>';
+      return;
+    }
+    host.innerHTML = list.map(function (wt) {
+      var lining = wt.kind === 'lining';
+      return '<article class="wt-card" data-wt-id="' + escapeHtml(wt.id) + '">' +
+        '<span class="wt-code' + (lining ? ' is-lining' : '') + '">' + escapeHtml(wt.code) + '</span>' +
+        '<p class="wt-name">' + escapeHtml(wt.name) + '</p>' +
+        '</article>';
+    }).join('');
+  }
+
+  async function openWallTypes() {
+    closeSheet();
+    showScreen('screen-wall-types');
+    wallTypesQuery = '';
+    if ($('wall-types-search')) $('wall-types-search').value = '';
+    renderWallTypes();
+    try {
+      var data = await loadWallTypesData();
+      if ($('wall-types-sub')) {
+        var proj = (data.project && data.project.name) || 'Project';
+        var rev = data.pack && data.pack.revision ? (' · Pack Rev ' + data.pack.revision) : '';
+        $('wall-types-sub').textContent = proj + rev;
+      }
+      renderWallTypes();
+    } catch (err) {
+      if ($('wall-types-list')) {
+        $('wall-types-list').innerHTML = '<div class="md-empty"><h3>Could not load wall types</h3><p>' +
+          escapeHtml(err && err.message ? err.message : 'Try again.') + '</p></div>';
+      }
+    }
+  }
+
+  function closeWallTypes() {
+    showScreen('screen-list');
+    renderCats();
+    renderList();
+  }
+
   /* ---------- Manage ---------- */
   function openManage() {
     if (state.role !== 'admin') {
@@ -1592,6 +1671,7 @@
     openSheet(
       '<h3 id="sheet-title">My Drawings</h3>' +
       '<button type="button" class="md-sheet-item" data-sheet="administration"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2"/></svg>Administration</button>' +
+      '<button type="button" class="md-sheet-item" data-sheet="wall-types"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 20V8l8-4 8 4v12"/><path d="M9 20v-6h6v6"/><path d="M4 12h16"/></svg>Wall Types</button>' +
       '<button type="button" class="md-sheet-item" data-sheet="activity"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Activity</button>' +
       '<button type="button" class="md-sheet-item" data-sheet="change-floor"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M6 20V10l6-4 6 4v10"/><path d="M10 20v-4h4v4"/></svg>Change floor' +
         (state.floor ? ' (' + escapeHtml(state.floor.label) + ')' : '') + '</button>' +
@@ -1653,6 +1733,10 @@
     }
     if (act === 'activity') {
       openActivity();
+      return;
+    }
+    if (act === 'wall-types') {
+      openWallTypes();
       return;
     }
     if (act === 'change-floor') {
@@ -1877,6 +1961,11 @@
   on($('btn-update'), 'click', updateDrawingsList);
   on($('btn-download-all'), 'click', downloadAllDrawings);
   on($('btn-activity-back'), 'click', closeActivity);
+  on($('btn-wall-types-back'), 'click', closeWallTypes);
+  on($('wall-types-search'), 'input', function () {
+    wallTypesQuery = ($('wall-types-search').value || '');
+    renderWallTypes();
+  });
   on($('btn-manage-back'), 'click', closeManage);
   on($('btn-mg-add-cat'), 'click', addCategory);
   on($('mg-cat-input'), 'keydown', function (e) {
