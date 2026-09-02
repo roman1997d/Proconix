@@ -15,7 +15,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="apple-touch-icon" href="/favicon_io/apple-touch-icon.png">
   <link rel="stylesheet" href="/mydrawings/mydrawings.css">
-  <link rel="stylesheet" href="/progress-drawings/progress-drawings.css?v=p2l">
+  <link rel="stylesheet" href="/progress-drawings/progress-drawings.css?v=p2m">
 </head>
 <body>
   <div class="md-boot" id="pd-boot">
@@ -107,9 +107,10 @@
         <p class="dv-status" data-dv-status hidden>Opening drawing…</p>
         <div class="dv-plane" data-dv-plane>
           <canvas data-dv-canvas></canvas>
-          <svg class="pd-anno" id="pd-anno" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
         <canvas class="dv-detail" data-dv-detail hidden></canvas>
+        <!-- Above HQ detail so marks stay visible/drawable while zoomed -->
+        <svg class="pd-anno" id="pd-anno" xmlns="http://www.w3.org/2000/svg"></svg>
       </div>
       <div class="pd-chrome" id="pd-chrome" hidden>
         <button type="button" class="pd-add" id="btn-save-location" disabled>Add work type</button>
@@ -145,7 +146,7 @@
   </div>
 
   <script src="/mydrawings/lib/pdf.min.js"></script>
-  <script src="/mydrawings/drawing-viewer.js?v=p2l"></script>
-  <script src="/progress-drawings/progress-drawings.js?v=p2l"></script>
+  <script src="/mydrawings/drawing-viewer.js?v=p2m"></script>
+  <script src="/progress-drawings/progress-drawings.js?v=p2m"></script>
 </body>
 </html>

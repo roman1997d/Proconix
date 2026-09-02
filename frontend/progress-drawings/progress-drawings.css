@@ -99,11 +99,11 @@
   position: absolute;
   left: 0;
   top: 0;
-  width: 100%;
-  height: 100%;
   overflow: visible;
   pointer-events: none;
-  z-index: 3;
+  z-index: 4; /* above .dv-detail HQ overlay */
+  transform-origin: 0 0;
+  will-change: transform;
   filter: none;
 }
 .pd-anno .pd-loc { pointer-events: auto; cursor: pointer; }

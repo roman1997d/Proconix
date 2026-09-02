@@ -307,6 +307,9 @@
     svg.setAttribute('viewBox', '0 0 ' + m.pageCssW + ' ' + m.pageCssH);
     svg.setAttribute('width', m.pageCssW);
     svg.setAttribute('height', m.pageCssH);
+    svg.style.width = m.pageCssW + 'px';
+    svg.style.height = m.pageCssH + 'px';
+    svg.style.transform = 'translate3d(' + m.tx + 'px,' + m.ty + 'px,0) scale(' + m.scale + ')';
 
     /* Straight coloured strokes only — no fill, shadow, or extra rectangle. */
     var html = '';

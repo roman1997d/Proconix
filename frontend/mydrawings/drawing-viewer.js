@@ -8,10 +8,10 @@
   var TAP_ZOOM_2 = 14;
   var HIDE_MS = 3400;
   var MAX_CANVAS = 6144;
-  /* HQ crop only for extreme zoom; normal pan uses a sharp full-page base. */
-  var DETAIL_MIN_SCALE = 7.5;
-  var DETAIL_SETTLE_MS = 120;
-  var DETAIL_REPAN_PX = 48;
+  /* HQ crop once zoom outruns the full-page base (large PDFs blur earlier). */
+  var DETAIL_MIN_SCALE = 2.25;
+  var DETAIL_SETTLE_MS = 80;
+  var DETAIL_REPAN_PX = 36;
   var BASE_ZOOM_COVER = 8;
   var TAP_MOVE = 8;
   var DOUBLE_MS = 300;
@@ -566,9 +566,9 @@
     var atScale = this.scale;
     var sw = Math.max(1, this.stage.clientWidth);
     var sh = Math.max(1, this.stage.clientHeight);
-    var dpr = Math.min(2, window.devicePixelRatio || 1);
-    var outW = Math.max(1, Math.round(sw * dpr * 1.25));
-    var outH = Math.max(1, Math.round(sh * dpr * 1.25));
+    var dpr = Math.min(3, window.devicePixelRatio || 1);
+    var outW = Math.max(1, Math.round(sw * dpr * 1.5));
+    var outH = Math.max(1, Math.round(sh * dpr * 1.5));
     var cap = MAX_CANVAS;
     var fit = Math.min(1, cap / Math.max(outW, outH));
     outW = Math.max(1, Math.round(outW * fit));
@@ -737,8 +737,9 @@
       } else {
         this.selectDrag.x1 = cur.x;
         this.selectDrag.y1 = cur.y;
-        if (Math.abs(this.selectDrag.x1 - this.selectDrag.x0) > 2 ||
-            Math.abs(this.selectDrag.y1 - this.selectDrag.y0) > 2) {
+        var dxPage = this.selectDrag.x1 - this.selectDrag.x0;
+        var dyPage = this.selectDrag.y1 - this.selectDrag.y0;
+        if (Math.sqrt(dxPage * dxPage + dyPage * dyPage) * this.scale > 6) {
           this.moved = true;
         }
         if (typeof this.opts.onSelectMove === 'function') {
@@ -777,9 +778,10 @@
       var y = Math.min(drag.y0, drag.y1);
       var w = Math.abs(drag.x1 - drag.x0);
       var h = Math.abs(drag.y1 - drag.y0);
-      /* Allow thin marks / straight lines — reject only near-zero length taps. */
-      var len = Math.sqrt((w * w) + (h * h));
-      if (this.moved && len > 10 && typeof this.opts.onSelectEnd === 'function') {
+      /* Min length in screen px — page-space thresholds break at high zoom. */
+      var pageLen = Math.sqrt((w * w) + (h * h));
+      var screenLen = pageLen * this.scale;
+      if (this.moved && screenLen > 14 && typeof this.opts.onSelectEnd === 'function') {
         try {
           this.opts.onSelectEnd({
             x: x,
@@ -795,6 +797,7 @@
       } else if (typeof this.opts.onSelectCancel === 'function') {
         try { this.opts.onSelectCancel(); } catch (e) {}
       }
+      this.scheduleDetail();
       this.pokeChrome();
       return;
     }
