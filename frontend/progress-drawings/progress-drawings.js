@@ -241,29 +241,43 @@
     }
   }
 
-  function patternId(wt, layers) {
-    return 'pd-pat-' + wt.id + '-L' + layers;
+  function workTypeCode(wt) {
+    var name = String((wt && wt.name) || '').toLowerCase();
+    if (name.indexOf('board') === 0) return 'B';
+    if (name.indexOf('insul') === 0) return 'I';
+    if (name.indexOf('metal') === 0) return 'M';
+    if (name.indexOf('angle') === 0) return 'A';
+    if (name.indexOf('patress') === 0 || name.indexOf('pattress') === 0) return 'PT';
+    if (name.indexOf('letter') === 0) return 'LB';
+    return String((wt && wt.name) || '?').slice(0, 2).toUpperCase();
   }
 
-  function patternsHtml() {
-    /* All work types use the same continuous-line hatch; colour distinguishes them. */
-    var out = '<defs>';
-    var size = 8;
-    state.workTypes.forEach(function (wt) {
-      var colour = wt.colour || '#ef4444';
-      var paths =
-        '<path d="M0 4 L' + size + ' 4" stroke="' + colour + '" stroke-width="2.4" stroke-linecap="butt"/>';
-      out += '<pattern id="' + patternId(wt, 1) + '" patternUnits="userSpaceOnUse" width="' +
-        size + '" height="' + size + '">' + paths + '</pattern>';
-    });
-    return out + '</defs>';
+  function workTypeShortLabel(wt) {
+    var name = String((wt && wt.name) || '');
+    if (/board/i.test(name)) return 'Board';
+    if (/insul/i.test(name) && !/angle/i.test(name)) return 'Insul';
+    if (/metal/i.test(name)) return 'Metal';
+    if (/angle/i.test(name)) return 'Angle';
+    if (/patress|pattress/i.test(name)) return 'Patress';
+    if (/letter/i.test(name)) return 'Letter';
+    return name;
+  }
+
+  function markColour(wt, fallback) {
+    return (wt && wt.colour) || fallback || '#2563eb';
   }
 
   function addButtonLabel(wt) {
     if (!wt) return 'Add work type';
-    var short = wt.name || 'work type';
+    var short = wt.name || workTypeShortLabel(wt);
     if (state.selectedLocationId) return 'Update ' + short;
     return 'Add ' + short;
+  }
+
+  function strokeRectHtml(cls, x, y, w, h, colour, width) {
+    return '<rect class="' + cls + '" x="' + x + '" y="' + y + '" width="' + w +
+      '" height="' + h + '" fill="transparent" stroke="' + escapeHtml(colour) +
+      '" stroke-width="' + width + '" stroke-linejoin="miter" stroke-linecap="butt"/>';
   }
 
   function renderAnnotations() {
@@ -276,40 +290,34 @@
     svg.setAttribute('width', m.pageCssW);
     svg.setAttribute('height', m.pageCssH);
 
-    var html = patternsHtml();
+    /* Clean straight outlines only — no hatch fill, shadow, or extra border. */
+    var html = '';
     var locs = (state.booking && state.booking.locations) || [];
     locs.forEach(function (loc) {
       if ((loc.pageIndex || 0) !== Math.max(0, (m.pageNum || 1) - 1)) return;
       var css = viewer.pdfToPageCss(loc);
       if (!css) return;
       var selected = state.selectedLocationId === loc.id;
+      var anns = loc.annotations || [];
+      var primary = anns[0]
+        ? (workTypeById(anns[0].workTypeId) || { colour: anns[0].colour })
+        : null;
+      var colour = markColour(primary, '#2563eb');
       html += '<g class="pd-loc' + (selected ? ' is-selected' : '') + '" data-loc-id="' + escapeHtml(loc.id) + '">';
-      (loc.annotations || []).forEach(function (a, idx) {
-        var wt = workTypeById(a.workTypeId) || { id: a.workTypeId, colour: a.colour, pattern: a.pattern };
-        var inset = idx * 3;
-        html += '<rect x="' + (css.x + inset) + '" y="' + (css.y + inset) + '" width="' +
-          Math.max(2, css.width - inset * 2) + '" height="' + Math.max(2, css.height - inset * 2) +
-          '" fill="url(#' + patternId(wt, 1) + ')" fill-opacity="0.85" stroke="none"/>';
-      });
-      html += '<rect class="pd-loc-border" x="' + css.x + '" y="' + css.y + '" width="' + css.width +
-        '" height="' + css.height + '" fill="transparent" stroke="' +
-        (selected ? '#38bdf8' : 'rgba(15,23,42,0.55)') + '" stroke-width="' + (selected ? 2.5 : 1) + '"/>';
+      html += strokeRectHtml('pd-mark', css.x, css.y, css.width, css.height, colour, selected ? 3.25 : 2.4);
       html += '</g>';
     });
 
     if (state.draftRect) {
       var d = state.draftRect;
       var previewWt = activeWorkType();
-      if (previewWt) {
-        html += '<rect class="pd-draft-fill" x="' + d.x + '" y="' + d.y + '" width="' + d.width +
-          '" height="' + d.height + '" fill="url(#' + patternId(previewWt, 1) + ')" fill-opacity="0.9"/>';
-        html += '<rect class="pd-draft-border" x="' + d.x + '" y="' + d.y + '" width="' + d.width +
-          '" height="' + d.height + '" fill="none" stroke="' + escapeHtml(previewWt.colour || '#38bdf8') +
-          '" stroke-width="2" stroke-dasharray="6 4"/>';
-      } else {
-        html += '<rect class="pd-draft-border" x="' + d.x + '" y="' + d.y + '" width="' + d.width +
-          '" height="' + d.height + '" fill="rgba(56,189,248,0.08)" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="6 4"/>';
-      }
+      var draftColour = markColour(previewWt, '#2563eb');
+      html += strokeRectHtml(
+        'pd-draft-mark',
+        d.x, d.y, d.width, d.height,
+        draftColour,
+        2.6
+      );
     }
 
     svg.innerHTML = html;
@@ -326,8 +334,10 @@
         var drawing = state.mode === 'select' && w.id === state.activeWorkTypeId;
         return '<button type="button" class="pd-wt' + (drawing ? ' is-on' : '') +
           '" data-wt="' + escapeHtml(w.id) + '" style="--pd-wt:' + escapeHtml(w.colour) +
-          ';border-left-color:' + escapeHtml(w.colour) + '">' +
-          escapeHtml(w.name) + '</button>';
+          '" aria-label="' + escapeHtml(w.name) + '">' +
+          '<span class="pd-wt-badge">' + escapeHtml(workTypeCode(w)) + '</span>' +
+          '<span class="pd-wt-label">' + escapeHtml(workTypeShortLabel(w)) + '</span>' +
+          '</button>';
       }).join('');
     }
 
@@ -336,13 +346,7 @@
     if ($('btn-save-location')) {
       $('btn-save-location').disabled = !canSave || !state.activeWorkTypeId;
       $('btn-save-location').textContent = addButtonLabel(wt);
-      if (wt && wt.colour) {
-        $('btn-save-location').style.borderColor = wt.colour;
-        $('btn-save-location').style.boxShadow = 'inset 3px 0 0 ' + wt.colour;
-      } else {
-        $('btn-save-location').style.borderColor = '';
-        $('btn-save-location').style.boxShadow = '';
-      }
+      $('btn-save-location').style.background = (wt && wt.colour) ? wt.colour : '#111827';
     }
     if ($('btn-delete-location')) {
       $('btn-delete-location').hidden = !state.selectedLocationId;

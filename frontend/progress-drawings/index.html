@@ -15,7 +15,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png">
   <link rel="apple-touch-icon" href="/favicon_io/apple-touch-icon.png">
   <link rel="stylesheet" href="/mydrawings/mydrawings.css">
-  <link rel="stylesheet" href="/progress-drawings/progress-drawings.css?v=p2i">
+  <link rel="stylesheet" href="/progress-drawings/progress-drawings.css?v=p2k">
 </head>
 <body>
   <div class="md-boot" id="pd-boot">
@@ -112,15 +112,23 @@
         <canvas class="dv-detail" data-dv-detail hidden></canvas>
       </div>
       <div class="pd-chrome" id="pd-chrome" hidden>
-        <div class="pd-worktypes" id="pd-worktypes" role="toolbar" aria-label="Work types"></div>
-        <div class="pd-actions">
-          <button type="button" class="md-btn md-btn-primary" id="btn-save-location" disabled>Add work type</button>
-          <button type="button" class="md-btn md-btn-ghost pd-delete" id="btn-delete-location" hidden>Delete</button>
-        </div>
-        <div class="pd-tools">
-          <button type="button" class="pd-tool" data-tool="undo" id="btn-undo" disabled>Undo</button>
-          <button type="button" class="pd-tool" data-tool="redo" id="btn-redo" disabled>Redo</button>
-          <button type="button" class="pd-tool" data-tool="pan" id="btn-pan">Pan</button>
+        <button type="button" class="pd-add" id="btn-save-location" disabled>Add work type</button>
+        <div class="pd-pill" role="toolbar" aria-label="Marking tools">
+          <button type="button" class="pd-pill-btn" id="btn-undo" disabled aria-label="Undo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14H4v-5"/><path d="M4 9a8 8 0 1 1-1.1 5.5"/></svg>
+          </button>
+          <button type="button" class="pd-pill-btn" id="btn-redo" disabled aria-label="Redo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14h5v-5"/><path d="M20 9a8 8 0 1 0 1.1 5.5"/></svg>
+          </button>
+          <div class="pd-pill-sep" aria-hidden="true"></div>
+          <div class="pd-worktypes" id="pd-worktypes"></div>
+          <div class="pd-pill-sep" aria-hidden="true"></div>
+          <button type="button" class="pd-pill-btn" id="btn-pan" aria-label="Pan">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11V6a1.5 1.5 0 0 1 3 0v4"/><path d="M12 10V5.5a1.5 1.5 0 0 1 3 0V10"/><path d="M15 10.5V7a1.5 1.5 0 0 1 3 0v7.5a4.5 4.5 0 0 1-4.5 4.5H12a5 5 0 0 1-5-5v-3a1.5 1.5 0 0 1 3 0V11"/></svg>
+          </button>
+          <button type="button" class="pd-pill-btn pd-delete" id="btn-delete-location" hidden aria-label="Delete">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M8 7l1 12h6l1-12"/></svg>
+          </button>
         </div>
       </div>
       <!-- Kept for DrawingViewer bindings; hidden — pinch/pan/double-tap still work -->
@@ -138,6 +146,6 @@
 
   <script src="/mydrawings/lib/pdf.min.js"></script>
   <script src="/mydrawings/drawing-viewer.js"></script>
-  <script src="/progress-drawings/progress-drawings.js?v=p2i"></script>
+  <script src="/progress-drawings/progress-drawings.js?v=p2k"></script>
 </body>
 </html>

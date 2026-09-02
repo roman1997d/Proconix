@@ -104,34 +104,43 @@
   overflow: visible;
   pointer-events: none;
   z-index: 3;
+  filter: none;
 }
 .pd-anno .pd-loc { pointer-events: auto; cursor: pointer; }
-.pd-anno .pd-loc.is-selected .pd-loc-border {
-  stroke: #38bdf8;
-  stroke-width: 2.5;
+.pd-anno .pd-mark,
+.pd-anno .pd-draft-mark {
+  fill: transparent;
+  stroke-linejoin: miter;
+  stroke-linecap: butt;
+  vector-effect: non-scaling-stroke;
+  filter: none;
 }
-.pd-anno .pd-draft-fill,
-.pd-anno .pd-draft-border { pointer-events: none; }
+.pd-anno .pd-mark { pointer-events: auto; }
+.pd-anno .pd-draft-mark { pointer-events: none; }
+.pd-anno .pd-loc.is-selected .pd-mark {
+  stroke-width: 3.25;
+}
 
 .md-viewer.is-select-mode,
 .md-viewer.is-select-mode .dv-stage { cursor: crosshair; }
 
-/* Bottom palette — always visible, max compact */
+/* Floating pill toolbar — reference style */
 .pd-chrome {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 8;
-  padding: 6px 8px calc(8px + var(--md-safe-b));
-  padding-left: calc(8px + var(--md-safe-l));
-  padding-right: calc(8px + var(--md-safe-r));
-  background: linear-gradient(180deg, transparent, rgba(7, 11, 20, 0.88) 18%, rgba(7, 11, 20, 0.96));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px calc(12px + var(--md-safe-b));
   pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(7, 11, 20, 0.35) 55%, rgba(7, 11, 20, 0.55) 100%);
 }
 .pd-chrome > * { pointer-events: auto; }
 
-/* Keep palette visible when viewer auto-hides header */
 #screen-viewer.pd-viewer.is-chrome-hidden .pd-chrome {
   opacity: 1;
   transform: none;
@@ -141,99 +150,139 @@
   pointer-events: auto;
 }
 
-.pd-worktypes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-bottom: 6px;
-}
-
-.pd-wt {
-  flex: 1 1 calc(33.33% - 5px);
-  min-width: 0;
-  min-height: 34px;
-  padding: 0 8px;
-  border-radius: 10px;
-  border: 1px solid var(--md-line);
-  border-left-width: 4px;
-  background: rgba(18, 26, 40, 0.94);
-  color: #cbd5e1;
-  font-size: 0.7rem;
+.pd-add {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #111827;
+  color: #f8fafc;
+  font-size: 0.86rem;
   font-weight: 750;
-  line-height: 1.15;
-  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  max-width: min(92vw, 320px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.pd-wt.is-on {
-  color: #f8fafc;
-  border-color: color-mix(in srgb, var(--pd-wt, #38bdf8) 55%, transparent);
-  background: color-mix(in srgb, var(--pd-wt, #38bdf8) 28%, rgba(18, 26, 40, 0.95));
+.pd-add:disabled {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+}
+.pd-add:not(:disabled) {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
 }
 
-.pd-actions {
+.pd-pill {
   display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-.pd-actions .md-btn {
-  flex: 1;
-  min-height: 42px;
-  font-size: 0.9rem;
-  border-radius: 12px;
-}
-.pd-actions .md-btn:disabled { opacity: 0.4; }
-.pd-actions .pd-delete {
-  flex: 0 0 auto;
-  min-width: 72px;
-  padding-left: 12px;
-  padding-right: 12px;
-}
-/* md-btn uses display:flex, which overrides the HTML hidden attribute */
-.pd-actions .pd-delete[hidden] {
-  display: none !important;
-}
-.pd-actions .md-btn-primary {
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
-}
-
-.pd-tools {
-  display: flex;
-  gap: 6px;
-}
-.pd-tool {
-  flex: 1;
-  min-height: 34px;
-  padding: 0 10px;
+  align-items: center;
+  gap: 4px;
+  max-width: min(96vw, 520px);
+  padding: 8px 10px;
   border-radius: 999px;
-  border: 1px solid var(--md-line);
-  background: rgba(18, 26, 40, 0.92);
-  color: var(--md-muted);
-  font-size: 0.74rem;
-  font-weight: 700;
+  background: rgba(28, 28, 30, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
-.pd-tool.is-on {
-  color: #f8fafc;
-  border-color: rgba(56, 189, 248, 0.45);
-  background: rgba(56, 189, 248, 0.2);
-}
-.pd-tool:disabled { opacity: 0.35; }
+.pd-pill::-webkit-scrollbar { display: none; }
 
-/* Give the drawing more room above the compact palette */
+.pd-pill-btn {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #f3f4f6;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.pd-pill-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pd-pill-btn.is-on {
+  background: rgba(255, 255, 255, 0.14);
+}
+.pd-pill-btn:disabled { opacity: 0.28; }
+.pd-pill-btn.pd-delete[hidden] { display: none !important; }
+
+.pd-pill-sep {
+  width: 1px;
+  height: 22px;
+  margin: 0 2px;
+  background: rgba(255, 255, 255, 0.14);
+  flex: 0 0 auto;
+}
+
+.pd-worktypes {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.pd-wt {
+  flex: 0 0 auto;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+.pd-wt-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.88);
+  display: grid;
+  place-items: center;
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+  color: #fff;
+  background: transparent;
+}
+.pd-wt-label {
+  font-size: 0.48rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(243, 244, 246, 0.78);
+  max-width: 48px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1;
+}
+.pd-wt.is-on .pd-wt-badge {
+  background: var(--pd-wt, #38bdf8);
+  border-color: var(--pd-wt, #38bdf8);
+  color: #fff;
+  box-shadow: none;
+}
+.pd-wt.is-on .pd-wt-label {
+  color: #fff;
+}
+
 #screen-viewer.pd-viewer .dv-stage {
   bottom: 0;
-}
-
-@media (min-width: 540px) {
-  .pd-wt {
-    flex: 0 1 auto;
-    min-width: 110px;
-    font-size: 0.76rem;
-    min-height: 36px;
-  }
-  .pd-chrome {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
 }
