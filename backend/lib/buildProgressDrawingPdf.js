@@ -1,5 +1,9 @@
 /**
  * Overlay Progress Drawings marks + top-left colour legend onto the original PDF (pdf-lib).
+ *
+ * Important: many CAD/export PDFs leave a flipped CTM (or unbalanced q/Q) on the page
+ * content stream. Appending marks there shifts them. We always stamp the source page
+ * onto a fresh page first, then draw in clean user space.
  */
 const fs = require('fs');
 const path = require('path');
@@ -43,9 +47,18 @@ async function buildProgressDrawingPdf(opts) {
   }
 
   const bytes = fs.readFileSync(abs);
-  const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const pages = pdfDoc.getPages();
+  const srcDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  const outDoc = await PDFDocument.create();
+  const font = await outDoc.embedFont(StandardFonts.Helvetica);
+  const srcPages = srcDoc.getPages();
+
+  const embeddedPages = await outDoc.embedPages(srcPages);
+  const pages = embeddedPages.map((emb, i) => {
+    const { width, height } = srcPages[i].getSize();
+    const page = outDoc.addPage([width, height]);
+    page.drawPage(emb, { x: 0, y: 0, width, height });
+    return page;
+  });
 
   const wtById = {};
   (opts.workTypes || []).forEach((w) => {
@@ -133,9 +146,9 @@ async function buildProgressDrawingPdf(opts) {
     const h = Number(loc.height);
     if (![x, y, w, h].every((n) => Number.isFinite(n))) return;
 
+    /* Stored coords use top-left origin (pdf.js viewport); clean page is bottom-left. */
     const kind = loc.markKind === 'line' ? 'line' : 'rect';
     if (kind === 'line') {
-      /* Stored coords use top-left origin (pdf.js viewport); pdf-lib is bottom-left. */
       page.drawLine({
         start: { x: x, y: pageH - y },
         end: { x: x + w, y: pageH - (y + h) },
@@ -164,7 +177,7 @@ async function buildProgressDrawingPdf(opts) {
     if (idx > 0 && pages[idx]) drawLegend(pages[idx]);
   });
 
-  const out = await pdfDoc.save();
+  const out = await outDoc.save();
   return Buffer.from(out);
 }
 
