@@ -1,6 +1,6 @@
-/* Progress Drawings PWA — cache the app shell + shared PDF viewer assets.
-   Drawing PDFs and annotation mutations live in IndexedDB (see pd-offline.js). */
-var CACHE = 'progress-drawings-shell-v2';
+/* Progress Drawings PWA — cache app shell only (scope: /progress-drawings/).
+   Plan PDFs + annotations live in IndexedDB (pd-offline.js). */
+var CACHE = 'progress-drawings-shell-v3';
 var PRECACHE = [
   '/progress-drawings/',
   '/progress-drawings/index.html',
@@ -8,10 +8,10 @@ var PRECACHE = [
   '/progress-drawings/progress-drawings.js',
   '/progress-drawings/pd-offline.js',
   '/progress-drawings/manifest.webmanifest',
-  '/mydrawings/mydrawings.css',
-  '/mydrawings/drawing-viewer.js',
-  '/mydrawings/lib/pdf.min.js',
-  '/mydrawings/lib/pdf.worker.min.js',
+  '/progress-drawings/vendor/mydrawings.css',
+  '/progress-drawings/vendor/drawing-viewer.js',
+  '/progress-drawings/vendor/pdf.min.js',
+  '/progress-drawings/vendor/pdf.worker.min.js',
   '/favicon_io/android-chrome-192x192.png',
   '/favicon_io/android-chrome-512x512.png',
   '/favicon_io/apple-touch-icon.png',
@@ -58,30 +58,6 @@ function cacheFirst(req) {
   });
 }
 
-function networkFirst(req) {
-  return fetch(req).then(function (res) {
-    if (res && res.ok) {
-      var copy = res.clone();
-      caches.open(CACHE).then(function (cache) { cache.put(req, copy); });
-    }
-    return res;
-  }).catch(function () {
-    return caches.match(req, { ignoreSearch: true });
-  });
-}
-
-function shouldHandle(url) {
-  var p = url.pathname;
-  if (p.indexOf('/progress-drawings/') === 0 || p === '/progress-drawings') return true;
-  if (p === '/mydrawings/mydrawings.css') return true;
-  if (p === '/mydrawings/drawing-viewer.js') return true;
-  if (p.indexOf('/mydrawings/lib/') === 0) return true;
-  if (p.indexOf('/favicon_io/') === 0) return true;
-  /* Cache source plan PDFs for offline open (auth’d response keyed by URL). */
-  if (/^\/api\/my-drawings\/drawings\/[^/]+\/file$/.test(p)) return true;
-  return false;
-}
-
 self.addEventListener('fetch', function (event) {
   var req = event.request;
   if (req.method !== 'GET') return;
@@ -89,12 +65,14 @@ self.addEventListener('fetch', function (event) {
   var url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (req.destination === 'worker') return;
-  if (!shouldHandle(url)) return;
 
-  if (/^\/api\/my-drawings\/drawings\/[^/]+\/file$/.test(url.pathname)) {
-    event.respondWith(networkFirst(req));
-    return;
-  }
+  var p = url.pathname;
+  var inScope = p.indexOf('/progress-drawings/') === 0 || p === '/progress-drawings';
+  var isIcon = p.indexOf('/favicon_io/') === 0;
+  if (!inScope && !isIcon) return;
+
+  /* Never intercept API — lets Add / sync hit Node.js directly. */
+  if (p.indexOf('/api/') === 0) return;
 
   event.respondWith(
     cacheFirst(req).then(function (res) {

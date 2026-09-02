@@ -185,9 +185,20 @@ const progressDrawingsHtmlPath = path.join(frontendDir, 'progress-drawings', 'in
 app.get(['/progress-drawings', '/progress-drawings/'], (req, res) => {
   res.sendFile(progressDrawingsHtmlPath);
 });
-/* Allow SW to cache shared /mydrawings viewer assets while serving Progress Drawings offline. */
+/* Shared viewer assets under /progress-drawings/vendor so the SW can stay scoped here
+   (site-wide SW scope breaks intermittent Safari POSTs with "Load failed"). */
+const pdVendor = {
+  'mydrawings.css': path.join(frontendDir, 'mydrawings', 'mydrawings.css'),
+  'drawing-viewer.js': path.join(frontendDir, 'mydrawings', 'drawing-viewer.js'),
+  'pdf.min.js': path.join(frontendDir, 'mydrawings', 'lib', 'pdf.min.js'),
+  'pdf.worker.min.js': path.join(frontendDir, 'mydrawings', 'lib', 'pdf.worker.min.js')
+};
+app.get('/progress-drawings/vendor/:file', (req, res) => {
+  const filePath = pdVendor[req.params.file];
+  if (!filePath) return res.status(404).end();
+  res.sendFile(filePath);
+});
 app.get('/progress-drawings/sw.js', (req, res) => {
-  res.setHeader('Service-Worker-Allowed', '/');
   res.setHeader('Cache-Control', 'no-cache');
   res.type('application/javascript');
   res.sendFile(path.join(frontendDir, 'progress-drawings', 'sw.js'));

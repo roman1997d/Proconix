@@ -5,7 +5,7 @@
   var DEVICE_KEY = 'proconix_mydrawings_device';
   var SESSION_KEY = 'proconix_mydrawings_session';
   var FLOOR_KEY = 'proconix_progress_drawings_floor';
-  var PDFJS_WORKER = '/mydrawings/lib/pdf.worker.min.js';
+  var PDFJS_WORKER = '/progress-drawings/vendor/pdf.worker.min.js';
   var Offline = window.PdOffline || null;
 
   var FLOORS = [
@@ -180,10 +180,19 @@
     return data;
   }
 
+  function friendlyNetworkError(err) {
+    var msg = err && err.message ? String(err.message) : '';
+    if (/load failed|failed to fetch|networkerror|offline/i.test(msg) || (err && err.name === 'TypeError')) {
+      return new Error('Connection problem. Marks are saved on this device and will sync when online.');
+    }
+    return err;
+  }
+
   async function apiJson(path, opts) {
     opts = opts || {};
     var method = String(opts.method || 'GET').toUpperCase();
     var body = opts.body;
+    var networkErr = null;
 
     if (isOnline()) {
       try {
@@ -194,16 +203,22 @@
         updateOfflineUi();
         return data;
       } catch (err) {
+        networkErr = err;
         if (err && err.status) throw err;
-        if (!Offline || !Offline.isNetworkError(err)) throw err;
+        if (!Offline || !Offline.isNetworkError(err)) throw friendlyNetworkError(err);
         /* fall through to offline handler */
       }
     }
 
-    if (!Offline) throw new Error('You are offline.');
-    var offlineData = await Offline.handleOffline(path, method, body, offlineCtx());
-    updateOfflineUi();
-    return offlineData;
+    if (!Offline) throw friendlyNetworkError(networkErr || new Error('You are offline.'));
+    try {
+      var offlineData = await Offline.handleOffline(path, method, body, offlineCtx());
+      updateOfflineUi();
+      if (networkErr) toast('Saved on this device — will sync when online.');
+      return offlineData;
+    } catch (offlineErr) {
+      throw friendlyNetworkError(networkErr || offlineErr);
+    }
   }
 
   function applyBootstrapData(data) {
@@ -1384,7 +1399,26 @@
 
   function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
-    navigator.serviceWorker.register('/progress-drawings/sw.js', { scope: '/' }).catch(function () {});
+    /* Drop the earlier site-wide SW (scope "/") that broke Safari API POSTs. */
+    navigator.serviceWorker.getRegistrations().then(function (regs) {
+      return Promise.all((regs || []).map(function (reg) {
+        var script = '';
+        try {
+          script = (reg.active && reg.active.scriptURL) ||
+            (reg.waiting && reg.waiting.scriptURL) ||
+            (reg.installing && reg.installing.scriptURL) || '';
+        } catch (e) {}
+        if (script.indexOf('/progress-drawings/sw.js') !== -1 &&
+            /\/$/.test(reg.scope) && reg.scope.indexOf('/progress-drawings') === -1) {
+          return reg.unregister();
+        }
+        return null;
+      }));
+    }).catch(function () {}).then(function () {
+      return navigator.serviceWorker.register('/progress-drawings/sw.js', {
+        scope: '/progress-drawings/'
+      });
+    }).catch(function () {});
   }
 
   async function boot() {
