@@ -250,6 +250,7 @@
     if (name.indexOf('angle') === 0) return 'A';
     if (name.indexOf('patress') === 0 || name.indexOf('pattress') === 0) return 'PT';
     if (name.indexOf('letter') === 0) return 'LB';
+    if (name.indexOf('flat') === 0) return 'FP';
     return String((wt && wt.name) || '?').slice(0, 2).toUpperCase();
   }
 
@@ -262,6 +263,7 @@
     if (/angle/i.test(name)) return 'Angle';
     if (/patress|pattress/i.test(name)) return 'Patress';
     if (/letter/i.test(name)) return 'Letter';
+    if (/flat/i.test(name)) return 'Flat';
     return name;
   }
 
