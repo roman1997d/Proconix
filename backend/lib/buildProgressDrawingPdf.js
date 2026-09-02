@@ -1,13 +1,13 @@
 /**
  * Overlay Progress Drawings marks + top-left colour legend onto the original PDF (pdf-lib).
  *
- * Important: many CAD/export PDFs leave a flipped CTM (or unbalanced q/Q) on the page
- * content stream. Appending marks there shifts them. We always stamp the source page
- * onto a fresh page first, then draw in clean user space.
+ * Marks are stored in pdf.js viewport space (top-left origin, rotation applied).
+ * Many CAD PDFs also leave a flipped/unbalanced CTM on content streams, so we never
+ * append onto the source page — we stamp it upright onto a fresh page first.
  */
 const fs = require('fs');
 const path = require('path');
-const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const { PDFDocument, StandardFonts, rgb, degrees } = require('pdf-lib');
 const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
 
 function absFromRelative(relativePath) {
@@ -26,6 +26,64 @@ function hexToRgb(hex) {
   const n = parseInt(h, 16);
   if (!Number.isFinite(n)) return rgb(0.15, 0.39, 0.92);
   return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+}
+
+function normalizeAngle(angle) {
+  return ((Number(angle) || 0) % 360 + 360) % 360;
+}
+
+/** Match pdf.js viewport size for a page (MediaBox + /Rotate). */
+function viewportSizeForPage(srcPage) {
+  const { width: mediaW, height: mediaH } = srcPage.getSize();
+  const angle = normalizeAngle(srcPage.getRotation().angle);
+  if (angle === 90 || angle === 270) {
+    return { vpW: mediaH, vpH: mediaW, mediaW, mediaH, angle };
+  }
+  return { vpW: mediaW, vpH: mediaH, mediaW, mediaH, angle };
+}
+
+/**
+ * Draw a source page onto an output page so visual orientation matches pdf.js
+ * (and on-screen Progress Drawings marks).
+ */
+function drawSourcePageUpright(outPage, embeddedPage, meta) {
+  const { vpW, vpH, mediaW, mediaH, angle } = meta;
+  if (angle === 90) {
+    outPage.drawPage(embeddedPage, {
+      x: 0,
+      y: vpH,
+      width: mediaW,
+      height: mediaH,
+      rotate: degrees(-90),
+    });
+    return;
+  }
+  if (angle === 180) {
+    outPage.drawPage(embeddedPage, {
+      x: vpW,
+      y: vpH,
+      width: mediaW,
+      height: mediaH,
+      rotate: degrees(180),
+    });
+    return;
+  }
+  if (angle === 270) {
+    outPage.drawPage(embeddedPage, {
+      x: vpW,
+      y: 0,
+      width: mediaW,
+      height: mediaH,
+      rotate: degrees(90),
+    });
+    return;
+  }
+  outPage.drawPage(embeddedPage, {
+    x: 0,
+    y: 0,
+    width: mediaW,
+    height: mediaH,
+  });
 }
 
 /**
@@ -51,12 +109,13 @@ async function buildProgressDrawingPdf(opts) {
   const outDoc = await PDFDocument.create();
   const font = await outDoc.embedFont(StandardFonts.Helvetica);
   const srcPages = srcDoc.getPages();
-
   const embeddedPages = await outDoc.embedPages(srcPages);
+
+  const pageMetas = srcPages.map((srcPage) => viewportSizeForPage(srcPage));
   const pages = embeddedPages.map((emb, i) => {
-    const { width, height } = srcPages[i].getSize();
-    const page = outDoc.addPage([width, height]);
-    page.drawPage(emb, { x: 0, y: 0, width, height });
+    const meta = pageMetas[i];
+    const page = outDoc.addPage([meta.vpW, meta.vpH]);
+    drawSourcePageUpright(page, emb, meta);
     return page;
   });
 
@@ -136,7 +195,7 @@ async function buildProgressDrawingPdf(opts) {
     const idx = Math.max(0, Number(loc.pageIndex) || 0);
     const page = pages[idx];
     if (!page) return;
-    const { height: pageH } = page.getSize();
+    const pageH = page.getSize().height;
     const ann = (loc.annotations && loc.annotations[0]) || {};
     const wt = wtById[String(ann.workTypeId)] || {};
     const colour = hexToRgb(ann.colour || wt.colour || '#2563eb');
@@ -146,7 +205,7 @@ async function buildProgressDrawingPdf(opts) {
     const h = Number(loc.height);
     if (![x, y, w, h].every((n) => Number.isFinite(n))) return;
 
-    /* Stored coords use top-left origin (pdf.js viewport); clean page is bottom-left. */
+    /* Viewport/top-left → clean page bottom-left (same space as upright stamp). */
     const kind = loc.markKind === 'line' ? 'line' : 'rect';
     if (kind === 'line') {
       page.drawLine({
@@ -181,4 +240,9 @@ async function buildProgressDrawingPdf(opts) {
   return Buffer.from(out);
 }
 
-module.exports = { buildProgressDrawingPdf, absFromRelative };
+module.exports = {
+  buildProgressDrawingPdf,
+  absFromRelative,
+  viewportSizeForPage,
+  drawSourcePageUpright,
+};
