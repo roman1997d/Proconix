@@ -891,6 +891,11 @@ img { max-width: 100%; }
   background: rgba(255,255,255,0.06);
   border: 1px solid var(--md-line);
 }
+.mg-item-actions .is-preview {
+  background: rgba(167, 139, 250, 0.14);
+  border-color: rgba(167, 139, 250, 0.3);
+  color: #ede9fe;
+}
 .mg-item-actions .is-update {
   background: rgba(56, 189, 248, 0.14);
   border-color: rgba(56, 189, 248, 0.3);

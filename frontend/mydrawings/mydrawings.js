@@ -55,7 +55,8 @@
     floor: null,
     floorFrom: '',
     pendingDeepLink: null,
-    manageQuery: ''
+    manageQuery: '',
+    viewerFrom: ''
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -1084,17 +1085,18 @@
       });
   }
 
-  async function openViewer(id, push) {
+  async function openViewer(id, push, from) {
     var d = drawingById(id);
     if (!d) return;
     state.viewing = d;
+    state.viewerFrom = from || '';
     $('viewer-number').textContent = d.number;
     showScreen('screen-viewer');
     setOfflineUi();
     if (push !== false) {
       state.pushingView = true;
       try {
-        history.pushState({ md: 'view', id: id }, '', '?d=' + encodeURIComponent(id));
+        history.pushState({ md: 'view', id: id, from: state.viewerFrom }, '', '?d=' + encodeURIComponent(id));
       } catch (e) {}
       state.pushingView = false;
     }
@@ -1108,12 +1110,19 @@
   }
 
   function closeViewer() {
+    var fromManage = state.viewerFrom === 'manage';
     state.viewing = null;
+    state.viewerFrom = '';
     getViewer().close();
     document.getElementById('md-app').classList.remove('is-fs');
-    showScreen('screen-list');
+    if (fromManage && state.role === 'admin') {
+      showScreen('screen-manage');
+      renderManage();
+    } else {
+      showScreen('screen-list');
+    }
     if (new URLSearchParams(location.search).get('d')) {
-      try { history.replaceState({ md: 'list' }, '', '/mydrawings/'); } catch (e) {}
+      try { history.replaceState({ md: fromManage ? 'manage' : 'list' }, '', '/mydrawings/'); } catch (e) {}
     }
   }
 
@@ -1303,6 +1312,7 @@
         '<p class="mg-item-num">' + escapeHtml(d.number) + '</p>' +
         '<p class="mg-item-meta">' + meta + '</p>' +
         '<div class="mg-item-actions">' +
+          '<button type="button" class="is-preview" data-mg="preview">Preview</button>' +
           '<button type="button" class="is-update" data-mg="update">Update</button>' +
           '<button type="button" data-mg="edit">Edit</button>' +
           '<button type="button" class="is-danger" data-mg="delete">Delete</button>' +
@@ -1708,6 +1718,7 @@
 
   function closeViewerQuiet() {
     state.viewing = null;
+    state.viewerFrom = '';
     if (drawingViewer) drawingViewer.close();
     document.getElementById('md-app').classList.remove('is-fs');
   }
@@ -1900,7 +1911,8 @@
     if (!item || !act) return;
     var id = item.getAttribute('data-id');
     var which = act.getAttribute('data-mg');
-    if (which === 'update') showManageForm({ type: 'update', id: id });
+    if (which === 'preview') openViewer(id, true, 'manage');
+    else if (which === 'update') showManageForm({ type: 'update', id: id });
     else if (which === 'edit') showManageForm({ type: 'edit', id: id });
     else if (which === 'delete') deleteDrawing(id);
   });
@@ -1926,7 +1938,7 @@
   on(window, 'popstate', function () {
     if (state.pushingView) return;
     var d = new URLSearchParams(location.search).get('d');
-    if (d && drawingById(d)) openViewer(d, false);
+    if (d && drawingById(d)) openViewer(d, false, (history.state && history.state.from) || '');
     else if ($('screen-viewer').classList.contains('is-active')) closeViewer();
   });
 
