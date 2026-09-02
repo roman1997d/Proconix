@@ -2,7 +2,7 @@
   "id": "/mydrawings/",
   "name": "My Drawings",
   "short_name": "My Drawings",
-  "description": "Project drawings on your phone. Search, view PDFs, and keep copies offline.",
+  "description": "Project drawings and Wall Types on your phone. Search, view PDFs, browse Siniat specs, and keep copies offline.",
   "start_url": "/mydrawings/",
   "scope": "/mydrawings/",
   "display": "standalone",

@@ -1,5 +1,5 @@
-/* My Drawings PWA — cache the app shell only. PDFs are stored in IndexedDB on demand. */
-var CACHE = 'mydrawings-shell-v33';
+/* My Drawings PWA — app shell + Wall Types catalog (offline). PDFs stay in IndexedDB. */
+var CACHE = 'mydrawings-shell-v35';
 var PRECACHE = [
   '/mydrawings/',
   '/mydrawings/index.html',
@@ -9,14 +9,54 @@ var PRECACHE = [
   '/mydrawings/manifest.webmanifest',
   '/mydrawings/data/medlock-wall-types.json',
   '/mydrawings/lib/pdf.min.js',
-  '/mydrawings/lib/pdf.worker.min.js'
+  '/mydrawings/lib/pdf.worker.min.js',
+  /* Wall Types construction details — available offline */
+  '/mydrawings/data/wall-types/wt01b.jpg',
+  '/mydrawings/data/wall-types/wt01c.jpg',
+  '/mydrawings/data/wall-types/wt03c.jpg',
+  '/mydrawings/data/wall-types/wt05b.jpg',
+  '/mydrawings/data/wall-types/wt07.jpg',
+  '/mydrawings/data/wall-types/wt08a-svp.jpg',
+  '/mydrawings/data/wall-types/wt08a-svp-36.jpg',
+  '/mydrawings/data/wall-types/wt08d.jpg',
+  '/mydrawings/data/wall-types/wt08e.jpg',
+  '/mydrawings/data/wall-types/wt09.jpg',
+  '/mydrawings/data/wall-types/wt10a.jpg',
+  '/mydrawings/data/wall-types/wt10b.jpg',
+  '/mydrawings/data/wall-types/wt20a.jpg',
+  '/mydrawings/data/wall-types/wt20b.jpg',
+  '/mydrawings/data/wall-types/wt21.jpg',
+  '/mydrawings/data/wall-types/wt21a.jpg',
+  '/mydrawings/data/wall-types/wt23.jpg',
+  '/mydrawings/data/wall-types/wt24.jpg',
+  '/mydrawings/data/wall-types/wt24a.jpg',
+  '/mydrawings/data/wall-types/wt25.jpg',
+  '/mydrawings/data/wall-types/wt26.jpg',
+  '/mydrawings/data/wall-types/wt26a.jpg',
+  '/mydrawings/data/wall-types/wt27.jpg',
+  '/mydrawings/data/wall-types/wt28.jpg',
+  '/mydrawings/data/wall-types/wt29.jpg',
+  '/mydrawings/data/wall-types/wt31.jpg',
+  '/mydrawings/data/wall-types/wt32.jpg',
+  '/mydrawings/data/wall-types/wt33.jpg',
+  '/mydrawings/data/wall-types/wt34.jpg'
 ];
+
+function precacheAll(cache) {
+  var i = 0;
+  function next() {
+    if (i >= PRECACHE.length) return Promise.resolve();
+    var url = PRECACHE[i++];
+    return cache.add(url).catch(function (err) {
+      console.warn('[mydrawings-sw] precache failed', url, err && err.message ? err.message : err);
+    }).then(next);
+  }
+  return next();
+}
 
 self.addEventListener('install', function (event) {
   event.waitUntil(
-    caches.open(CACHE).then(function (cache) {
-      return cache.addAll(PRECACHE);
-    }).then(function () {
+    caches.open(CACHE).then(precacheAll).then(function () {
       return self.skipWaiting();
     })
   );

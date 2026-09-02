@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="My Drawings">
-  <meta name="description" content="View project drawings on your phone. Search, open PDFs, and keep copies offline.">
+  <meta name="description" content="View project drawings and Wall Types on your phone. Search, open PDFs, browse specs offline.">
   <title>My Drawings</title>
   <link rel="manifest" href="/mydrawings/manifest.webmanifest">
   <link rel="icon" href="/favicon_io/favicon.ico" sizes="any">
@@ -258,6 +258,7 @@
           <h1 class="md-header-title">Wall Types</h1>
           <p class="md-header-sub" id="wall-types-sub">1 Medlock Street</p>
         </div>
+        <span class="md-offline" id="wall-types-offline" aria-live="polite"><i></i> Offline</span>
       </header>
       <div class="md-main">
         <label class="md-search">
@@ -278,6 +279,7 @@
           <h1 class="md-header-title" id="wt-detail-code">Wall Type</h1>
           <p class="md-header-sub" id="wt-detail-name">Details</p>
         </div>
+        <span class="md-offline" id="wall-type-detail-offline" aria-live="polite"><i></i> Offline</span>
       </header>
       <div class="md-main wt-detail" id="wall-type-detail"></div>
     </section>

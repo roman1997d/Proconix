@@ -607,7 +607,7 @@
 
   function setOfflineUi() {
     var on = !isOnline();
-    ['offline-pill', 'viewer-offline'].forEach(function (id) {
+    ['offline-pill', 'viewer-offline', 'wall-types-offline', 'wall-type-detail-offline'].forEach(function (id) {
       var el = $(id);
       if (el) el.classList.toggle('is-on', on);
     });
@@ -1219,11 +1219,31 @@
     if (wallTypesCache) return wallTypesCache;
     var res = await fetch('/mydrawings/data/medlock-wall-types.json', {
       credentials: 'same-origin',
-      cache: 'no-cache'
+      /* Prefer SW/HTTP cache so Wall Types opens offline after first install. */
+      cache: 'force-cache'
     });
-    if (!res.ok) throw new Error('Could not load wall types.');
+    if (!res.ok) throw new Error(isOnline()
+      ? 'Could not load wall types.'
+      : 'Wall Types are not available offline yet. Open once online to download.');
     wallTypesCache = await res.json();
     return wallTypesCache;
+  }
+
+  function warmWallTypesOfflineCache(data) {
+    if (!isOnline() || !('caches' in window) || !data || !data.wallTypes) return;
+    var urls = ['/mydrawings/data/medlock-wall-types.json'];
+    data.wallTypes.forEach(function (wt) {
+      if (wt && wt.detailImage) urls.push(wt.detailImage);
+    });
+    caches.keys().then(function (keys) {
+      var shell = keys.filter(function (k) { return k.indexOf('mydrawings-shell-') === 0; }).sort().pop();
+      if (!shell) return;
+      return caches.open(shell).then(function (cache) {
+        urls.forEach(function (url) {
+          cache.add(url).catch(function () {});
+        });
+      });
+    }).catch(function () {});
   }
 
   function wallTypeById(id) {
@@ -1601,9 +1621,11 @@
       if ($('wall-types-sub')) {
         var proj = (data.project && data.project.name) || 'Project';
         var rev = data.pack && data.pack.revision ? (' · Pack Rev ' + data.pack.revision) : '';
-        $('wall-types-sub').textContent = proj + rev;
+        var off = !isOnline() ? ' · Offline' : '';
+        $('wall-types-sub').textContent = proj + rev + off;
       }
       renderWallTypes();
+      warmWallTypesOfflineCache(data);
     } catch (err) {
       if ($('wall-types-list')) {
         $('wall-types-list').innerHTML = '<div class="md-empty"><h3>Could not load wall types</h3><p>' +
