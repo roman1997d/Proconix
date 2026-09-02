@@ -116,11 +116,12 @@ async function ensureSchemaInner() {
 /** Canonical work-type legend for Progress Drawings (name → colour + hatch). */
 const PROGRESS_WORK_TYPES = [
   { name: 'PlasterBoard', colour: '#2563eb', pattern: 'solid', supportsLayers: false, sortOrder: 0 },
-  { name: 'Insulation', colour: '#eab308', pattern: 'solid', supportsLayers: false, sortOrder: 1 },
-  { name: 'Metal', colour: '#111827', pattern: 'solid', supportsLayers: false, sortOrder: 2 },
-  { name: 'Angle & Insulation', colour: '#16a34a', pattern: 'solid', supportsLayers: false, sortOrder: 3 },
-  { name: 'Patress', colour: '#a855f7', pattern: 'solid', supportsLayers: false, sortOrder: 4 },
-  { name: 'Letterbox', colour: '#ef4444', pattern: 'solid', supportsLayers: false, sortOrder: 5 }
+  { name: 'PlasterBoard 2nd Layer', colour: '#14b8a6', pattern: 'solid', supportsLayers: false, sortOrder: 1 },
+  { name: 'Insulation', colour: '#eab308', pattern: 'solid', supportsLayers: false, sortOrder: 2 },
+  { name: 'Metal', colour: '#111827', pattern: 'solid', supportsLayers: false, sortOrder: 3 },
+  { name: 'Angle & Insulation', colour: '#16a34a', pattern: 'solid', supportsLayers: false, sortOrder: 4 },
+  { name: 'Patress', colour: '#a855f7', pattern: 'solid', supportsLayers: false, sortOrder: 5 },
+  { name: 'Letterbox', colour: '#ef4444', pattern: 'solid', supportsLayers: false, sortOrder: 6 }
 ];
 
 async function syncProgressWorkTypes() {

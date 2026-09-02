@@ -243,6 +243,7 @@
 
   function workTypeCode(wt) {
     var name = String((wt && wt.name) || '').toLowerCase();
+    if (/board/.test(name) && /2nd|second|\bb2\b/.test(name) && !/letter/.test(name)) return 'B2';
     if (/board/.test(name) && !/letter/.test(name)) return 'B';
     if (name.indexOf('insul') === 0) return 'I';
     if (name.indexOf('metal') === 0) return 'M';
@@ -254,6 +255,7 @@
 
   function workTypeShortLabel(wt) {
     var name = String((wt && wt.name) || '');
+    if (/board/i.test(name) && /2nd|second|\bb2\b/i.test(name)) return 'B2';
     if (/board/i.test(name)) return 'Plaster';
     if (/insul/i.test(name) && !/angle/i.test(name)) return 'Insul';
     if (/metal/i.test(name)) return 'Metal';
