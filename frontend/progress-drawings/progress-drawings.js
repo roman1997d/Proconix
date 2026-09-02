@@ -33,6 +33,8 @@
     layerCount: 1,
     selectedLocationId: null,
     draftLine: null,
+    /* Ignore ghost click/tap on marks right after finishing a stroke (iOS). */
+    suppressAnnoSelectUntil: 0,
     pendingAnnotations: [],
     visibleTypes: {},
     undoStack: [],
@@ -596,10 +598,27 @@
             y1: rect.y1 != null ? rect.y1 : (rect.y + rect.height)
           };
           state.selectedLocationId = null;
+          /* Finger-up synthesizes a click that can hit another mark and wipe the draft. */
+          state.suppressAnnoSelectUntil = Date.now() + 600;
           renderAnnotations();
           updateChrome();
         },
         onSelectCancel: function () {
+          /* Keep an in-progress draft if the stroke was already long enough to show. */
+          if (state.draftLine) {
+            var d = state.draftLine;
+            var len = Math.sqrt(
+              Math.pow((d.x1 || 0) - (d.x0 || 0), 2) +
+              Math.pow((d.y1 || 0) - (d.y0 || 0), 2)
+            );
+            var m = drawingViewer && drawingViewer.getPageMetrics();
+            var scale = (m && m.scale) || 1;
+            if (len * scale > 14) {
+              state.suppressAnnoSelectUntil = Date.now() + 600;
+              updateChrome();
+              return;
+            }
+          }
           state.draftLine = null;
           renderAnnotations();
           updateChrome();
@@ -1255,6 +1274,7 @@
   });
 
   function selectLocationById(locId) {
+    if (Date.now() < (state.suppressAnnoSelectUntil || 0)) return;
     state.selectedLocationId = String(locId);
     state.draftLine = null;
     var loc = locById(locId);
@@ -1269,6 +1289,11 @@
   function onAnnoPointerDown(e) {
     if (e.type === 'pointerdown' && e.pointerType === 'touch') return;
     if (e.type === 'pointerdown' && e.pointerType === 'mouse' && e.button !== 0) return;
+    if (Date.now() < (state.suppressAnnoSelectUntil || 0)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     var target = e.target && e.target.closest ? e.target : (e.target && e.target.parentNode);
     if (!target || !target.closest) return;
     var g = target.closest('[data-loc-id]');
@@ -1283,6 +1308,11 @@
   on($('pd-anno'), 'touchstart', onAnnoPointerDown, { passive: false });
 
   on($('pd-anno'), 'click', function (e) {
+    if (Date.now() < (state.suppressAnnoSelectUntil || 0)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     var g = e.target.closest('[data-loc-id]');
     if (!g) return;
     e.stopPropagation();

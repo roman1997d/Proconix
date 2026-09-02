@@ -1,6 +1,6 @@
 /* Progress Drawings PWA — cache app shell only (scope: /progress-drawings/).
    Plan PDFs + annotations live in IndexedDB (pd-offline.js). */
-var CACHE = 'progress-drawings-shell-v4';
+var CACHE = 'progress-drawings-shell-v5';
 var PRECACHE = [
   '/progress-drawings/',
   '/progress-drawings/index.html',
