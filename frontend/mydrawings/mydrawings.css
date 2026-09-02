@@ -1203,33 +1203,68 @@ img { max-width: 100%; }
   position: fixed;
   inset: 0;
   z-index: 80;
-  background: rgba(2, 6, 14, 0.94);
+  background: rgba(2, 6, 14, 0.96);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 56px 12px 20px;
+  flex-direction: column;
+  touch-action: none;
+  overscroll-behavior: none;
 }
 .wt-lightbox[hidden] { display: none !important; }
-.wt-lightbox img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  background: #fff;
-  border-radius: 8px;
+.wt-lightbox-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 52px;
+  padding: calc(8px + var(--md-safe-t)) 10px 8px;
+  background: rgba(2, 6, 14, 0.88);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
 }
-.wt-lightbox-close {
-  position: absolute;
-  top: calc(10px + var(--md-safe-t));
-  right: calc(10px + var(--md-safe-r));
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+.wt-lightbox-hint {
+  margin: 0;
+  padding-left: 6px;
+  font-size: 0.78rem;
+  color: var(--md-muted);
+  min-width: 0;
+}
+.wt-lightbox-actions {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.wt-lightbox-actions .md-icon-btn {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+.wt-lightbox-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.wt-lightbox-stage.is-dragging { cursor: grabbing; }
+.wt-lightbox-plane {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.wt-lightbox-plane img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: none;
+  background: #fff;
+  border-radius: 4px;
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 
 /* ---------- Desktop / tablet expansion ---------- */

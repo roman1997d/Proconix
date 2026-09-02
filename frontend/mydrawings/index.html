@@ -283,10 +283,25 @@
     </section>
 
     <div class="wt-lightbox" id="wt-lightbox" hidden>
-      <button type="button" class="wt-lightbox-close" id="wt-lightbox-close" aria-label="Close drawing">
-        <svg class="md-icon md-icon-lg" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
-      </button>
-      <img id="wt-lightbox-img" alt="Construction detail">
+      <header class="wt-lightbox-bar">
+        <p class="wt-lightbox-hint" id="wt-lightbox-hint">Pinch or double-tap to zoom</p>
+        <div class="wt-lightbox-actions">
+          <button type="button" class="md-icon-btn" id="wt-lightbox-zoom-out" aria-label="Zoom out">
+            <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-3.5-3.5M8 11h6"/></svg>
+          </button>
+          <button type="button" class="md-icon-btn" id="wt-lightbox-zoom-in" aria-label="Zoom in">
+            <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-3.5-3.5M11 8v6M8 11h6"/></svg>
+          </button>
+          <button type="button" class="md-icon-btn" id="wt-lightbox-close" aria-label="Close drawing">
+            <svg class="md-icon md-icon-lg" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+      </header>
+      <div class="wt-lightbox-stage" id="wt-lightbox-stage">
+        <div class="wt-lightbox-plane" id="wt-lightbox-plane">
+          <img id="wt-lightbox-img" alt="Construction detail" draggable="false">
+        </div>
+      </div>
     </div>
 
     <section class="md-screen md-viewer" id="screen-viewer" aria-label="Drawing viewer">
