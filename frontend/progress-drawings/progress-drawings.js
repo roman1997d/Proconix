@@ -375,6 +375,10 @@
       $('btn-delete-location').hidden = !state.selectedLocationId;
     }
     if ($('btn-share')) $('btn-share').disabled = !state.booking;
+    if ($('btn-clean')) {
+      var markCount = (state.booking && state.booking.locations && state.booking.locations.length) || 0;
+      $('btn-clean').disabled = !state.booking || markCount === 0;
+    }
   }
 
   function setMode(mode) {
@@ -575,6 +579,29 @@
       }
     } catch (err) {
       alert(err.message || 'Could not save location.');
+    }
+  }
+
+  async function cleanDrawing() {
+    if (!state.booking) return;
+    var count = (state.booking.locations && state.booking.locations.length) || 0;
+    if (!count) {
+      toast('No marks to clean.');
+      return;
+    }
+    if (!confirm('Remove all marks from this drawing?')) return;
+    try {
+      var data = await apiJson('/bookings/' + encodeURIComponent(state.booking.id) + '/locations', {
+        method: 'DELETE'
+      });
+      state.undoStack = [];
+      state.redoStack = [];
+      state.selectedLocationId = null;
+      state.draftLine = null;
+      applyBooking(data.booking);
+      toast('Drawing cleaned.');
+    } catch (err) {
+      alert(err.message || 'Could not clean drawing.');
     }
   }
 
@@ -962,6 +989,7 @@
   on($('btn-redo'), 'click', redo);
   on($('btn-pan'), 'click', function () { setMode('pan'); });
   on($('btn-share'), 'click', openShareSheet);
+  on($('btn-clean'), 'click', cleanDrawing);
   on($('btn-save-location'), 'click', saveLocation);
   on($('btn-delete-location'), 'click', deleteSelectedLocation);
   on($('pd-backdrop'), 'click', closeSheet);

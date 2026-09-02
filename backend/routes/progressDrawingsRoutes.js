@@ -14,6 +14,7 @@ router.get('/bookings/:id', requireMyDrawingsPin, ctrl.getBooking);
 router.get('/bookings/:id/pdf', requireMyDrawingsPin, ctrl.downloadBookingPdf);
 router.post('/bookings/:id/email', requireMyDrawingsPin, ctrl.emailBookingPdf);
 router.post('/bookings/:id/locations', requireMyDrawingsPin, ctrl.addLocation);
+router.delete('/bookings/:id/locations', requireMyDrawingsPin, ctrl.clearBookingLocations);
 router.put('/locations/:id', requireMyDrawingsPin, ctrl.updateLocation);
 router.delete('/locations/:id', requireMyDrawingsPin, ctrl.deleteLocation);
 

@@ -133,12 +133,13 @@ async function buildProgressDrawingPdf(opts) {
   function drawLegend(page) {
     if (!legendTypes.length) return;
     const { width: pageW, height: pageH } = page.getSize();
-    const pad = 7;
-    const marginX = 10;
-    const top = pageH - 10;
-    const swatchW = 16;
-    const fontSize = 8;
-    const rowH = 12;
+    /* ~3× previous legend scale for site readability on large drawings. */
+    const pad = 21;
+    const marginX = 30;
+    const top = pageH - 30;
+    const swatchW = 48;
+    const fontSize = 24;
+    const rowH = 36;
 
     const rows = legendTypes.map((wt) => {
       const label = ' --- "' + String(wt.name || 'Work type') + '"';
@@ -149,7 +150,7 @@ async function buildProgressDrawingPdf(opts) {
       };
     });
     const innerW = Math.max.apply(null, rows.map((r) => swatchW + r.textW));
-    const boxW = Math.min(pageW * 0.5, innerW + pad * 2);
+    const boxW = Math.min(pageW * 0.72, innerW + pad * 2);
     const boxH = pad + rows.length * rowH + pad;
     const boxX = marginX;
     const boxY = top - boxH;
@@ -161,17 +162,17 @@ async function buildProgressDrawingPdf(opts) {
       height: boxH,
       color: rgb(1, 1, 1),
       borderColor: rgb(0.72, 0.75, 0.8),
-      borderWidth: 0.45,
+      borderWidth: 1.35,
       opacity: 0.94,
     });
 
-    let y = top - pad - fontSize + 1;
+    let y = top - pad - fontSize + 3;
     rows.forEach((row) => {
       const colour = hexToRgb(row.wt.colour);
       page.drawLine({
-        start: { x: boxX + pad, y: y + 3 },
-        end: { x: boxX + pad + swatchW, y: y + 3 },
-        thickness: 3.2,
+        start: { x: boxX + pad, y: y + 8 },
+        end: { x: boxX + pad + swatchW, y: y + 8 },
+        thickness: 9.6,
         color: colour,
       });
       page.drawText(row.label, {

@@ -628,6 +628,23 @@ async function deleteLocation(req, res) {
   }
 }
 
+/** DELETE /bookings/:id/locations — remove every mark on the draft booking */
+async function clearBookingLocations(req, res) {
+  try {
+    await ensureSchema();
+    const bookingId = parseInt(req.params.id, 10);
+    const check = await assertDraftBooking(req, bookingId);
+    if (check.error) return res.status(check.error.status).json({ success: false, message: check.error.message });
+    await pool.query('DELETE FROM progress_locations WHERE booking_id = $1', [bookingId]);
+    await pool.query('UPDATE progress_bookings SET updated_at = NOW() WHERE id = $1', [bookingId]);
+    const detail = await loadBookingDetail(bookingId);
+    return res.json({ success: true, booking: detail });
+  } catch (err) {
+    console.error('progressDrawings clearBookingLocations:', err);
+    return res.status(500).json({ success: false, message: 'Could not clean drawing.' });
+  }
+}
+
 function safePdfFilename(detail) {
   const num = String((detail && detail.drawingNumber) || 'drawing')
     .replace(/[^\w\s.-]+/g, '_')
@@ -747,6 +764,7 @@ module.exports = {
   addLocation,
   updateLocation,
   deleteLocation,
+  clearBookingLocations,
   downloadBookingPdf,
   emailBookingPdf,
 };
