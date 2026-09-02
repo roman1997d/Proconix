@@ -5,9 +5,18 @@
   var SESSION_KEY = 'proconix_mydrawings_session';
   var DEVICE_KEY = 'proconix_mydrawings_device';
   var PENDING_KEY = 'proconix_mydrawings_pending';
+  var FLOOR_KEY = 'proconix_mydrawings_floor';
   var DB_NAME = 'proconix-mydrawings';
   var DB_VER = 1;
   var PDFJS_WORKER = '/mydrawings/lib/pdf.worker.min.js';
+  var FLOORS = [
+    { id: 'ground', label: 'Ground Floor' },
+    { id: '1', label: 'Floor 1' },
+    { id: '2', label: 'Floor 2' },
+    { id: '3', label: 'Floor 3' },
+    { id: '4', label: 'Floor 4' },
+    { id: '5', label: 'Floor 5' }
+  ];
 
   var CATALOG = {
     project: { id: 'riverside-p2', name: 'Riverside Tower — Phase 2' },
@@ -42,7 +51,10 @@
     role: 'worker',
     pinMode: 'worker',
     adminPin: '',
-    pinFrom: ''
+    pinFrom: '',
+    floor: null,
+    floorFrom: '',
+    pendingDeepLink: null
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -498,9 +510,91 @@
     } catch (e) {}
   }
 
+  function floorById(id) {
+    for (var i = 0; i < FLOORS.length; i++) {
+      if (FLOORS[i].id === id) return FLOORS[i];
+    }
+    return null;
+  }
+
+  function readFloor() {
+    try {
+      return floorById(localStorage.getItem(FLOOR_KEY) || '');
+    } catch (e) { return null; }
+  }
+
+  function writeFloor(id) {
+    var floor = floorById(id);
+    if (!floor) return null;
+    try { localStorage.setItem(FLOOR_KEY, floor.id); } catch (e) {}
+    state.floor = floor;
+    return floor;
+  }
+
+  function updateHeaderFloor() {
+    var chip = $('btn-floor');
+    var floor = state.floor || readFloor();
+    state.floor = floor;
+    if (!chip) return;
+    if (floor) {
+      chip.textContent = floor.label;
+      chip.hidden = false;
+    } else {
+      chip.textContent = 'Floor';
+      chip.hidden = true;
+    }
+  }
+
+  function renderFloorOptions() {
+    var host = $('floor-grid');
+    if (!host) return;
+    var current = (state.floor || readFloor() || {}).id || '';
+    host.innerHTML = FLOORS.map(function (f) {
+      var wide = f.id === 'ground' ? ' md-floor-wide' : '';
+      var on = f.id === current ? ' is-on' : '';
+      return '<button type="button" class="md-floor-btn' + wide + on + '" data-floor="' + escapeHtml(f.id) + '">' +
+        escapeHtml(f.label) + '</button>';
+    }).join('');
+  }
+
+  function showFloorPicker(from) {
+    state.floorFrom = from || '';
+    var canCancel = !!(state.floor || readFloor()) && state.floorFrom !== 'boot';
+    if ($('floor-back-wrap')) $('floor-back-wrap').hidden = !canCancel;
+    renderFloorOptions();
+    showScreen('screen-floor');
+  }
+
+  function openFloorHome() {
+    var deep = state.pendingDeepLink || new URLSearchParams(location.search).get('d');
+    state.pendingDeepLink = null;
+    updateHeaderFloor();
+    showScreen('screen-list');
+    renderList();
+    if (deep && drawingById(deep)) openViewer(deep, false);
+  }
+
+  function ensureFloorThenHome(opts) {
+    opts = opts || {};
+    if (opts.deepLink) state.pendingDeepLink = opts.deepLink;
+    var floor = readFloor();
+    if (!floor) {
+      showFloorPicker(opts.from || 'boot');
+      return;
+    }
+    state.floor = floor;
+    openFloorHome();
+  }
+
+  function selectFloor(id) {
+    if (!writeFloor(id)) return;
+    vibrate(8);
+    openFloorHome();
+  }
+
   /* ---------- Screens ---------- */
   function showScreen(id) {
-    ['screen-register', 'screen-login', 'screen-pin', 'screen-list', 'screen-activity', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
+    ['screen-register', 'screen-login', 'screen-pin', 'screen-floor', 'screen-list', 'screen-activity', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
       var el = $(sid);
       if (el) el.classList.toggle('is-active', sid === id);
     });
@@ -601,10 +695,10 @@
     applyCatalog(data);
     await cacheCatalog(data, (extra && extra.deviceToken) || (extra && extra.pin) || sessionSecret());
     await dropStaleOfflineCopies();
-    showScreen('screen-list');
-    renderList();
-    var deep = new URLSearchParams(location.search).get('d');
-    if (deep && drawingById(deep)) openViewer(deep, false);
+    ensureFloorThenHome({
+      from: 'boot',
+      deepLink: new URLSearchParams(location.search).get('d')
+    });
   }
 
   async function postJson(path, body) {
@@ -757,6 +851,7 @@
     state.categories = data.categories || [];
     state.drawings = data.drawings || [];
     $('project-name').textContent = state.project.name || 'Project';
+    updateHeaderFloor();
     renderCats();
   }
 
@@ -1336,6 +1431,8 @@
       '<h3 id="sheet-title">My Drawings</h3>' +
       '<button type="button" class="md-sheet-item" data-sheet="administration"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2"/></svg>Administration</button>' +
       '<button type="button" class="md-sheet-item" data-sheet="activity"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Activity</button>' +
+      '<button type="button" class="md-sheet-item" data-sheet="change-floor"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M6 20V10l6-4 6 4v10"/><path d="M10 20v-4h4v4"/></svg>Change floor' +
+        (state.floor ? ' (' + escapeHtml(state.floor.label) + ')' : '') + '</button>' +
       '<button type="button" class="md-sheet-item" data-sheet="download-all"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Download all drawings</button>' +
       installItem +
       '<button type="button" class="md-sheet-item" data-sheet="clear-offline"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 14h10l1-14"/></svg>Remove all offline copies</button>' +
@@ -1394,6 +1491,10 @@
     }
     if (act === 'activity') {
       openActivity();
+      return;
+    }
+    if (act === 'change-floor') {
+      showFloorPicker('menu');
       return;
     }
     if (act === 'download-all') {
@@ -1509,8 +1610,7 @@
             state.role = cached.role || session.role || 'worker';
             applyCatalog(cached.data);
             await refreshOfflineMap();
-            showScreen('screen-list');
-            renderList();
+            ensureFloorThenHome({ from: 'boot' });
           } else if (err && err.code === 'bad_pin') {
             writeSession(false);
             showRegister();
@@ -1518,8 +1618,7 @@
             state.role = cached.role || session.role || 'worker';
             applyCatalog(cached.data);
             await refreshOfflineMap();
-            showScreen('screen-list');
-            renderList();
+            ensureFloorThenHome({ from: 'boot' });
           } else {
             writeSession(false);
             showRegister();
@@ -1535,8 +1634,7 @@
           if (adminCache && adminCache.data) {
             applyCatalog(adminCache.data);
             await refreshOfflineMap();
-            showScreen('screen-list');
-            renderList();
+            ensureFloorThenHome({ from: 'boot' });
           } else {
             writeSession(false);
             showPin('admin');
@@ -1603,6 +1701,15 @@
     openViewer(id, true);
   });
 
+  on($('floor-grid'), 'click', function (e) {
+    var btn = e.target.closest('[data-floor]');
+    if (!btn) return;
+    selectFloor(btn.getAttribute('data-floor'));
+  });
+  on($('btn-floor'), 'click', function () { showFloorPicker('header'); });
+  on($('btn-floor-back'), 'click', function () {
+    if (state.floor || readFloor()) openFloorHome();
+  });
   on($('btn-menu'), 'click', openMainMenu);
   on($('btn-update'), 'click', updateDrawingsList);
   on($('btn-download-all'), 'click', downloadAllDrawings);

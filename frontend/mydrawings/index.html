@@ -104,11 +104,25 @@
       </p>
     </section>
 
+    <section class="md-screen md-pin md-floor" id="screen-floor" aria-label="Select floor">
+      <p class="md-pin-brand">My Drawings</p>
+      <h2>Which floor are you on?</h2>
+      <p class="md-pin-hint">We will remember this for next time. You can change it later from the header.</p>
+      <div class="md-floor-grid" id="floor-grid" role="list"></div>
+      <p class="md-pin-actions" id="floor-back-wrap" hidden>
+        <button type="button" class="md-link" id="btn-floor-back">Cancel</button>
+      </p>
+    </section>
+
     <section class="md-screen" id="screen-list" aria-label="Drawings">
       <header class="md-header">
         <div class="md-header-text">
           <h1 class="md-header-title">My Drawings</h1>
-          <p class="md-header-sub" id="project-name">Project</p>
+          <p class="md-header-sub">
+            <button type="button" class="md-floor-chip" id="btn-floor" aria-label="Change floor">Floor</button>
+            <span class="md-header-sep" aria-hidden="true">·</span>
+            <span id="project-name">Project</span>
+          </p>
         </div>
         <span class="md-offline" id="offline-pill" aria-live="polite"><i></i> Offline</span>
         <button type="button" class="md-update-btn" id="btn-update" aria-label="Update drawings">Update</button>
