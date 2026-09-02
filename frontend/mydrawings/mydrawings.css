@@ -645,7 +645,10 @@ img { max-width: 100%; }
   pointer-events: none;
   z-index: 1;
   opacity: 0;
-  transition: opacity 0.16s ease;
+  transform-origin: 0 0;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   background: #fff;
 }
 .dv-detail.is-on { opacity: 1; }

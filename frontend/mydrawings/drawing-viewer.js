@@ -7,7 +7,9 @@
   var TAP_ZOOM = 5.5;
   var TAP_ZOOM_2 = 14;
   var HIDE_MS = 3400;
-  var MAX_CANVAS = 4096;
+  var MAX_CANVAS = 5120;
+  var DETAIL_SETTLE_MS = 70;
+  var DETAIL_REPAN_PX = 36;
   var TAP_MOVE = 8;
   var DOUBLE_MS = 300;
   var PAN_GAIN = 1.35;
@@ -210,7 +212,8 @@
   DrawingViewer.prototype.maxBaseScale = function (cssW, cssH, pdfW) {
     var dpr = Math.min(3, window.devicePixelRatio || 1);
     var pdfH = pdfW * (cssH / cssW);
-    var want = (cssW / pdfW) * dpr * 2;
+    /* Sharper base so light zoom stays crisp without waiting for HQ crop. */
+    var want = (cssW / pdfW) * dpr * 2.75;
     var maxByCanvas = MAX_CANVAS / Math.max(pdfW, pdfH);
     return clamp(want, 0.5, maxByCanvas);
   };
@@ -272,15 +275,48 @@
     this.plane.style.width = this.pageCssW + 'px';
     this.plane.style.height = this.pageCssH + 'px';
     this.plane.style.transform = 'translate3d(' + this.tx + 'px,' + this.ty + 'px,0) scale(' + this.scale + ')';
+    this.nudgeDetail();
   };
 
   DrawingViewer.prototype.hideDetail = function () {
+    if (this.detailTimer) {
+      clearTimeout(this.detailTimer);
+      this.detailTimer = null;
+    }
+    if (this.detailTask && this.detailTask.cancel) {
+      try { this.detailTask.cancel(); } catch (e) {}
+    }
+    this.detailTask = null;
     if (this.detail) {
       this.detail.classList.remove('is-on');
       this.detail.hidden = true;
       this.detail.style.transform = '';
+      this.detail.style.opacity = '';
     }
     this.detailAtScale = 0;
+  };
+
+  /* Keep the last sharp crop on screen and slide it with the finger (Files-like). */
+  DrawingViewer.prototype.nudgeDetail = function () {
+    if (!this.detail || this.detail.hidden || !this.detailAtScale) return;
+    var scaleRatio = this.scale / this.detailAtScale;
+    if (scaleRatio < 0.94 || scaleRatio > 1.06) {
+      this.detail.style.opacity = '0';
+      return;
+    }
+    var dx = this.tx - this.detailAtTx;
+    var dy = this.ty - this.detailAtTy;
+    this.detail.style.transform = 'translate3d(' + dx + 'px,' + dy + 'px,0)';
+    this.detail.style.opacity = '1';
+    this.detail.classList.add('is-on');
+  };
+
+  DrawingViewer.prototype.detailNeedsRefresh = function () {
+    if (!this.detail || !this.detailAtScale || this.detail.hidden) return this.scale > 1.08;
+    if (Math.abs(this.scale / this.detailAtScale - 1) > 0.03) return true;
+    var dx = this.tx - this.detailAtTx;
+    var dy = this.ty - this.detailAtTy;
+    return Math.sqrt(dx * dx + dy * dy) > DETAIL_REPAN_PX;
   };
 
   DrawingViewer.prototype.clampPan = function (soft) {
@@ -398,7 +434,6 @@
     this.scale = ns;
     this.tx = x - dx * this.scale;
     this.ty = y - dy * this.scale;
-    this.hideDetail();
     this.applyTransform(true);
   };
 
@@ -451,12 +486,18 @@
       this.hideDetail();
       return;
     }
+    if (!this.detailNeedsRefresh() && this.detail.classList.contains('is-on')) {
+      this.nudgeDetail();
+      return;
+    }
     var token = ++this.detailToken;
     var sw = Math.max(1, this.stage.clientWidth);
     var sh = Math.max(1, this.stage.clientHeight);
-    var dpr = Math.min(3, window.devicePixelRatio || 1);
-    var outW = Math.max(1, Math.round(sw * dpr));
-    var outH = Math.max(1, Math.round(sh * dpr));
+    /* Cap detail DPR for speed — overlay only needs to look sharp, not print-ready. */
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var boost = this.scale > 10 ? 1.15 : 1.35;
+    var outW = Math.max(1, Math.round(sw * dpr * boost));
+    var outH = Math.max(1, Math.round(sh * dpr * boost));
     var cap = MAX_CANVAS;
     var fit = Math.min(1, cap / Math.max(outW, outH));
     outW = Math.max(1, Math.round(outW * fit));
@@ -476,9 +517,12 @@
     var renderScale = outW / pdfVisW;
     var viewport = this.page.getViewport({ scale: renderScale });
 
-    var off = document.createElement('canvas');
-    off.width = outW;
-    off.height = outH;
+    if (!this._detailOff) this._detailOff = document.createElement('canvas');
+    var off = this._detailOff;
+    if (off.width !== outW || off.height !== outH) {
+      off.width = outW;
+      off.height = outH;
+    }
     var ctx = off.getContext('2d', { alpha: false });
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, outW, outH);
@@ -515,19 +559,22 @@
     this.detailAtTx = this.tx;
     this.detailAtTy = this.ty;
     this.detailAtScale = this.scale;
-    shown.style.transform = '';
+    shown.style.transform = 'translate3d(0,0,0)';
+    shown.style.opacity = '1';
     shown.hidden = false;
-    requestAnimationFrame(function () {
-      shown.classList.add('is-on');
-    });
+    shown.classList.add('is-on');
   };
 
   DrawingViewer.prototype.scheduleDetail = function () {
     var self = this;
     if (this.detailTimer) clearTimeout(this.detailTimer);
+    if (!this.detailNeedsRefresh() && this.detail && this.detail.classList.contains('is-on')) {
+      this.nudgeDetail();
+      return;
+    }
     this.detailTimer = setTimeout(function () {
       self.paintDetail().catch(function () {});
-    }, 90);
+    }, DETAIL_SETTLE_MS);
   };
 
   DrawingViewer.prototype.touchPoints = function (e) {
@@ -541,8 +588,15 @@
 
   DrawingViewer.prototype.beginGesture = function (pts) {
     this.stopInertia();
+    if (this.detailTimer) {
+      clearTimeout(this.detailTimer);
+      this.detailTimer = null;
+    }
+    if (this.detailTask && this.detailTask.cancel) {
+      try { this.detailTask.cancel(); } catch (e) {}
+      this.detailTask = null;
+    }
     if (pts.length >= 2) {
-      this.hideDetail();
       this.gesture = {
         mode: 'two',
         dist: Math.max(1, dist(pts[0], pts[1])),
@@ -578,7 +632,6 @@
     var d = Math.max(1, dist(pts[0], pts[1]));
     var pinch = Math.pow(d / g.dist, 1.18);
     var newScale = clamp(g.scale * pinch, MIN_SCALE, MAX_SCALE);
-    this.hideDetail();
     var rect = this.stage.getBoundingClientRect();
     var worldX = (g.mid.x - rect.left - g.tx) / g.scale;
     var worldY = (g.mid.y - rect.top - g.ty) / g.scale;
@@ -596,7 +649,6 @@
     var rawY = pt.y - g.y;
     if (Math.abs(rawX) > TAP_MOVE || Math.abs(rawY) > TAP_MOVE) {
       this.moved = true;
-      this.hideDetail();
     }
     var gain = this.scale > 1.4 ? PAN_GAIN : 1.15;
     this.tx = g.tx + rawX * gain;
