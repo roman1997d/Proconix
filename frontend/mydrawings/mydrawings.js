@@ -882,7 +882,9 @@
     if (state.category !== 'All' && cats.indexOf(state.category) === -1) state.category = 'All';
     host.innerHTML = cats.map(function (c) {
       var onCls = c === state.category ? ' is-on' : '';
-      return '<button type="button" class="md-chip' + onCls + '" data-cat="' + escapeHtml(c) + '" role="tab" aria-selected="' + (c === state.category) + '">' + escapeHtml(c) + '</button>';
+      var toneAttr = c === 'All' ? '' : ' data-tone="' + categoryTone(c) + '"';
+      return '<button type="button" class="md-chip' + onCls + '" data-cat="' + escapeHtml(c) + '"' + toneAttr +
+        ' role="tab" aria-selected="' + (c === state.category) + '">' + escapeHtml(c) + '</button>';
     }).join('');
   }
 
