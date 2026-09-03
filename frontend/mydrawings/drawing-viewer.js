@@ -16,6 +16,7 @@
   var DETAIL_LEAD_MS = 140; /* predict pan this far ahead */
   var BASE_ZOOM_COVER = 8;
   var DEBUG_DETAIL = true;
+  var DEBUG_PINCH = true;
   var TAP_MOVE = 8;
   var DOUBLE_MS = 300;
   var PAN_GAIN = 1.35;
@@ -280,7 +281,7 @@
   };
 
   DrawingViewer.prototype.applyTransform = function (immediate) {
-    this.clampPan(this.softPan);
+    if (this.canClampPan()) this.clampPan(this.softPan);
     if (immediate) {
       this.flushTransform();
       return;
@@ -294,7 +295,7 @@
   };
 
   DrawingViewer.prototype.flushTransform = function () {
-    this.clampPan(this.softPan);
+    if (this.canClampPan()) this.clampPan(this.softPan);
     this.plane.style.width = this.pageCssW + 'px';
     this.plane.style.height = this.pageCssH + 'px';
     this.plane.style.transform = 'translate3d(' + this.tx + 'px,' + this.ty + 'px,0) scale(' + this.scale + ')';
@@ -395,6 +396,10 @@
     var dx = this.tx - this.detailAtTx;
     var dy = this.ty - this.detailAtTy;
     return Math.sqrt(dx * dx + dy * dy) > DETAIL_REPAN_PX;
+  };
+
+  DrawingViewer.prototype.canClampPan = function () {
+    return !(this.gesture && this.gesture.mode === 'two');
   };
 
   DrawingViewer.prototype.clampPan = function (soft) {
@@ -766,6 +771,10 @@
       clearTimeout(this.detailTimer);
       this.detailTimer = null;
     }
+    if (this.gesture && this.gesture.mode === 'two' && pts.length < 2) {
+      this.dumpPinchLog(this.gesture);
+      this.scheduleDetail();
+    }
     /* Keep any in-flight HQ crop. Canceling it was blanking back to the blurry base. */
     if (pts.length >= 2) {
       if (this.selectDrag) {
@@ -774,13 +783,19 @@
           try { this.opts.onSelectCancel(); } catch (e) {}
         }
       }
+      var rect = this.stage.getBoundingClientRect();
       this.gesture = {
         mode: 'two',
         dist: Math.max(1, dist(pts[0], pts[1])),
+        smoothD: Math.max(1, dist(pts[0], pts[1])),
         mid: midpoint(pts[0], pts[1]),
+        sl: rect.left,
+        st: rect.top,
         scale: this.scale,
         tx: this.tx,
-        ty: this.ty
+        ty: this.ty,
+        logT: 0,
+        samples: []
       };
       this.softPan = true;
       return;
@@ -802,21 +817,61 @@
     }
   };
 
+  DrawingViewer.prototype.logPinchFrame = function (g, now, dt, mid, d, newScale) {
+    if (!DEBUG_PINCH || !g) return;
+    var row = {
+      t: Math.round(now),
+      dt: Math.round(dt * 10) / 10,
+      scale: Math.round(newScale * 10000) / 10000,
+      tx: Math.round(this.tx * 100) / 100,
+      ty: Math.round(this.ty * 100) / 100,
+      midX: Math.round(mid.x * 10) / 10,
+      midY: Math.round(mid.y * 10) / 10,
+      d: Math.round(d * 10) / 10
+    };
+    g.samples.push(row);
+    if (g.samples.length > 80) g.samples.shift();
+    if (dt > 0 && dt < 22 || g.samples.length % 2 === 0) {
+      this.logDetail(
+        'pinch dt ' + row.dt + 'ms · z' + row.scale.toFixed(3) +
+        ' · tx ' + row.tx + ' ty ' + row.ty +
+        ' · mid ' + row.midX + ',' + row.midY
+      );
+    }
+  };
+
+  DrawingViewer.prototype.dumpPinchLog = function (g) {
+    if (!DEBUG_PINCH || !g || !g.samples || !g.samples.length) return;
+    try {
+      console.log('[dv-pinch] ' + g.samples.length + ' frames (slow-pinch debug)');
+      console.table(g.samples);
+    } catch (e) {}
+  };
+
   DrawingViewer.prototype.applyTwoFinger = function (pts) {
     var g = this.gesture;
     if (!g || g.mode !== 'two' || pts.length < 2) return;
+    var now = performance.now();
+    var dt = g.logT ? (now - g.logT) : 0;
+    g.logT = now;
+
     var mid = midpoint(pts[0], pts[1]);
     var d = Math.max(1, dist(pts[0], pts[1]));
-    var pinch = Math.pow(d / g.dist, 1.18);
-    var newScale = clamp(g.scale * pinch, MIN_SCALE, MAX_SCALE);
-    var rect = this.stage.getBoundingClientRect();
-    var worldX = (g.mid.x - rect.left - g.tx) / g.scale;
-    var worldY = (g.mid.y - rect.top - g.ty) / g.scale;
+    /* Follow measured span, but damp 1px touch noise that shows up on slow pinch. */
+    g.smoothD += (d - g.smoothD) * 0.4;
+    var newScale = clamp(g.scale * (g.smoothD / g.dist), MIN_SCALE, MAX_SCALE);
+
+    /* Keep the page point under the *current* midpoint. Incremental, so a noisy
+       midpoint with unchanged scale does not translate 1:1 into tx/ty. */
+    var mx = mid.x - g.sl;
+    var my = mid.y - g.st;
+    var worldX = (mx - this.tx) / this.scale;
+    var worldY = (my - this.ty) / this.scale;
     this.scale = newScale;
-    this.tx = (mid.x - rect.left) - worldX * newScale;
-    this.ty = (mid.y - rect.top) - worldY * newScale;
+    this.tx = mx - worldX * newScale;
+    this.ty = my - worldY * newScale;
     this.applyTransform();
-    this.scheduleDetail(true);
+    this.logPinchFrame(g, now, dt, mid, d, newScale);
   };
 
   DrawingViewer.prototype.beginSelectAt = function (clientX, clientY) {
@@ -909,7 +964,12 @@
       return;
     }
 
+    var g = this.gesture;
     this.gesture = null;
+    if (g && g.mode === 'two') {
+      this.dumpPinchLog(g);
+      this.scheduleDetail();
+    }
     if (!this.moved) {
       this.softPan = false;
       var now = Date.now();
