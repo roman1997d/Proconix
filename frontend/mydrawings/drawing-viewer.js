@@ -10,9 +10,12 @@
   var MAX_CANVAS = 6144;
   /* HQ crop once zoom outruns the full-page base (large PDFs blur earlier). */
   var DETAIL_MIN_SCALE = 2.25;
-  var DETAIL_SETTLE_MS = 80;
-  var DETAIL_REPAN_PX = 36;
+  var DETAIL_SETTLE_MS = 48;
+  var DETAIL_REPAN_PX = 24;
+  var DETAIL_OVERSCAN = 0.32; /* extra page area around the viewport, each side */
+  var DETAIL_LEAD_MS = 140; /* predict pan this far ahead */
   var BASE_ZOOM_COVER = 8;
+  var DEBUG_DETAIL = true;
   var TAP_MOVE = 8;
   var DOUBLE_MS = 300;
   var PAN_GAIN = 1.35;
@@ -70,6 +73,11 @@
     this.detailAtTx = 0;
     this.detailAtTy = 0;
     this.detailAtScale = 1;
+    this.detailOriginX = 0;
+    this.detailOriginY = 0;
+    this.detailDirty = false;
+    this.detailRaf = 0;
+    this.detailBusy = false;
     this.basePaintKey = '';
     this.resizeTimer = null;
     this.active = false;
@@ -185,6 +193,12 @@
       try { this.detailTask.cancel(); } catch (e) {}
     }
     this.detailTask = null;
+    this.detailBusy = false;
+    this.detailDirty = false;
+    if (this.detailRaf) {
+      cancelAnimationFrame(this.detailRaf);
+      this.detailRaf = 0;
+    }
     this.hideDetail();
     if (this.renderTask && this.renderTask.cancel) {
       try { this.renderTask.cancel(); } catch (e) {}
@@ -357,24 +371,19 @@
       this.detail.style.opacity = '';
     }
     this.detailAtScale = 0;
+    this.detailOriginX = 0;
+    this.detailOriginY = 0;
   };
 
-  /* Slide/scale the last HQ crop with the gesture — never blank to a blurry base. */
+  /* Slide/scale the last HQ crop with the gesture — keep it on top of the base. */
   DrawingViewer.prototype.nudgeDetail = function () {
     if (!this.detail || this.detail.hidden || !this.detailAtScale) return;
-    if (this.scale < DETAIL_MIN_SCALE * 0.9) {
-      this.detail.style.opacity = '0';
-      return;
-    }
+    if (this.scale < DETAIL_MIN_SCALE) return;
     var scaleRatio = this.scale / this.detailAtScale;
-    var dx = this.tx - this.detailAtTx;
-    var dy = this.ty - this.detailAtTy;
-    if (Math.abs(scaleRatio - 1) < 0.002) {
-      this.detail.style.transform = 'translate3d(' + dx + 'px,' + dy + 'px,0)';
-    } else {
-      this.detail.style.transform =
-        'translate3d(' + dx + 'px,' + dy + 'px,0) scale(' + scaleRatio + ')';
-    }
+    var dx = this.detailOriginX * scaleRatio + (this.tx - this.detailAtTx);
+    var dy = this.detailOriginY * scaleRatio + (this.ty - this.detailAtTy);
+    this.detail.style.transform =
+      'translate3d(' + dx + 'px,' + dy + 'px,0) scale(' + scaleRatio + ')';
     this.detail.style.opacity = '1';
     this.detail.classList.add('is-on');
   };
@@ -449,6 +458,7 @@
       self.vx *= friction;
       self.vy *= friction;
       self.flushTransform();
+      if (self.detailNeedsRefresh()) self.scheduleDetail(true);
       var sp = Math.sqrt(self.vx * self.vx + self.vy * self.vy);
       if (sp < 0.035) {
         self.inertiaId = 0;
@@ -549,16 +559,40 @@
     this.basePaintKey = key;
   };
 
+  DrawingViewer.prototype.logDetail = function (info) {
+    if (!DEBUG_DETAIL) return;
+    try { console.log('[dv-detail]', info); } catch (e) {}
+    var el = this.root && this.root.querySelector('[data-dv-detail-hud]');
+    if (!el) {
+      el = document.createElement('div');
+      el.setAttribute('data-dv-detail-hud', '');
+      el.className = 'dv-detail-hud';
+      this.root.appendChild(el);
+    }
+    el.textContent = info;
+    el.hidden = false;
+  };
+
   DrawingViewer.prototype.paintDetail = async function () {
     if (!this.page || !this.active || !this.detail) return;
     if (this.scale < DETAIL_MIN_SCALE) {
       this.hideDetail();
+      this.detailBusy = false;
+      this.detailDirty = false;
+      return;
+    }
+    if (this.detailBusy) {
+      this.detailDirty = true;
       return;
     }
     if (!this.detailNeedsRefresh() && this.detail.classList.contains('is-on')) {
       this.nudgeDetail();
       return;
     }
+
+    var t0 = performance.now();
+    this.detailBusy = true;
+    this.detailDirty = false;
     var token = ++this.detailToken;
     /* Freeze the view we are rendering — do not stamp later finger position. */
     var atTx = this.tx;
@@ -567,26 +601,51 @@
     var sw = Math.max(1, this.stage.clientWidth);
     var sh = Math.max(1, this.stage.clientHeight);
     var dpr = Math.min(3, window.devicePixelRatio || 1);
-    var outW = Math.max(1, Math.round(sw * dpr * 1.5));
-    var outH = Math.max(1, Math.round(sh * dpr * 1.5));
-    var cap = MAX_CANVAS;
-    var fit = Math.min(1, cap / Math.max(outW, outH));
-    outW = Math.max(1, Math.round(outW * fit));
-    outH = Math.max(1, Math.round(outH * fit));
 
-    var vp1 = this.page.getViewport({ scale: 1 });
+    /* Spatial overscan + lead in the pan direction so HQ covers the next view. */
+    var visW0 = sw / atScale;
+    var visH0 = sh / atScale;
     var visLeft = (0 - atTx) / atScale;
     var visTop = (0 - atTy) / atScale;
-    var visW = sw / atScale;
-    var visH = sh / atScale;
+    var extraL = visW0 * DETAIL_OVERSCAN;
+    var extraR = visW0 * DETAIL_OVERSCAN;
+    var extraT = visH0 * DETAIL_OVERSCAN;
+    var extraB = visH0 * DETAIL_OVERSCAN;
+    var leadX = this.vx * DETAIL_LEAD_MS;
+    var leadY = this.vy * DETAIL_LEAD_MS;
+    /* Finger left → tx drops → new content on the right. */
+    if (leadX < 0) extraR += Math.abs(leadX) / atScale;
+    else extraL += leadX / atScale;
+    if (leadY < 0) extraB += Math.abs(leadY) / atScale;
+    else extraT += leadY / atScale;
+
+    visLeft -= extraL;
+    visTop -= extraT;
+    var visW = visW0 + extraL + extraR;
+    var visH = visH0 + extraT + extraB;
+
+    var vp1 = this.page.getViewport({ scale: 1 });
     var pdfLeft = visLeft / this.pageCssW * vp1.width;
     var pdfTop = visTop / this.pageCssH * vp1.height;
     var pdfVisW = visW / this.pageCssW * vp1.width;
     var pdfVisH = visH / this.pageCssH * vp1.height;
-    if (pdfVisW < 1 || pdfVisH < 1) return;
+    if (pdfVisW < 1 || pdfVisH < 1) {
+      this.detailBusy = false;
+      return;
+    }
 
+    var cssW = visW * atScale;
+    var cssH = visH * atScale;
+    var outW = Math.max(1, Math.round(cssW * dpr));
+    var outH = Math.max(1, Math.round(cssH * dpr));
+    var cap = MAX_CANVAS;
+    var fit = Math.min(1, cap / Math.max(outW, outH));
+    outW = Math.max(1, Math.round(outW * fit));
+    outH = Math.max(1, Math.round(outH * fit));
     var renderScale = outW / pdfVisW;
-    var viewport = this.page.getViewport({ scale: renderScale });
+
+    var originX = visLeft * atScale + atTx;
+    var originY = visTop * atScale + atTy;
 
     if (!this._detailOff) this._detailOff = document.createElement('canvas');
     var off = this._detailOff;
@@ -604,7 +663,7 @@
     }
     this.detailTask = this.page.render({
       canvasContext: ctx,
-      viewport: viewport,
+      viewport: this.page.getViewport({ scale: renderScale }),
       transform: [1, 0, 0, 1, -pdfLeft * renderScale, -pdfTop * renderScale],
       intent: 'display',
       background: 'rgb(255,255,255)'
@@ -612,10 +671,18 @@
     try {
       await this.detailTask.promise;
     } catch (e) {
-      if (e && e.name === 'RenderingCancelledException') return;
+      this.detailBusy = false;
+      this.detailTask = null;
+      if (e && e.name === 'RenderingCancelledException') {
+        this.queueDetailPaint();
+        return;
+      }
       throw e;
     }
-    if (token !== this.detailToken || !this.active) return;
+    if (token !== this.detailToken || !this.active) {
+      this.detailBusy = false;
+      return;
+    }
     this.detailTask = null;
 
     var shown = this.detail;
@@ -623,33 +690,64 @@
       shown.width = outW;
       shown.height = outH;
     }
-    shown.style.width = sw + 'px';
-    shown.style.height = sh + 'px';
+    shown.style.width = cssW + 'px';
+    shown.style.height = cssH + 'px';
     var dest = shown.getContext('2d', { alpha: false });
+    dest.imageSmoothingEnabled = false;
     dest.drawImage(off, 0, 0);
     this.detailAtTx = atTx;
     this.detailAtTy = atTy;
     this.detailAtScale = atScale;
-    shown.style.transform = 'translate3d(0,0,0)';
-    shown.style.opacity = '1';
+    this.detailOriginX = originX;
+    this.detailOriginY = originY;
     shown.hidden = false;
     shown.classList.add('is-on');
     this.nudgeDetail();
+    this.detailBusy = false;
+
+    var ms = Math.round(performance.now() - t0);
+    this.logDetail(
+      ms + 'ms · ' + outW + '×' + outH +
+      ' · rs ' + renderScale.toFixed(1) +
+      ' · z' + atScale.toFixed(2) +
+      (this.detailDirty ? ' · queued' : '')
+    );
+
+    if (this.detailDirty) this.queueDetailPaint();
   };
 
-  DrawingViewer.prototype.scheduleDetail = function () {
+  DrawingViewer.prototype.queueDetailPaint = function () {
+    var self = this;
+    if (this.detailRaf) return;
+    this.detailRaf = requestAnimationFrame(function () {
+      self.detailRaf = 0;
+      if (!self.active) return;
+      self.paintDetail().catch(function () {});
+    });
+  };
+
+  DrawingViewer.prototype.scheduleDetail = function (immediate) {
     var self = this;
     if (this.detailTimer) clearTimeout(this.detailTimer);
     if (this.scale < DETAIL_MIN_SCALE) {
       if (this.detail && !this.detail.hidden) this.hideDetail();
+      this.detailDirty = false;
+      return;
+    }
+    this.nudgeDetail();
+    if (this.detailBusy) {
+      this.detailDirty = true;
       return;
     }
     if (!this.detailNeedsRefresh() && this.detail && this.detail.classList.contains('is-on')) {
-      this.nudgeDetail();
+      return;
+    }
+    if (immediate) {
+      this.queueDetailPaint();
       return;
     }
     this.detailTimer = setTimeout(function () {
-      self.paintDetail().catch(function () {});
+      self.queueDetailPaint();
     }, DETAIL_SETTLE_MS);
   };
 
@@ -668,10 +766,7 @@
       clearTimeout(this.detailTimer);
       this.detailTimer = null;
     }
-    if (this.detailTask && this.detailTask.cancel) {
-      try { this.detailTask.cancel(); } catch (e) {}
-      this.detailTask = null;
-    }
+    /* Keep any in-flight HQ crop. Canceling it was blanking back to the blurry base. */
     if (pts.length >= 2) {
       if (this.selectDrag) {
         this.selectDrag = null;
@@ -721,6 +816,7 @@
     this.tx = (mid.x - rect.left) - worldX * newScale;
     this.ty = (mid.y - rect.top) - worldY * newScale;
     this.applyTransform();
+    this.scheduleDetail(true);
   };
 
   DrawingViewer.prototype.beginSelectAt = function (clientX, clientY) {
@@ -774,6 +870,7 @@
     this.lastPanY = pt.y;
     this.lastPanT = now;
     this.applyTransform();
+    this.scheduleDetail(true);
   };
 
   DrawingViewer.prototype.finishGesture = function (clientX, clientY) {
@@ -934,7 +1031,7 @@
     e.preventDefault();
     var factor = e.deltaY < 0 ? 1.16 : 0.86;
     this.zoomAt(e.clientX, e.clientY, this.scale * factor);
-    this.scheduleDetail();
+    this.scheduleDetail(true);
     this.pokeChrome();
   };
 
