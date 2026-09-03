@@ -380,7 +380,20 @@
   DrawingViewer.prototype.nudgeDetail = function () {
     if (!this.detail || this.detail.hidden || !this.detailAtScale) return;
     if (this.scale < DETAIL_MIN_SCALE) return;
+    /* Two-finger pinch: one CSS layer only. A stale crop shrinks on zoom-out and
+       leaves a sharp patch beside the blurry base (half-screen blur). */
+    if (this.gesture && this.gesture.mode === 'two') {
+      this.detail.style.opacity = '0';
+      this.detail.classList.remove('is-on');
+      return;
+    }
     var r = this.scale / this.detailAtScale;
+    /* Zoom changed a lot since this crop — showing it leaves a sharp island. */
+    if (Math.abs(r - 1) > 0.1) {
+      this.detail.style.opacity = '0';
+      this.detail.classList.remove('is-on');
+      return;
+    }
     /* Crop top-left is at visLeft * scale + tx. visLeft = (origin - atTx) / atScale. */
     var dx = this.tx + (this.detailOriginX - this.detailAtTx) * r;
     var dy = this.ty + (this.detailOriginY - this.detailAtTy) * r;
@@ -790,19 +803,25 @@
         }
       }
       var rect = this.stage.getBoundingClientRect();
+      var mid0 = midpoint(pts[0], pts[1]);
+      var mx0 = mid0.x - rect.left;
+      var my0 = mid0.y - rect.top;
       this.gesture = {
         mode: 'two',
         dist: Math.max(1, dist(pts[0], pts[1])),
-        smoothD: Math.max(1, dist(pts[0], pts[1])),
-        mid: midpoint(pts[0], pts[1]),
+        mid: mid0,
         sl: rect.left,
         st: rect.top,
         scale: this.scale,
         tx: this.tx,
         ty: this.ty,
+        /* Page point under the pinch centre at gesture start — never re-sample. */
+        worldX: (mx0 - this.tx) / this.scale,
+        worldY: (my0 - this.ty) / this.scale,
         logT: 0,
         samples: []
       };
+      this.nudgeDetail();
       this.softPan = true;
       return;
     }
@@ -865,15 +884,13 @@
     var d = Math.max(1, dist(pts[0], pts[1]));
     var newScale = clamp(g.scale * (d / g.dist), MIN_SCALE, MAX_SCALE);
 
-    /* Keep the page point under the *current* midpoint. Incremental, so a noisy
-       midpoint with unchanged scale does not translate 1:1 into tx/ty. */
+    /* Keep the *start* page point under the current midpoint. Re-sampling world
+       every frame let 1px finger noise accumulate into swim. */
     var mx = mid.x - g.sl;
     var my = mid.y - g.st;
-    var worldX = (mx - this.tx) / this.scale;
-    var worldY = (my - this.ty) / this.scale;
     this.scale = newScale;
-    this.tx = mx - worldX * newScale;
-    this.ty = my - worldY * newScale;
+    this.tx = mx - g.worldX * newScale;
+    this.ty = my - g.worldY * newScale;
     this.applyTransform(true);
     this.logPinchFrame(g, now, dt, mid, d, newScale);
   };
