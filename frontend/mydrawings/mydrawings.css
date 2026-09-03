@@ -659,6 +659,45 @@ img { max-width: 100%; }
   background: transparent;
 }
 .dv-detail.is-on { opacity: 1; }
+.dv-edge-hit {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 28px;
+  z-index: 4;
+  touch-action: none;
+  /* Keep pan usable; only captures swipes that start on this edge */
+}
+.dv-wt-peek {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 132px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transform: translateX(100%);
+  background: linear-gradient(270deg, rgba(7, 14, 26, 0.94), rgba(7, 14, 26, 0.72) 70%, transparent);
+  border-left: 1px solid rgba(56, 189, 248, 0.28);
+  transition: none;
+}
+.dv-wt-peek.is-armed {
+  /* driven by --dv-wt-peek via JS */
+  transform: translateX(calc(100% - var(--dv-wt-peek, 0px)));
+}
+.dv-wt-peek-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+}
 .dv-status {
   position: absolute;
   inset: 0;

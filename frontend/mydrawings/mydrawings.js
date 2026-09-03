@@ -56,7 +56,8 @@
     floorFrom: '',
     pendingDeepLink: null,
     manageQuery: '',
-    viewerFrom: ''
+    viewerFrom: '',
+    wallTypesReturnDrawingId: ''
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -1609,9 +1610,11 @@
     if (box) box.hidden = true;
   }
 
-  async function openWallTypes() {
+  async function openWallTypes(opts) {
+    opts = opts || {};
     closeSheet();
     closeWallTypeLightbox();
+    if (!opts.fromDrawing) state.wallTypesReturnDrawingId = '';
     showScreen('screen-wall-types');
     wallTypesQuery = '';
     if ($('wall-types-search')) $('wall-types-search').value = '';
@@ -1634,12 +1637,111 @@
     }
   }
 
+  function openWallTypesFromDrawing() {
+    var d = state.viewing;
+    if (!d || !d.id) {
+      openWallTypes();
+      return;
+    }
+    state.wallTypesReturnDrawingId = d.id;
+    resetViewerEdgePeek();
+    closeViewerQuiet();
+    openWallTypes({ fromDrawing: true });
+  }
+
   function closeWallTypes() {
     closeWallTypeLightbox();
     activeWallTypeId = '';
+    var returnId = state.wallTypesReturnDrawingId;
+    state.wallTypesReturnDrawingId = '';
+    if (returnId && drawingById(returnId)) {
+      openViewer(returnId, false, state.viewerFrom || '');
+      return;
+    }
     showScreen('screen-list');
     renderCats();
     renderList();
+  }
+
+  /* Right-edge swipe on drawing → Wall Types */
+  var viewerEdgeSwipe = null;
+
+  function resetViewerEdgePeek() {
+    var peek = $('dv-wt-peek');
+    if (peek) {
+      peek.classList.remove('is-armed');
+      peek.style.removeProperty('--dv-wt-peek');
+    }
+    viewerEdgeSwipe = null;
+  }
+
+  function setViewerEdgePeek(px) {
+    var peek = $('dv-wt-peek');
+    if (!peek) return;
+    var w = Math.max(0, Math.min(132, px || 0));
+    peek.classList.toggle('is-armed', w > 2);
+    peek.style.setProperty('--dv-wt-peek', w + 'px');
+  }
+
+  function bindViewerEdgeSwipe() {
+    var hit = $('dv-edge-wall-types');
+    if (!hit || hit._bound) return;
+    hit._bound = true;
+    var EDGE_OPEN = 72;
+
+    on(hit, 'pointerdown', function (e) {
+      if (!$('screen-viewer') || !$('screen-viewer').classList.contains('is-active')) return;
+      if (!state.viewing) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      try { hit.setPointerCapture(e.pointerId); } catch (err) {}
+      viewerEdgeSwipe = {
+        id: e.pointerId,
+        x0: e.clientX,
+        y0: e.clientY,
+        x: e.clientX,
+        y: e.clientY,
+        claimed: false
+      };
+      setViewerEdgePeek(0);
+    });
+
+    on(hit, 'pointermove', function (e) {
+      var g = viewerEdgeSwipe;
+      if (!g || g.id !== e.pointerId) return;
+      g.x = e.clientX;
+      g.y = e.clientY;
+      var dx = g.x0 - e.clientX; /* leftward positive */
+      var dy = Math.abs(e.clientY - g.y0);
+      if (!g.claimed) {
+        if (dx > 14 && dx > dy * 1.15) g.claimed = true;
+        else if (dy > 24 && dy > dx) {
+          resetViewerEdgePeek();
+          try { hit.releasePointerCapture(e.pointerId); } catch (err) {}
+          return;
+        }
+      }
+      if (g.claimed) {
+        e.preventDefault();
+        setViewerEdgePeek(dx);
+      }
+    }, { passive: false });
+
+    function endEdge(e) {
+      var g = viewerEdgeSwipe;
+      if (!g || (e && g.id !== e.pointerId)) return;
+      var dx = g.x0 - g.x;
+      var dy = Math.abs(g.y - g.y0);
+      var open = g.claimed && dx >= EDGE_OPEN && dx > dy;
+      resetViewerEdgePeek();
+      try { hit.releasePointerCapture(g.id); } catch (err) {}
+      if (open) openWallTypesFromDrawing();
+    }
+
+    on(hit, 'pointerup', endEdge);
+    on(hit, 'pointercancel', function () { resetViewerEdgePeek(); });
+    on(hit, 'lostpointercapture', function () {
+      if (viewerEdgeSwipe) resetViewerEdgePeek();
+    });
   }
 
   /* ---------- Manage ---------- */
@@ -2387,6 +2489,7 @@
     else if (which === 'edit') showManageForm({ type: 'edit', id: id });
     else if (which === 'delete') deleteDrawing(id);
   });
+  bindViewerEdgeSwipe();
   on($('btn-viewer-more'), 'click', openViewerMenu);
   on($('btn-back'), 'click', function () {
     if (history.state && history.state.md === 'view') history.back();
