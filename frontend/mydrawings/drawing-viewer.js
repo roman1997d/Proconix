@@ -380,11 +380,11 @@
   DrawingViewer.prototype.nudgeDetail = function () {
     if (!this.detail || this.detail.hidden || !this.detailAtScale) return;
     if (this.scale < DETAIL_MIN_SCALE) return;
-    var scaleRatio = this.scale / this.detailAtScale;
-    var dx = this.detailOriginX * scaleRatio + (this.tx - this.detailAtTx);
-    var dy = this.detailOriginY * scaleRatio + (this.ty - this.detailAtTy);
-    this.detail.style.transform =
-      'translate3d(' + dx + 'px,' + dy + 'px,0) scale(' + scaleRatio + ')';
+    var r = this.scale / this.detailAtScale;
+    /* Crop top-left is at visLeft * scale + tx. visLeft = (origin - atTx) / atScale. */
+    var dx = this.tx + (this.detailOriginX - this.detailAtTx) * r;
+    var dy = this.ty + (this.detailOriginY - this.detailAtTy) * r;
+    this.detail.style.transform = 'translate3d(' + dx + 'px,' + dy + 'px,0) scale(' + r + ')';
     this.detail.style.opacity = '1';
     this.detail.classList.add('is-on');
   };
@@ -689,6 +689,12 @@
       return;
     }
     this.detailTask = null;
+    /* Do not swap the overlay mid-pinch — that desyncs two scaled layers. */
+    if (this.gesture && this.gesture.mode === 'two') {
+      this.detailBusy = false;
+      this.detailDirty = true;
+      return;
+    }
 
     var shown = this.detail;
     if (shown.width !== outW || shown.height !== outH) {
@@ -857,9 +863,7 @@
 
     var mid = midpoint(pts[0], pts[1]);
     var d = Math.max(1, dist(pts[0], pts[1]));
-    /* Follow measured span, but damp 1px touch noise that shows up on slow pinch. */
-    g.smoothD += (d - g.smoothD) * 0.4;
-    var newScale = clamp(g.scale * (g.smoothD / g.dist), MIN_SCALE, MAX_SCALE);
+    var newScale = clamp(g.scale * (d / g.dist), MIN_SCALE, MAX_SCALE);
 
     /* Keep the page point under the *current* midpoint. Incremental, so a noisy
        midpoint with unchanged scale does not translate 1:1 into tx/ty. */
@@ -870,7 +874,7 @@
     this.scale = newScale;
     this.tx = mx - worldX * newScale;
     this.ty = my - worldY * newScale;
-    this.applyTransform();
+    this.applyTransform(true);
     this.logPinchFrame(g, now, dt, mid, d, newScale);
   };
 
