@@ -32,6 +32,7 @@ const { createBackup, restoreBackup, restoreBackupFromServer, startPlatformAutoB
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
 const drawingGalleryRoutes = require('./routes/drawingGalleryRoutes');
 const myDrawingsRoutes = require('./routes/myDrawingsRoutes');
+const myDrawingsMobileRoutes = require('./routes/myDrawingsMobileRoutes');
 const { ensureSchema: ensureMyDrawingsSchema } = require('./controllers/myDrawingsController');
 const progressDrawingsRoutes = require('./routes/progressDrawingsRoutes');
 const { ensureSchema: ensureProgressDrawingsSchema } = require('./controllers/progressDrawingsController');
@@ -148,6 +149,7 @@ app.use('/api/site-snags', siteSnagsRoutes);
 app.use('/api/drawing-gallery', drawingGalleryRoutes);
 app.use('/api/my-drawings', myDrawingsRoutes);
 app.use('/api/progress-drawings', progressDrawingsRoutes);
+app.use('/api', myDrawingsMobileRoutes);
 
 // Site chat (project room, material requests, notifications)
 app.use('/api/site-chat', siteChatRoutes);
@@ -163,6 +165,11 @@ app.use('/api', (req, res) => {
     originalUrl: req.originalUrl,
     method: req.method,
   });
+});
+
+// My Drawings PDFs are tenant-isolated and must not be public.
+app.use('/uploads/mydrawings', (req, res) => {
+  res.status(403).json({ success: false, message: 'Use the authenticated drawing download endpoint.' });
 });
 
 // Uploaded files (issues, documents) – served from backend/uploads
@@ -233,6 +240,9 @@ app.listen(PORT, HOST, async () => {
     ensureMyDrawingsSchema().catch((err) => {
       console.error('My Drawings schema:', err && err.message ? err.message : err);
     });
+    if (!String(process.env.MY_DRAWINGS_JWT_SECRET || process.env.JWT_SECRET || '').trim()) {
+      console.warn('My Drawings: set MY_DRAWINGS_JWT_SECRET so the native app can receive JWT tokens.');
+    }
     ensureProgressDrawingsSchema().catch((err) => {
       console.error('Progress Drawings schema:', err && err.message ? err.message : err);
     });

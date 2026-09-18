@@ -9,6 +9,8 @@ const bcrypt = require('bcrypt');
 const { pool } = require('../db/pool');
 const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
 const { createTransport } = require('../lib/sendCallbackRequestEmail');
+const { signMyDrawingsJwt, verifyMyDrawingsJwt } = require('../lib/myDrawingsJwt');
+const { notifyDrawingChange } = require('../lib/myDrawingsPushService');
 
 const ACCESS_PIN = String(process.env.MY_DRAWINGS_ACCESS_PIN || '2580');
 const ADMIN_PIN = '2026';
@@ -75,6 +77,22 @@ function floorsForClient(value) {
 function ensureUploadDir() {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   return UPLOAD_DIR;
+}
+
+function positiveInt(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+function ensureTenantUploadDir(companyId, projectId) {
+  const cid = positiveInt(companyId);
+  const pid = positiveInt(projectId);
+  if (!cid || !pid) {
+    throw new Error('Invalid company or project for upload path');
+  }
+  const dir = path.join(UPLOAD_DIR, String(cid), String(pid));
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
 function relativeFromAbs(absPath) {
@@ -223,9 +241,42 @@ async function ensureSchemaInner() {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_my_drawings_admin_session_ws ON my_drawings_admin_session(workspace_id)`
   );
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS my_drawings_project (
+      id SERIAL PRIMARY KEY,
+      workspace_id INT NOT NULL REFERENCES my_drawings_workspace(id) ON DELETE CASCADE,
+      name VARCHAR(200) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT uq_my_drawings_project UNIQUE (workspace_id, name)
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_my_drawings_project_ws ON my_drawings_project(workspace_id)`
+  );
+  await pool.query(`
+    ALTER TABLE my_drawings_item
+    ADD COLUMN IF NOT EXISTS project_id INT REFERENCES my_drawings_project(id) ON DELETE CASCADE
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_my_drawings_item_project ON my_drawings_item(project_id)`
+  );
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_devices (
+      id SERIAL PRIMARY KEY,
+      user_id INT NOT NULL REFERENCES my_drawings_worker(id) ON DELETE CASCADE,
+      fcm_token TEXT NOT NULL,
+      platform VARCHAR(20),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT uq_user_devices_fcm_token UNIQUE (fcm_token)
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices(user_id)`);
 
   ensureUploadDir();
   await seedTenants();
+  await seedDefaultProjects();
+  await migrateStoredDrawingsToTenantDirs();
 }
 
 async function clearWorkspaceCatalog(workspaceId) {
@@ -353,6 +404,70 @@ async function seedTenants() {
   }
 }
 
+async function getDefaultProject(workspaceId) {
+  const wsId = positiveInt(workspaceId);
+  if (!wsId) return null;
+  const found = await pool.query(
+    'SELECT id, name FROM my_drawings_project WHERE workspace_id = $1 ORDER BY id ASC LIMIT 1',
+    [wsId]
+  );
+  if (found.rows[0]) return found.rows[0];
+  const ws = await pool.query('SELECT name FROM my_drawings_workspace WHERE id = $1', [wsId]);
+  const name = (ws.rows[0] && ws.rows[0].name) || DEFAULT_PROJECT_NAME;
+  const inserted = await pool.query(
+    `INSERT INTO my_drawings_project (workspace_id, name) VALUES ($1, $2) RETURNING id, name`,
+    [wsId, name]
+  );
+  return inserted.rows[0];
+}
+
+async function seedDefaultProjects() {
+  const workspaces = await pool.query('SELECT id, name FROM my_drawings_workspace ORDER BY id ASC');
+  for (const ws of workspaces.rows) {
+    const project = await getDefaultProject(ws.id);
+    if (!project) continue;
+    await pool.query(
+      `UPDATE my_drawings_item SET project_id = $1 WHERE workspace_id = $2 AND project_id IS NULL`,
+      [project.id, ws.id]
+    );
+  }
+}
+
+async function migrateStoredDrawingsToTenantDirs() {
+  const items = await pool.query(
+    `SELECT id, workspace_id, project_id, relative_path, stored_filename
+     FROM my_drawings_item
+     WHERE relative_path IS NOT NULL`
+  );
+  for (const row of items.rows) {
+    const projectId = positiveInt(row.project_id);
+    if (!projectId) continue;
+    const expectedPrefix = `mydrawings/${row.workspace_id}/${projectId}/`;
+    if (String(row.relative_path).startsWith(expectedPrefix)) continue;
+    const abs = absFromRelative(row.relative_path);
+    if (!abs || !fs.existsSync(abs)) continue;
+    const destDir = ensureTenantUploadDir(row.workspace_id, projectId);
+    const destName = row.stored_filename || path.basename(abs);
+    const destAbs = path.join(destDir, destName);
+    if (path.resolve(abs) === path.resolve(destAbs)) continue;
+    try {
+      fs.renameSync(abs, destAbs);
+    } catch (_) {
+      try {
+        fs.copyFileSync(abs, destAbs);
+        fs.unlinkSync(abs);
+      } catch (err) {
+        console.warn('myDrawings migrate file failed:', abs, err.message || err);
+        continue;
+      }
+    }
+    await pool.query(
+      'UPDATE my_drawings_item SET relative_path = $1, stored_filename = $2 WHERE id = $3',
+      [relativeFromAbs(destAbs), destName, row.id]
+    );
+  }
+}
+
 function ensureSchema() {
   if (!schemaReady) {
     schemaReady = ensureSchemaInner().catch((err) => {
@@ -400,6 +515,73 @@ async function resolveAdminToken(token) {
       managerName: row.manager_name || '',
       email: row.email || '',
     },
+  };
+}
+
+async function resolveJwtAuth(token) {
+  const claims = verifyMyDrawingsJwt(token);
+  if (!claims) return null;
+  await ensureSchema();
+  const result = await pool.query(
+    `SELECT w.id AS worker_id, w.first_name, w.last_name, w.email, w.workspace_id,
+            ws.name AS workspace_name
+     FROM my_drawings_worker w
+     JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
+     WHERE w.id = $1 AND w.workspace_id = $2`,
+    [claims.workerId, claims.companyId]
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  const claimed = await pool.query(
+    'SELECT id, name FROM my_drawings_project WHERE id = $1 AND workspace_id = $2',
+    [claims.projectId, row.workspace_id]
+  );
+  const project = claimed.rows[0] || (await getDefaultProject(row.workspace_id));
+  if (!project) return null;
+  return {
+    workspace: { id: row.workspace_id, name: row.workspace_name },
+    role: 'worker',
+    worker: {
+      id: row.worker_id,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      email: row.email,
+    },
+    project: { id: project.id, name: project.name },
+  };
+}
+
+async function issueWorkerSession(workspace, worker) {
+  const project = await getDefaultProject(workspace.id);
+  if (!project) {
+    const err = new Error('Company project is missing.');
+    err.code = 'PROJECT_MISSING';
+    throw err;
+  }
+  const opened = await openWorkerDevice(workspace, worker);
+  let token = null;
+  try {
+    token = signMyDrawingsJwt({
+      workerId: worker.id,
+      companyId: workspace.id,
+      projectId: project.id,
+      email: worker.email,
+      role: 'worker',
+    });
+  } catch (err) {
+    if (err && err.code !== 'JWT_NOT_CONFIGURED') throw err;
+    console.warn('My Drawings: MY_DRAWINGS_JWT_SECRET is not set; mobile JWT will not be issued.');
+  }
+  return {
+    ...opened,
+    company: { id: workspace.id, name: workspace.name },
+    project: {
+      id: project.id,
+      name: project.name,
+      companyId: workspace.id,
+    },
+    token: token || undefined,
+    tokenType: token ? 'Bearer' : undefined,
   };
 }
 
@@ -671,7 +853,7 @@ async function loginWorker(req, res) {
     }
     const worker = rows[0];
     const workspace = { id: worker.workspace_id, name: worker.workspace_name };
-    return res.json(await openWorkerDevice(workspace, worker));
+    return res.json(await issueWorkerSession(workspace, worker));
   } catch (err) {
     console.error('myDrawings login:', err);
     return res.status(500).json({ success: false, message: 'Could not sign in.' });
@@ -720,10 +902,72 @@ async function verifyWorker(req, res) {
       [worker.id]
     );
     const workspace = { id: worker.workspace_id, name: worker.workspace_name };
-    return res.json(await openWorkerDevice(workspace, worker));
+    return res.json(await issueWorkerSession(workspace, worker));
   } catch (err) {
     console.error('myDrawings verify:', err);
     return res.status(500).json({ success: false, message: 'Could not verify access key.' });
+  }
+}
+
+async function requestAuthCode(req, res) {
+  try {
+    await ensureSchema();
+    const email = cleanEmail(req.body && req.body.email);
+    const accessCode = normalizeAccessCode(
+      (req.body && (req.body.hostAccessCode || req.body.accessCode)) || ''
+    );
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+    }
+    if (!allowRate('email:' + email, REGISTER_EMAIL_MAX, REGISTER_WINDOW_MS)
+        || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
+      return res.status(429).json({ success: false, message: 'Too many requests. Try again later.' });
+    }
+    let rows = await findWorkersByEmail(email);
+    if (accessCode) {
+      const workspace = await findWorkspaceByAccessCode(accessCode);
+      if (!workspace) {
+        return res.status(404).json({ success: false, message: 'That host access code is not valid.' });
+      }
+      rows = rows.filter((row) => Number(row.workspace_id) === Number(workspace.id));
+    }
+    if (!rows.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'No account found for that email. Create an account with the host access code first.',
+      });
+    }
+    if (rows.length > 1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Enter the host access code for the company you want to open.',
+      });
+    }
+    const worker = rows[0];
+    const { pin, sha } = await issueUniquePin(worker.workspace_id);
+    const pinHash = await bcrypt.hash(pin, 10);
+    await pool.query(
+      `UPDATE my_drawings_worker
+       SET pin_hash = $2, pin_sha = $3, pin_expires_at = NOW() + INTERVAL '24 hours'
+       WHERE id = $1`,
+      [worker.id, pinHash, sha]
+    );
+    await sendPasskeyEmail({ to: worker.email, firstName: worker.first_name, pin });
+    return res.json({
+      success: true,
+      email: worker.email,
+      companyName: worker.workspace_name,
+      message: 'We sent a 4-digit key to your email.',
+    });
+  } catch (err) {
+    console.error('myDrawings requestAuthCode:', err);
+    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({ success: false, message: err.message });
+    }
+    if (err && err.code === 'PIN_ALLOC') {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+    return res.status(500).json({ success: false, message: 'Could not send your access key.' });
   }
 }
 
@@ -748,10 +992,17 @@ async function loadCatalog(workspace, role) {
     );
     accessCode = (extra.rows[0] && extra.rows[0].access_code) || '';
   }
+  const project = await getDefaultProject(workspace.id);
   return {
     success: true,
     role: role || 'worker',
-    project: { id: `ws-${workspace.id}`, name: workspace.name },
+    company: { id: workspace.id, name: workspace.name },
+    project: {
+      id: `ws-${workspace.id}`,
+      name: workspace.name,
+      companyId: workspace.id,
+      projectId: project ? project.id : null,
+    },
     accessCode: (role || 'worker') === 'admin' ? accessCode : undefined,
     categories: cats.rows.map((r) => r.name),
     drawings: items.rows.map((d) => ({
@@ -1058,6 +1309,23 @@ function fileMeta(file) {
   };
 }
 
+function queueDrawingPush(req, action, drawing) {
+  const workspaceId = req.myDrawings && req.myDrawings.workspace && req.myDrawings.workspace.id;
+  const projectId =
+    (req.myDrawings && req.myDrawings.project && req.myDrawings.project.id) ||
+    (drawing && drawing.project_id) ||
+    null;
+  notifyDrawingChange({
+    workspaceId,
+    projectId,
+    action,
+    drawingId: drawing && drawing.id,
+    number: drawing && drawing.number,
+    title: drawing && drawing.title,
+    revision: drawing && drawing.revision,
+  }).catch((err) => console.warn('myDrawings push:', err && err.message ? err.message : err));
+}
+
 async function addDrawing(req, res) {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'Choose a PDF file.' });
@@ -1071,6 +1339,7 @@ async function addDrawing(req, res) {
       return res.status(400).json({ success: false, message: 'Number and title are required.' });
     }
     const workspaceId = req.myDrawings.workspace.id;
+    const project = req.myDrawings.project || (await getDefaultProject(workspaceId));
     const clash = await pool.query(
       'SELECT id FROM my_drawings_item WHERE workspace_id = $1 AND LOWER(number) = LOWER($2)',
       [workspaceId, number]
@@ -1081,13 +1350,21 @@ async function addDrawing(req, res) {
     }
     const cat = await getOrCreateCategory(workspaceId, categoryName || 'Uncategorised');
     const meta = fileMeta(req.file);
-    await pool.query(
+    const inserted = await pool.query(
       `INSERT INTO my_drawings_item
-        (workspace_id, category_id, number, title, revision, size_bytes, stored_filename, relative_path, mime_type, floors)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [workspaceId, cat && cat.id, number, title, revision, meta.size_bytes, meta.stored_filename, meta.relative_path, meta.mime_type, floors]
+        (workspace_id, project_id, category_id, number, title, revision, size_bytes, stored_filename, relative_path, mime_type, floors)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING id`,
+      [workspaceId, project && project.id, cat && cat.id, number, title, revision, meta.size_bytes, meta.stored_filename, meta.relative_path, meta.mime_type, floors]
     );
     await logActivity(req, 'added', title, number);
+    queueDrawingPush(req, 'added', {
+      id: inserted.rows[0] && inserted.rows[0].id,
+      project_id: project && project.id,
+      number,
+      title,
+      revision,
+    });
     return catalogResponse(req, res);
   } catch (err) {
     if (req.file) removeStoredFile(relativeFromAbs(req.file.path));
@@ -1152,6 +1429,13 @@ async function editDrawing(req, res) {
       [cat && cat.id, number, title, revision, meta.size_bytes, meta.stored_filename, meta.relative_path, meta.mime_type, floors, item.id]
     );
     await logActivity(req, 'updated', title, number);
+    queueDrawingPush(req, 'updated', {
+      id: item.id,
+      project_id: item.project_id,
+      number,
+      title,
+      revision,
+    });
     return catalogResponse(req, res);
   } catch (err) {
     if (req.file) removeStoredFile(relativeFromAbs(req.file.path));
@@ -1179,6 +1463,13 @@ async function updateDrawingFile(req, res) {
       [title || item.title, revision, meta.size_bytes, meta.stored_filename, meta.relative_path, meta.mime_type, item.id]
     );
     await logActivity(req, 'updated', title || item.title, item.number);
+    queueDrawingPush(req, 'updated', {
+      id: item.id,
+      project_id: item.project_id,
+      number: item.number,
+      title: title || item.title,
+      revision,
+    });
     return catalogResponse(req, res);
   } catch (err) {
     if (req.file) removeStoredFile(relativeFromAbs(req.file.path));
@@ -1205,12 +1496,21 @@ async function downloadFile(req, res) {
   try {
     const item = await loadItem(req.myDrawings.workspace.id, req.params.id);
     if (!item) return res.status(404).json({ success: false, message: 'Drawing not found.' });
+    const scopedProject = req.myDrawings.project && req.myDrawings.project.id;
+    if (scopedProject && item.project_id && Number(item.project_id) !== Number(scopedProject)) {
+      return res.status(404).json({ success: false, message: 'Drawing not found.' });
+    }
     const abs = absFromRelative(item.relative_path);
     if (!abs || !fs.existsSync(abs)) {
       return res.status(404).json({ success: false, message: 'File missing on server.' });
     }
+    const expectedRoot = path.join(UPLOAD_DIR, String(req.myDrawings.workspace.id)) + path.sep;
+    if (!abs.startsWith(expectedRoot) && !abs.startsWith(UPLOAD_DIR + path.sep)) {
+      return res.status(404).json({ success: false, message: 'File missing on server.' });
+    }
     const download = req.query.download === '1' || req.query.download === 'true';
     res.setHeader('Content-Type', item.mime_type || 'application/pdf');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     if (download) {
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(item.number || 'drawing')}.pdf"`);
     } else {
@@ -1223,9 +1523,116 @@ async function downloadFile(req, res) {
   }
 }
 
-function prepareUploadDir(req, res, next) {
-  req.myDrawingsUploadDir = ensureUploadDir();
-  next();
+async function prepareUploadDir(req, res, next) {
+  try {
+    await ensureSchema();
+    const workspaceId = req.myDrawings.workspace.id;
+    const project = req.myDrawings.project || (await getDefaultProject(workspaceId));
+    req.myDrawings.project = project;
+    req.myDrawingsUploadDir = ensureTenantUploadDir(workspaceId, project.id);
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function listDrawings(req, res) {
+  try {
+    const workspaceId = req.myDrawings.workspace.id;
+    const defaultProject = req.myDrawings.project || (await getDefaultProject(workspaceId));
+    const requestedProject = positiveInt(req.query.projectId || req.query.project);
+    let project = defaultProject;
+    if (requestedProject) {
+      const owned = await pool.query(
+        'SELECT id, name FROM my_drawings_project WHERE id = $1 AND workspace_id = $2',
+        [requestedProject, workspaceId]
+      );
+      if (!owned.rows[0]) {
+        return res.status(404).json({ success: false, message: 'Project not found.' });
+      }
+      project = owned.rows[0];
+    }
+    const floor = normalizeFloorId(req.query.floor);
+    const category = String(req.query.category || '').trim();
+    const params = [workspaceId, project.id];
+    let sql = `
+      SELECT i.id, i.number, i.title, i.revision, i.size_bytes, i.updated_at, i.floors, c.name AS category
+      FROM my_drawings_item i
+      LEFT JOIN my_drawings_category c ON c.id = i.category_id
+      WHERE i.workspace_id = $1 AND (i.project_id = $2 OR i.project_id IS NULL)
+    `;
+    if (floor) {
+      params.push(floor);
+      sql += ` AND (i.floors IS NULL OR $${params.length} = ANY(i.floors))`;
+    }
+    if (category) {
+      params.push(category);
+      sql += ` AND LOWER(COALESCE(c.name, 'Uncategorised')) = LOWER($${params.length})`;
+    }
+    sql += ' ORDER BY i.number ASC';
+    const items = await pool.query(sql, params);
+    const cats = await pool.query(
+      'SELECT name FROM my_drawings_category WHERE workspace_id = $1 ORDER BY sort_order ASC, name ASC',
+      [workspaceId]
+    );
+    return res.json({
+      success: true,
+      company: { id: workspaceId, name: req.myDrawings.workspace.name },
+      project: { id: project.id, name: project.name },
+      categories: cats.rows.map((r) => r.name),
+      drawings: items.rows.map((d) => ({
+        id: d.id,
+        number: d.number,
+        title: d.title,
+        category: d.category || 'Uncategorised',
+        revision: d.revision,
+        floors: floorsForClient(d.floors),
+        updatedAt: isoDate(d.updated_at),
+        sizeBytes: Number(d.size_bytes) || 0,
+        fileUrl: `/api/drawings/${d.id}/file`,
+      })),
+    });
+  } catch (err) {
+    console.error('myDrawings listDrawings:', err);
+    return res.status(500).json({ success: false, message: 'Could not load drawings.' });
+  }
+}
+
+async function registerDevice(req, res) {
+  try {
+    const worker = req.myDrawings && req.myDrawings.worker;
+    if (!worker || !worker.id) {
+      return res.status(403).json({ success: false, message: 'Worker session required.' });
+    }
+    const body = req.body || {};
+    const token =
+      typeof body.fcmToken === 'string'
+        ? body.fcmToken.trim()
+        : typeof body.token === 'string'
+          ? body.token.trim()
+          : '';
+    const platform = String(body.platform || '').toLowerCase() || null;
+    if (!token || token.length < 20) {
+      return res.status(400).json({ success: false, message: 'Valid FCM token is required.' });
+    }
+    if (platform && !['ios', 'android'].includes(platform)) {
+      return res.status(400).json({ success: false, message: 'platform must be ios or android.' });
+    }
+    await pool.query(
+      `INSERT INTO user_devices (user_id, fcm_token, platform, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (fcm_token)
+       DO UPDATE SET
+         user_id = EXCLUDED.user_id,
+         platform = COALESCE(EXCLUDED.platform, user_devices.platform),
+         updated_at = NOW()`,
+      [worker.id, token.slice(0, 512), platform]
+    );
+    return res.json({ success: true, message: 'Device registered.' });
+  } catch (err) {
+    console.error('myDrawings registerDevice:', err);
+    return res.status(500).json({ success: false, message: 'Failed to register device.' });
+  }
 }
 
 module.exports = {
@@ -1233,12 +1640,15 @@ module.exports = {
   resolveWorkspaceByPin,
   resolveDeviceToken,
   resolveAdminToken,
+  resolveJwtAuth,
   registerWorker,
   loginWorker,
   verifyWorker,
+  requestAuthCode,
   companyLogin,
   unlock,
   getCatalog,
+  listDrawings,
   getActivity,
   listWorkers,
   addCategory,
@@ -1249,5 +1659,6 @@ module.exports = {
   updateDrawingFile,
   deleteDrawing,
   downloadFile,
+  registerDevice,
   prepareUploadDir,
 };

@@ -114,3 +114,31 @@ CREATE TABLE IF NOT EXISTS my_drawings_activity (
 );
 
 CREATE INDEX IF NOT EXISTS idx_my_drawings_activity_ws ON my_drawings_activity(workspace_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS my_drawings_project (
+  id SERIAL PRIMARY KEY,
+  workspace_id INT NOT NULL REFERENCES my_drawings_workspace(id) ON DELETE CASCADE,
+  name VARCHAR(200) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_my_drawings_project UNIQUE (workspace_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_my_drawings_project_ws ON my_drawings_project(workspace_id);
+
+ALTER TABLE my_drawings_item
+  ADD COLUMN IF NOT EXISTS project_id INT REFERENCES my_drawings_project(id) ON DELETE CASCADE;
+
+CREATE INDEX IF NOT EXISTS idx_my_drawings_item_project ON my_drawings_item(project_id);
+
+-- FCM tokens for My Drawings workers. user_id = my_drawings_worker.id
+CREATE TABLE IF NOT EXISTS user_devices (
+  id SERIAL PRIMARY KEY,
+  user_id INT NOT NULL REFERENCES my_drawings_worker(id) ON DELETE CASCADE,
+  fcm_token TEXT NOT NULL,
+  platform VARCHAR(20),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_user_devices_fcm_token UNIQUE (fcm_token)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices(user_id);

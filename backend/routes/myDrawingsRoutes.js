@@ -24,11 +24,15 @@ function handleUploadError(err, req, res, next) {
 router.post('/register', ctrl.registerWorker);
 router.post('/login', ctrl.loginWorker);
 router.post('/verify', ctrl.verifyWorker);
+router.post('/auth/request-code', ctrl.requestAuthCode);
+router.post('/auth/verify', ctrl.verifyWorker);
 router.post('/company-login', ctrl.companyLogin);
 router.post('/unlock', ctrl.unlock);
 router.get('/catalog', requireMyDrawingsPin, ctrl.getCatalog);
+router.get('/drawings', requireMyDrawingsPin, ctrl.listDrawings);
 router.get('/activity', requireMyDrawingsPin, ctrl.getActivity);
 router.get('/workers', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.listWorkers);
+router.post('/devices/register', requireMyDrawingsPin, ctrl.registerDevice);
 
 router.post('/categories', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.addCategory);
 router.post('/categories/rename', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.renameCategory);

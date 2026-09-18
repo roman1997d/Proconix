@@ -6,7 +6,9 @@ const {
   resolveWorkspaceByPin,
   resolveDeviceToken,
   resolveAdminToken,
+  resolveJwtAuth,
 } = require('../controllers/myDrawingsController');
+const { readBearerToken } = require('../lib/myDrawingsJwt');
 
 function readDevice(req) {
   const header = req.headers['x-mydrawings-device'];
@@ -31,6 +33,15 @@ function readAdminToken(req) {
 
 async function requireMyDrawingsPin(req, res, next) {
   try {
+    const bearer = readBearerToken(req);
+    if (bearer) {
+      const asJwt = await resolveJwtAuth(bearer);
+      if (asJwt) {
+        req.myDrawings = asJwt;
+        return next();
+      }
+      return res.status(401).json({ success: false, message: 'Session expired. Request a new access key.' });
+    }
     const adminToken = readAdminToken(req);
     if (adminToken) {
       const asAdmin = await resolveAdminToken(adminToken);
