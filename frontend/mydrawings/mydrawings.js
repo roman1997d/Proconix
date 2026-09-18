@@ -58,7 +58,8 @@
     manageQuery: '',
     viewerFrom: '',
     wallTypesReturnDrawingId: '',
-    workers: []
+    workers: [],
+    accessCode: ''
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -235,8 +236,13 @@
     return s && s.deviceToken ? String(s.deviceToken) : '';
   }
 
+  function sessionAdminToken() {
+    var s = readSession();
+    return s && s.adminToken ? String(s.adminToken) : '';
+  }
+
   function sessionSecret() {
-    return sessionDevice() || sessionPin();
+    return sessionDevice() || sessionPin() || sessionAdminToken();
   }
 
   function pinHeaders(extra) {
@@ -244,9 +250,11 @@
     var adminPin = state.adminPin || (state.role === 'admin' ? sessionPin() : '');
     var device = sessionDevice();
     var pin = sessionPin();
+    var adminToken = sessionAdminToken();
+    if (adminToken) headers['X-MyDrawings-Admin'] = adminToken;
     if (adminPin) headers['X-MyDrawings-Pin'] = adminPin;
     if (device) headers['X-MyDrawings-Device'] = device;
-    else if (!adminPin && pin) headers['X-MyDrawings-Pin'] = pin;
+    else if (!adminPin && !adminToken && pin) headers['X-MyDrawings-Pin'] = pin;
     return headers;
   }
 
@@ -336,12 +344,22 @@
             credentials: 'same-origin',
             headers: { 'X-MyDrawings-Device': opts.deviceToken }
           });
+        } else if (opts.adminToken) {
+          res = await fetch('/api/my-drawings/catalog', {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'X-MyDrawings-Admin': opts.adminToken }
+          });
         } else if (opts.verify) {
           res = await fetch('/api/my-drawings/verify', {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: opts.email, pin: opts.pin })
+            body: JSON.stringify({
+              email: opts.email,
+              pin: opts.pin,
+              hostAccessCode: opts.hostAccessCode || ''
+            })
           });
         } else {
           res = await fetch('/api/my-drawings/unlock', {
@@ -386,7 +404,7 @@
     if (!isOnline() || !sessionSecret()) return;
     try {
       var data = await apiJson('/catalog');
-      var keepAdmin = !!state.adminPin;
+      var keepAdmin = !!state.adminPin || !!sessionAdminToken();
       await applyRemoteCatalog(data);
       if (keepAdmin) state.role = 'admin';
       renderList();
@@ -411,7 +429,7 @@
     (state.drawings || []).forEach(function (d) { before[d.id] = true; });
     try {
       var data = await apiJson('/catalog');
-      var keepAdmin = !!state.adminPin;
+      var keepAdmin = !!state.adminPin || !!sessionAdminToken();
       await applyRemoteCatalog(data);
       if (keepAdmin) state.role = 'admin';
       renderList();
@@ -468,7 +486,7 @@
       if (!raw) return null;
       var parsed = JSON.parse(raw);
       if (!parsed || !parsed.ok) return null;
-      if (parsed.deviceToken || parsed.pin) {
+      if (parsed.deviceToken || parsed.pin || parsed.adminToken) {
         try { localStorage.setItem(DEVICE_KEY, JSON.stringify(parsed)); } catch (e2) {}
       }
       return parsed;
@@ -490,11 +508,15 @@
         role: extra && extra.role ? extra.role : (prev.role || state.role),
         pin: extra && extra.pin != null ? String(extra.pin) : prev.pin || '',
         deviceToken: extra && extra.deviceToken != null ? String(extra.deviceToken) : prev.deviceToken || '',
+        adminToken: extra && extra.adminToken != null ? String(extra.adminToken) : prev.adminToken || '',
         firstName: extra && extra.firstName != null ? extra.firstName : prev.firstName || '',
         lastName: extra && extra.lastName != null ? extra.lastName : prev.lastName || '',
         email: extra && extra.email != null ? extra.email : prev.email || ''
       };
-      if (payload.role !== 'admin') payload.pin = '';
+      if (payload.role !== 'admin') {
+        payload.pin = '';
+        payload.adminToken = '';
+      }
       localStorage.setItem(DEVICE_KEY, JSON.stringify(payload));
       sessionStorage.removeItem(SESSION_KEY);
     } catch (e) {}
@@ -601,7 +623,7 @@
 
   /* ---------- Screens ---------- */
   function showScreen(id) {
-    ['screen-register', 'screen-login', 'screen-pin', 'screen-floor', 'screen-list', 'screen-activity', 'screen-wall-types', 'screen-wall-type-detail', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
+    ['screen-register', 'screen-login', 'screen-company', 'screen-pin', 'screen-floor', 'screen-list', 'screen-activity', 'screen-wall-types', 'screen-wall-type-detail', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
       var el = $(sid);
       if (el) el.classList.toggle('is-active', sid === id);
     });
@@ -639,6 +661,7 @@
     if ($('reg-first')) $('reg-first').value = pending.firstName || '';
     if ($('reg-last')) $('reg-last').value = pending.lastName || '';
     if ($('reg-email')) $('reg-email').value = pending.email || '';
+    if ($('reg-host-code')) $('reg-host-code').value = pending.hostAccessCode || '';
     if ($('reg-error')) $('reg-error').textContent = '';
   }
 
@@ -669,6 +692,7 @@
   function showLogin() {
     var pending = readPending() || {};
     if ($('login-email')) $('login-email').value = pending.email || '';
+    if ($('login-host-code')) $('login-host-code').value = pending.hostAccessCode || '';
     if ($('login-error')) $('login-error').textContent = '';
     showScreen('screen-login');
     setTimeout(function () {
@@ -677,9 +701,23 @@
     }, 200);
   }
 
+  function showCompanyLogin() {
+    if ($('company-error')) $('company-error').textContent = '';
+    if ($('company-password')) $('company-password').value = '';
+    showScreen('screen-company');
+    setTimeout(function () {
+      var email = $('company-email');
+      if (email) email.focus();
+    }, 200);
+  }
+
   function backFromPin() {
     if (state.pinFrom === 'menu') {
       showScreen('screen-list');
+      return;
+    }
+    if (state.pinMode === 'admin') {
+      showCompanyLogin();
       return;
     }
     var pending = pendingDetails();
@@ -728,6 +766,7 @@
     var firstName = ($('reg-first').value || '').replace(/\s+/g, ' ').trim();
     var lastName = ($('reg-last').value || '').replace(/\s+/g, ' ').trim();
     var email = ($('reg-email').value || '').trim().toLowerCase();
+    var hostAccessCode = ($('reg-host-code').value || '').replace(/\s+/g, '').toUpperCase();
     $('reg-error').textContent = '';
     if (!isOnline()) {
       $('reg-error').textContent = 'Connect to the internet to get your access key.';
@@ -741,11 +780,29 @@
       $('reg-error').textContent = 'Enter a valid email address.';
       return;
     }
+    if (!/^[A-Z0-9]{4,12}$/.test(hostAccessCode)) {
+      $('reg-error').textContent = 'Enter the host access code from your company.';
+      return;
+    }
     $('reg-continue').disabled = true;
     try {
-      await postJson('/register', { firstName: firstName, lastName: lastName, email: email });
-      writePending({ firstName: firstName, lastName: lastName, email: email, from: 'register' });
+      var created = await postJson('/register', {
+        firstName: firstName,
+        lastName: lastName,
+        email: email,
+        hostAccessCode: hostAccessCode
+      });
+      writePending({
+        firstName: firstName,
+        lastName: lastName,
+        email: email,
+        hostAccessCode: hostAccessCode,
+        from: 'register'
+      });
       showPin('worker');
+      if (created && created.companyName) {
+        $('pin-hint').textContent = 'We sent a 4-digit key to ' + email + ' for ' + created.companyName + '.';
+      }
     } catch (err) {
       $('reg-error').textContent = err && err.message ? err.message : 'Could not send your access key.';
     }
@@ -755,6 +812,7 @@
   async function submitLogin(e) {
     if (e) e.preventDefault();
     var email = ($('login-email').value || '').trim().toLowerCase();
+    var hostAccessCode = ($('login-host-code').value || '').replace(/\s+/g, '').toUpperCase();
     $('login-error').textContent = '';
     if (!isOnline()) {
       $('login-error').textContent = 'Connect to the internet to sign in.';
@@ -766,7 +824,9 @@
     }
     $('login-continue').disabled = true;
     try {
-      var data = await postJson('/login', { email: email });
+      var body = { email: email };
+      if (hostAccessCode) body.hostAccessCode = hostAccessCode;
+      var data = await postJson('/login', body);
       await enterApp(data, {
         deviceToken: data.deviceToken,
         role: 'worker',
@@ -778,6 +838,38 @@
       $('login-error').textContent = err && err.message ? err.message : 'No account found for that email.';
     }
     $('login-continue').disabled = false;
+  }
+
+  async function submitCompanyLogin(e) {
+    if (e) e.preventDefault();
+    var email = ($('company-email').value || '').trim().toLowerCase();
+    var password = $('company-password').value || '';
+    $('company-error').textContent = '';
+    if (!isOnline()) {
+      $('company-error').textContent = 'Connect to the internet to sign in.';
+      return;
+    }
+    if (!email || !password) {
+      $('company-error').textContent = 'Enter the company email and password.';
+      return;
+    }
+    $('company-continue').disabled = true;
+    try {
+      var data = await postJson('/company-login', { email: email, password: password });
+      state.adminPin = '';
+      await enterApp(data, {
+        adminToken: data.adminToken,
+        pin: '',
+        role: 'admin',
+        email: data.email || email,
+        firstName: data.managerName || '',
+        lastName: ''
+      });
+      openManage();
+    } catch (err) {
+      $('company-error').textContent = err && err.message ? err.message : 'Incorrect company email or password.';
+    }
+    $('company-continue').disabled = false;
   }
 
   async function resendKey() {
@@ -795,7 +887,8 @@
       await postJson('/register', {
         firstName: pending.firstName || '',
         lastName: pending.lastName || '',
-        email: pending.email
+        email: pending.email,
+        hostAccessCode: pending.hostAccessCode || ''
       });
       $('pin-hint').textContent = 'We sent a new 4-digit key to ' + pending.email;
     } catch (err) {
@@ -832,7 +925,12 @@
           backFromPin();
           return;
         }
-        data = await fetchRemoteCatalog({ verify: true, email: pending.email, pin: pin });
+        data = await fetchRemoteCatalog({
+          verify: true,
+          email: pending.email,
+          pin: pin,
+          hostAccessCode: pending.hostAccessCode || ''
+        });
         extra = {
           deviceToken: data.deviceToken,
           role: 'worker',
@@ -857,6 +955,7 @@
     state.project = data.project || { name: 'Project' };
     state.categories = data.categories || [];
     state.drawings = data.drawings || [];
+    state.accessCode = data.accessCode || state.accessCode || '';
     $('project-name').textContent = state.project.name || 'Project';
     updateHeaderFloor();
     renderCats();
@@ -1844,6 +1943,16 @@
     showScreen('screen-manage');
     renderManage();
     loadWorkers();
+    var codeEl = $('mg-host-code');
+    if (codeEl) {
+      if (state.accessCode) {
+        codeEl.hidden = false;
+        codeEl.textContent = 'Host access code for users: ' + state.accessCode;
+      } else {
+        codeEl.hidden = true;
+        codeEl.textContent = '';
+      }
+    }
   }
 
   function closeManage() {
@@ -2269,7 +2378,7 @@
         openManage();
         return;
       }
-      showPin('admin', 'menu');
+      showCompanyLogin();
       return;
     }
     if (act === 'activity') {
@@ -2301,6 +2410,7 @@
         writeSession(true, {
           role: 'worker',
           pin: '',
+          adminToken: '',
           deviceToken: sessionDevice(),
           firstName: s.firstName || '',
           lastName: s.lastName || '',
@@ -2412,6 +2522,22 @@
             showRegister();
           }
         }
+      } else if (session && session.ok && session.adminToken && session.role === 'admin') {
+        state.role = 'admin';
+        try {
+          var companyData = await fetchRemoteCatalog({ adminToken: session.adminToken });
+          await enterApp(companyData, { adminToken: session.adminToken, role: 'admin', email: session.email });
+        } catch (err) {
+          var companyCache = await idbGet('meta', 'catalog');
+          if (companyCache && companyCache.data) {
+            applyCatalog(companyCache.data);
+            await refreshOfflineMap();
+            ensureFloorThenHome({ from: 'boot' });
+          } else {
+            writeSession(false);
+            showCompanyLogin();
+          }
+        }
       } else if (session && session.ok && session.pin && session.role === 'admin') {
         state.role = 'admin';
         try {
@@ -2456,10 +2582,13 @@
   on($('pin-continue'), 'click', submitPin);
   on($('register-form'), 'submit', submitRegister);
   on($('login-form'), 'submit', submitLogin);
+  on($('company-form'), 'submit', submitCompanyLogin);
   on($('btn-have-account'), 'click', showLogin);
   on($('btn-create-account'), 'click', showRegister);
-  on($('btn-admin-login'), 'click', function () { showPin('admin', 'login'); });
-  on($('btn-admin-login-2'), 'click', function () { showPin('admin', 'login'); });
+  on($('btn-admin-login'), 'click', showCompanyLogin);
+  on($('btn-admin-login-2'), 'click', showCompanyLogin);
+  on($('btn-company-back'), 'click', showRegister);
+  on($('btn-company-admin-key'), 'click', function () { showPin('admin', 'login'); });
   on($('pin-resend'), 'click', resendKey);
   on($('pin-change'), 'click', backFromPin);
   on($('pin-admin-back'), 'click', backFromPin);

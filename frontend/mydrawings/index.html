@@ -28,7 +28,7 @@
     <section class="md-screen md-pin md-register" id="screen-register" aria-label="Sign in">
       <p class="md-pin-brand">My Drawings</p>
       <h2>Get access</h2>
-      <p class="md-pin-hint">First time on this device — enter your details. We will email you a 4-digit key.</p>
+      <p class="md-pin-hint">First time on this device — enter your details and the host access code from your company. We will email you a 4-digit key.</p>
       <form class="md-reg-form" id="register-form" autocomplete="on">
         <label class="mg-field">
           <span>First name</span>
@@ -42,23 +42,31 @@
           <span>Email</span>
           <input id="reg-email" type="email" maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email" required>
         </label>
+        <label class="mg-field">
+          <span>Host access code</span>
+          <input id="reg-host-code" type="text" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. 2026AA" required>
+        </label>
         <p class="md-error" id="reg-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="reg-continue">Continue</button>
       </form>
       <p class="md-pin-actions">
         <button type="button" class="md-link" id="btn-have-account">Already have an account?</button>
       </p>
-      <p class="md-admin-link"><button type="button" id="btn-admin-login">Admin</button></p>
+      <p class="md-admin-link"><button type="button" id="btn-admin-login">Company sign in</button></p>
     </section>
 
     <section class="md-screen md-pin md-register" id="screen-login" aria-label="Sign in with email">
       <p class="md-pin-brand">My Drawings</p>
       <h2>Welcome back</h2>
-      <p class="md-pin-hint">Enter the email you used before. If it is on this project, you will go straight in.</p>
+      <p class="md-pin-hint">Enter the email you used before. If you work for more than one company, also enter that host access code.</p>
       <form class="md-reg-form" id="login-form" autocomplete="on">
         <label class="mg-field">
           <span>Email</span>
           <input id="login-email" type="email" maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email" required>
+        </label>
+        <label class="mg-field">
+          <span>Host access code (if needed)</span>
+          <input id="login-host-code" type="text" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. 2026AA">
         </label>
         <p class="md-error" id="login-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="login-continue">Continue</button>
@@ -66,7 +74,29 @@
       <p class="md-pin-actions">
         <button type="button" class="md-link" id="btn-create-account">Create an account</button>
       </p>
-      <p class="md-admin-link"><button type="button" id="btn-admin-login-2">Admin</button></p>
+      <p class="md-admin-link"><button type="button" id="btn-admin-login-2">Company sign in</button></p>
+    </section>
+
+    <section class="md-screen md-pin md-register" id="screen-company" aria-label="Company sign in">
+      <p class="md-pin-brand">My Drawings</p>
+      <h2>Company sign in</h2>
+      <p class="md-pin-hint">Use the company email and password. After you sign in you can manage this company’s drawings. Users join with your host access code.</p>
+      <form class="md-reg-form" id="company-form" autocomplete="on">
+        <label class="mg-field">
+          <span>Company email</span>
+          <input id="company-email" type="email" maxlength="254" autocomplete="username" autocapitalize="off" spellcheck="false" inputmode="email" required>
+        </label>
+        <label class="mg-field">
+          <span>Password</span>
+          <input id="company-password" type="password" maxlength="120" autocomplete="current-password" required>
+        </label>
+        <p class="md-error" id="company-error" role="alert"></p>
+        <button type="submit" class="md-btn md-btn-primary" id="company-continue">Sign in</button>
+      </form>
+      <p class="md-pin-actions">
+        <button type="button" class="md-link" id="btn-company-back">Back</button>
+        <button type="button" class="md-link" id="btn-company-admin-key">Use administration key</button>
+      </p>
     </section>
 
     <section class="md-screen md-pin" id="screen-pin" aria-label="Access">
@@ -167,7 +197,8 @@
             <div class="mg-block-head">
               <h2>Users</h2>
             </div>
-            <p class="mg-form-note">Everyone registered in My Drawings on this project.</p>
+            <p class="mg-form-note">Everyone registered in My Drawings for this company.</p>
+            <p class="mg-host-code" id="mg-host-code" hidden></p>
             <label class="mg-field">
               <span>My Drawings users</span>
               <select id="mg-users" aria-label="My Drawings users">

@@ -83,12 +83,18 @@
     return s && s.pin ? String(s.pin) : '';
   }
 
+  function sessionAdminToken() {
+    var s = readSession();
+    return s && s.adminToken ? String(s.adminToken) : '';
+  }
+
   function writeAdminSession(pin) {
     try {
       localStorage.setItem(DEVICE_KEY, JSON.stringify({
         ok: true,
         role: 'admin',
         pin: pin,
+        adminToken: sessionAdminToken() || '',
         deviceToken: sessionDevice() || ''
       }));
     } catch (e) {}
@@ -96,6 +102,8 @@
 
   function authHeaders() {
     var headers = {};
+    var adminToken = sessionAdminToken();
+    if (adminToken) headers['X-MyDrawings-Admin'] = adminToken;
     if (state.adminPin) headers['X-MyDrawings-Pin'] = state.adminPin;
     else if (sessionPin() && (!sessionDevice() || state.role === 'admin')) {
       headers['X-MyDrawings-Pin'] = sessionPin();
@@ -1178,7 +1186,7 @@
     try {
       registerServiceWorker();
       var session = readSession();
-      if (session && session.ok && (session.deviceToken || (session.pin && session.role === 'admin'))) {
+      if (session && session.ok && (session.deviceToken || (session.pin && session.role === 'admin') || (session.adminToken && session.role === 'admin'))) {
         if (session.role === 'admin' && session.pin) state.adminPin = session.pin;
         state.role = session.role || 'worker';
         state.floor = readFloor();

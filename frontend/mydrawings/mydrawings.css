@@ -792,6 +792,15 @@ img { max-width: 100%; }
 .mg-user-detail p { margin: 0 0 4px; }
 .mg-user-detail p:last-child { margin-bottom: 0; }
 .mg-user-detail strong { font-weight: 700; }
+.mg-host-code {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--md-line);
+  background: var(--md-surface);
+  font-size: 0.88rem;
+  letter-spacing: 0.04em;
+}
 .mg-cats {
   display: flex;
   flex-direction: column;

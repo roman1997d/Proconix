@@ -24,6 +24,7 @@ function handleUploadError(err, req, res, next) {
 router.post('/register', ctrl.registerWorker);
 router.post('/login', ctrl.loginWorker);
 router.post('/verify', ctrl.verifyWorker);
+router.post('/company-login', ctrl.companyLogin);
 router.post('/unlock', ctrl.unlock);
 router.get('/catalog', requireMyDrawingsPin, ctrl.getCatalog);
 router.get('/activity', requireMyDrawingsPin, ctrl.getActivity);

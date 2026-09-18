@@ -14,6 +14,32 @@ CREATE TABLE IF NOT EXISTS my_drawings_workspace (
 ALTER TABLE my_drawings_workspace
   ADD COLUMN IF NOT EXISTS demo_cleared_at TIMESTAMPTZ;
 
+ALTER TABLE my_drawings_workspace
+  ADD COLUMN IF NOT EXISTS email VARCHAR(254);
+ALTER TABLE my_drawings_workspace
+  ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE my_drawings_workspace
+  ADD COLUMN IF NOT EXISTS manager_name VARCHAR(160);
+ALTER TABLE my_drawings_workspace
+  ADD COLUMN IF NOT EXISTS access_code VARCHAR(32);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_workspace_access_code
+  ON my_drawings_workspace (UPPER(access_code))
+  WHERE access_code IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_workspace_email
+  ON my_drawings_workspace (LOWER(email))
+  WHERE email IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS my_drawings_admin_session (
+  id SERIAL PRIMARY KEY,
+  workspace_id INT NOT NULL REFERENCES my_drawings_workspace(id) ON DELETE CASCADE,
+  token_hash VARCHAR(64) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_my_drawings_admin_session_token UNIQUE (token_hash)
+);
+
 CREATE TABLE IF NOT EXISTS my_drawings_category (
   id SERIAL PRIMARY KEY,
   workspace_id INT NOT NULL REFERENCES my_drawings_workspace(id) ON DELETE CASCADE,

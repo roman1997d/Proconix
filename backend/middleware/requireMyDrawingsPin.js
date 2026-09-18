@@ -1,8 +1,12 @@
 /**
- * Unlock My Drawings with a remembered device token or the admin 4-digit key.
+ * Unlock My Drawings with a remembered device token, company admin session, or the admin 4-digit key.
  */
 
-const { resolveWorkspaceByPin, resolveDeviceToken } = require('../controllers/myDrawingsController');
+const {
+  resolveWorkspaceByPin,
+  resolveDeviceToken,
+  resolveAdminToken,
+} = require('../controllers/myDrawingsController');
 
 function readDevice(req) {
   const header = req.headers['x-mydrawings-device'];
@@ -18,8 +22,23 @@ function readPin(req) {
   return '';
 }
 
+function readAdminToken(req) {
+  const header = req.headers['x-mydrawings-admin'];
+  if (header != null && String(header).trim()) return String(header).trim();
+  if (req.body && req.body.adminToken != null) return String(req.body.adminToken).trim();
+  return '';
+}
+
 async function requireMyDrawingsPin(req, res, next) {
   try {
+    const adminToken = readAdminToken(req);
+    if (adminToken) {
+      const asAdmin = await resolveAdminToken(adminToken);
+      if (asAdmin) {
+        req.myDrawings = asAdmin;
+        return next();
+      }
+    }
     const pin = readPin(req);
     if (/^\d{4}$/.test(pin)) {
       const byPin = await resolveWorkspaceByPin(pin);
