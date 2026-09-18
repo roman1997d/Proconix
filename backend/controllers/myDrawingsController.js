@@ -508,7 +508,7 @@ async function resolveAdminToken(token) {
   if (!row) return null;
   pool.query('UPDATE my_drawings_admin_session SET last_seen_at = NOW() WHERE id = $1', [row.session_id]).catch(() => {});
   return {
-    workspace: { id: row.workspace_id, name: row.workspace_name },
+    workspace: { id: row.workspace_id, name: row.workspace_name, managerName: row.manager_name || '' },
     role: 'admin',
     company: {
       accessCode: row.access_code || '',
@@ -524,7 +524,7 @@ async function resolveJwtAuth(token) {
   await ensureSchema();
   const result = await pool.query(
     `SELECT w.id AS worker_id, w.first_name, w.last_name, w.email, w.workspace_id,
-            ws.name AS workspace_name
+            ws.name AS workspace_name, ws.manager_name
      FROM my_drawings_worker w
      JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
      WHERE w.id = $1 AND w.workspace_id = $2`,
@@ -539,7 +539,7 @@ async function resolveJwtAuth(token) {
   const project = claimed.rows[0] || (await getDefaultProject(row.workspace_id));
   if (!project) return null;
   return {
-    workspace: { id: row.workspace_id, name: row.workspace_name },
+    workspace: { id: row.workspace_id, name: row.workspace_name, managerName: row.manager_name || '' },
     role: 'worker',
     worker: {
       id: row.worker_id,
@@ -574,7 +574,11 @@ async function issueWorkerSession(workspace, worker) {
   }
   return {
     ...opened,
-    company: { id: workspace.id, name: workspace.name },
+    company: {
+      id: workspace.id,
+      name: workspace.name,
+      managerName: workspace.managerName || workspace.manager_name || '',
+    },
     project: {
       id: project.id,
       name: project.name,
@@ -602,7 +606,7 @@ async function findWorkersByEmail(email) {
   const result = await pool.query(
     `SELECT w.id, w.workspace_id, w.first_name, w.last_name, w.email,
             w.pin_hash, w.pin_expires_at,
-            ws.name AS workspace_name
+            ws.name AS workspace_name, ws.manager_name
      FROM my_drawings_worker w
      JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
      WHERE w.email = $1
@@ -713,7 +717,7 @@ async function resolveDeviceToken(token) {
   const result = await pool.query(
     `SELECT d.id AS device_id,
             w.id AS worker_id, w.first_name, w.last_name, w.email,
-            ws.id AS workspace_id, ws.name AS workspace_name
+            ws.id AS workspace_id, ws.name AS workspace_name, ws.manager_name
      FROM my_drawings_device d
      JOIN my_drawings_worker w ON w.id = d.worker_id
      JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
@@ -724,7 +728,7 @@ async function resolveDeviceToken(token) {
   if (!row) return null;
   pool.query('UPDATE my_drawings_device SET last_seen_at = NOW() WHERE id = $1', [row.device_id]).catch(() => {});
   return {
-    workspace: { id: row.workspace_id, name: row.workspace_name },
+    workspace: { id: row.workspace_id, name: row.workspace_name, managerName: row.manager_name || '' },
     role: 'worker',
     worker: {
       id: row.worker_id,
@@ -852,7 +856,11 @@ async function loginWorker(req, res) {
       });
     }
     const worker = rows[0];
-    const workspace = { id: worker.workspace_id, name: worker.workspace_name };
+    const workspace = {
+      id: worker.workspace_id,
+      name: worker.workspace_name,
+      managerName: worker.manager_name || '',
+    };
     return res.json(await issueWorkerSession(workspace, worker));
   } catch (err) {
     console.error('myDrawings login:', err);
@@ -901,7 +909,11 @@ async function verifyWorker(req, res) {
        WHERE id = $1`,
       [worker.id]
     );
-    const workspace = { id: worker.workspace_id, name: worker.workspace_name };
+    const workspace = {
+      id: worker.workspace_id,
+      name: worker.workspace_name,
+      managerName: worker.manager_name || '',
+    };
     return res.json(await issueWorkerSession(workspace, worker));
   } catch (err) {
     console.error('myDrawings verify:', err);
@@ -996,7 +1008,11 @@ async function loadCatalog(workspace, role) {
   return {
     success: true,
     role: role || 'worker',
-    company: { id: workspace.id, name: workspace.name },
+    company: {
+      id: workspace.id,
+      name: workspace.name,
+      managerName: workspace.managerName || workspace.manager_name || '',
+    },
     project: {
       id: `ws-${workspace.id}`,
       name: workspace.name,
@@ -1577,7 +1593,11 @@ async function listDrawings(req, res) {
     );
     return res.json({
       success: true,
-      company: { id: workspaceId, name: req.myDrawings.workspace.name },
+      company: {
+        id: workspaceId,
+        name: req.myDrawings.workspace.name,
+        managerName: req.myDrawings.workspace.managerName || req.myDrawings.workspace.manager_name || '',
+      },
       project: { id: project.id, name: project.name },
       categories: cats.rows.map((r) => r.name),
       drawings: items.rows.map((d) => ({
