@@ -780,6 +780,18 @@ img { max-width: 100%; }
   font-size: 0.95rem;
   font-weight: 700;
 }
+.mg-user-detail {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--md-line);
+  background: var(--md-surface);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.mg-user-detail p { margin: 0 0 4px; }
+.mg-user-detail p:last-child { margin-bottom: 0; }
+.mg-user-detail strong { font-weight: 700; }
 .mg-cats {
   display: flex;
   flex-direction: column;

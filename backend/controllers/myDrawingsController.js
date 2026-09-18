@@ -638,6 +638,37 @@ async function getActivity(req, res) {
   }
 }
 
+async function listWorkers(req, res) {
+  try {
+    const workspaceId = req.myDrawings.workspace.id;
+    const rows = await pool.query(
+      `SELECT w.id, w.first_name, w.last_name, w.email, w.verified_at, w.created_at,
+              (SELECT COUNT(*)::int FROM my_drawings_device d WHERE d.worker_id = w.id) AS device_count,
+              (SELECT MAX(d.last_seen_at) FROM my_drawings_device d WHERE d.worker_id = w.id) AS last_seen_at
+       FROM my_drawings_worker w
+       WHERE w.workspace_id = $1
+       ORDER BY w.last_name ASC, w.first_name ASC, w.id ASC`,
+      [workspaceId]
+    );
+    return res.json({
+      success: true,
+      workers: rows.rows.map((r) => ({
+        id: r.id,
+        firstName: r.first_name,
+        lastName: r.last_name,
+        email: r.email,
+        verifiedAt: r.verified_at instanceof Date ? r.verified_at.toISOString() : r.verified_at,
+        createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+        deviceCount: r.device_count || 0,
+        lastSeenAt: r.last_seen_at instanceof Date ? r.last_seen_at.toISOString() : r.last_seen_at,
+      })),
+    });
+  } catch (err) {
+    console.error('myDrawings listWorkers:', err);
+    return res.status(500).json({ success: false, message: 'Could not load users.' });
+  }
+}
+
 async function unlock(req, res) {
   try {
     await ensureSchema();
@@ -977,6 +1008,7 @@ module.exports = {
   unlock,
   getCatalog,
   getActivity,
+  listWorkers,
   addCategory,
   renameCategory,
   reorderCategories,

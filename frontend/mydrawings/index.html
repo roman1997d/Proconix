@@ -158,11 +158,24 @@
         </button>
         <div class="md-header-text">
           <h1 class="md-header-title">Manage</h1>
-          <p class="md-header-sub">Drawings &amp; categories</p>
+          <p class="md-header-sub">Users, drawings &amp; categories</p>
         </div>
       </header>
       <div class="md-main mg-main">
         <div id="mg-home">
+          <section class="mg-block">
+            <div class="mg-block-head">
+              <h2>Users</h2>
+            </div>
+            <p class="mg-form-note">Everyone registered in My Drawings on this project.</p>
+            <label class="mg-field">
+              <span>My Drawings users</span>
+              <select id="mg-users" aria-label="My Drawings users">
+                <option value="">Loading…</option>
+              </select>
+            </label>
+            <div class="mg-user-detail" id="mg-user-detail" hidden></div>
+          </section>
           <section class="mg-block">
             <div class="mg-block-head">
               <h2>Categories</h2>

@@ -27,6 +27,7 @@ router.post('/verify', ctrl.verifyWorker);
 router.post('/unlock', ctrl.unlock);
 router.get('/catalog', requireMyDrawingsPin, ctrl.getCatalog);
 router.get('/activity', requireMyDrawingsPin, ctrl.getActivity);
+router.get('/workers', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.listWorkers);
 
 router.post('/categories', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.addCategory);
 router.post('/categories/rename', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.renameCategory);

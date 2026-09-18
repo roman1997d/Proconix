@@ -57,7 +57,8 @@
     pendingDeepLink: null,
     manageQuery: '',
     viewerFrom: '',
-    wallTypesReturnDrawingId: ''
+    wallTypesReturnDrawingId: '',
+    workers: []
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -1745,6 +1746,90 @@
   }
 
   /* ---------- Manage ---------- */
+  function workerOptionLabel(w) {
+    var name = [w.firstName, w.lastName].filter(Boolean).join(' ').trim();
+    if (name && w.email) return name + ' — ' + w.email;
+    return name || w.email || ('User #' + w.id);
+  }
+
+  function fillWorkersSelect() {
+    var sel = $('mg-users');
+    if (!sel) return;
+    var list = state.workers || [];
+    var prev = sel.value;
+    sel.innerHTML = '';
+    var first = document.createElement('option');
+    first.value = '';
+    first.textContent = list.length
+      ? 'Select a user — ' + list.length + ' registered'
+      : 'No users registered yet';
+    sel.appendChild(first);
+    list.forEach(function (w) {
+      var o = document.createElement('option');
+      o.value = String(w.id);
+      o.textContent = workerOptionLabel(w);
+      sel.appendChild(o);
+    });
+    if (prev && Array.prototype.some.call(sel.options, function (opt) { return opt.value === prev; })) {
+      sel.value = prev;
+    }
+    showSelectedWorker();
+  }
+
+  function showSelectedWorker() {
+    var box = $('mg-user-detail');
+    var sel = $('mg-users');
+    if (!box) return;
+    var id = sel && sel.value ? String(sel.value) : '';
+    var w = null;
+    for (var i = 0; i < (state.workers || []).length; i++) {
+      if (String(state.workers[i].id) === id) {
+        w = state.workers[i];
+        break;
+      }
+    }
+    if (!w) {
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+    var name = [w.firstName, w.lastName].filter(Boolean).join(' ').trim() || '—';
+    var devices = w.deviceCount === 1 ? '1 device' : String(w.deviceCount || 0) + ' devices';
+    box.hidden = false;
+    box.innerHTML =
+      '<p><strong>' + escapeHtml(name) + '</strong></p>' +
+      '<p>' + escapeHtml(w.email || '—') + '</p>' +
+      '<p>Registered ' + escapeHtml(w.createdAt ? formatDate(String(w.createdAt).slice(0, 10)) : '—') +
+      ' · ' + (w.verifiedAt ? 'Verified' : 'Not verified') +
+      ' · ' + escapeHtml(devices) + '</p>' +
+      (w.lastSeenAt
+        ? '<p>Last seen ' + escapeHtml(formatActivityWhen(w.lastSeenAt)) + '</p>'
+        : '<p>No sign-in on a device yet</p>');
+  }
+
+  async function loadWorkers() {
+    var sel = $('mg-users');
+    if (sel && !(state.workers && state.workers.length)) {
+      sel.innerHTML = '<option value="">Loading…</option>';
+    }
+    try {
+      var data = await apiJson('/workers');
+      state.workers = data.workers || [];
+    } catch (err) {
+      state.workers = [];
+      if (sel) {
+        sel.innerHTML = '<option value="">Could not load users</option>';
+      }
+      var box = $('mg-user-detail');
+      if (box) {
+        box.hidden = false;
+        box.innerHTML = '<p>' + escapeHtml(err && err.message ? err.message : 'Could not load users.') + '</p>';
+      }
+      return;
+    }
+    fillWorkersSelect();
+  }
+
   function openManage() {
     if (state.role !== 'admin') {
       alert('Enter the admin key to manage drawings.');
@@ -1758,6 +1843,7 @@
     hideManageForm();
     showScreen('screen-manage');
     renderManage();
+    loadWorkers();
   }
 
   function closeManage() {
@@ -2449,6 +2535,7 @@
     }
   });
   on($('btn-manage-back'), 'click', closeManage);
+  on($('mg-users'), 'change', showSelectedWorker);
   on($('btn-mg-add-cat'), 'click', addCategory);
   on($('mg-cat-input'), 'keydown', function (e) {
     if (e.key === 'Enter') {
