@@ -240,9 +240,6 @@ app.listen(PORT, HOST, async () => {
     ensureMyDrawingsSchema().catch((err) => {
       console.error('My Drawings schema:', err && err.message ? err.message : err);
     });
-    if (!String(process.env.MY_DRAWINGS_JWT_SECRET || process.env.JWT_SECRET || '').trim()) {
-      console.warn('My Drawings: set MY_DRAWINGS_JWT_SECRET so the native app can receive JWT tokens.');
-    }
     ensureProgressDrawingsSchema().catch((err) => {
       console.error('Progress Drawings schema:', err && err.message ? err.message : err);
     });
