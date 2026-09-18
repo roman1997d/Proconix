@@ -1,6 +1,6 @@
 /**
- * Platform admin: list / view / edit / delete all manager + users rows (cross-tenant).
- * Identity: kind = "manager" | "user" + numeric id (IDs may overlap across tables).
+ * Platform admin: list / view / edit / delete all manager + users + My Drawings workers (cross-tenant).
+ * Identity: kind = "manager" | "user" | "mydrawings" + numeric id (IDs may overlap across tables).
  */
 
 const bcrypt = require('bcrypt');
@@ -18,14 +18,71 @@ function stripPassword(row, kind) {
   return o;
 }
 
+const KIND_ORDER = { manager: 0, user: 1, mydrawings: 2 };
+
 function sortItems(items) {
   return items.slice().sort((a, b) => {
+    const ka = KIND_ORDER[a.kind] ?? 9;
+    const kb = KIND_ORDER[b.kind] ?? 9;
+    if (ka !== kb) return ka - kb;
     const ca = a.company_id ?? 0;
     const cb = b.company_id ?? 0;
     if (ca !== cb) return ca - cb;
-    if (a.kind !== b.kind) return a.kind === 'manager' ? -1 : 1;
     return (a.id || 0) - (b.id || 0);
   });
+}
+
+const MY_DRAWINGS_WORKER_SQL = `
+  SELECT w.id,
+         w.first_name,
+         w.last_name,
+         w.email,
+         w.verified_at,
+         w.created_at,
+         w.pin_expires_at,
+         w.workspace_id,
+         ws.name AS workspace_name,
+         (SELECT COUNT(*)::int FROM my_drawings_device d WHERE d.worker_id = w.id) AS device_count,
+         (SELECT MAX(d.last_seen_at) FROM my_drawings_device d WHERE d.worker_id = w.id) AS last_seen_at
+  FROM my_drawings_worker w
+  LEFT JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
+`;
+
+function mapMyDrawingsWorker(row) {
+  if (!row) return null;
+  const first = row.first_name || '';
+  const last = row.last_name || '';
+  const devices = Number(row.device_count) || 0;
+  return {
+    kind: 'mydrawings',
+    id: row.id,
+    first_name: first,
+    last_name: last,
+    name: [first, last].filter(Boolean).join(' ').trim(),
+    surname: last,
+    email: row.email,
+    company_id: null,
+    workspace_id: row.workspace_id || null,
+    company_name: row.workspace_name || 'My Drawings',
+    role: devices === 1 ? 'Worker · 1 device' : devices > 1 ? 'Worker · ' + devices + ' devices' : 'Worker',
+    active: !!row.verified_at,
+    password_set: devices > 0,
+    verified_at: row.verified_at || null,
+    device_count: devices,
+    last_seen_at: row.last_seen_at || null,
+    created_at: row.created_at || null,
+    pin_expires_at: row.pin_expires_at || null,
+  };
+}
+
+async function loadMyDrawingsWorkers() {
+  try {
+    const r = await pool.query(MY_DRAWINGS_WORKER_SQL + ' ORDER BY w.last_name ASC, w.first_name ASC, w.id ASC');
+    return r.rows.map(mapMyDrawingsWorker);
+  } catch (err) {
+    if (err.code === '42P01') return [];
+    throw err;
+  }
 }
 
 /**
@@ -33,7 +90,7 @@ function sortItems(items) {
  */
 async function listPlatformUsers(req, res) {
   try {
-    const [mgr, usr] = await Promise.all([
+    const [mgr, usr, mdItems] = await Promise.all([
       pool.query(
         `SELECT m.*, c.name AS company_name
          FROM manager m
@@ -46,6 +103,7 @@ async function listPlatformUsers(req, res) {
          LEFT JOIN companies c ON c.id = u.company_id
          ORDER BY u.id ASC`
       ),
+      loadMyDrawingsWorkers(),
     ]);
 
     const items = [];
@@ -54,6 +112,9 @@ async function listPlatformUsers(req, res) {
     });
     usr.rows.forEach((row) => {
       items.push(stripPassword(row, 'user'));
+    });
+    mdItems.forEach((row) => {
+      items.push(row);
     });
 
     return res.status(200).json({
@@ -71,7 +132,7 @@ async function listPlatformUsers(req, res) {
 
 function parseKind(kind) {
   const k = String(kind || '').toLowerCase();
-  if (k === 'manager' || k === 'user') return k;
+  if (k === 'manager' || k === 'user' || k === 'mydrawings') return k;
   return null;
 }
 
@@ -83,6 +144,25 @@ async function getPlatformUser(req, res) {
   const id = parseInt(req.params.id, 10);
   if (!kind || !Number.isInteger(id) || id < 1) {
     return res.status(400).json({ success: false, message: 'Invalid kind or id.' });
+  }
+
+  if (kind === 'mydrawings') {
+    try {
+      const r = await pool.query(MY_DRAWINGS_WORKER_SQL + ' WHERE w.id = $1', [id]);
+      if (!r.rows.length) {
+        return res.status(404).json({ success: false, message: 'Record not found.' });
+      }
+      return res.status(200).json({
+        success: true,
+        record: mapMyDrawingsWorker(r.rows[0]),
+      });
+    } catch (err) {
+      if (err.code === '42P01') {
+        return res.status(503).json({ success: false, message: 'Database table missing.' });
+      }
+      console.error('getPlatformUser mydrawings error:', err);
+      return res.status(500).json({ success: false, message: 'Failed to load record.' });
+    }
   }
 
   const table = kind === 'manager' ? 'manager' : 'users';
@@ -151,6 +231,50 @@ async function updatePlatformUser(req, res) {
   }
 
   const body = req.body && typeof req.body === 'object' ? req.body : {};
+
+  if (kind === 'mydrawings') {
+    const first = String(body.first_name != null ? body.first_name : body.name || '').trim();
+    const last = String(body.last_name != null ? body.last_name : body.surname || '').trim();
+    const em = normalizeEmail(body.email);
+    if (!first || !last) {
+      return res.status(400).json({ success: false, message: 'First name and last name are required.' });
+    }
+    if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      return res.status(400).json({ success: false, message: 'A valid email is required.' });
+    }
+    try {
+      const r = await pool.query(
+        `UPDATE my_drawings_worker
+         SET first_name = $2, last_name = $3, email = $4
+         WHERE id = $1
+         RETURNING id`,
+        [id, first, last, em]
+      );
+      if (!r.rows.length) {
+        return res.status(404).json({ success: false, message: 'Record not found.' });
+      }
+      const fresh = await pool.query(MY_DRAWINGS_WORKER_SQL + ' WHERE w.id = $1', [id]);
+      return res.status(200).json({
+        success: true,
+        message: 'Updated.',
+        record: mapMyDrawingsWorker(fresh.rows[0]),
+      });
+    } catch (err) {
+      if (err.code === '23505') {
+        return res.status(409).json({
+          success: false,
+          message: 'That email is already registered for My Drawings.',
+          detail: err.detail,
+        });
+      }
+      if (err.code === '42P01') {
+        return res.status(503).json({ success: false, message: 'Database table missing.' });
+      }
+      console.error('updatePlatformUser mydrawings error:', err);
+      return res.status(500).json({ success: false, message: err.message || 'Update failed.' });
+    }
+  }
+
   const table = kind === 'manager' ? 'manager' : 'users';
   const allowed = kind === 'manager' ? MANAGER_PATCH_KEYS : USER_PATCH_KEYS;
 
@@ -290,6 +414,26 @@ async function deletePlatformUser(req, res) {
   const id = parseInt(req.params.id, 10);
   if (!kind || !Number.isInteger(id) || id < 1) {
     return res.status(400).json({ success: false, message: 'Invalid kind or id.' });
+  }
+
+  if (kind === 'mydrawings') {
+    try {
+      const r = await pool.query('DELETE FROM my_drawings_worker WHERE id = $1 RETURNING id', [id]);
+      if (!r.rows.length) {
+        return res.status(404).json({ success: false, message: 'Record not found.' });
+      }
+      return res.status(200).json({
+        success: true,
+        message: 'Deleted.',
+        deleted: { kind, id: r.rows[0].id },
+      });
+    } catch (err) {
+      if (err.code === '42P01') {
+        return res.status(503).json({ success: false, message: 'Database table missing.' });
+      }
+      console.error('deletePlatformUser mydrawings error:', err);
+      return res.status(500).json({ success: false, message: err.message || 'Delete failed.' });
+    }
   }
 
   const table = kind === 'manager' ? 'manager' : 'users';

@@ -2937,15 +2937,26 @@
   var currentPuId = null;
   var platformUsersCache = [];
 
+  function puKindLabel(kind, longForm) {
+    if (kind === 'manager') return longForm ? 'Manager' : 'manager';
+    if (kind === 'mydrawings') return longForm ? 'My Drawings' : 'mydrawings';
+    return longForm ? 'User' : 'user';
+  }
+
   function puDisplayName(row) {
     if (row.kind === 'manager') {
       return [row.name, row.surname].filter(Boolean).join(' ').trim();
+    }
+    if (row.kind === 'mydrawings') {
+      return [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || row.name || '';
     }
     return row.name || '';
   }
 
   function puRoleLabel(row) {
-    return row.kind === 'manager' ? row.is_head_manager || '—' : row.role || '—';
+    if (row.kind === 'manager') return row.is_head_manager || '—';
+    if (row.kind === 'mydrawings') return row.role || 'Worker';
+    return row.role || '—';
   }
 
   function appendPlatformUserRow(tbody, row) {
@@ -2955,7 +2966,7 @@
     tr.setAttribute('data-pu-id', String(row.id));
     tr.setAttribute('role', 'button');
     tr.tabIndex = 0;
-    var typeLabel = row.kind === 'manager' ? 'Manager' : 'User';
+    var typeLabel = puKindLabel(row.kind, true);
     var displayName = puDisplayName(row);
     var roleLabel = puRoleLabel(row);
     var activeStr = row.active === true || row.active === 'true' || row.active === 't' ? 'Yes' : 'No';
@@ -3014,6 +3025,40 @@
     }
   }
 
+  function fillMdUsersSelect(list) {
+    var sel = document.getElementById('pxAdminPuMdUsers');
+    if (!sel) return;
+    var prev = sel.value;
+    var md = (list || []).filter(function (row) {
+      return row && row.kind === 'mydrawings';
+    });
+    md.sort(function (a, b) {
+      var na = puDisplayName(a).toLowerCase();
+      var nb = puDisplayName(b).toLowerCase();
+      if (na !== nb) return na.localeCompare(nb);
+      return String(a.email || '').localeCompare(String(b.email || ''));
+    });
+    sel.innerHTML = '';
+    var first = document.createElement('option');
+    first.value = '';
+    first.textContent = md.length
+      ? 'Select a user — ' + md.length + ' registered'
+      : 'No My Drawings users yet';
+    sel.appendChild(first);
+    md.forEach(function (row) {
+      var o = document.createElement('option');
+      o.value = String(row.id);
+      var name = puDisplayName(row) || 'User #' + row.id;
+      o.textContent = row.email ? name + ' — ' + row.email : name;
+      sel.appendChild(o);
+    });
+    if (prev && Array.prototype.some.call(sel.options, function (opt) { return opt.value === prev; })) {
+      sel.value = prev;
+    } else {
+      sel.value = '';
+    }
+  }
+
   function filterPlatformUsersList(list) {
     var companySel = document.getElementById('pxAdminPuFilterCompany');
     var typeSel = document.getElementById('pxAdminPuFilterType');
@@ -3026,7 +3071,7 @@
       if (companyId !== '' && String(row.company_id) !== companyId) return false;
       if (typeV && String(row.kind) !== typeV) return false;
       if (!q) return true;
-      var typeLabel = row.kind === 'manager' ? 'manager' : 'user';
+      var typeLabel = puKindLabel(row.kind, false);
       var displayName = puDisplayName(row);
       var roleLabel = puRoleLabel(row);
       var hay = [
@@ -3039,6 +3084,8 @@
         roleLabel,
         row.name,
         row.surname,
+        row.first_name,
+        row.last_name,
       ]
         .filter(function (x) {
           return x != null && x !== '';
@@ -3124,6 +3171,7 @@
         }
         if (out.status !== 200 || !out.data || !out.data.success) {
           platformUsersCache = [];
+          fillMdUsersSelect([]);
           if (alertEl) {
             alertEl.textContent =
               (out.data && out.data.message) || 'Could not load platform users.';
@@ -3134,11 +3182,13 @@
         }
         platformUsersCache = out.data.items || [];
         fillPuCompanySelect(platformUsersCache);
+        fillMdUsersSelect(platformUsersCache);
         applyPlatformUsersFilters();
       })
       .catch(function () {
         if (loading) loading.classList.add('d-none');
         platformUsersCache = [];
+        fillMdUsersSelect([]);
         applyPlatformUsersFilters();
         if (alertEl) {
           alertEl.textContent = 'Network error while loading platform users.';
@@ -3172,7 +3222,20 @@
       if (puFilterCompany) puFilterCompany.value = '';
       if (puFilterType) puFilterType.value = '';
       if (puSearch) puSearch.value = '';
+      var mdSel = document.getElementById('pxAdminPuMdUsers');
+      if (mdSel) mdSel.value = '';
       applyPlatformUsersFilters();
+    });
+  }
+
+  var puMdUsers = document.getElementById('pxAdminPuMdUsers');
+  if (puMdUsers) {
+    puMdUsers.addEventListener('change', function () {
+      var id = puMdUsers.value;
+      if (!id) return;
+      if (puFilterType) puFilterType.value = 'mydrawings';
+      applyPlatformUsersFilters();
+      openPuModal('mydrawings', id);
     });
   }
 
@@ -3182,6 +3245,7 @@
   var puModalFeedback = document.getElementById('pxAdminPuModalFeedback');
   var puBlockM = document.getElementById('pxPu_block_manager');
   var puBlockU = document.getElementById('pxPu_block_user');
+  var puBlockMd = document.getElementById('pxPu_block_mydrawings');
 
   function getPuModal() {
     if (!puModalEl || !window.bootstrap) return null;
@@ -3249,6 +3313,7 @@
     if (!record) return;
     if (puBlockM) puBlockM.classList.add('d-none');
     if (puBlockU) puBlockU.classList.add('d-none');
+    if (puBlockMd) puBlockMd.classList.add('d-none');
     if (record.kind === 'manager' && puBlockM) {
       puBlockM.classList.remove('d-none');
       setVal('pxPu_m_id', record.id);
@@ -3285,11 +3350,21 @@
       var uob = document.getElementById('pxPu_u_onboarded');
       if (uob) uob.checked = boolFromRow(record.onboarded);
       setVal('pxPu_u_new_password', '');
+    } else if (record.kind === 'mydrawings' && puBlockMd) {
+      puBlockMd.classList.remove('d-none');
+      setVal('pxPu_md_id', record.id);
+      setVal('pxPu_md_first_name', record.first_name);
+      setVal('pxPu_md_last_name', record.last_name);
+      setVal('pxPu_md_email', record.email);
+      setVal('pxPu_md_workspace', record.company_name);
+      setVal('pxPu_md_devices', record.device_count != null ? String(record.device_count) : '0');
+      setCreatedAtInput('pxPu_md_created_at', record.created_at);
+      setCreatedAtInput('pxPu_md_verified_at', record.verified_at);
+      setCreatedAtInput('pxPu_md_last_seen', record.last_seen_at);
     }
     var title = document.getElementById('pxAdminPuModalLabel');
     if (title) {
-      title.textContent =
-        (record.kind === 'manager' ? 'Manager' : 'User') + ' · ID ' + String(record.id);
+      title.textContent = puKindLabel(record.kind, true) + ' · ID ' + String(record.id);
     }
   }
 
@@ -3434,6 +3509,20 @@
         var npu =
           document.getElementById('pxPu_u_new_password') && document.getElementById('pxPu_u_new_password').value;
         if (npu && npu.length) payload.new_password = npu;
+      } else if (currentPuKind === 'mydrawings') {
+        payload.first_name =
+          document.getElementById('pxPu_md_first_name') && document.getElementById('pxPu_md_first_name').value;
+        payload.last_name =
+          document.getElementById('pxPu_md_last_name') && document.getElementById('pxPu_md_last_name').value;
+        payload.email = document.getElementById('pxPu_md_email') && document.getElementById('pxPu_md_email').value;
+        if (!payload.first_name || !String(payload.first_name).trim() || !payload.last_name || !String(payload.last_name).trim()) {
+          showPuModalFeedback('First name and last name are required.', 'error');
+          return;
+        }
+        if (!payload.email || !String(payload.email).trim()) {
+          showPuModalFeedback('Email is required.', 'error');
+          return;
+        }
       }
 
       btnPuSave.disabled = true;
@@ -3482,7 +3571,7 @@
       if (!currentPuKind || currentPuId == null) return;
       var msg =
         'Delete ' +
-        (currentPuKind === 'manager' ? 'manager' : 'user') +
+        puKindLabel(currentPuKind, false) +
         ' #' +
         currentPuId +
         '? This cannot be undone.';
