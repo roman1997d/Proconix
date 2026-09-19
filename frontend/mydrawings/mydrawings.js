@@ -2037,12 +2037,10 @@
                 '<button type="button" class="mg-user-btn" data-user-act="restore" data-user-id="' + id + '">Restore</button>'
               : daysSelectHtml(7) +
                 '<button type="button" class="mg-user-btn" data-user-act="close" data-user-id="' + id + '">Close access</button>';
-            var adminCell = !isCompanyHead()
-              ? (admin ? '<span class="mg-user-admin">Site manager</span>' : '—')
-              : (admin
+            var adminCell = admin
               ? '<span class="mg-user-admin">Site manager</span>' +
                 '<button type="button" class="mg-user-btn" data-user-act="remove-admin" data-user-id="' + id + '">Remove</button>'
-              : '<button type="button" class="mg-user-btn" data-user-act="make-admin" data-user-id="' + id + '">Make site manager</button>');
+              : '<button type="button" class="mg-user-btn" data-user-act="make-admin" data-user-id="' + id + '">Make site manager</button>';
             return '<tr class="' + (closed ? 'is-closed' : '') + (admin ? ' is-admin' : '') + '">' +
               '<td data-label="User">' +
                 '<strong>' + escapeHtml(workerFullName(w)) + '</strong>' +
@@ -2248,7 +2246,9 @@
     if ($('ad-stat-published')) $('ad-stat-published').textContent = String(Math.max(0, total - drafts));
     if ($('ad-stat-draft')) $('ad-stat-draft').textContent = String(drafts);
     var sitesNav = $('ad-nav-sites');
-    if (sitesNav) sitesNav.hidden = !isCompanyHead();
+    if (sitesNav) sitesNav.hidden = !canManageCatalog();
+    var addRow = document.querySelector('#ad-panel-sites .mg-add-row');
+    if (addRow) addRow.hidden = !isCompanyHead();
     var codeEl = $('mg-host-code');
     if (codeEl) {
       codeEl.hidden = false;
@@ -2286,7 +2286,7 @@
         '</div>' +
         '<div class="mg-item-actions">' +
           (on ? '' : '<button type="button" class="mg-user-btn" data-site-act="open" data-site-id="' + id + '">Open</button>') +
-          '<button type="button" class="mg-user-btn is-danger" data-site-act="close" data-site-id="' + id + '">Close site</button>' +
+          (isCompanyHead() ? '<button type="button" class="mg-user-btn is-danger" data-site-act="close" data-site-id="' + id + '">Close site</button>' : '') +
         '</div>' +
       '</div>';
     }).join('');
@@ -2296,6 +2296,10 @@
     var input = $('mg-site-input');
     var name = input ? String(input.value || '').replace(/\s+/g, ' ').trim() : '';
     setSitesStatus('');
+    if (!isCompanyHead()) {
+      setSitesStatus('Only the company head can add a site.', true);
+      return;
+    }
     if (!name) {
       setSitesStatus('Enter a site name.', true);
       return;
@@ -2332,6 +2336,10 @@
       if (String(state.sites[i].id) === String(id)) site = state.sites[i];
     }
     if (!site) return;
+    if (!isCompanyHead()) {
+      setSitesStatus('Only the company head can close a site.', true);
+      return;
+    }
     if (!confirm('Close ' + (site.name || 'this site') + '? Drawings, SPEC, and users on this site will be removed.')) return;
     setSitesStatus('');
     try {

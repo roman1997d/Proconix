@@ -1411,7 +1411,7 @@ async function loadCatalog(workspace, role, site) {
         workerCount: current.workerCount,
       }
       : null,
-    sites: role === 'admin' ? sites : undefined,
+    sites: manage ? sites : undefined,
     project: {
       id: projectId,
       name: (current && current.name) || (project && project.name) || workspace.name,
@@ -1618,8 +1618,8 @@ async function deleteWorker(req, res) {
 async function makeWorkerAdmin(req, res) {
   try {
     await ensureSchema();
-    if (!isCompanyHead(req.myDrawings)) {
-      return res.status(403).json({ success: false, message: 'Only the company head can appoint a site manager.' });
+    if (!canManageSite(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Site manager or company access is required.' });
     }
     const workspaceId = req.myDrawings.workspace.id;
     const worker = await findCompanyWorker(workspaceId, req.params.id, currentSiteId(req.myDrawings));
@@ -1653,8 +1653,8 @@ async function makeWorkerAdmin(req, res) {
 async function removeWorkerAdmin(req, res) {
   try {
     await ensureSchema();
-    if (!isCompanyHead(req.myDrawings)) {
-      return res.status(403).json({ success: false, message: 'Only the company head can change the site manager.' });
+    if (!canManageSite(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Site manager or company access is required.' });
     }
     const workspaceId = req.myDrawings.workspace.id;
     const worker = await findCompanyWorker(workspaceId, req.params.id, currentSiteId(req.myDrawings));
@@ -2434,8 +2434,8 @@ async function registerDevice(req, res) {
 
 async function listSites(req, res) {
   try {
-    if (!isCompanyHead(req.myDrawings)) {
-      return res.status(403).json({ success: false, message: 'Only the company head can manage sites.' });
+    if (!canManageSite(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Site manager or company access is required.' });
     }
     const sites = await listWorkspaceSites(req.myDrawings.workspace.id);
     return res.json({

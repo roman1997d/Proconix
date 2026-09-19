@@ -91,16 +91,16 @@ async function attachCurrentSite(req, ctx) {
   const sites = await listWorkspaceSites(workspaceId);
   ctx.sites = sites;
   ctx.siteCount = sites.length;
-  if (ctx.role === 'worker' || ctx.role === 'site_manager') {
+  if (ctx.role === 'worker') {
     const fromCtx = ctx.project && positiveInt(ctx.project.id);
     const owned = fromCtx && sites.find((s) => Number(s.id) === Number(fromCtx));
     ctx.project = owned || sites[0] || ctx.project || null;
     return ctx;
   }
-  if (ctx.role === 'admin') {
+  if (ctx.role === 'admin' || ctx.role === 'site_manager') {
     const wanted = requestedSiteId(req);
     const match = wanted && sites.find((s) => Number(s.id) === Number(wanted));
-    ctx.project = match || sites[0] || null;
+    ctx.project = match || (ctx.project && sites.find((s) => Number(s.id) === Number(ctx.project.id))) || sites[0] || null;
   }
   return ctx;
 }

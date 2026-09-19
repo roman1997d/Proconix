@@ -37,10 +37,10 @@ router.get('/workers', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.listWo
 router.post('/workers/:id/suspend', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.suspendWorker);
 router.post('/workers/:id/restore', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.restoreWorker);
 router.delete('/workers/:id', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.deleteWorker);
-router.post('/workers/:id/make-admin', requireMyDrawingsPin, requireMyDrawingsCompanyAdmin, ctrl.makeWorkerAdmin);
-router.post('/workers/:id/remove-admin', requireMyDrawingsPin, requireMyDrawingsCompanyAdmin, ctrl.removeWorkerAdmin);
+router.post('/workers/:id/make-admin', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.makeWorkerAdmin);
+router.post('/workers/:id/remove-admin', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.removeWorkerAdmin);
 router.post('/access-code', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.updateAccessCode);
-router.get('/sites', requireMyDrawingsPin, requireMyDrawingsCompanyAdmin, ctrl.listSites);
+router.get('/sites', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.listSites);
 router.post('/sites', requireMyDrawingsPin, requireMyDrawingsCompanyAdmin, ctrl.addSite);
 router.put('/sites/:id', requireMyDrawingsPin, requireMyDrawingsCompanyAdmin, ctrl.renameSite);
 router.delete('/sites/:id', requireMyDrawingsPin, requireMyDrawingsCompanyAdmin, ctrl.deleteSite);
