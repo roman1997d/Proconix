@@ -342,6 +342,10 @@ async function copyStarterWallTypes(workspaceId, projectId) {
     const fields = fieldsFromStarter(list[i] || {});
     if (!WT_CODE_RE.test(fields.code)) continue;
     if (have.has(fields.code)) {
+      const firstIdx = list.findIndex(
+        (item) => normalizeWallTypeCode((item && item.code) || '') === fields.code
+      );
+      if (firstIdx === i) continue;
       const alt = normalizeWallTypeCode(String((list[i] && list[i].id) || '').replace(/^wt/i, 'WT'));
       if (alt && WT_CODE_RE.test(alt) && !have.has(alt)) fields.code = alt;
       else continue;
@@ -772,8 +776,70 @@ async function sendSpecImportRequest(req, res) {
   }
 }
 
+async function importNorfolkMedlockSpecsOnce() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS my_drawings_app_flag (
+        key TEXT PRIMARY KEY,
+        set_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    const done = await pool.query(
+      `SELECT 1 FROM my_drawings_app_flag WHERE key = 'import_norfolk_medlock_v1'`
+    );
+    if (done.rows[0]) return { skipped: true };
+    const ws = await pool.query(
+      `SELECT id, name FROM my_drawings_workspace
+       WHERE UPPER(access_code) = '2026AA'
+          OR name ILIKE 'Norfolk Drywall%'
+       ORDER BY id ASC
+       LIMIT 1`
+    );
+    if (!ws.rows[0]) {
+      console.warn('[My Drawings] Norfolk Drywall Ltd workspace not found; Medlock SPEC not imported.');
+      return { skipped: true, reason: 'workspace-missing' };
+    }
+    let project = await pool.query(
+      'SELECT id, name FROM my_drawings_project WHERE workspace_id = $1 ORDER BY id ASC LIMIT 1',
+      [ws.rows[0].id]
+    );
+    if (!project.rows[0]) {
+      project = await pool.query(
+        `INSERT INTO my_drawings_project (workspace_id, name, wall_types_pack)
+         VALUES ($1, $2, '{}'::jsonb)
+         RETURNING id, name`,
+        [ws.rows[0].id, '1 Medlock Street']
+      );
+    }
+    const projectId = project.rows[0].id;
+    if (!project.rows[0].name || /norfolk|my drawings/i.test(project.rows[0].name)) {
+      await pool.query('UPDATE my_drawings_project SET name = $2 WHERE id = $1', [
+        projectId,
+        '1 Medlock Street',
+      ]);
+    }
+    const result = await copyStarterWallTypes(ws.rows[0].id, projectId);
+    await pool.query(
+      `INSERT INTO my_drawings_app_flag (key) VALUES ('import_norfolk_medlock_v1')
+       ON CONFLICT (key) DO NOTHING`
+    );
+    console.log(
+      '[My Drawings] Imported Medlock SPEC for Norfolk Drywall Ltd:',
+      result.added,
+      'wall types, site',
+      projectId
+    );
+    return { skipped: false, workspaceId: ws.rows[0].id, projectId, added: result.added };
+  } catch (err) {
+    console.error('myDrawings importNorfolkMedlockSpecsOnce:', err);
+    return { skipped: true, error: err && err.message ? err.message : String(err) };
+  }
+}
+
 module.exports = {
   clearAutoSeededWallTypesOnce,
+  importNorfolkMedlockSpecsOnce,
+  copyStarterWallTypes,
   listWallTypes,
   updateWallTypesPack,
   seedStarterWallTypes,

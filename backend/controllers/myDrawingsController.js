@@ -13,6 +13,7 @@ const { signMyDrawingsJwt, verifyMyDrawingsJwt } = require('../lib/myDrawingsJwt
 const { notifyDrawingChange } = require('../lib/myDrawingsPushService');
 const {
   clearAutoSeededWallTypesOnce,
+  importNorfolkMedlockSpecsOnce,
   listWallTypes,
   updateWallTypesPack,
   seedStarterWallTypes,
@@ -359,6 +360,7 @@ async function ensureSchemaInner() {
   await migrateSitesOntoProjects();
   await migrateStoredDrawingsToTenantDirs();
   await clearAutoSeededWallTypesOnce();
+  await importNorfolkMedlockSpecsOnce();
 }
 
 async function addSiteColumns() {
