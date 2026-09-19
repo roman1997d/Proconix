@@ -744,6 +744,8 @@
   }
 
   async function enterApp(data, extra) {
+    if (extra && extra.role) state.role = extra.role;
+    else if (data && data.role) state.role = data.role;
     writeSession(true, extra);
     writePending(null);
     $('pin-input').value = '';
@@ -2025,14 +2027,17 @@
     if (name !== 'form') state.managePanel = name || 'home';
     var panel = name || state.managePanel || 'home';
     if ($('mg-form')) $('mg-form').hidden = panel !== 'form';
-    ['home', 'drawings', 'category', 'spec', 'users', 'access', 'settings'].forEach(function (id) {
-      var el = $('ad-panel-' + id);
-      if (el) el.hidden = panel !== id;
-    });
-    document.querySelectorAll('#ad-sidebar [data-ad-panel]').forEach(function (btn) {
+    var ids = ['home', 'drawings', 'category', 'spec', 'users', 'access', 'settings'];
+    for (var i = 0; i < ids.length; i++) {
+      var el = $('ad-panel-' + ids[i]);
+      if (el) el.hidden = panel !== ids[i];
+    }
+    var nav = document.querySelectorAll('#ad-sidebar [data-ad-panel]');
+    for (var n = 0; n < nav.length; n++) {
+      var btn = nav[n];
       var key = btn.getAttribute('data-ad-panel');
       btn.classList.toggle('is-on', panel !== 'form' && key === panel && btn.id !== 'ad-logo');
-    });
+    }
     setAdminNavOpen(false);
     if (panel === 'home') renderAdminChrome();
     if (panel === 'users') loadWorkers();
@@ -2095,6 +2100,7 @@
 
   function renderManage() {
     var host = $('mg-cats');
+    if (!host) return;
     if (!state.categories.length) {
       host.innerHTML = '<p class="mg-form-note">No categories yet.</p>';
     } else {
@@ -2113,6 +2119,7 @@
     }
 
     var list = $('mg-list');
+    if (!list) return;
     if (!state.drawings.length) {
       list.innerHTML = '<p class="mg-form-note">No drawings yet. Add one to get started.</p>';
       return;
