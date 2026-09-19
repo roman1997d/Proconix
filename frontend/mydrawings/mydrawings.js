@@ -2515,6 +2515,43 @@
     }
   }
 
+  function setSpecRequestStatus(msg, isError) {
+    var el = $('wt-spec-error');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.toggle('is-ok', !!msg && !isError);
+  }
+
+  async function sendSpecToProconix() {
+    setSpecRequestStatus('');
+    var file = $('wt-spec-file') && $('wt-spec-file').files && $('wt-spec-file').files[0];
+    if (!isPdfFile(file)) {
+      setSpecRequestStatus('Choose a PDF specification file.', true);
+      return;
+    }
+    if (!$('wt-spec-consent') || !$('wt-spec-consent').checked) {
+      setSpecRequestStatus('Please tick the box to confirm Proconix may process this document.', true);
+      return;
+    }
+    var btn = $('btn-wt-spec-send');
+    if (btn) btn.disabled = true;
+    try {
+      var fd = new FormData();
+      fd.append('file', file, file.name || 'specifications.pdf');
+      fd.append('consent', 'true');
+      fd.append('note', ($('wt-spec-note') && $('wt-spec-note').value) || '');
+      var data = await apiJson('/wall-types/spec-request', { method: 'POST', body: fd });
+      setSpecRequestStatus(data.message || 'Sent to Proconix.', false);
+      if ($('wt-spec-file')) $('wt-spec-file').value = '';
+      if ($('wt-spec-file-name')) $('wt-spec-file-name').textContent = 'No file selected';
+      if ($('wt-spec-consent')) $('wt-spec-consent').checked = false;
+      if ($('wt-spec-note')) $('wt-spec-note').value = '';
+    } catch (err) {
+      setSpecRequestStatus(err && err.message ? err.message : 'Could not send the file.', true);
+    }
+    if (btn) btn.disabled = false;
+  }
+
   async function deleteCompanyWallType(id) {
     var wt = wallTypeById(id);
     if (!wt) return;
@@ -3251,6 +3288,11 @@
   });
   on($('btn-wt-add'), 'click', function () { showWallTypeForm({ type: 'add' }); });
   on($('btn-wt-save-pack'), 'click', saveWallTypesPack);
+  on($('btn-wt-spec-send'), 'click', sendSpecToProconix);
+  on($('wt-spec-file'), 'change', function () {
+    var file = $('wt-spec-file') && $('wt-spec-file').files && $('wt-spec-file').files[0];
+    if ($('wt-spec-file-name')) $('wt-spec-file-name').textContent = file ? file.name : 'No file selected';
+  });
   on($('btn-wt-cancel'), 'click', hideManageForm);
   on($('wt-form'), 'submit', submitWallTypeForm);
   on($('btn-wt-add-layer'), 'click', function () {

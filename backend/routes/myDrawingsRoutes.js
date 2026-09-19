@@ -7,7 +7,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireMyDrawingsPin, requireMyDrawingsAdmin } = require('../middleware/requireMyDrawingsPin');
-const { uploadPdf, uploadCompanyLogo, uploadWallTypeImage } = require('../utils/myDrawingsUpload');
+const { uploadPdf, uploadCompanyLogo, uploadWallTypeImage, uploadSpecRequestPdf } = require('../utils/myDrawingsUpload');
 const ctrl = require('../controllers/myDrawingsController');
 
 function handleUploadError(err, req, res, next) {
@@ -97,5 +97,13 @@ router.put(
 );
 router.delete('/wall-types/:id', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.deleteWallType);
 router.get('/wall-types/:id/image', requireMyDrawingsPin, ctrl.downloadWallTypeImage);
+router.post(
+  '/wall-types/spec-request',
+  requireMyDrawingsPin,
+  requireMyDrawingsAdmin,
+  uploadSpecRequestPdf,
+  handleUploadError,
+  ctrl.sendSpecImportRequest
+);
 
 module.exports = router;

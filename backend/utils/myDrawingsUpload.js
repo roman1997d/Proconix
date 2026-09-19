@@ -62,4 +62,18 @@ const uploadWallTypeImage = multer({
   },
 }).single('image');
 
-module.exports = { uploadPdf, uploadCompanyLogo, uploadWallTypeImage, safePdfFilename };
+const uploadSpecRequestPdf = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const name = String(file.originalname || '').toLowerCase();
+    const mimeOk = file.mimetype === 'application/pdf' || file.mimetype === 'application/x-pdf';
+    const extOk = name.endsWith('.pdf');
+    if (!mimeOk && !extOk) {
+      return cb(new Error('Only PDF files are allowed'));
+    }
+    cb(null, true);
+  },
+}).single('file');
+
+module.exports = { uploadPdf, uploadCompanyLogo, uploadWallTypeImage, uploadSpecRequestPdf, safePdfFilename };

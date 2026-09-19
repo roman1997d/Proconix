@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { createTransport } = require('./sendCallbackRequestEmail');
 const { pool } = require('../db/pool');
 const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
 
@@ -591,6 +592,146 @@ async function downloadWallTypeImage(req, res) {
   }
 }
 
+function truthyConsent(raw) {
+  const v = String(raw == null ? '' : raw).trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'on' || v === 'yes';
+}
+
+function mailEscape(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+const specRequestAt = new Map();
+
+async function sendSpecImportRequest(req, res) {
+  try {
+    const workspaceId = req.myDrawings.workspace.id;
+    const now = Date.now();
+    const prev = specRequestAt.get(workspaceId) || 0;
+    if (now - prev < 120000) {
+      return res.status(429).json({
+        success: false,
+        message: 'A specification file was already sent. Please wait a minute before sending another.',
+      });
+    }
+    if (!truthyConsent(req.body && (req.body.consent || req.body.agree))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please confirm you agree that Proconix may process this document.',
+      });
+    }
+    const file = req.file;
+    if (!file || !file.buffer || !file.buffer.length) {
+      return res.status(400).json({ success: false, message: 'Choose a PDF specification file.' });
+    }
+    const found = await pool.query(
+      'SELECT id, name, email, manager_name FROM my_drawings_workspace WHERE id = $1',
+      [workspaceId]
+    );
+    const workspace = found.rows[0];
+    if (!workspace) {
+      return res.status(404).json({ success: false, message: 'Company not found.' });
+    }
+    const worker = req.myDrawings && req.myDrawings.worker;
+    const person = [worker && worker.firstName, worker && worker.lastName].filter(Boolean).join(' ').trim()
+      || workspace.manager_name
+      || 'Administrator';
+    const personEmail = (worker && worker.email) || workspace.email || '';
+    const company = workspace.name || 'Unknown company';
+    const note = String((req.body && req.body.note) || '').trim().slice(0, 400);
+    const originalName = String(file.originalname || 'specifications.pdf').replace(/[^\w.\- ()]+/g, '_').slice(0, 120)
+      || 'specifications.pdf';
+
+    const dir = path.join(UPLOAD_DIR, String(workspaceId), 'spec-requests');
+    fs.mkdirSync(dir, { recursive: true });
+    const storedName = `spec-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.pdf`;
+    fs.writeFileSync(path.join(dir, storedName), file.buffer);
+
+    const to = (process.env.SPEC_REQUEST_NOTIFY_EMAIL || 'info@proconix.uk').trim();
+    const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+    const transport = createTransport();
+    if (!transport) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[My Drawings] SPEC request (no SMTP)', company, person, originalName);
+        specRequestAt.set(workspaceId, now);
+        return res.json({
+          success: true,
+          message: 'Request recorded. Email is not configured on this development server.',
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        message: 'Email is not configured on the server. Please email info@proconix.uk directly.',
+      });
+    }
+
+    const subject = `SPEC request — ${company}`;
+    const text = [
+      `${person} from ${company} has asked Proconix to extract wall type specifications from the attached PDF and add them to their My Drawings catalog.`,
+      '',
+      `Company: ${company}`,
+      `Requested by: ${person}`,
+      personEmail ? `Email: ${personEmail}` : '',
+      `Workspace ID: ${workspaceId}`,
+      '',
+      'Consent: Yes. They agreed that the Proconix team may open, process, and use this PDF to enter specifications into their company account, and may work on this file and their application for that purpose.',
+      note ? `Note: ${note}` : '',
+      '',
+      `Attached: ${originalName}`,
+    ].filter(Boolean).join('\n');
+    const html = `
+      <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:16px;color:#0f172a;">
+        <strong>${mailEscape(person)}</strong> from <strong>${mailEscape(company)}</strong>
+        has asked Proconix to extract wall type specifications from the attached PDF
+        and add them to their My Drawings catalog.
+      </p>
+      <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:14px;color:#334155;">
+        Company: ${mailEscape(company)}<br>
+        Requested by: ${mailEscape(person)}<br>
+        ${personEmail ? `Email: ${mailEscape(personEmail)}<br>` : ''}
+        Workspace ID: ${mailEscape(String(workspaceId))}
+      </p>
+      <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:14px;color:#334155;">
+        Consent: Yes. They agreed that the Proconix team may open, process, and use this PDF
+        to enter specifications into their company account, and may work on this file and their application for that purpose.
+      </p>
+      ${note ? `<p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:14px;color:#334155;">Note: ${mailEscape(note)}</p>` : ''}
+      <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:13px;color:#64748b;">Attached: ${mailEscape(originalName)}</p>
+    `;
+
+    await transport.sendMail({
+      from,
+      to,
+      replyTo: personEmail || undefined,
+      subject,
+      text,
+      html,
+      attachments: [
+        {
+          filename: originalName.endsWith('.pdf') ? originalName : `${originalName}.pdf`,
+          content: file.buffer,
+          contentType: 'application/pdf',
+        },
+      ],
+    });
+    specRequestAt.set(workspaceId, now);
+    return res.json({
+      success: true,
+      message: 'Sent to Proconix. We will extract the wall types and add them to this company.',
+    });
+  } catch (err) {
+    console.error('myDrawings sendSpecImportRequest:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Could not send the specification file. Try again or email info@proconix.uk.',
+    });
+  }
+}
+
 module.exports = {
   clearAutoSeededWallTypesOnce,
   listWallTypes,
@@ -600,4 +741,5 @@ module.exports = {
   editWallType,
   deleteWallType,
   downloadWallTypeImage,
+  sendSpecImportRequest,
 };

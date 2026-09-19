@@ -20,6 +20,7 @@ const {
   editWallType,
   deleteWallType,
   downloadWallTypeImage,
+  sendSpecImportRequest,
 } = require('../lib/myDrawingsWallTypes');
 
 const ACCESS_PIN = String(process.env.MY_DRAWINGS_ACCESS_PIN || '2580');
@@ -2248,4 +2249,5 @@ module.exports = {
   editWallType,
   deleteWallType,
   downloadWallTypeImage,
+  sendSpecImportRequest,
 };

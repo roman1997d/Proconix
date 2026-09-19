@@ -1798,6 +1798,36 @@ a.md-link { color: var(--md-accent); }
 }
 #wt-layers { margin-bottom: 8px; }
 #mg-spec-status { min-height: 1.2em; }
+.wt-spec-request {
+  margin: 18px 0 8px;
+  padding: 16px 14px 14px;
+  border-radius: 12px;
+  border: 1px solid #e6ebf2;
+  background: #f8fafc;
+}
+.wt-spec-request h3 {
+  margin: 0 0 6px;
+  font-size: 0.92rem;
+  color: #1b2433;
+}
+.ad-screen .wt-spec-request .mg-form-note { margin-bottom: 12px; }
+.wt-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0 14px;
+  color: #1b2433;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+.wt-consent input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+}
+.wt-consent span { min-width: 0; }
+.wt-spec-request .md-btn-primary { width: auto; }
 @media (max-width: 620px) {
   .wt-perf-fields { grid-template-columns: 1fr; }
   .wt-layer-row { flex-wrap: wrap; }
@@ -1822,6 +1852,13 @@ a.md-link { color: var(--md-accent); }
 .ad-screen .md-btn-ghost {
   background: #eef1f5;
   color: #1b2433;
+}
+.ad-screen .mg-add-dwg {
+  background: #1b4f72;
+  color: #fff;
+}
+.ad-screen .mg-add-dwg svg {
+  stroke: #fff;
 }
 .ad-screen .md-error { color: #b91c1c; }
 .ad-screen .md-error.is-ok { color: #0f766e; }
