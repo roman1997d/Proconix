@@ -283,10 +283,13 @@
               <section class="mg-block">
                 <div class="mg-block-head">
                   <h2>SPEC</h2>
-                  <button type="button" class="mg-add-dwg" id="btn-wt-add">
-                    <svg class="md-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-                    Add wall type
-                  </button>
+                  <div class="mg-block-actions">
+                    <button type="button" class="mg-add-dwg" id="btn-wt-add">
+                      <svg class="md-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                      Add wall type
+                    </button>
+                    <button type="button" class="mg-add-dwg" id="btn-wt-spec-open">Send specifications to Proconix</button>
+                  </div>
                 </div>
                 <p class="mg-form-note">Only this company’s wall types. Add the specifications your site uses — they are not shared with other companies.</p>
                 <label class="mg-field">
@@ -305,25 +308,6 @@
                 <div class="ad-settings-actions">
                   <button type="button" class="md-btn md-btn-ghost" id="btn-wt-save-pack">Save pack details</button>
                   <button type="button" class="md-btn md-btn-primary" id="btn-ad-wall-types">Open Wall Types</button>
-                </div>
-                <div class="wt-spec-request">
-                  <h3>Send specifications to Proconix</h3>
-                  <p class="mg-form-note">Upload the project pack PDF. Proconix will extract the wall types and add them to this company for you.</p>
-                  <label class="mg-field">
-                    <span>Specification PDF</span>
-                    <input id="wt-spec-file" type="file" accept="application/pdf,.pdf">
-                    <span class="mg-file-name" id="wt-spec-file-name">No file selected</span>
-                  </label>
-                  <label class="mg-field">
-                    <span>Note for Proconix (optional)</span>
-                    <input id="wt-spec-note" type="text" maxlength="400" placeholder="Site name, pack revision, anything we should know" autocomplete="off">
-                  </label>
-                  <label class="wt-consent">
-                    <input id="wt-spec-consent" type="checkbox">
-                    <span>I am authorised to send this document. I agree that the Proconix team may open, process, and use the information in this PDF to enter wall type specifications into this company’s My Drawings account, and may work on this file and this company’s application for that purpose.</span>
-                  </label>
-                  <p class="md-error" id="wt-spec-error" role="alert"></p>
-                  <button type="button" class="md-btn md-btn-primary" id="btn-wt-spec-send">Send to Proconix</button>
                 </div>
                 <p class="mg-form-note" id="mg-spec-status"></p>
                 <div id="mg-wt-list"></div>
@@ -474,6 +458,35 @@
         </div>
       </div>
       <div class="ad-scrim" id="ad-scrim" hidden></div>
+      <div class="wt-spec-modal" id="wt-spec-modal" hidden>
+        <div class="wt-spec-modal-card" role="dialog" aria-modal="true" aria-labelledby="wt-spec-modal-title">
+          <div class="wt-spec-modal-head">
+            <h3 id="wt-spec-modal-title">Send specifications to Proconix</h3>
+            <button type="button" class="md-icon-btn" id="btn-wt-spec-close" aria-label="Close">
+              <svg class="md-icon md-icon-lg" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </div>
+          <p class="mg-form-note">Upload the project pack PDF. Proconix will extract the wall types and add them to this company for you.</p>
+          <label class="mg-field">
+            <span>Specification PDF</span>
+            <input id="wt-spec-file" type="file" accept="application/pdf,.pdf">
+            <span class="mg-file-name" id="wt-spec-file-name">No file selected</span>
+          </label>
+          <label class="mg-field">
+            <span>Note for Proconix (optional)</span>
+            <input id="wt-spec-note" type="text" maxlength="400" placeholder="Site name, pack revision, anything we should know" autocomplete="off">
+          </label>
+          <label class="wt-consent">
+            <input id="wt-spec-consent" type="checkbox">
+            <span>I am authorised to send this document. I agree that the Proconix team may open, process, and use the information in this PDF to enter wall type specifications into this company’s My Drawings account, and may work on this file and this company’s application for that purpose.</span>
+          </label>
+          <p class="md-error" id="wt-spec-error" role="alert"></p>
+          <div class="mg-form-actions">
+            <button type="button" class="md-btn md-btn-ghost" id="btn-wt-spec-cancel">Cancel</button>
+            <button type="button" class="md-btn md-btn-primary" id="btn-wt-spec-send">Send to Proconix</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="md-screen" id="screen-activity" aria-label="Activity">

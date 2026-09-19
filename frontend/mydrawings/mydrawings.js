@@ -2291,6 +2291,7 @@
     if (panel === 'drawings' || panel === 'category') renderManage();
     if (panel === 'access') renderAdminChrome();
     if (panel === 'spec') loadSpecWallTypes();
+    else closeSpecRequestModal();
   }
 
   function openManage() {
@@ -2314,6 +2315,7 @@
   }
 
   function closeManage() {
+    closeSpecRequestModal();
     hideManageForm();
     setAdminNavOpen(false);
     showScreen('screen-list');
@@ -2522,6 +2524,18 @@
     el.classList.toggle('is-ok', !!msg && !isError);
   }
 
+  function openSpecRequestModal() {
+    var box = $('wt-spec-modal');
+    if (!box) return;
+    setSpecRequestStatus('');
+    box.hidden = false;
+  }
+
+  function closeSpecRequestModal() {
+    var box = $('wt-spec-modal');
+    if (box) box.hidden = true;
+  }
+
   async function sendSpecToProconix() {
     setSpecRequestStatus('');
     var file = $('wt-spec-file') && $('wt-spec-file').files && $('wt-spec-file').files[0];
@@ -2541,11 +2555,12 @@
       fd.append('consent', 'true');
       fd.append('note', ($('wt-spec-note') && $('wt-spec-note').value) || '');
       var data = await apiJson('/wall-types/spec-request', { method: 'POST', body: fd });
-      setSpecRequestStatus(data.message || 'Sent to Proconix.', false);
       if ($('wt-spec-file')) $('wt-spec-file').value = '';
       if ($('wt-spec-file-name')) $('wt-spec-file-name').textContent = 'No file selected';
       if ($('wt-spec-consent')) $('wt-spec-consent').checked = false;
       if ($('wt-spec-note')) $('wt-spec-note').value = '';
+      closeSpecRequestModal();
+      setSpecStatus(data.message || 'Sent to Proconix.');
     } catch (err) {
       setSpecRequestStatus(err && err.message ? err.message : 'Could not send the file.', true);
     }
@@ -3274,6 +3289,11 @@
       else wtZoomBy(1 / 1.25);
     }
   });
+  on(document, 'keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var modal = $('wt-spec-modal');
+    if (modal && !modal.hidden) closeSpecRequestModal();
+  });
   on($('ad-menu-btn'), 'click', function () { setAdminNavOpen(true); });
   on($('ad-scrim'), 'click', function () { setAdminNavOpen(false); });
   on($('ad-sidebar'), 'click', function (e) {
@@ -3287,6 +3307,12 @@
     openWallTypes();
   });
   on($('btn-wt-add'), 'click', function () { showWallTypeForm({ type: 'add' }); });
+  on($('btn-wt-spec-open'), 'click', openSpecRequestModal);
+  on($('btn-wt-spec-close'), 'click', closeSpecRequestModal);
+  on($('btn-wt-spec-cancel'), 'click', closeSpecRequestModal);
+  on($('wt-spec-modal'), 'click', function (e) {
+    if (e.target && e.target.id === 'wt-spec-modal') closeSpecRequestModal();
+  });
   on($('btn-wt-save-pack'), 'click', saveWallTypesPack);
   on($('btn-wt-spec-send'), 'click', sendSpecToProconix);
   on($('wt-spec-file'), 'change', function () {
