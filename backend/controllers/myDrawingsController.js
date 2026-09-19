@@ -314,7 +314,36 @@ function normalizeAccessCode(raw) {
   return String(raw || '').replace(/\s+/g, '').toUpperCase();
 }
 
-const ACCESS_CODE_RE = /^[A-Z0-9]{4,12}$/;
+const ACCESS_CODE_RE = /^[A-Z0-9]{6,10}$/;
+const ACCESS_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function generateAccessCode(length) {
+  const size = length || 8;
+  let out = '';
+  for (let i = 0; i < size; i++) {
+    out += ACCESS_CODE_CHARS[crypto.randomInt(0, ACCESS_CODE_CHARS.length)];
+  }
+  return out;
+}
+
+async function accessCodeTaken(code, exceptWorkspaceId) {
+  const result = await pool.query(
+    `SELECT id FROM my_drawings_workspace
+     WHERE UPPER(access_code) = $1 AND id <> $2`,
+    [code, exceptWorkspaceId || 0]
+  );
+  return !!result.rows[0];
+}
+
+async function allocateAccessCode(exceptWorkspaceId) {
+  for (let i = 0; i < 30; i++) {
+    const code = generateAccessCode(8);
+    if (!(await accessCodeTaken(code, exceptWorkspaceId))) return code;
+  }
+  const err = new Error('Could not generate a unique access code.');
+  err.code = 'ACCESS_CODE_ALLOC';
+  throw err;
+}
 
 async function dummyPinHash() {
   return bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
@@ -1303,6 +1332,48 @@ async function deleteWorker(req, res) {
   }
 }
 
+async function updateAccessCode(req, res) {
+  try {
+    await ensureSchema();
+    const workspaceId = req.myDrawings.workspace.id;
+    const generate = !!(req.body && (req.body.generate === true || req.body.generate === 'true'));
+    let code = generate ? await allocateAccessCode(workspaceId) : normalizeAccessCode(req.body && req.body.accessCode);
+    if (!ACCESS_CODE_RE.test(code)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Access code must be 6 to 10 letters or numbers.',
+      });
+    }
+    if (await accessCodeTaken(code, workspaceId)) {
+      return res.status(409).json({
+        success: false,
+        message: 'That access code is already in use. Choose another.',
+      });
+    }
+    await pool.query(
+      'UPDATE my_drawings_workspace SET access_code = $2 WHERE id = $1',
+      [workspaceId, code]
+    );
+    return res.json({
+      success: true,
+      accessCode: code,
+      message: generate ? 'A new access code was generated.' : 'Access code updated.',
+    });
+  } catch (err) {
+    console.error('myDrawings updateAccessCode:', err);
+    if (err && err.code === 'ACCESS_CODE_ALLOC') {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+    if (err && err.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message: 'That access code is already in use. Choose another.',
+      });
+    }
+    return res.status(500).json({ success: false, message: 'Could not update the access code.' });
+  }
+}
+
 async function companyLogin(req, res) {
   try {
     await ensureSchema();
@@ -1856,6 +1927,7 @@ module.exports = {
   suspendWorker,
   restoreWorker,
   deleteWorker,
+  updateAccessCode,
   addCategory,
   renameCategory,
   reorderCategories,

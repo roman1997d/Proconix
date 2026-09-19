@@ -795,8 +795,8 @@
       $('reg-error').textContent = 'Enter a valid email address.';
       return;
     }
-    if (!/^[A-Z0-9]{4,12}$/.test(hostAccessCode)) {
-      $('reg-error').textContent = 'Enter the host access code from your company.';
+    if (!/^[A-Z0-9]{6,10}$/.test(hostAccessCode)) {
+      $('reg-error').textContent = 'Enter the 6–10 character host access code from your company.';
       return;
     }
     $('reg-continue').disabled = true;
@@ -2098,6 +2098,50 @@
       codeEl.hidden = false;
       codeEl.textContent = state.accessCode || '—';
     }
+    var input = $('mg-access-input');
+    if (input && !input.value && state.accessCode) input.value = state.accessCode;
+  }
+
+  function setAccessCodeStatus(message, isError) {
+    var err = $('mg-access-error');
+    if (!err) return;
+    err.textContent = message || '';
+    err.classList.toggle('is-ok', !!message && !isError);
+  }
+
+  async function saveAccessCode(opts) {
+    opts = opts || {};
+    setAccessCodeStatus('');
+    var input = $('mg-access-input');
+    var typed = input ? String(input.value || '').replace(/\s+/g, '').toUpperCase() : '';
+    if (input) input.value = typed;
+    if (!opts.generate) {
+      if (!/^[A-Z0-9]{6,10}$/.test(typed)) {
+        setAccessCodeStatus('Access code must be 6 to 10 letters or numbers.', true);
+        return;
+      }
+      if (typed === String(state.accessCode || '').toUpperCase()) {
+        setAccessCodeStatus('That is already the current access code.', true);
+        return;
+      }
+      if (!confirm('Replace the access code with ' + typed + '? New users will need this code to join.')) {
+        return;
+      }
+    } else if (!confirm('Generate a new access code? The current one will stop working for new sign-ups.')) {
+      return;
+    }
+    try {
+      var data = await apiJson('/access-code', {
+        method: 'POST',
+        body: opts.generate ? { generate: true } : { accessCode: typed }
+      });
+      state.accessCode = data.accessCode || typed;
+      if (input) input.value = state.accessCode;
+      renderAdminChrome();
+      setAccessCodeStatus(data.message || 'Access code updated.', false);
+    } catch (err) {
+      setAccessCodeStatus(err && err.message ? err.message : 'Could not update the access code.', true);
+    }
   }
 
   function showManagePanel(name) {
@@ -2875,6 +2919,13 @@
   });
   on($('btn-ad-site'), 'click', closeManage);
   on($('btn-ad-lock'), 'click', function () { handleSheet('lock'); });
+  on($('btn-mg-gen-code'), 'click', function () { saveAccessCode({ generate: true }); });
+  on($('btn-mg-save-code'), 'click', function () { saveAccessCode(); });
+  on($('mg-access-input'), 'input', function () {
+    var el = $('mg-access-input');
+    if (!el) return;
+    el.value = String(el.value || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10);
+  });
   on($('mg-users-table'), 'click', handleUsersTableClick);
   on($('btn-mg-add-cat'), 'click', addCategory);
   on($('mg-cat-input'), 'keydown', function (e) {

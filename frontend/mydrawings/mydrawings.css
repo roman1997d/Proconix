@@ -1690,12 +1690,23 @@ img { max-width: 100%; }
   font-weight: 800;
 }
 .ad-access-code {
-  margin: 18px 0 0;
+  margin: 18px 0 22px;
   font-size: 2.4rem;
   font-weight: 800;
   letter-spacing: 0.18em;
   color: #1b2433;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+#mg-access-input {
+  max-width: 280px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+}
+#mg-access-error.is-ok {
+  color: #0f766e;
 }
 .ad-settings-actions {
   display: flex;
@@ -1741,6 +1752,7 @@ img { max-width: 100%; }
   color: #1b2433;
 }
 .ad-screen .md-error { color: #b91c1c; }
+.ad-screen .md-error.is-ok { color: #0f766e; }
 .ad-screen .mg-form {
   background: #fff;
   border-radius: 8px;

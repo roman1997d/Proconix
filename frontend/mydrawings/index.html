@@ -44,7 +44,7 @@
         </label>
         <label class="mg-field">
           <span>Host access code</span>
-          <input id="reg-host-code" type="text" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. 2026AA" required>
+          <input id="reg-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. 2026AA" required>
         </label>
         <p class="md-error" id="reg-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="reg-continue">Continue</button>
@@ -66,7 +66,7 @@
         </label>
         <label class="mg-field">
           <span>Host access code (if needed)</span>
-          <input id="login-host-code" type="text" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. 2026AA">
+          <input id="login-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. 2026AA">
         </label>
         <p class="md-error" id="login-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="login-continue">Continue</button>
@@ -313,6 +313,16 @@
                 </div>
                 <p class="mg-form-note">Give this host code to workers when they create an account. They will only see this company’s drawings.</p>
                 <p class="ad-access-code" id="mg-host-code">—</p>
+                <label class="mg-field">
+                  <span>New access code</span>
+                  <input id="mg-access-input" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="6–10 characters">
+                </label>
+                <p class="mg-form-note">Letters and numbers only. Between 6 and 10 characters.</p>
+                <p class="md-error" id="mg-access-error" role="alert"></p>
+                <div class="ad-settings-actions">
+                  <button type="button" class="md-btn md-btn-ghost" id="btn-mg-gen-code">Generate</button>
+                  <button type="button" class="md-btn md-btn-primary" id="btn-mg-save-code">Save code</button>
+                </div>
               </section>
             </div>
             <div class="ad-panel" id="ad-panel-settings" hidden>

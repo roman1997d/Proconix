@@ -35,6 +35,7 @@ router.get('/workers', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.listWo
 router.post('/workers/:id/suspend', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.suspendWorker);
 router.post('/workers/:id/restore', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.restoreWorker);
 router.delete('/workers/:id', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.deleteWorker);
+router.post('/access-code', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.updateAccessCode);
 router.post('/devices/register', requireMyDrawingsPin, ctrl.registerDevice);
 
 router.post('/categories', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.addCategory);
