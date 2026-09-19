@@ -174,6 +174,10 @@ async function ensureSchemaInner() {
     ADD COLUMN IF NOT EXISTS access_suspended_until TIMESTAMPTZ
   `);
   await pool.query(`
+    ALTER TABLE my_drawings_worker
+    ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS my_drawings_device (
       id SERIAL PRIMARY KEY,
       worker_id INT NOT NULL REFERENCES my_drawings_worker(id) ON DELETE CASCADE,
@@ -582,7 +586,7 @@ async function resolveJwtAuth(token) {
   await ensureSchema();
   const result = await pool.query(
     `SELECT w.id AS worker_id, w.first_name, w.last_name, w.email, w.workspace_id,
-            w.access_suspended_until, ws.name AS workspace_name, ws.manager_name
+            w.access_suspended_until, w.is_admin, ws.name AS workspace_name, ws.manager_name
      FROM my_drawings_worker w
      JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
      WHERE w.id = $1 AND w.workspace_id = $2`,
@@ -602,7 +606,7 @@ async function resolveJwtAuth(token) {
   if (!project) return null;
   return {
     workspace: { id: row.workspace_id, name: row.workspace_name, managerName: row.manager_name || '' },
-    role: 'worker',
+    role: row.is_admin ? 'admin' : 'worker',
     worker: {
       id: row.worker_id,
       firstName: row.first_name,
@@ -668,7 +672,7 @@ async function findWorkspaceByAccessCode(code) {
 async function findWorkersByEmail(email) {
   const result = await pool.query(
     `SELECT w.id, w.workspace_id, w.first_name, w.last_name, w.email,
-            w.pin_hash, w.pin_expires_at, w.access_suspended_until,
+            w.pin_hash, w.pin_expires_at, w.access_suspended_until, w.is_admin,
             ws.name AS workspace_name, ws.manager_name
      FROM my_drawings_worker w
      JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
@@ -834,6 +838,7 @@ async function resolveDeviceToken(token) {
     `SELECT d.id AS device_id,
             w.id AS worker_id, w.first_name, w.last_name, w.email,
             w.access_suspended_until,
+            w.is_admin,
             ws.id AS workspace_id, ws.name AS workspace_name, ws.manager_name
      FROM my_drawings_device d
      JOIN my_drawings_worker w ON w.id = d.worker_id
@@ -851,7 +856,7 @@ async function resolveDeviceToken(token) {
   pool.query('UPDATE my_drawings_device SET last_seen_at = NOW() WHERE id = $1', [row.device_id]).catch(() => {});
   return {
     workspace: { id: row.workspace_id, name: row.workspace_name, managerName: row.manager_name || '' },
-    role: 'worker',
+    role: row.is_admin ? 'admin' : 'worker',
     worker: {
       id: row.worker_id,
       firstName: row.first_name,
@@ -962,6 +967,7 @@ async function openWorkerDevice(workspace, worker) {
 
 async function loginWorker(req, res) {
   try {
+    await ensureSchema();
     const email = cleanEmail(req.body && req.body.email);
     const accessCode = normalizeAccessCode(
       (req.body && (req.body.hostAccessCode || req.body.accessCode)) || ''
@@ -1001,6 +1007,17 @@ async function loginWorker(req, res) {
       return res.status(404).json({ success: false, message: 'No account found for that email.' });
     }
     const worker = rows[0];
+    if (worker.is_admin) {
+      const wsRow = await pool.query(
+        `SELECT id, name, email, manager_name, access_code, project_mode, logo_path
+         FROM my_drawings_workspace WHERE id = $1`,
+        [worker.workspace_id]
+      );
+      const display = [worker.first_name, worker.last_name].filter(Boolean).join(' ').trim();
+      if (wsRow.rows[0]) {
+        return res.json(await issueAdminSession(wsRow.rows[0], display));
+      }
+    }
     const workspace = {
       id: worker.workspace_id,
       name: worker.workspace_name,
@@ -1255,7 +1272,7 @@ async function listWorkers(req, res) {
     const workspaceId = req.myDrawings.workspace.id;
     const rows = await pool.query(
       `SELECT w.id, w.first_name, w.last_name, w.email, w.verified_at, w.created_at,
-              w.access_suspended_until,
+              w.access_suspended_until, w.is_admin,
               (SELECT COUNT(*)::int FROM my_drawings_device d WHERE d.worker_id = w.id) AS device_count,
               (SELECT MAX(d.last_seen_at) FROM my_drawings_device d WHERE d.worker_id = w.id) AS last_seen_at
        FROM my_drawings_worker w
@@ -1278,6 +1295,7 @@ async function listWorkers(req, res) {
           lastSeenAt: r.last_seen_at instanceof Date ? r.last_seen_at.toISOString() : r.last_seen_at,
           accessSuspendedUntil: until ? until.toISOString() : null,
           accessClosed: !!until,
+          isAdmin: !!r.is_admin,
         };
       }),
     });
@@ -1371,6 +1389,46 @@ async function deleteWorker(req, res) {
   }
 }
 
+async function makeWorkerAdmin(req, res) {
+  try {
+    await ensureSchema();
+    const workspaceId = req.myDrawings.workspace.id;
+    const worker = await findCompanyWorker(workspaceId, req.params.id);
+    if (!worker) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    await pool.query(
+      `UPDATE my_drawings_worker
+       SET is_admin = TRUE, access_suspended_until = NULL
+       WHERE id = $1`,
+      [worker.id]
+    );
+    return res.json({ success: true, message: 'This user is now an administrator.', isAdmin: true });
+  } catch (err) {
+    console.error('myDrawings makeWorkerAdmin:', err);
+    return res.status(500).json({ success: false, message: 'Could not make this user an administrator.' });
+  }
+}
+
+async function removeWorkerAdmin(req, res) {
+  try {
+    await ensureSchema();
+    const workspaceId = req.myDrawings.workspace.id;
+    const worker = await findCompanyWorker(workspaceId, req.params.id);
+    if (!worker) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    await pool.query(
+      'UPDATE my_drawings_worker SET is_admin = FALSE WHERE id = $1',
+      [worker.id]
+    );
+    return res.json({ success: true, message: 'Administrator access removed.', isAdmin: false });
+  } catch (err) {
+    console.error('myDrawings removeWorkerAdmin:', err);
+    return res.status(500).json({ success: false, message: 'Could not remove administrator access.' });
+  }
+}
+
 async function updateAccessCode(req, res) {
   try {
     await ensureSchema();
@@ -1428,7 +1486,7 @@ function saveCompanyLogo(workspaceId, file) {
   return path.posix.join('mydrawings-branding', String(workspaceId), filename);
 }
 
-async function issueAdminSession(row) {
+async function issueAdminSession(row, managerName) {
   const adminToken = crypto.randomBytes(32).toString('hex');
   const opened = await pool.query(
     `INSERT INTO my_drawings_admin_session (workspace_id, token_hash, expires_at)
@@ -1436,8 +1494,9 @@ async function issueAdminSession(row) {
      RETURNING expires_at`,
     [row.id, tokenSha(adminToken)]
   );
+  const displayName = managerName || row.manager_name || '';
   const catalog = await loadCatalog(
-    { id: row.id, name: row.name, access_code: row.access_code, managerName: row.manager_name || '' },
+    { id: row.id, name: row.name, access_code: row.access_code, managerName: displayName },
     'admin'
   );
   const expiresAt = opened.rows[0] && opened.rows[0].expires_at;
@@ -1445,7 +1504,7 @@ async function issueAdminSession(row) {
     ...catalog,
     adminToken,
     accessCode: row.access_code || catalog.accessCode || '',
-    managerName: row.manager_name || '',
+    managerName: displayName,
     email: row.email || '',
     projectMode: row.project_mode === 'multi' ? 'multi' : 'single',
     logoUrl: publicLogoUrl(row.logo_path),
@@ -2117,6 +2176,8 @@ module.exports = {
   suspendWorker,
   restoreWorker,
   deleteWorker,
+  makeWorkerAdmin,
+  removeWorkerAdmin,
   updateAccessCode,
   addCategory,
   renameCategory,

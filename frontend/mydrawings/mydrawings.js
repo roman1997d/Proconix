@@ -1940,12 +1940,14 @@
           '<th>Registered</th>' +
           '<th>Last seen</th>' +
           '<th>Access</th>' +
+          '<th>Admin</th>' +
           '<th></th>' +
         '</tr></thead>' +
         '<tbody>' +
           list.map(function (w) {
             var id = String(w.id);
             var closed = !!w.accessClosed;
+            var admin = !!w.isAdmin;
             var accessCell = closed
               ? '<span class="mg-user-closed">Closed until ' +
                 escapeHtml(formatDate(String(w.accessSuspendedUntil || '').slice(0, 10))) +
@@ -1953,7 +1955,11 @@
                 '<button type="button" class="mg-user-btn" data-user-act="restore" data-user-id="' + id + '">Restore</button>'
               : daysSelectHtml(7) +
                 '<button type="button" class="mg-user-btn" data-user-act="close" data-user-id="' + id + '">Close access</button>';
-            return '<tr class="' + (closed ? 'is-closed' : '') + '">' +
+            var adminCell = admin
+              ? '<span class="mg-user-admin">Administrator</span>' +
+                '<button type="button" class="mg-user-btn" data-user-act="remove-admin" data-user-id="' + id + '">Remove admin</button>'
+              : '<button type="button" class="mg-user-btn" data-user-act="make-admin" data-user-id="' + id + '">Make administrator</button>';
+            return '<tr class="' + (closed ? 'is-closed' : '') + (admin ? ' is-admin' : '') + '">' +
               '<td data-label="User">' +
                 '<strong>' + escapeHtml(workerFullName(w)) + '</strong>' +
                 '<span class="mg-user-email">' + escapeHtml(w.email || '—') + '</span>' +
@@ -1965,6 +1971,7 @@
                 (w.lastSeenAt ? escapeHtml(formatActivityWhen(w.lastSeenAt)) : 'Never') +
               '</td>' +
               '<td data-label="Access" class="mg-user-access">' + accessCell + '</td>' +
+              '<td data-label="Admin" class="mg-user-access">' + adminCell + '</td>' +
               '<td data-label="">' +
                 '<button type="button" class="mg-user-btn is-danger" data-user-act="delete" data-user-id="' + id + '">Delete</button>' +
               '</td>' +
@@ -2029,6 +2036,32 @@
     }
   }
 
+  async function makeWorkerAdministrator(id) {
+    var w = workerById(id);
+    var name = w ? workerFullName(w) : 'this user';
+    if (!confirm('Make ' + name + ' an administrator? They will be able to manage drawings, users, and the access code.')) {
+      return;
+    }
+    try {
+      await apiJson('/workers/' + encodeURIComponent(id) + '/make-admin', { method: 'POST', body: {} });
+      await loadWorkers();
+    } catch (err) {
+      alert(err && err.message ? err.message : 'Could not make this user an administrator.');
+    }
+  }
+
+  async function removeWorkerAdministrator(id) {
+    var w = workerById(id);
+    var name = w ? workerFullName(w) : 'this user';
+    if (!confirm('Remove administrator access for ' + name + '?')) return;
+    try {
+      await apiJson('/workers/' + encodeURIComponent(id) + '/remove-admin', { method: 'POST', body: {} });
+      await loadWorkers();
+    } catch (err) {
+      alert(err && err.message ? err.message : 'Could not remove administrator access.');
+    }
+  }
+
   async function deleteCompanyWorker(id) {
     var w = workerById(id);
     var name = w ? workerFullName(w) : 'this user';
@@ -2057,6 +2090,14 @@
     }
     if (act === 'restore') {
       restoreWorkerAccess(id);
+      return;
+    }
+    if (act === 'make-admin') {
+      makeWorkerAdministrator(id);
+      return;
+    }
+    if (act === 'remove-admin') {
+      removeWorkerAdministrator(id);
       return;
     }
     if (act === 'delete') deleteCompanyWorker(id);

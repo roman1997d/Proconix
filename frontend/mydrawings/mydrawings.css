@@ -910,6 +910,12 @@ a.md-link { color: var(--md-accent); }
   color: #b45309;
   line-height: 1.35;
 }
+.mg-user-admin {
+  display: block;
+  margin: 0 0 6px;
+  font-weight: 700;
+  color: #0f766e;
+}
 .mg-host-code {
   margin: 0 0 12px;
   padding: 10px 12px;

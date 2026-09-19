@@ -97,6 +97,8 @@ CREATE TABLE IF NOT EXISTS my_drawings_worker (
 
 ALTER TABLE my_drawings_worker
   ADD COLUMN IF NOT EXISTS access_suspended_until TIMESTAMPTZ;
+ALTER TABLE my_drawings_worker
+  ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_my_drawings_worker_ws ON my_drawings_worker(workspace_id);
 
