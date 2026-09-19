@@ -673,7 +673,9 @@ async function findWorkersByEmail(email) {
      FROM my_drawings_worker w
      JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
      WHERE w.email = $1
-     ORDER BY w.id ASC`,
+     ORDER BY (
+       SELECT MAX(d.last_seen_at) FROM my_drawings_device d WHERE d.worker_id = w.id
+     ) DESC NULLS LAST, w.verified_at DESC NULLS LAST, w.id DESC`,
     [email]
   );
   return result.rows;
@@ -979,20 +981,15 @@ async function loginWorker(req, res) {
       }
       rows = rows.filter((row) => Number(row.workspace_id) === Number(workspace.id));
     }
+    rows = rows.filter((row) => !suspendedUntil(row));
     if (!rows.length) {
+      const closed = (await findWorkersByEmail(email)).find((row) => suspendedUntil(row));
+      if (closed) {
+        return res.status(403).json(accessClosedPayload(suspendedUntil(closed)));
+      }
       return res.status(404).json({ success: false, message: 'No account found for that email.' });
     }
-    if (rows.length > 1) {
-      return res.status(400).json({
-        success: false,
-        message: 'Enter the host access code for the company you want to open.',
-      });
-    }
     const worker = rows[0];
-    const until = suspendedUntil(worker);
-    if (until) {
-      return res.status(403).json(accessClosedPayload(until));
-    }
     const workspace = {
       id: worker.workspace_id,
       name: worker.workspace_name,
@@ -1472,7 +1469,7 @@ async function lookupAuth(req, res) {
       return res.json({ success: true, kind: 'none', needsPassword: false, needsAccessCode: false });
     }
     if (open.length > 1) {
-      return res.json({ success: true, kind: 'worker', needsPassword: false, needsAccessCode: true });
+      return res.json({ success: true, kind: 'worker', needsPassword: false, needsAccessCode: false });
     }
     return res.json({ success: true, kind: 'worker', needsPassword: false, needsAccessCode: false });
   } catch (err) {

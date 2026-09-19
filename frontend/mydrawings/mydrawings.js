@@ -716,22 +716,19 @@
   function resetLoginExtras() {
     loginLookup = { email: '', kind: '' };
     if ($('login-password-wrap')) $('login-password-wrap').hidden = true;
-    if ($('login-code-wrap')) $('login-code-wrap').hidden = true;
     if ($('login-password')) {
       $('login-password').value = '';
       $('login-password').required = false;
     }
-    if ($('login-host-code')) $('login-host-code').required = false;
-    if ($('login-continue')) $('login-continue').textContent = 'Continue';
+    if ($('login-continue')) $('login-continue').textContent = 'Sign in';
     if ($('login-hint')) {
-      $('login-hint').textContent = 'Enter your email. Company accounts will be asked for a password. Simple users stay signed in for 6 months.';
+      $('login-hint').textContent = 'Enter your email to sign in. Simple users stay signed in for 6 months.';
     }
   }
 
   function showLogin() {
     var pending = readPending() || {};
     if ($('login-email')) $('login-email').value = pending.email || '';
-    if ($('login-host-code')) $('login-host-code').value = pending.hostAccessCode || '';
     if ($('login-error')) $('login-error').textContent = '';
     resetLoginExtras();
     showScreen('screen-login');
@@ -878,7 +875,6 @@
     if (e) e.preventDefault();
     var email = ($('login-email').value || '').trim().toLowerCase();
     var password = $('login-password') ? $('login-password').value || '' : '';
-    var hostAccessCode = ($('login-host-code').value || '').replace(/\s+/g, '').toUpperCase();
     $('login-error').textContent = '';
     if (!isOnline()) {
       $('login-error').textContent = 'Connect to the internet to sign in.';
@@ -900,25 +896,11 @@
         }
         if (looked.kind === 'manager') {
           if ($('login-password-wrap')) $('login-password-wrap').hidden = false;
-          if ($('login-code-wrap')) $('login-code-wrap').hidden = true;
           if ($('login-password')) $('login-password').required = true;
-          if ($('login-continue')) $('login-continue').textContent = 'Sign in';
           if ($('login-hint')) $('login-hint').textContent = 'This is a company account. Enter your password.';
           $('login-continue').disabled = false;
           setTimeout(function () {
             if ($('login-password')) $('login-password').focus();
-          }, 50);
-          return;
-        }
-        if (looked.needsAccessCode) {
-          if ($('login-password-wrap')) $('login-password-wrap').hidden = true;
-          if ($('login-code-wrap')) $('login-code-wrap').hidden = false;
-          if ($('login-host-code')) $('login-host-code').required = true;
-          if ($('login-continue')) $('login-continue').textContent = 'Sign in';
-          if ($('login-hint')) $('login-hint').textContent = 'This email is used in more than one company. Enter the access code.';
-          $('login-continue').disabled = false;
-          setTimeout(function () {
-            if ($('login-host-code')) $('login-host-code').focus();
           }, 50);
           return;
         }
@@ -932,9 +914,7 @@
         var companyData = await postJson('/company-login', { email: email, password: password });
         await enterCompanySession(companyData, email);
       } else {
-        var body = { email: email };
-        if (hostAccessCode) body.hostAccessCode = hostAccessCode;
-        var data = await postJson('/login', body);
+        var data = await postJson('/login', { email: email });
         await enterWorkerSession(data, email);
       }
     } catch (err) {

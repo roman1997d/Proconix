@@ -58,7 +58,7 @@
     <section class="md-screen md-pin md-register" id="screen-login" aria-label="Sign in">
       <p class="md-pin-brand">My Drawings</p>
       <h2>Sign in</h2>
-      <p class="md-pin-hint" id="login-hint">Enter your email. Company accounts will be asked for a password. Simple users stay signed in for 6 months.</p>
+      <p class="md-pin-hint" id="login-hint">Enter your email to sign in. Simple users stay signed in for 6 months.</p>
       <form class="md-reg-form" id="login-form" autocomplete="on">
         <label class="mg-field">
           <span>Email</span>
@@ -68,12 +68,8 @@
           <span>Password</span>
           <input id="login-password" type="password" maxlength="120" autocomplete="current-password">
         </label>
-        <label class="mg-field" id="login-code-wrap" hidden>
-          <span>Company access code</span>
-          <input id="login-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="6–10 characters">
-        </label>
         <p class="md-error" id="login-error" role="alert"></p>
-        <button type="submit" class="md-btn md-btn-primary" id="login-continue">Continue</button>
+        <button type="submit" class="md-btn md-btn-primary" id="login-continue">Sign in</button>
       </form>
       <p class="md-pin-actions">
         <button type="button" class="md-link" id="btn-create-account">Create a simple user account</button>
