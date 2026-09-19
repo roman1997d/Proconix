@@ -12,7 +12,7 @@ const { createTransport } = require('../lib/sendCallbackRequestEmail');
 const { signMyDrawingsJwt, verifyMyDrawingsJwt } = require('../lib/myDrawingsJwt');
 const { notifyDrawingChange } = require('../lib/myDrawingsPushService');
 const {
-  seedExistingWorkspaceWallTypes,
+  clearAutoSeededWallTypesOnce,
   listWallTypes,
   updateWallTypesPack,
   seedStarterWallTypes,
@@ -346,7 +346,7 @@ async function ensureSchemaInner() {
   await seedTenants();
   await seedDefaultProjects();
   await migrateStoredDrawingsToTenantDirs();
-  await seedExistingWorkspaceWallTypes();
+  await clearAutoSeededWallTypesOnce();
 }
 
 async function clearWorkspaceCatalog(workspaceId) {

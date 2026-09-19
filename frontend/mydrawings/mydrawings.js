@@ -1478,7 +1478,7 @@
     if (!all.length) {
       host.innerHTML = '<div class="md-empty"><h3>No wall types yet</h3><p>' +
         (state.role === 'admin'
-          ? 'Open SPEC in Manage to add this company’s specifications, or copy the starter pack.'
+          ? 'Open SPEC in Manage and add this company’s wall types.'
           : 'Ask your company administrator to add wall type specifications.') +
         '</p></div>';
       return;
@@ -2354,7 +2354,7 @@
     if (!host) return;
     var list = (wallTypesCache && wallTypesCache.wallTypes) || [];
     if (!list.length) {
-      host.innerHTML = '<p class="mg-form-note">No wall types for this company yet.</p>';
+      host.innerHTML = '<p class="mg-form-note">No wall types yet. Use Add wall type to create this company’s specifications.</p>';
       return;
     }
     host.innerHTML = list.map(function (wt) {
@@ -2512,20 +2512,6 @@
       setSpecStatus('Pack details saved.');
     } catch (err) {
       if ($('wt-pack-error')) $('wt-pack-error').textContent = err && err.message ? err.message : 'Could not save pack details.';
-    }
-  }
-
-  async function seedCompanyWallTypes() {
-    if (!confirm('Copy the Siniat starter pack into this company? Existing codes stay as they are.')) return;
-    setSpecStatus('Copying starter pack…');
-    try {
-      var data = await apiJson('/wall-types/seed-starter', { method: 'POST', body: {} });
-      rememberWallTypes(data);
-      fillSpecPackFields(data);
-      renderSpecWallTypes();
-      setSpecStatus(data.message || 'Starter pack copied.');
-    } catch (err) {
-      setSpecStatus(err && err.message ? err.message : 'Could not copy the starter pack.', true);
     }
   }
 
@@ -3265,7 +3251,6 @@
   });
   on($('btn-wt-add'), 'click', function () { showWallTypeForm({ type: 'add' }); });
   on($('btn-wt-save-pack'), 'click', saveWallTypesPack);
-  on($('btn-wt-seed'), 'click', seedCompanyWallTypes);
   on($('btn-wt-cancel'), 'click', hideManageForm);
   on($('wt-form'), 'submit', submitWallTypeForm);
   on($('btn-wt-add-layer'), 'click', function () {

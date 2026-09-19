@@ -319,24 +319,30 @@ async function copyStarterWallTypes(workspaceId) {
   return { added, pack };
 }
 
-async function seedExistingWorkspaceWallTypes() {
+async function clearAutoSeededWallTypesOnce() {
   try {
-    const workspaces = await pool.query(
-      `SELECT id FROM my_drawings_workspace WHERE wall_types_pack IS NULL`
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS my_drawings_app_flag (
+        key TEXT PRIMARY KEY,
+        set_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    const done = await pool.query(
+      `SELECT 1 FROM my_drawings_app_flag WHERE key = 'clear_autoseed_wall_types_v1'`
     );
-    for (let i = 0; i < workspaces.rows.length; i++) {
-      try {
-        await copyStarterWallTypes(workspaces.rows[i].id);
-      } catch (err) {
-        console.warn(
-          'myDrawings seed wall types workspace',
-          workspaces.rows[i].id,
-          err && err.message ? err.message : err
-        );
-      }
-    }
+    if (done.rows[0]) return;
+    const images = await pool.query(
+      'SELECT detail_image_path FROM my_drawings_wall_type WHERE detail_image_path IS NOT NULL'
+    );
+    images.rows.forEach((row) => removeStoredFile(row.detail_image_path));
+    await pool.query('DELETE FROM my_drawings_wall_type');
+    await pool.query(`UPDATE my_drawings_workspace SET wall_types_pack = '{}'::jsonb`);
+    await pool.query(
+      `INSERT INTO my_drawings_app_flag (key) VALUES ('clear_autoseed_wall_types_v1')
+       ON CONFLICT (key) DO NOTHING`
+    );
   } catch (err) {
-    console.warn('myDrawings seedExistingWorkspaceWallTypes:', err && err.message ? err.message : err);
+    console.warn('myDrawings clearAutoSeededWallTypesOnce:', err && err.message ? err.message : err);
   }
 }
 
@@ -586,7 +592,7 @@ async function downloadWallTypeImage(req, res) {
 }
 
 module.exports = {
-  seedExistingWorkspaceWallTypes,
+  clearAutoSeededWallTypesOnce,
   listWallTypes,
   updateWallTypesPack,
   seedStarterWallTypes,

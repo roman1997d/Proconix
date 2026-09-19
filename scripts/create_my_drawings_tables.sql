@@ -191,3 +191,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_wall_type_code
 
 CREATE INDEX IF NOT EXISTS idx_my_drawings_wall_type_ws
   ON my_drawings_wall_type (workspace_id, sort_order, id);
+
+CREATE TABLE IF NOT EXISTS my_drawings_app_flag (
+  key TEXT PRIMARY KEY,
+  set_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
