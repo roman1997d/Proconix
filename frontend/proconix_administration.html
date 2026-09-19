@@ -748,6 +748,49 @@
               </div>
             </div>
             <div id="pxAdminContentEmailAlert" class="alert d-none" role="alert"></div>
+
+            <form id="pxMdOutreachForm" class="px-admin-compose-email border border-secondary rounded-3 p-3 mb-4" novalidate>
+              <h3 class="h6 text-white mb-1">My Drawings — prospect email</h3>
+              <p class="text-white-50 small mb-3">
+                Sends the My Drawings presentation email
+                (<a class="link-info" href="/mydrawings-prezentation" target="_blank" rel="noopener">product page</a>
+                ·
+                <a class="link-info" href="/mydrawings-outreach-email.html" target="_blank" rel="noopener">email preview</a>).
+                Choose the client email and when to send it.
+              </p>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small mb-1" for="pxMdOutreachTo">Client email</label>
+                  <input
+                    type="email"
+                    class="form-control form-control-sm bg-dark text-white border-secondary"
+                    id="pxMdOutreachTo"
+                    name="to"
+                    required
+                    maxlength="200"
+                    placeholder="client@company.com"
+                    autocomplete="email"
+                  >
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-white-50 small mb-1" for="pxMdOutreachWhen">When to send</label>
+                  <input
+                    type="datetime-local"
+                    class="form-control form-control-sm bg-dark text-white border-secondary"
+                    id="pxMdOutreachWhen"
+                    name="sendAt"
+                    required
+                  >
+                </div>
+                <div class="col-12">
+                  <button type="submit" class="btn btn-primary btn-sm" id="pxMdOutreachSendBtn">
+                    <i class="bi bi-send-fill me-1" aria-hidden="true"></i> Send
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <p class="text-white-50 small text-uppercase mb-2" style="letter-spacing: 0.06em;">Custom email</p>
             <form id="pxContentClientEmailForm" class="px-admin-compose-email" novalidate>
               <div class="row g-3">
                 <div class="col-12">

@@ -19,6 +19,7 @@ const {
   listBillingSubscriptions,
   updateBillingSubscription,
   sendClientEmail,
+  sendMyDrawingsOutreach,
   createDemoRecords,
   sendDemoLoginEmail,
   createBackup,
@@ -62,6 +63,7 @@ router.get('/panic-alert', requirePlatformAdminAuth, getPanicAlert);
 router.post('/panic-alert/test', requirePlatformAdminAuth, postPanicAlertTest);
 router.post('/panic-alert/run', requirePlatformAdminAuth, postPanicAlertRun);
 router.post('/send-client-email', requirePlatformAdminAuth, sendClientEmail);
+router.post('/send-mydrawings-outreach', requirePlatformAdminAuth, sendMyDrawingsOutreach);
 router.post('/create-demo-records', requirePlatformAdminAuth, createDemoRecords);
 router.post('/send-demo-login-email', requirePlatformAdminAuth, sendDemoLoginEmail);
 router.post('/backup', requirePlatformAdminAuth, createBackup);

@@ -2075,6 +2075,62 @@
     }
   }
 
+  var mdOutreachForm = document.getElementById('pxMdOutreachForm');
+  var mdOutreachBtn = document.getElementById('pxMdOutreachSendBtn');
+  var mdOutreachWhen = document.getElementById('pxMdOutreachWhen');
+  if (mdOutreachWhen && !mdOutreachWhen.value) {
+    var now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    mdOutreachWhen.value = now.toISOString().slice(0, 16);
+  }
+  if (mdOutreachForm) {
+    mdOutreachForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      hideContentEmailAlert();
+      var toEl = document.getElementById('pxMdOutreachTo');
+      if (!toEl || !mdOutreachWhen) return;
+      var whenLocal = mdOutreachWhen.value;
+      if (!whenLocal) {
+        showContentEmailAlert('Choose a date and time.', 'error');
+        return;
+      }
+      var sendAt = new Date(whenLocal).toISOString();
+      if (mdOutreachBtn) mdOutreachBtn.disabled = true;
+      fetch('/api/platform-admin/send-mydrawings-outreach', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+        credentials: 'same-origin',
+        body: JSON.stringify({ to: toEl.value.trim(), sendAt: sendAt }),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          if (mdOutreachBtn) mdOutreachBtn.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status === 200 && out.data && out.data.success) {
+            showContentEmailAlert(out.data.message || 'Email sent.', 'success');
+            mdOutreachForm.reset();
+            var again = new Date();
+            again.setMinutes(again.getMinutes() - again.getTimezoneOffset());
+            mdOutreachWhen.value = again.toISOString().slice(0, 16);
+            return;
+          }
+          showContentEmailAlert((out.data && out.data.message) || 'Send failed.', 'error');
+        })
+        .catch(function () {
+          if (mdOutreachBtn) mdOutreachBtn.disabled = false;
+          showContentEmailAlert('Network error.', 'error');
+        });
+    });
+  }
+
   var contentEmailForm = document.getElementById('pxContentClientEmailForm');
   var contentEmailBtn = document.getElementById('pxContentEmailSendBtn');
   var contentEmailClear = document.getElementById('pxContentEmailClearBtn');

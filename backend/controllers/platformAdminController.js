@@ -15,6 +15,7 @@ const {
   sendPlatformAdminClientEmail,
   sendDemoTenantWelcomeEmail,
 } = require('../lib/sendCallbackRequestEmail');
+const { queueMyDrawingsOutreach } = require('../lib/myDrawingsOutreachEmail');
 const { countCompanySeats } = require('../utils/companyUserSeats');
 const { runCreateDemoRecords } = require('../lib/createDemoRecords');
 const {
@@ -1362,6 +1363,55 @@ async function sendClientEmail(req, res) {
   }
 }
 
+/**
+ * POST /api/platform-admin/send-mydrawings-outreach
+ * Body: { to, sendAt } — My Drawings prospect template, now or scheduled.
+ */
+async function sendMyDrawingsOutreach(req, res) {
+  const raw = req.body || {};
+  const to = typeof raw.to === 'string' ? raw.to.trim() : '';
+  const sendAt = raw.sendAt || raw.send_at || raw.sendAtLocal;
+  const admin = req.platformAdmin || {};
+  const adminEmail = typeof admin.email === 'string' ? admin.email.trim() : '';
+  const adminName = admin.full_name != null ? String(admin.full_name).trim() : '';
+  try {
+    const result = await queueMyDrawingsOutreach({
+      to,
+      sendAt,
+      adminEmail,
+      adminName,
+    });
+    const when = result.sendAt ? new Date(result.sendAt) : null;
+    const whenLabel = when && !Number.isNaN(when.getTime())
+      ? when.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
+      : '';
+    return res.status(200).json({
+      success: true,
+      queued: result.queued,
+      sent: result.sent,
+      sendAt: result.sendAt,
+      message: result.sent
+        ? 'My Drawings email sent.'
+        : `My Drawings email scheduled for ${whenLabel}.`,
+    });
+  } catch (err) {
+    if (err && err.status === 400) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({
+        success: false,
+        message: 'Email is not configured on the server. Set SMTP_* environment variables.',
+      });
+    }
+    console.error('platformAdmin sendMyDrawingsOutreach error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Failed to send or schedule the email.',
+    });
+  }
+}
+
 function getDemoPortalUrls() {
   const base = (process.env.PROCONIX_PUBLIC_URL || 'https://proconix.uk').replace(/\/$/, '');
   const mgr = process.env.PROCONIX_MANAGER_DEMO_PATH || '/dashboard_manager.html';
@@ -2208,6 +2258,7 @@ module.exports = {
   listBillingSubscriptions,
   updateBillingSubscription,
   sendClientEmail,
+  sendMyDrawingsOutreach,
   createDemoRecords,
   sendDemoLoginEmail,
   createBackup,

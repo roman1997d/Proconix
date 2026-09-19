@@ -29,6 +29,7 @@ const crewRoutes = require('./routes/crewRoutes');
 const platformAdminRoutes = require('./routes/platformAdminRoutes');
 const { requirePlatformAdminAuth } = require('./middleware/requirePlatformAdminAuth');
 const { createBackup, restoreBackup, restoreBackupFromServer, startPlatformAutoBackupScheduler } = require('./controllers/platformAdminController');
+const { startMyDrawingsOutreachScheduler } = require('./lib/myDrawingsOutreachEmail');
 const siteSnagsRoutes = require('./routes/siteSnagsRoutes');
 const drawingGalleryRoutes = require('./routes/drawingGalleryRoutes');
 const myDrawingsRoutes = require('./routes/myDrawingsRoutes');
@@ -264,6 +265,7 @@ app.listen(PORT, HOST, async () => {
   }, agentPollMs);
   runSiteChatAgentReminders().catch(() => {});
   startPlatformAutoBackupScheduler();
+  startMyDrawingsOutreachScheduler();
   startShareLinkCleanupScheduler();
   startDeletedFilesCleanupScheduler();
 });
