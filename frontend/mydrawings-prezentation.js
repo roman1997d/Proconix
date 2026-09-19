@@ -256,6 +256,17 @@ window.addEventListener('scroll', () => {
   if (nav) nav.classList.toggle('is-on', window.scrollY > 8);
 }, { passive: true });
 
+const demoScenes = document.querySelectorAll('.demo-scene');
+const demoSteps = document.querySelectorAll('.demo-script li');
+if (demoScenes.length && !reduced) {
+  let index = 0;
+  setInterval(() => {
+    index = (index + 1) % demoScenes.length;
+    demoScenes.forEach((scene, i) => scene.classList.toggle('is-on', i === index));
+    demoSteps.forEach((step, i) => step.classList.toggle('is-on', i === index));
+  }, 3200);
+}
+
 document.querySelectorAll('[data-tilt]').forEach((node) => {
   const phone = node.querySelector('.phone');
   if (!phone || reduced) return;
