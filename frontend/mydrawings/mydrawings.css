@@ -1371,23 +1371,25 @@ img { max-width: 100%; }
 .ad-screen {
   background: #eef1f5;
   color: #1a2332;
-  color-scheme: light;
   width: 100%;
 }
 .ad-screen.is-active {
-  display: flex;
+  display: flex !important;
   flex-direction: column;
-  flex: 1 1 auto;
+  position: fixed;
+  inset: 0;
+  z-index: 30;
   width: 100%;
   height: 100%;
-  min-height: 100dvh;
-  min-height: 100svh;
+  min-height: 100%;
+  background: #eef1f5;
 }
 .ad-shell {
   display: flex;
   flex: 1 1 auto;
   align-items: stretch;
   width: 100%;
+  height: 100%;
   min-height: 100%;
   background: #eef1f5;
 }
@@ -1666,14 +1668,27 @@ img { max-width: 100%; }
 }
 
 @media (max-width: 859px) {
-  .ad-screen.ad-nav-open .ad-sidebar {
+  .ad-sidebar {
     display: flex;
-    position: fixed;
-    inset: 0 auto 0 0;
-    height: 100%;
+    flex: 0 0 64px;
+    width: 64px;
+    padding: calc(12px + var(--md-safe-t)) 6px 16px;
   }
+  .ad-logo { width: 44px; height: 44px; margin: 0 auto 12px; }
+  .ad-logo svg { width: 34px; height: 34px; }
+  .ad-menu-label { display: none; }
+  .ad-nav button {
+    font-size: 0;
+    letter-spacing: 0;
+    padding: 11px 0;
+    justify-content: center;
+    gap: 0;
+  }
+  .ad-nav button svg { width: 22px; height: 22px; }
+  .ad-burger { display: none; }
   .ad-welcome { font-size: 1.05rem; }
-  .ad-dash { padding: 28px 18px; gap: 28px; }
+  .ad-company { display: none; }
+  .ad-dash { padding: 28px 18px; gap: 28px; min-height: 320px; }
   .ad-clock { width: 180px; height: 180px; flex-basis: 180px; }
   .ad-clock-n { transform: rotate(calc(var(--a) * 1deg)) translateY(-70px) rotate(calc(var(--a) * -1deg)); font-size: 0.82rem; }
   .ad-clock-hour { height: 46px; }

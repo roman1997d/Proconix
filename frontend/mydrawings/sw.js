@@ -1,5 +1,5 @@
 /* My Drawings PWA — app shell + Wall Types catalog (offline). PDFs stay in IndexedDB. */
-var CACHE = 'mydrawings-shell-v44';
+var CACHE = 'mydrawings-shell-v45';
 var PRECACHE = [
   '/mydrawings/',
   '/mydrawings/index.html',
@@ -87,6 +87,28 @@ function cacheFirst(req) {
   });
 }
 
+function isAppShell(url) {
+  var p = url.pathname;
+  return p === '/mydrawings/' ||
+    p === '/mydrawings/index.html' ||
+    p === '/mydrawings/mydrawings.css' ||
+    p === '/mydrawings/mydrawings.js' ||
+    p === '/mydrawings/drawing-viewer.js' ||
+    p === '/mydrawings/manifest.webmanifest';
+}
+
+function networkFirst(req) {
+  return fetch(req).then(function (res) {
+    if (res && res.ok) {
+      var copy = res.clone();
+      caches.open(CACHE).then(function (cache) { cache.put(req, copy); });
+    }
+    return res;
+  }).catch(function () {
+    return caches.match(req);
+  });
+}
+
 self.addEventListener('fetch', function (event) {
   var req = event.request;
   if (req.method !== 'GET') return;
@@ -104,6 +126,16 @@ self.addEventListener('fetch', function (event) {
   }
 
   if (url.pathname.indexOf('/mydrawings/') !== 0) return;
+
+  if (isAppShell(url) || req.mode === 'navigate') {
+    event.respondWith(
+      networkFirst(req).then(function (res) {
+        if (res) return res;
+        return caches.match('/mydrawings/index.html');
+      })
+    );
+    return;
+  }
 
   event.respondWith(
     cacheFirst(req).then(function (res) {

@@ -636,8 +636,10 @@
       var el = $(sid);
       if (el) el.classList.toggle('is-active', sid === id);
     });
-    if (id === 'screen-manage') startAdminClock();
-    else stopAdminClock();
+    try {
+      if (id === 'screen-manage') startAdminClock();
+      else stopAdminClock();
+    } catch (e) {}
   }
 
   function setOfflineUi() {
@@ -2051,11 +2053,18 @@
       return;
     }
     closeSheet();
-    showScreen('screen-manage');
-    renderAdminChrome();
-    renderManage();
-    showManagePanel(state.managePanel || 'home');
-    loadWorkers();
+    try {
+      showScreen('screen-manage');
+      renderAdminChrome();
+      renderManage();
+      showManagePanel(state.managePanel || 'home');
+      loadWorkers();
+    } catch (err) {
+      console.error('openManage', err);
+      showScreen('screen-list');
+      renderCats();
+      renderList();
+    }
   }
 
   function closeManage() {
@@ -2867,7 +2876,9 @@
   });
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/mydrawings/sw.js', { scope: '/mydrawings/' }).catch(function () {});
+    navigator.serviceWorker.register('/mydrawings/sw.js', { scope: '/mydrawings/', updateViaCache: 'none' }).then(function (reg) {
+      if (reg && reg.update) reg.update();
+    }).catch(function () {});
   }
 
   boot();
