@@ -2088,10 +2088,20 @@
       e.preventDefault();
       hideContentEmailAlert();
       var toEl = document.getElementById('pxMdOutreachTo');
+      var firstEl = document.getElementById('pxMdOutreachFirst');
+      var lastEl = document.getElementById('pxMdOutreachLast');
+      var tplEl = mdOutreachForm.querySelector('input[name="pxMdOutreachTemplate"]:checked');
       if (!toEl || !mdOutreachWhen) return;
       var whenLocal = mdOutreachWhen.value;
       if (!whenLocal) {
         showContentEmailAlert('Choose a date and time.', 'error');
+        return;
+      }
+      var template = tplEl && tplEl.value === 'familiar' ? 'familiar' : 'problem';
+      var firstName = firstEl ? firstEl.value.trim() : '';
+      var lastName = lastEl ? lastEl.value.trim() : '';
+      if (template === 'familiar' && (!firstName || !lastName)) {
+        showContentEmailAlert('Template 2 needs first name and last name.', 'error');
         return;
       }
       var sendAt = new Date(whenLocal).toISOString();
@@ -2100,7 +2110,13 @@
         method: 'POST',
         headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
         credentials: 'same-origin',
-        body: JSON.stringify({ to: toEl.value.trim(), sendAt: sendAt }),
+        body: JSON.stringify({
+          to: toEl.value.trim(),
+          sendAt: sendAt,
+          template: template,
+          firstName: firstName,
+          lastName: lastName,
+        }),
       })
         .then(function (res) {
           return res.json().then(function (data) {
@@ -2120,6 +2136,8 @@
             var again = new Date();
             again.setMinutes(again.getMinutes() - again.getTimezoneOffset());
             mdOutreachWhen.value = again.toISOString().slice(0, 16);
+            var problemRadio = mdOutreachForm.querySelector('input[name="pxMdOutreachTemplate"][value="problem"]');
+            if (problemRadio) problemRadio.checked = true;
             return;
           }
           showContentEmailAlert((out.data && out.data.message) || 'Send failed.', 'error');

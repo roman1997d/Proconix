@@ -1365,7 +1365,7 @@ async function sendClientEmail(req, res) {
 
 /**
  * POST /api/platform-admin/send-mydrawings-outreach
- * Body: { to, sendAt } — My Drawings prospect template, now or scheduled.
+ * Body: { to, sendAt, template, firstName, lastName } — template 1 (problem) or 2 (familiar).
  */
 async function sendMyDrawingsOutreach(req, res) {
   const raw = req.body || {};
@@ -1380,6 +1380,9 @@ async function sendMyDrawingsOutreach(req, res) {
       sendAt,
       adminEmail,
       adminName,
+      template: raw.template,
+      firstName: raw.firstName || raw.first_name,
+      lastName: raw.lastName || raw.last_name,
     });
     const when = result.sendAt ? new Date(result.sendAt) : null;
     const whenLabel = when && !Number.isNaN(when.getTime())
