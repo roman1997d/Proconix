@@ -7,12 +7,12 @@
 const express = require('express');
 const router = express.Router();
 const { requireMyDrawingsPin, requireMyDrawingsAdmin } = require('../middleware/requireMyDrawingsPin');
-const { uploadPdf, uploadCompanyLogo } = require('../utils/myDrawingsUpload');
+const { uploadPdf, uploadCompanyLogo, uploadWallTypeImage } = require('../utils/myDrawingsUpload');
 const ctrl = require('../controllers/myDrawingsController');
 
 function handleUploadError(err, req, res, next) {
   if (!err) return next();
-  if (err.message && (err.message.includes('Only PDF') || err.message.includes('Upload directory') || err.message.includes('Logo must'))) {
+  if (err.message && (err.message.includes('Only PDF') || err.message.includes('Upload directory') || err.message.includes('Logo must') || err.message.includes('Construction detail'))) {
     return res.status(400).json({ success: false, message: err.message });
   }
   if (err.code === 'LIMIT_FILE_SIZE') {
@@ -75,5 +75,27 @@ router.post(
 );
 router.delete('/drawings/:id', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.deleteDrawing);
 router.get('/drawings/:id/file', requireMyDrawingsPin, ctrl.downloadFile);
+
+router.get('/wall-types', requireMyDrawingsPin, ctrl.listWallTypes);
+router.put('/wall-types/pack', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.updateWallTypesPack);
+router.post('/wall-types/seed-starter', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.seedStarterWallTypes);
+router.post(
+  '/wall-types',
+  requireMyDrawingsPin,
+  requireMyDrawingsAdmin,
+  uploadWallTypeImage,
+  handleUploadError,
+  ctrl.addWallType
+);
+router.put(
+  '/wall-types/:id',
+  requireMyDrawingsPin,
+  requireMyDrawingsAdmin,
+  uploadWallTypeImage,
+  handleUploadError,
+  ctrl.editWallType
+);
+router.delete('/wall-types/:id', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.deleteWallType);
+router.get('/wall-types/:id/image', requireMyDrawingsPin, ctrl.downloadWallTypeImage);
 
 module.exports = router;

@@ -11,6 +11,16 @@ const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
 const { createTransport } = require('../lib/sendCallbackRequestEmail');
 const { signMyDrawingsJwt, verifyMyDrawingsJwt } = require('../lib/myDrawingsJwt');
 const { notifyDrawingChange } = require('../lib/myDrawingsPushService');
+const {
+  seedExistingWorkspaceWallTypes,
+  listWallTypes,
+  updateWallTypesPack,
+  seedStarterWallTypes,
+  addWallType,
+  editWallType,
+  deleteWallType,
+  downloadWallTypeImage,
+} = require('../lib/myDrawingsWallTypes');
 
 const ACCESS_PIN = String(process.env.MY_DRAWINGS_ACCESS_PIN || '2580');
 const ADMIN_PIN = '2026';
@@ -239,10 +249,6 @@ async function ensureSchemaInner() {
     ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ
   `);
   await pool.query(`
-    ALTER TABLE my_drawings_admin_session
-    ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ
-  `);
-  await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_workspace_access_code
     ON my_drawings_workspace (UPPER(access_code))
     WHERE access_code IS NOT NULL
@@ -261,6 +267,10 @@ async function ensureSchemaInner() {
       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT uq_my_drawings_admin_session_token UNIQUE (token_hash)
     )
+  `);
+  await pool.query(`
+    ALTER TABLE my_drawings_admin_session
+    ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ
   `);
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_my_drawings_admin_session_ws ON my_drawings_admin_session(workspace_id)`
@@ -296,11 +306,47 @@ async function ensureSchemaInner() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices(user_id)`);
+  await pool.query(`
+    ALTER TABLE my_drawings_workspace
+    ADD COLUMN IF NOT EXISTS wall_types_pack JSONB
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS my_drawings_wall_type (
+      id SERIAL PRIMARY KEY,
+      workspace_id INT NOT NULL REFERENCES my_drawings_workspace(id) ON DELETE CASCADE,
+      code VARCHAR(40) NOT NULL,
+      kind VARCHAR(20) NOT NULL DEFAULT 'wall',
+      name VARCHAR(300) NOT NULL DEFAULT '',
+      system_ref VARCHAR(120) NOT NULL DEFAULT '',
+      system_type VARCHAR(200) NOT NULL DEFAULT '',
+      fire_minutes VARCHAR(40) NOT NULL DEFAULT '',
+      fire_class VARCHAR(80) NOT NULL DEFAULT '',
+      acoustic VARCHAR(80) NOT NULL DEFAULT '',
+      thickness VARCHAR(40) NOT NULL DEFAULT '',
+      max_height_m VARCHAR(40) NOT NULL DEFAULT '',
+      duty VARCHAR(40) NOT NULL DEFAULT '',
+      buildup JSONB NOT NULL DEFAULT '{}'::jsonb,
+      pack_pages JSONB NOT NULL DEFAULT '{}'::jsonb,
+      detail_image_path TEXT,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_wall_type_code
+     ON my_drawings_wall_type (workspace_id, UPPER(code))`
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_my_drawings_wall_type_ws
+     ON my_drawings_wall_type (workspace_id, sort_order, id)`
+  );
 
   ensureUploadDir();
   await seedTenants();
   await seedDefaultProjects();
   await migrateStoredDrawingsToTenantDirs();
+  await seedExistingWorkspaceWallTypes();
 }
 
 async function clearWorkspaceCatalog(workspaceId) {
@@ -311,6 +357,12 @@ async function clearWorkspaceCatalog(workspaceId) {
   files.rows.forEach((row) => removeStoredFile(row.relative_path));
   await pool.query('DELETE FROM my_drawings_item WHERE workspace_id = $1', [workspaceId]);
   await pool.query('DELETE FROM my_drawings_category WHERE workspace_id = $1', [workspaceId]);
+  const wallImages = await pool.query(
+    'SELECT detail_image_path FROM my_drawings_wall_type WHERE workspace_id = $1',
+    [workspaceId]
+  );
+  wallImages.rows.forEach((row) => removeStoredFile(row.detail_image_path));
+  await pool.query('DELETE FROM my_drawings_wall_type WHERE workspace_id = $1', [workspaceId]);
   try {
     if (fs.existsSync(UPLOAD_DIR)) {
       fs.readdirSync(UPLOAD_DIR).forEach((name) => {
@@ -1594,8 +1646,8 @@ async function startCompany(req, res) {
     const managerName = email.split('@')[0] || companyName;
     const inserted = await pool.query(
       `INSERT INTO my_drawings_workspace
-        (name, access_pin_hash, admin_pin_hash, email, password_hash, manager_name, access_code, project_mode, demo_cleared_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+        (name, access_pin_hash, admin_pin_hash, email, password_hash, manager_name, access_code, project_mode, demo_cleared_at, wall_types_pack)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), '{}'::jsonb)
        RETURNING id, name, email, manager_name, access_code, project_mode, logo_path`,
       [companyName, accessHash, adminHash, email, passwordHash, managerName, accessCode, projectMode]
     );
@@ -2189,4 +2241,11 @@ module.exports = {
   downloadFile,
   registerDevice,
   prepareUploadDir,
+  listWallTypes,
+  updateWallTypesPack,
+  seedStarterWallTypes,
+  addWallType,
+  editWallType,
+  deleteWallType,
+  downloadWallTypeImage,
 };

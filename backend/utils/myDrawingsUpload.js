@@ -48,4 +48,18 @@ const uploadCompanyLogo = multer({
   },
 }).single('logo');
 
-module.exports = { uploadPdf, uploadCompanyLogo, safePdfFilename };
+const uploadWallTypeImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const name = String(file.originalname || '').toLowerCase();
+    const mimeOk = /image\/(jpeg|pjpeg|png|webp|gif)/.test(file.mimetype || '');
+    const extOk = /\.(jpe?g|png|webp|gif)$/.test(name);
+    if (!mimeOk && !extOk) {
+      return cb(new Error('Construction detail must be a JPG, PNG, or WebP image.'));
+    }
+    cb(null, true);
+  },
+}).single('image');
+
+module.exports = { uploadPdf, uploadCompanyLogo, uploadWallTypeImage, safePdfFilename };

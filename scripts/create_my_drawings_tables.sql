@@ -160,3 +160,34 @@ CREATE TABLE IF NOT EXISTS user_devices (
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices(user_id);
+
+ALTER TABLE my_drawings_workspace
+  ADD COLUMN IF NOT EXISTS wall_types_pack JSONB;
+
+CREATE TABLE IF NOT EXISTS my_drawings_wall_type (
+  id SERIAL PRIMARY KEY,
+  workspace_id INT NOT NULL REFERENCES my_drawings_workspace(id) ON DELETE CASCADE,
+  code VARCHAR(40) NOT NULL,
+  kind VARCHAR(20) NOT NULL DEFAULT 'wall',
+  name VARCHAR(300) NOT NULL DEFAULT '',
+  system_ref VARCHAR(120) NOT NULL DEFAULT '',
+  system_type VARCHAR(200) NOT NULL DEFAULT '',
+  fire_minutes VARCHAR(40) NOT NULL DEFAULT '',
+  fire_class VARCHAR(80) NOT NULL DEFAULT '',
+  acoustic VARCHAR(80) NOT NULL DEFAULT '',
+  thickness VARCHAR(40) NOT NULL DEFAULT '',
+  max_height_m VARCHAR(40) NOT NULL DEFAULT '',
+  duty VARCHAR(40) NOT NULL DEFAULT '',
+  buildup JSONB NOT NULL DEFAULT '{}'::jsonb,
+  pack_pages JSONB NOT NULL DEFAULT '{}'::jsonb,
+  detail_image_path TEXT,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_wall_type_code
+  ON my_drawings_wall_type (workspace_id, UPPER(code));
+
+CREATE INDEX IF NOT EXISTS idx_my_drawings_wall_type_ws
+  ON my_drawings_wall_type (workspace_id, sort_order, id);

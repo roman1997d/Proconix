@@ -7,7 +7,7 @@
   var PENDING_KEY = 'proconix_mydrawings_pending';
   var FLOOR_KEY = 'proconix_mydrawings_floor';
   var DB_NAME = 'proconix-mydrawings';
-  var DB_VER = 1;
+  var DB_VER = 2;
   var PDFJS_WORKER = '/mydrawings/lib/pdf.worker.min.js';
   var FLOORS = [
     { id: 'ground', label: 'Ground Floor' },
@@ -128,6 +128,7 @@
         var db = req.result;
         if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
         if (!db.objectStoreNames.contains('files')) db.createObjectStore('files');
+        if (!db.objectStoreNames.contains('wallTypeImages')) db.createObjectStore('wallTypeImages');
       };
       req.onsuccess = function () { resolve(req.result); };
       req.onerror = function () { reject(req.error); };
@@ -503,6 +504,7 @@
         localStorage.removeItem(DEVICE_KEY);
         sessionStorage.removeItem(SESSION_KEY);
         state.role = 'worker';
+        wallTypesCache = null;
         return;
       }
       var prev = readSession() || {};
@@ -771,6 +773,7 @@
     $('pin-input').value = '';
     renderPinDots();
     applyCatalog(data);
+    wallTypesCache = null;
     await cacheCatalog(data, (extra && extra.deviceToken) || (extra && extra.pin) || sessionSecret());
     await dropStaleOfflineCopies();
     ensureFloorThenHome({
@@ -1363,46 +1366,86 @@
     renderList();
   }
 
-  /* ---------- Wall Types catalog (Siniat Project Pack) ---------- */
+  /* ---------- Wall Types catalog (per company) ---------- */
   var wallTypesCache = null;
   var wallTypesQuery = '';
   var activeWallTypeId = '';
+  var wtImageUrls = {};
+  var wtFormMode = null;
 
-  async function loadWallTypesData() {
-    if (wallTypesCache) return wallTypesCache;
-    var res = await fetch('/mydrawings/data/medlock-wall-types.json', {
-      credentials: 'same-origin',
-      /* Prefer SW/HTTP cache so Wall Types opens offline after first install. */
-      cache: 'force-cache'
-    });
-    if (!res.ok) throw new Error(isOnline()
-      ? 'Could not load wall types.'
-      : 'Wall Types are not available offline yet. Open once online to download.');
-    wallTypesCache = await res.json();
+  function revokeWallTypeImageUrl(id) {
+    var key = String(id || '');
+    if (key && wtImageUrls[key]) {
+      try { URL.revokeObjectURL(wtImageUrls[key]); } catch (e) {}
+      delete wtImageUrls[key];
+    }
+  }
+
+  async function wallTypeDisplaySrc(wt) {
+    if (!wt || !wt.detailImage) return '';
+    var key = String(wt.id);
+    if (wtImageUrls[key]) return wtImageUrls[key];
+    try {
+      var rec = await idbGet('wallTypeImages', key);
+      if (rec && rec.blob) {
+        wtImageUrls[key] = URL.createObjectURL(rec.blob);
+        return wtImageUrls[key];
+      }
+    } catch (e) {}
+    if (!isOnline()) return '';
+    try {
+      var res = await fetch(wt.detailImage, { credentials: 'same-origin', headers: pinHeaders() });
+      if (!res.ok) return '';
+      var blob = await res.blob();
+      try { await idbSet('wallTypeImages', key, { blob: blob, updatedAt: wt.updatedAt || Date.now() }); } catch (e2) {}
+      wtImageUrls[key] = URL.createObjectURL(blob);
+      return wtImageUrls[key];
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function rememberWallTypes(data) {
+    wallTypesCache = data || null;
+    idbSet('meta', 'wallTypes', { data: data, savedAt: Date.now() }).catch(function () {});
+    if (data && data.wallTypes) {
+      data.wallTypes.forEach(function (wt) {
+        if (wt && wt.detailImage) wallTypeDisplaySrc(wt);
+      });
+    }
     return wallTypesCache;
   }
 
-  function warmWallTypesOfflineCache(data) {
-    if (!isOnline() || !('caches' in window) || !data || !data.wallTypes) return;
-    var urls = ['/mydrawings/data/medlock-wall-types.json'];
-    data.wallTypes.forEach(function (wt) {
-      if (wt && wt.detailImage) urls.push(wt.detailImage);
-    });
-    caches.keys().then(function (keys) {
-      var shell = keys.filter(function (k) { return k.indexOf('mydrawings-shell-') === 0; }).sort().pop();
-      if (!shell) return;
-      return caches.open(shell).then(function (cache) {
-        urls.forEach(function (url) {
-          cache.add(url).catch(function () {});
-        });
-      });
-    }).catch(function () {});
+  async function loadWallTypesData(force) {
+    if (wallTypesCache && !force) return wallTypesCache;
+    if (isOnline() && sessionSecret()) {
+      try {
+        var data = await apiJson('/wall-types');
+        return rememberWallTypes(data);
+      } catch (err) {
+        var cachedOnline = await idbGet('meta', 'wallTypes');
+        if (cachedOnline && cachedOnline.data) {
+          wallTypesCache = cachedOnline.data;
+          return wallTypesCache;
+        }
+        throw err;
+      }
+    }
+    var cached = await idbGet('meta', 'wallTypes');
+    if (cached && cached.data) {
+      wallTypesCache = cached.data;
+      return wallTypesCache;
+    }
+    throw new Error(isOnline()
+      ? 'Could not load wall types.'
+      : 'Wall Types are not available offline yet. Open once online to download.');
   }
 
   function wallTypeById(id) {
     var list = (wallTypesCache && wallTypesCache.wallTypes) || [];
+    var want = String(id || '');
     for (var i = 0; i < list.length; i++) {
-      if (list[i].id === id) return list[i];
+      if (String(list[i].id) === want) return list[i];
     }
     return null;
   }
@@ -1427,9 +1470,18 @@
       if (countEl) countEl.textContent = '';
       return;
     }
+    var all = (wallTypesCache.wallTypes) || [];
     var list = filteredWallTypes(wallTypesCache);
     if (countEl) {
       countEl.textContent = list.length + (list.length === 1 ? ' wall type' : ' wall types');
+    }
+    if (!all.length) {
+      host.innerHTML = '<div class="md-empty"><h3>No wall types yet</h3><p>' +
+        (state.role === 'admin'
+          ? 'Open SPEC in Manage to add this company’s specifications, or copy the starter pack.'
+          : 'Ask your company administrator to add wall type specifications.') +
+        '</p></div>';
+      return;
     }
     if (!list.length) {
       host.innerHTML = '<div class="md-empty"><h3>No matches</h3><p>Try another search.</p></div>';
@@ -1450,7 +1502,7 @@
     return s || '—';
   }
 
-  function renderWallTypeDetail(wt) {
+  function renderWallTypeDetail(wt, imageSrc) {
     var host = $('wall-type-detail');
     if (!host || !wt) return;
     var perf = wt.performance || {};
@@ -1468,6 +1520,7 @@
     if (wt.packPages && wt.packPages.detail) {
       pageNote = 'Pack page ' + wt.packPages.detail;
     }
+    var src = imageSrc || '';
 
     host.innerHTML =
       '<div class="wt-detail-meta">' +
@@ -1497,24 +1550,28 @@
           '<div><dt>Insulation</dt><dd>' + escapeHtml(wtOrDash(buildup.insulation)) + '</dd></div>' +
         '</dl>' +
       '</section>' +
-      (wt.detailImage
-        ? '<button type="button" class="wt-detail-figure" data-wt-image="' + escapeHtml(wt.detailImage) + '" aria-label="Open construction detail drawing">' +
-            '<img src="' + escapeHtml(wt.detailImage) + '" alt="Construction detail for ' + escapeHtml(wt.code) + '" loading="eager">' +
+      (src
+        ? '<button type="button" class="wt-detail-figure" data-wt-image="' + escapeHtml(src) + '" aria-label="Open construction detail drawing">' +
+            '<img src="' + escapeHtml(src) + '" alt="Construction detail for ' + escapeHtml(wt.code) + '" loading="eager">' +
             '<span class="wt-detail-caption">Construction detail' + (pageNote ? ' · ' + escapeHtml(pageNote) : '') + ' · Tap to enlarge</span>' +
           '</button>'
-        : '');
+        : (wt.detailImage
+          ? '<p class="mg-form-note">Construction detail is downloading…</p>'
+          : ''));
   }
 
-  function openWallTypeDetail(id) {
+  async function openWallTypeDetail(id) {
     var wt = wallTypeById(id);
     if (!wt) return;
     activeWallTypeId = id;
     if ($('wt-detail-code')) $('wt-detail-code').textContent = wt.code || 'Wall Type';
     if ($('wt-detail-name')) $('wt-detail-name').textContent = wt.name || '';
-    renderWallTypeDetail(wt);
+    renderWallTypeDetail(wt, wtImageUrls[String(wt.id)] || '');
     showScreen('screen-wall-type-detail');
     var main = $('wall-type-detail');
     if (main && main.parentElement) main.parentElement.scrollTop = 0;
+    var src = await wallTypeDisplaySrc(wt);
+    if (String(activeWallTypeId) === String(id)) renderWallTypeDetail(wt, src);
   }
 
   function closeWallTypeDetail() {
@@ -1772,15 +1829,14 @@
     if ($('wall-types-search')) $('wall-types-search').value = '';
     renderWallTypes();
     try {
-      var data = await loadWallTypesData();
+      var data = await loadWallTypesData(true);
       if ($('wall-types-sub')) {
-        var proj = (data.project && data.project.name) || 'Project';
+        var proj = (data.project && data.project.name) || 'Wall Types';
         var rev = data.pack && data.pack.revision ? (' · Pack Rev ' + data.pack.revision) : '';
         var off = !isOnline() ? ' · Offline' : '';
         $('wall-types-sub').textContent = proj + rev + off;
       }
       renderWallTypes();
-      warmWallTypesOfflineCache(data);
     } catch (err) {
       if ($('wall-types-list')) {
         $('wall-types-list').innerHTML = '<div class="md-empty"><h3>Could not load wall types</h3><p>' +
@@ -2216,6 +2272,7 @@
     if (name !== 'form') state.managePanel = name || 'home';
     var panel = name || state.managePanel || 'home';
     if ($('mg-form')) $('mg-form').hidden = panel !== 'form';
+    if ($('wt-form')) $('wt-form').hidden = panel !== 'wt-form';
     var ids = ['home', 'drawings', 'category', 'spec', 'users', 'access', 'settings'];
     for (var i = 0; i < ids.length; i++) {
       var el = $('ad-panel-' + ids[i]);
@@ -2225,13 +2282,15 @@
     for (var n = 0; n < nav.length; n++) {
       var btn = nav[n];
       var key = btn.getAttribute('data-ad-panel');
-      btn.classList.toggle('is-on', panel !== 'form' && key === panel && btn.id !== 'ad-logo');
+      var navKey = panel === 'wt-form' ? 'spec' : panel;
+      btn.classList.toggle('is-on', navKey !== 'form' && key === navKey && btn.id !== 'ad-logo');
     }
     setAdminNavOpen(false);
     if (panel === 'home') renderAdminChrome();
     if (panel === 'users') loadWorkers();
     if (panel === 'drawings' || panel === 'category') renderManage();
     if (panel === 'access') renderAdminChrome();
+    if (panel === 'spec') loadSpecWallTypes();
   }
 
   function openManage() {
@@ -2263,13 +2322,227 @@
   }
 
   function hideManageForm() {
-    var wasForm = $('mg-form') && !$('mg-form').hidden;
+    var wasForm = ($('mg-form') && !$('mg-form').hidden) || ($('wt-form') && !$('wt-form').hidden);
+    var backTo = wtFormMode ? 'spec' : (state.managePanel || 'drawings');
     state.manageMode = null;
+    wtFormMode = null;
     if ($('mg-form')) $('mg-form').hidden = true;
+    if ($('wt-form')) $('wt-form').hidden = true;
     if ($('mg-file')) $('mg-file').value = '';
     if ($('mg-error')) $('mg-error').textContent = '';
     if ($('mg-file-name')) $('mg-file-name').textContent = 'No file selected';
-    if (wasForm) showManagePanel(state.managePanel || 'drawings');
+    if ($('wt-error')) $('wt-error').textContent = '';
+    if ($('wt-image')) $('wt-image').value = '';
+    if (wasForm) showManagePanel(backTo);
+  }
+
+  function setSpecStatus(msg, isError) {
+    var el = $('mg-spec-status');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = isError ? '#b91c1c' : '';
+  }
+
+  function fillSpecPackFields(data) {
+    if ($('wt-pack-project')) $('wt-pack-project').value = (data && data.project && data.project.name) || '';
+    if ($('wt-pack-title')) $('wt-pack-title').value = (data && data.pack && data.pack.title) || '';
+    if ($('wt-pack-revision')) $('wt-pack-revision').value = (data && data.pack && data.pack.revision) || '';
+  }
+
+  function renderSpecWallTypes() {
+    var host = $('mg-wt-list');
+    if (!host) return;
+    var list = (wallTypesCache && wallTypesCache.wallTypes) || [];
+    if (!list.length) {
+      host.innerHTML = '<p class="mg-form-note">No wall types for this company yet.</p>';
+      return;
+    }
+    host.innerHTML = list.map(function (wt) {
+      var lining = wt.kind === 'lining';
+      return '<article class="mg-item" data-wt-id="' + escapeHtml(wt.id) + '">' +
+        '<p class="mg-item-title">' + escapeHtml(wt.code) + (lining ? ' · lining' : '') + '</p>' +
+        '<p class="mg-item-num">' + escapeHtml(wt.name || '—') + '</p>' +
+        '<p class="mg-item-meta">' + escapeHtml(wt.systemRef || wt.systemType || '') + '</p>' +
+        '<div class="mg-item-actions">' +
+          '<button type="button" data-wt="edit">Edit</button>' +
+          '<button type="button" class="is-danger" data-wt="delete">Delete</button>' +
+        '</div></article>';
+    }).join('');
+  }
+
+  async function loadSpecWallTypes() {
+    setSpecStatus('Loading wall types…');
+    try {
+      var data = await loadWallTypesData(true);
+      fillSpecPackFields(data);
+      renderSpecWallTypes();
+      var n = (data.wallTypes || []).length;
+      setSpecStatus(n ? (n + (n === 1 ? ' wall type' : ' wall types')) : '');
+    } catch (err) {
+      renderSpecWallTypes();
+      setSpecStatus(err && err.message ? err.message : 'Could not load wall types.', true);
+    }
+  }
+
+  function emptyLayerRow() {
+    return { side: '', board: '' };
+  }
+
+  function readLayerRows() {
+    var host = $('wt-layers');
+    if (!host) return [];
+    return Array.prototype.map.call(host.querySelectorAll('.wt-layer-row'), function (row) {
+      var side = row.querySelector('.wt-layer-side');
+      var board = row.querySelector('.wt-layer-board');
+      return {
+        side: side ? String(side.value || '').trim() : '',
+        board: board ? String(board.value || '').trim() : ''
+      };
+    }).filter(function (layer) { return layer.side || layer.board; });
+  }
+
+  function renderLayerRows(layers) {
+    var host = $('wt-layers');
+    if (!host) return;
+    var list = (layers && layers.length) ? layers.slice() : [emptyLayerRow(), emptyLayerRow()];
+    host.innerHTML = list.map(function (layer) {
+      return '<div class="wt-layer-row">' +
+        '<input class="wt-layer-side" type="text" maxlength="80" placeholder="Side (A inner)" value="' + escapeHtml(layer.side || '') + '">' +
+        '<input class="wt-layer-board" type="text" maxlength="200" placeholder="Board" value="' + escapeHtml(layer.board || '') + '">' +
+        '<button type="button" data-wt-layer="remove" aria-label="Remove layer">×</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  function showWallTypeForm(mode) {
+    wtFormMode = mode || { type: 'add' };
+    state.managePanel = 'spec';
+    var main = document.querySelector('#screen-manage .ad-content');
+    if (main) main.scrollTop = 0;
+    showManagePanel('wt-form');
+    if ($('wt-error')) $('wt-error').textContent = '';
+    if ($('wt-image')) $('wt-image').value = '';
+    if ($('wt-image-name')) $('wt-image-name').textContent = 'No file selected';
+    var wt = mode && mode.id ? wallTypeById(mode.id) : null;
+    var buildup = (wt && wt.buildup) || {};
+    var perf = (wt && wt.performance) || {};
+    if ($('wt-form-title')) $('wt-form-title').textContent = wt ? 'Edit wall type' : 'Add wall type';
+    if ($('wt-code')) $('wt-code').value = wt ? wt.code : '';
+    if ($('wt-kind')) $('wt-kind').value = wt && wt.kind === 'lining' ? 'lining' : 'wall';
+    if ($('wt-name')) $('wt-name').value = wt ? (wt.name || '') : '';
+    if ($('wt-system-ref')) $('wt-system-ref').value = wt ? (wt.systemRef || '') : '';
+    if ($('wt-system-type')) $('wt-system-type').value = wt ? (wt.systemType || '') : '';
+    if ($('wt-fire')) $('wt-fire').value = perf.fireMinutes || '';
+    if ($('wt-fire-class')) $('wt-fire-class').value = perf.fireClass || '';
+    if ($('wt-acoustic')) $('wt-acoustic').value = perf.acoustic || '';
+    if ($('wt-thickness')) $('wt-thickness').value = perf.thickness || '';
+    if ($('wt-height')) $('wt-height').value = perf.maxHeightM || '';
+    if ($('wt-duty')) $('wt-duty').value = perf.duty || '';
+    if ($('wt-studs')) $('wt-studs').value = buildup.studs || '';
+    if ($('wt-insulation')) $('wt-insulation').value = buildup.insulation || '';
+    renderLayerRows(buildup.layers || []);
+    if ($('wt-image-name')) {
+      $('wt-image-name').textContent = wt && wt.hasImage ? 'Current image kept unless you choose a new file' : 'No file selected';
+    }
+    if ($('btn-wt-save')) $('btn-wt-save').textContent = wt ? 'Save changes' : 'Save wall type';
+  }
+
+  function wallTypeFormData() {
+    var fd = new FormData();
+    fd.append('code', ($('wt-code') && $('wt-code').value) || '');
+    fd.append('kind', ($('wt-kind') && $('wt-kind').value) || 'wall');
+    fd.append('name', ($('wt-name') && $('wt-name').value) || '');
+    fd.append('systemRef', ($('wt-system-ref') && $('wt-system-ref').value) || '');
+    fd.append('systemType', ($('wt-system-type') && $('wt-system-type').value) || '');
+    fd.append('fireMinutes', ($('wt-fire') && $('wt-fire').value) || '');
+    fd.append('fireClass', ($('wt-fire-class') && $('wt-fire-class').value) || '');
+    fd.append('acoustic', ($('wt-acoustic') && $('wt-acoustic').value) || '');
+    fd.append('thickness', ($('wt-thickness') && $('wt-thickness').value) || '');
+    fd.append('maxHeightM', ($('wt-height') && $('wt-height').value) || '');
+    fd.append('duty', ($('wt-duty') && $('wt-duty').value) || '');
+    fd.append('studs', ($('wt-studs') && $('wt-studs').value) || '');
+    fd.append('insulation', ($('wt-insulation') && $('wt-insulation').value) || '');
+    fd.append('layers', JSON.stringify(readLayerRows()));
+    var file = $('wt-image') && $('wt-image').files && $('wt-image').files[0];
+    if (file) fd.append('image', file, file.name || 'detail.jpg');
+    return fd;
+  }
+
+  async function submitWallTypeForm(e) {
+    if (e) e.preventDefault();
+    if ($('wt-error')) $('wt-error').textContent = '';
+    var code = ($('wt-code') && $('wt-code').value || '').replace(/\s+/g, '').toUpperCase();
+    if (!/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(code)) {
+      if ($('wt-error')) $('wt-error').textContent = 'Enter a wall type code (letters, numbers, 2–40 characters).';
+      return;
+    }
+    try {
+      var path = wtFormMode && wtFormMode.id
+        ? '/wall-types/' + encodeURIComponent(wtFormMode.id)
+        : '/wall-types';
+      var data = await apiJson(path, {
+        method: wtFormMode && wtFormMode.id ? 'PUT' : 'POST',
+        body: wallTypeFormData()
+      });
+      if (wtFormMode && wtFormMode.id) revokeWallTypeImageUrl(wtFormMode.id);
+      rememberWallTypes(data);
+      hideManageForm();
+      fillSpecPackFields(data);
+      renderSpecWallTypes();
+      setSpecStatus(data.message || 'Wall type saved.');
+    } catch (err) {
+      if ($('wt-error')) $('wt-error').textContent = err && err.message ? err.message : 'Could not save wall type.';
+    }
+  }
+
+  async function saveWallTypesPack() {
+    setSpecStatus('');
+    if ($('wt-pack-error')) $('wt-pack-error').textContent = '';
+    try {
+      var data = await apiJson('/wall-types/pack', {
+        method: 'PUT',
+        body: {
+          projectName: ($('wt-pack-project') && $('wt-pack-project').value) || '',
+          packTitle: ($('wt-pack-title') && $('wt-pack-title').value) || '',
+          revision: ($('wt-pack-revision') && $('wt-pack-revision').value) || ''
+        }
+      });
+      rememberWallTypes(data);
+      fillSpecPackFields(data);
+      setSpecStatus('Pack details saved.');
+    } catch (err) {
+      if ($('wt-pack-error')) $('wt-pack-error').textContent = err && err.message ? err.message : 'Could not save pack details.';
+    }
+  }
+
+  async function seedCompanyWallTypes() {
+    if (!confirm('Copy the Siniat starter pack into this company? Existing codes stay as they are.')) return;
+    setSpecStatus('Copying starter pack…');
+    try {
+      var data = await apiJson('/wall-types/seed-starter', { method: 'POST', body: {} });
+      rememberWallTypes(data);
+      fillSpecPackFields(data);
+      renderSpecWallTypes();
+      setSpecStatus(data.message || 'Starter pack copied.');
+    } catch (err) {
+      setSpecStatus(err && err.message ? err.message : 'Could not copy the starter pack.', true);
+    }
+  }
+
+  async function deleteCompanyWallType(id) {
+    var wt = wallTypeById(id);
+    if (!wt) return;
+    if (!confirm('Delete ' + (wt.code || 'this wall type') + ' for everyone in this company?')) return;
+    try {
+      var data = await apiJson('/wall-types/' + encodeURIComponent(id), { method: 'DELETE' });
+      revokeWallTypeImageUrl(id);
+      try { await idbDel('wallTypeImages', String(id)); } catch (e) {}
+      rememberWallTypes(data);
+      renderSpecWallTypes();
+      setSpecStatus((wt.code || 'Wall type') + ' deleted.');
+    } catch (err) {
+      setSpecStatus(err && err.message ? err.message : 'Could not delete wall type.', true);
+    }
   }
 
   function fillCategorySelect(selected) {
@@ -2989,6 +3262,36 @@
     setAdminNavOpen(false);
     state.wallTypesFromManage = true;
     openWallTypes();
+  });
+  on($('btn-wt-add'), 'click', function () { showWallTypeForm({ type: 'add' }); });
+  on($('btn-wt-save-pack'), 'click', saveWallTypesPack);
+  on($('btn-wt-seed'), 'click', seedCompanyWallTypes);
+  on($('btn-wt-cancel'), 'click', hideManageForm);
+  on($('wt-form'), 'submit', submitWallTypeForm);
+  on($('btn-wt-add-layer'), 'click', function () {
+    var layers = readLayerRows();
+    layers.push({ side: '', board: '' });
+    renderLayerRows(layers);
+  });
+  on($('wt-layers'), 'click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-wt-layer="remove"]') : null;
+    if (!btn) return;
+    var row = btn.closest('.wt-layer-row');
+    if (row && row.parentNode) row.parentNode.removeChild(row);
+    if ($('wt-layers') && !$('wt-layers').querySelector('.wt-layer-row')) renderLayerRows([]);
+  });
+  on($('wt-image'), 'change', function () {
+    var file = $('wt-image') && $('wt-image').files && $('wt-image').files[0];
+    if ($('wt-image-name')) $('wt-image-name').textContent = file ? file.name : 'No file selected';
+  });
+  on($('mg-wt-list'), 'click', function (e) {
+    var item = e.target && e.target.closest ? e.target.closest('[data-wt-id]') : null;
+    if (!item) return;
+    var id = item.getAttribute('data-wt-id');
+    var act = e.target.closest('[data-wt]');
+    var which = act ? act.getAttribute('data-wt') : '';
+    if (which === 'edit') showWallTypeForm({ type: 'edit', id: id });
+    if (which === 'delete') deleteCompanyWallType(id);
   });
   on($('btn-ad-site'), 'click', closeManage);
   on($('btn-ad-lock'), 'click', function () { handleSheet('lock'); });

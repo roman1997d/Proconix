@@ -283,9 +283,32 @@
               <section class="mg-block">
                 <div class="mg-block-head">
                   <h2>SPEC</h2>
+                  <button type="button" class="mg-add-dwg" id="btn-wt-add">
+                    <svg class="md-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                    Add wall type
+                  </button>
                 </div>
-                <p class="mg-form-note">Siniat Wall Types catalog used on site. Workers open it from My Drawings while viewing a floor.</p>
-                <button type="button" class="md-btn md-btn-primary" id="btn-ad-wall-types">Open Wall Types</button>
+                <p class="mg-form-note">This company’s wall types. Workers open the same catalog on site. New companies start empty; you can copy the Siniat starter pack or add your own.</p>
+                <label class="mg-field">
+                  <span>Project / site name</span>
+                  <input id="wt-pack-project" type="text" maxlength="200" autocomplete="off" placeholder="Site name">
+                </label>
+                <label class="mg-field">
+                  <span>Pack title</span>
+                  <input id="wt-pack-title" type="text" maxlength="200" autocomplete="off" placeholder="Wall Types">
+                </label>
+                <label class="mg-field">
+                  <span>Revision</span>
+                  <input id="wt-pack-revision" type="text" maxlength="40" autocomplete="off" placeholder="A">
+                </label>
+                <p class="md-error" id="wt-pack-error" role="alert"></p>
+                <div class="ad-settings-actions">
+                  <button type="button" class="md-btn md-btn-ghost" id="btn-wt-save-pack">Save pack details</button>
+                  <button type="button" class="md-btn md-btn-ghost" id="btn-wt-seed">Copy starter pack</button>
+                  <button type="button" class="md-btn md-btn-primary" id="btn-ad-wall-types">Open Wall Types</button>
+                </div>
+                <p class="mg-form-note" id="mg-spec-status"></p>
+                <div id="mg-wt-list"></div>
               </section>
             </div>
             <div class="ad-panel" id="ad-panel-users" hidden>
@@ -371,6 +394,64 @@
             <button type="submit" class="md-btn md-btn-primary" id="btn-mg-save">Save</button>
           </div>
         </form>
+            <form id="wt-form" class="mg-form" hidden>
+              <h2 id="wt-form-title">Add wall type</h2>
+              <p class="mg-form-note">Saved to this company only. Workers see it the next time they open Wall Types.</p>
+              <label class="mg-field">
+                <span>Code</span>
+                <input id="wt-code" type="text" maxlength="40" placeholder="WT01B" autocomplete="off" autocapitalize="characters" required>
+              </label>
+              <label class="mg-field">
+                <span>Kind</span>
+                <select id="wt-kind">
+                  <option value="wall">Wall</option>
+                  <option value="lining">Lining</option>
+                </select>
+              </label>
+              <label class="mg-field">
+                <span>Where it is used</span>
+                <input id="wt-name" type="text" maxlength="300" placeholder="Bedroom to corridor" autocomplete="off">
+              </label>
+              <label class="mg-field">
+                <span>System ref</span>
+                <input id="wt-system-ref" type="text" maxlength="120" placeholder="CS50R-215dB-25G" autocomplete="off">
+              </label>
+              <label class="mg-field">
+                <span>System type</span>
+                <input id="wt-system-type" type="text" maxlength="200" placeholder="Single Frame Metal Stud Partition" autocomplete="off">
+              </label>
+              <div class="wt-perf-fields">
+                <label class="mg-field"><span>Fire (minutes)</span><input id="wt-fire" type="text" maxlength="40" placeholder="90" inputmode="numeric"></label>
+                <label class="mg-field"><span>Fire class</span><input id="wt-fire-class" type="text" maxlength="80" placeholder=""></label>
+                <label class="mg-field"><span>Acoustic</span><input id="wt-acoustic" type="text" maxlength="80" placeholder="55"></label>
+                <label class="mg-field"><span>Thickness</span><input id="wt-thickness" type="text" maxlength="40" placeholder="110mm"></label>
+                <label class="mg-field"><span>Max height (m)</span><input id="wt-height" type="text" maxlength="40" placeholder="4.1"></label>
+                <label class="mg-field"><span>Duty</span><input id="wt-duty" type="text" maxlength="40" placeholder="Severe"></label>
+              </div>
+              <div class="mg-field">
+                <span>Boarding layers</span>
+                <div id="wt-layers"></div>
+                <button type="button" class="md-btn md-btn-ghost" id="btn-wt-add-layer">Add layer</button>
+              </div>
+              <label class="mg-field">
+                <span>Studs / framing</span>
+                <input id="wt-studs" type="text" maxlength="300" placeholder="50mm C Studs at 600mm centres" autocomplete="off">
+              </label>
+              <label class="mg-field">
+                <span>Insulation</span>
+                <input id="wt-insulation" type="text" maxlength="300" placeholder="Glass Mineral Wool · 25mm" autocomplete="off">
+              </label>
+              <label class="mg-field">
+                <span>Construction detail image</span>
+                <input id="wt-image" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp">
+                <span class="mg-file-name" id="wt-image-name">No file selected</span>
+              </label>
+              <p class="md-error" id="wt-error" role="alert"></p>
+              <div class="mg-form-actions">
+                <button type="button" class="md-btn md-btn-ghost" id="btn-wt-cancel">Cancel</button>
+                <button type="submit" class="md-btn md-btn-primary" id="btn-wt-save">Save wall type</button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
@@ -399,7 +480,7 @@
         </button>
         <div class="md-header-text">
           <h1 class="md-header-title">Wall Types</h1>
-          <p class="md-header-sub" id="wall-types-sub">1 Medlock Street</p>
+          <p class="md-header-sub" id="wall-types-sub">Company specifications</p>
         </div>
         <span class="md-offline" id="wall-types-offline" aria-live="polite"><i></i> Offline</span>
       </header>

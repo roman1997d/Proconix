@@ -1,5 +1,5 @@
-/* My Drawings PWA — app shell + Wall Types catalog (offline). PDFs stay in IndexedDB. */
-var CACHE = 'mydrawings-shell-v51';
+/* My Drawings PWA — app shell (offline). PDFs and company Wall Types stay in IndexedDB. */
+var CACHE = 'mydrawings-shell-v52';
 var PRECACHE = [
   '/mydrawings/',
   '/mydrawings/index.html',
@@ -7,39 +7,8 @@ var PRECACHE = [
   '/mydrawings/mydrawings.js',
   '/mydrawings/drawing-viewer.js',
   '/mydrawings/manifest.webmanifest',
-  '/mydrawings/data/medlock-wall-types.json',
   '/mydrawings/lib/pdf.min.js',
-  '/mydrawings/lib/pdf.worker.min.js',
-  /* Wall Types construction details — available offline */
-  '/mydrawings/data/wall-types/wt01b.jpg',
-  '/mydrawings/data/wall-types/wt01c.jpg',
-  '/mydrawings/data/wall-types/wt03c.jpg',
-  '/mydrawings/data/wall-types/wt05b.jpg',
-  '/mydrawings/data/wall-types/wt07.jpg',
-  '/mydrawings/data/wall-types/wt08a-svp.jpg',
-  '/mydrawings/data/wall-types/wt08a-svp-36.jpg',
-  '/mydrawings/data/wall-types/wt08d.jpg',
-  '/mydrawings/data/wall-types/wt08e.jpg',
-  '/mydrawings/data/wall-types/wt09.jpg',
-  '/mydrawings/data/wall-types/wt10a.jpg',
-  '/mydrawings/data/wall-types/wt10b.jpg',
-  '/mydrawings/data/wall-types/wt20a.jpg',
-  '/mydrawings/data/wall-types/wt20b.jpg',
-  '/mydrawings/data/wall-types/wt21.jpg',
-  '/mydrawings/data/wall-types/wt21a.jpg',
-  '/mydrawings/data/wall-types/wt23.jpg',
-  '/mydrawings/data/wall-types/wt24.jpg',
-  '/mydrawings/data/wall-types/wt24a.jpg',
-  '/mydrawings/data/wall-types/wt25.jpg',
-  '/mydrawings/data/wall-types/wt26.jpg',
-  '/mydrawings/data/wall-types/wt26a.jpg',
-  '/mydrawings/data/wall-types/wt27.jpg',
-  '/mydrawings/data/wall-types/wt28.jpg',
-  '/mydrawings/data/wall-types/wt29.jpg',
-  '/mydrawings/data/wall-types/wt31.jpg',
-  '/mydrawings/data/wall-types/wt32.jpg',
-  '/mydrawings/data/wall-types/wt33.jpg',
-  '/mydrawings/data/wall-types/wt34.jpg'
+  '/mydrawings/lib/pdf.worker.min.js'
 ];
 
 function precacheAll(cache) {

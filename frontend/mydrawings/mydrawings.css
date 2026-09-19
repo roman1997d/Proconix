@@ -1770,6 +1770,38 @@ a.md-link { color: var(--md-accent); }
   color: #1b2433;
   border: 1px solid #d7dee8;
 }
+.wt-perf-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+}
+.wt-layer-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+.wt-layer-row input {
+  flex: 1;
+  min-width: 0;
+}
+.wt-layer-row button {
+  flex: 0 0 auto;
+  min-width: 36px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: #fde8e8;
+  color: #b91c1c;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+#wt-layers { margin-bottom: 8px; }
+#mg-spec-status { min-height: 1.2em; }
+@media (max-width: 620px) {
+  .wt-perf-fields { grid-template-columns: 1fr; }
+  .wt-layer-row { flex-wrap: wrap; }
+}
 .ad-screen .md-search input { color: #1b2433; }
 .ad-screen .mg-cat-row,
 .ad-screen .mg-group,
