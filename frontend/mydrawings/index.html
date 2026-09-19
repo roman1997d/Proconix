@@ -181,59 +181,158 @@
       </div>
     </section>
 
-    <section class="md-screen" id="screen-manage" aria-label="Manage drawings">
-      <header class="md-header">
-        <button type="button" class="md-icon-btn" id="btn-manage-back" aria-label="Back to drawings">
-          <svg class="md-icon md-icon-lg" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
-        </button>
-        <div class="md-header-text">
-          <h1 class="md-header-title">Manage</h1>
-          <p class="md-header-sub">Users, drawings &amp; categories</p>
-        </div>
-      </header>
-      <div class="md-main mg-main">
-        <div id="mg-home">
-          <section class="mg-block">
-            <div class="mg-block-head">
-              <h2>Users</h2>
+    <section class="md-screen ad-screen" id="screen-manage" aria-label="Manage drawings">
+      <div class="ad-shell">
+        <aside class="ad-sidebar" id="ad-sidebar">
+          <button type="button" class="ad-logo" id="ad-logo" data-ad-panel="home" aria-label="Dashboard">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <path d="M8 28 L32 14 L56 28 L32 22 Z" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+              <path d="M18 30 v8 c0 6 6 10 14 10 s14-4 14-10 v-8" fill="none" stroke="currentColor" stroke-width="2.6"/>
+              <path d="M22 44 l18-18 7 7-18 18-8 2 z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <p class="ad-menu-label">MENU</p>
+          <nav class="ad-nav" aria-label="Administration">
+            <button type="button" data-ad-panel="drawings">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h7l2 2h7v10H4z"/><path d="M4 7V5h6l2 2"/></svg>
+              DRAWINGS
+            </button>
+            <button type="button" data-ad-panel="category">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12l9-9 9 9-9 9z"/><circle cx="8.5" cy="8.5" r="1.2" fill="currentColor" stroke="none"/></svg>
+              CATEGORY
+            </button>
+            <button type="button" data-ad-panel="spec">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v3H8z"/><path d="M6 7h12v13H6z"/><path d="M9 12h6M9 16h6"/></svg>
+              SPEC
+            </button>
+            <span class="ad-nav-line" aria-hidden="true"></span>
+            <button type="button" data-ad-panel="users">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.6-3 2.8-5 5.5-5s4.9 2 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.2.4 3.8 2.2 4.3 4.8"/></svg>
+              USERS
+            </button>
+            <button type="button" data-ad-panel="access">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="M11.5 12.5 L21 4 v4 M17 4 h4"/></svg>
+              ACCES code
+            </button>
+            <button type="button" data-ad-panel="settings">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M4.9 6.5l1.6 1.6M17.5 15.9l1.6 1.6M3 12h2.2M18.8 12H21M4.9 17.5l1.6-1.6M17.5 8.1l1.6-1.6"/></svg>
+              Setting
+            </button>
+          </nav>
+        </aside>
+        <div class="ad-main">
+          <header class="ad-top">
+            <button type="button" class="ad-burger" id="ad-menu-btn" aria-label="Open menu">
+              <svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg>
+            </button>
+            <h1 class="ad-welcome" id="ad-welcome">Welcome :</h1>
+            <p class="ad-company" id="ad-company"></p>
+            <span class="ad-avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.4" fill="currentColor" stroke="none"/><path d="M5 19.2c.7-3.6 3.2-5.4 7-5.4s6.3 1.8 7 5.4" fill="currentColor" stroke="none"/></svg>
+            </span>
+          </header>
+          <div class="ad-content">
+            <div class="ad-panel" id="ad-panel-home">
+              <div class="ad-dash">
+                <div class="ad-clock" id="ad-clock" aria-hidden="true">
+                  <span class="ad-clock-n" style="--a:0">12</span>
+                  <span class="ad-clock-n" style="--a:30">1</span>
+                  <span class="ad-clock-n" style="--a:60">2</span>
+                  <span class="ad-clock-n" style="--a:90">3</span>
+                  <span class="ad-clock-n" style="--a:120">4</span>
+                  <span class="ad-clock-n" style="--a:150">5</span>
+                  <span class="ad-clock-n" style="--a:180">6</span>
+                  <span class="ad-clock-n" style="--a:210">7</span>
+                  <span class="ad-clock-n" style="--a:240">8</span>
+                  <span class="ad-clock-n" style="--a:270">9</span>
+                  <span class="ad-clock-n" style="--a:300">10</span>
+                  <span class="ad-clock-n" style="--a:330">11</span>
+                  <div class="ad-clock-hour" id="ad-hour"></div>
+                  <div class="ad-clock-min" id="ad-min"></div>
+                  <div class="ad-clock-dot"></div>
+                </div>
+                <ul class="ad-stats">
+                  <li><strong id="ad-stat-drawings">0</strong> DRAWINGS</li>
+                  <li><strong id="ad-stat-published">0</strong> Publisheet</li>
+                  <li><strong id="ad-stat-draft">0</strong> DRAFT</li>
+                </ul>
+              </div>
             </div>
-            <p class="mg-form-note">Everyone registered in My Drawings for this company.</p>
-            <p class="mg-host-code" id="mg-host-code" hidden></p>
-            <label class="mg-field">
-              <span>My Drawings users</span>
-              <select id="mg-users" aria-label="My Drawings users">
-                <option value="">Loading…</option>
-              </select>
-            </label>
-            <div class="mg-user-detail" id="mg-user-detail" hidden></div>
-          </section>
-          <section class="mg-block">
-            <div class="mg-block-head">
-              <h2>Categories</h2>
+            <div class="ad-panel" id="ad-panel-drawings" hidden>
+              <section class="mg-block">
+                <div class="mg-block-head">
+                  <h2>Drawings</h2>
+                  <button type="button" class="mg-add-dwg" id="btn-mg-add">
+                    <svg class="md-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                    Add drawing
+                  </button>
+                </div>
+                <label class="md-search mg-search">
+                  <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                  <input id="mg-search" type="search" placeholder="Search drawings to edit..." enterkeyhint="search" autocapitalize="off" autocomplete="off" spellcheck="false">
+                </label>
+                <div id="mg-list"></div>
+              </section>
             </div>
-            <p class="mg-form-note">Rename or change display order. Categories cannot be deleted.</p>
-            <div class="mg-cats" id="mg-cats"></div>
-            <div class="mg-add-row">
-              <input id="mg-cat-input" type="text" maxlength="80" placeholder="New category name" autocomplete="off">
-              <button type="button" class="md-btn md-btn-ghost" id="btn-mg-add-cat">Add</button>
+            <div class="ad-panel" id="ad-panel-category" hidden>
+              <section class="mg-block">
+                <div class="mg-block-head">
+                  <h2>Categories</h2>
+                </div>
+                <p class="mg-form-note">Rename or change display order. Categories cannot be deleted.</p>
+                <div class="mg-cats" id="mg-cats"></div>
+                <div class="mg-add-row">
+                  <input id="mg-cat-input" type="text" maxlength="80" placeholder="New category name" autocomplete="off">
+                  <button type="button" class="md-btn md-btn-ghost" id="btn-mg-add-cat">Add</button>
+                </div>
+              </section>
             </div>
-          </section>
-          <section class="mg-block">
-            <div class="mg-block-head">
-              <h2>Drawings</h2>
-              <button type="button" class="mg-add-dwg" id="btn-mg-add">
-                <svg class="md-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-                Add drawing
-              </button>
+            <div class="ad-panel" id="ad-panel-spec" hidden>
+              <section class="mg-block">
+                <div class="mg-block-head">
+                  <h2>SPEC</h2>
+                </div>
+                <p class="mg-form-note">Siniat Wall Types catalog used on site. Workers open it from My Drawings while viewing a floor.</p>
+                <button type="button" class="md-btn md-btn-primary" id="btn-ad-wall-types">Open Wall Types</button>
+              </section>
             </div>
-            <label class="md-search mg-search">
-              <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-              <input id="mg-search" type="search" placeholder="Search drawings to edit..." enterkeyhint="search" autocapitalize="off" autocomplete="off" spellcheck="false">
-            </label>
-            <div id="mg-list"></div>
-          </section>
-        </div>
-        <form id="mg-form" class="mg-form" hidden>
+            <div class="ad-panel" id="ad-panel-users" hidden>
+              <section class="mg-block">
+                <div class="mg-block-head">
+                  <h2>Users</h2>
+                </div>
+                <p class="mg-form-note">Everyone registered in My Drawings for this company.</p>
+                <label class="mg-field">
+                  <span>My Drawings users</span>
+                  <select id="mg-users" aria-label="My Drawings users">
+                    <option value="">Loading…</option>
+                  </select>
+                </label>
+                <div class="mg-user-detail" id="mg-user-detail" hidden></div>
+              </section>
+            </div>
+            <div class="ad-panel" id="ad-panel-access" hidden>
+              <section class="mg-block">
+                <div class="mg-block-head">
+                  <h2>Access code</h2>
+                </div>
+                <p class="mg-form-note">Give this host code to workers when they create an account. They will only see this company’s drawings.</p>
+                <p class="ad-access-code" id="mg-host-code">—</p>
+              </section>
+            </div>
+            <div class="ad-panel" id="ad-panel-settings" hidden>
+              <section class="mg-block">
+                <div class="mg-block-head">
+                  <h2>Setting</h2>
+                </div>
+                <p class="mg-form-note">Open the worker drawing list, or leave the company session on this device.</p>
+                <div class="ad-settings-actions">
+                  <button type="button" class="md-btn md-btn-ghost" id="btn-ad-site">View site drawings</button>
+                  <button type="button" class="md-btn md-btn-primary" id="btn-ad-lock">Sign out</button>
+                </div>
+              </section>
+            </div>
+            <form id="mg-form" class="mg-form" hidden>
           <h2 id="mg-form-title">Add drawing</h2>
           <p class="mg-form-note" id="mg-form-note"></p>
           <label class="mg-field">
@@ -275,7 +374,10 @@
             <button type="submit" class="md-btn md-btn-primary" id="btn-mg-save">Save</button>
           </div>
         </form>
+          </div>
+        </div>
       </div>
+      <div class="ad-scrim" id="ad-scrim" hidden></div>
     </section>
 
     <section class="md-screen" id="screen-activity" aria-label="Activity">

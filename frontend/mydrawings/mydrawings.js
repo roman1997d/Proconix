@@ -59,7 +59,11 @@
     viewerFrom: '',
     wallTypesReturnDrawingId: '',
     workers: [],
-    accessCode: ''
+    accessCode: '',
+    managerName: '',
+    companyName: '',
+    managePanel: 'home',
+    wallTypesFromManage: false
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -511,7 +515,8 @@
         adminToken: extra && extra.adminToken != null ? String(extra.adminToken) : prev.adminToken || '',
         firstName: extra && extra.firstName != null ? extra.firstName : prev.firstName || '',
         lastName: extra && extra.lastName != null ? extra.lastName : prev.lastName || '',
-        email: extra && extra.email != null ? extra.email : prev.email || ''
+        email: extra && extra.email != null ? extra.email : prev.email || '',
+        managerName: extra && extra.managerName != null ? extra.managerName : prev.managerName || ''
       };
       if (payload.role !== 'admin') {
         payload.pin = '';
@@ -605,6 +610,10 @@
 
   function ensureFloorThenHome(opts) {
     opts = opts || {};
+    if (state.role === 'admin') {
+      openManage();
+      return;
+    }
     if (opts.deepLink) state.pendingDeepLink = opts.deepLink;
     var floor = readFloor();
     if (!floor) {
@@ -627,6 +636,8 @@
       var el = $(sid);
       if (el) el.classList.toggle('is-active', sid === id);
     });
+    if (id === 'screen-manage') startAdminClock();
+    else stopAdminClock();
   }
 
   function setOfflineUi() {
@@ -863,7 +874,8 @@
         role: 'admin',
         email: data.email || email,
         firstName: data.managerName || '',
-        lastName: ''
+        lastName: '',
+        managerName: data.managerName || ''
       });
       openManage();
     } catch (err) {
@@ -956,9 +968,17 @@
     state.categories = data.categories || [];
     state.drawings = data.drawings || [];
     state.accessCode = data.accessCode || state.accessCode || '';
+    if (data.managerName) state.managerName = data.managerName;
+    if (data.company && data.company.name) state.companyName = data.company.name;
+    else if (data.project && data.project.name) state.companyName = data.project.name;
+    if (data.company && data.company.managerName) state.managerName = data.company.managerName;
     $('project-name').textContent = state.project.name || 'Project';
     updateHeaderFloor();
     renderCats();
+    if ($('screen-manage') && $('screen-manage').classList.contains('is-active')) {
+      renderAdminChrome();
+      renderManage();
+    }
   }
 
   /* ---------- List ---------- */
@@ -1220,6 +1240,7 @@
     document.getElementById('md-app').classList.remove('is-fs');
     if (fromManage && state.role === 'admin') {
       showScreen('screen-manage');
+      showManagePanel('drawings');
       renderManage();
     } else {
       showScreen('screen-list');
@@ -1758,6 +1779,12 @@
       openViewer(returnId, false, state.viewerFrom || '');
       return;
     }
+    if (state.wallTypesFromManage && state.role === 'admin') {
+      state.wallTypesFromManage = false;
+      openManage();
+      showManagePanel('spec');
+      return;
+    }
     showScreen('screen-list');
     renderCats();
     renderList();
@@ -1929,46 +1956,119 @@
     fillWorkersSelect();
   }
 
+  var adminClockTimer = 0;
+
+  function formatWelcomeName() {
+    var session = readSession() || {};
+    var first = (state.managerName || session.managerName || session.firstName || '').trim();
+    var last = (session.lastName || '').trim();
+    if (first && last) return first.toLowerCase() + ' ' + last.toUpperCase();
+    if (first) {
+      var parts = first.split(/\s+/);
+      if (parts.length >= 2) return parts[0].toLowerCase() + ' ' + parts.slice(1).join(' ').toUpperCase();
+      return first;
+    }
+    return 'Administrator';
+  }
+
+  function tickAdminClock() {
+    var hour = $('ad-hour');
+    var min = $('ad-min');
+    if (!hour || !min) return;
+    var now = new Date();
+    var h = now.getHours() % 12;
+    var m = now.getMinutes();
+    var s = now.getSeconds();
+    hour.style.transform = 'rotate(' + ((h + m / 60) * 30) + 'deg)';
+    min.style.transform = 'rotate(' + ((m + s / 60) * 6) + 'deg)';
+  }
+
+  function startAdminClock() {
+    tickAdminClock();
+    if (adminClockTimer) return;
+    adminClockTimer = setInterval(tickAdminClock, 1000);
+  }
+
+  function stopAdminClock() {
+    if (adminClockTimer) {
+      clearInterval(adminClockTimer);
+      adminClockTimer = 0;
+    }
+  }
+
+  function setAdminNavOpen(open) {
+    var screen = $('screen-manage');
+    var scrim = $('ad-scrim');
+    if (screen) screen.classList.toggle('ad-nav-open', !!open);
+    if (scrim) scrim.hidden = !open;
+  }
+
+  function renderAdminChrome() {
+    var welcome = $('ad-welcome');
+    if (welcome) welcome.textContent = 'Welcome : ' + formatWelcomeName();
+    var company = $('ad-company');
+    var name = state.companyName || (state.project && state.project.name) || '';
+    if (company) company.textContent = name ? name + ' &' : '';
+    var total = (state.drawings || []).length;
+    var drafts = (state.drawings || []).filter(function (d) { return d && d.status === 'draft'; }).length;
+    if ($('ad-stat-drawings')) $('ad-stat-drawings').textContent = String(total);
+    if ($('ad-stat-published')) $('ad-stat-published').textContent = String(Math.max(0, total - drafts));
+    if ($('ad-stat-draft')) $('ad-stat-draft').textContent = String(drafts);
+    var codeEl = $('mg-host-code');
+    if (codeEl) {
+      codeEl.hidden = false;
+      codeEl.textContent = state.accessCode || '—';
+    }
+  }
+
+  function showManagePanel(name) {
+    if (name !== 'form') state.managePanel = name || 'home';
+    var panel = name || state.managePanel || 'home';
+    if ($('mg-form')) $('mg-form').hidden = panel !== 'form';
+    ['home', 'drawings', 'category', 'spec', 'users', 'access', 'settings'].forEach(function (id) {
+      var el = $('ad-panel-' + id);
+      if (el) el.hidden = panel !== id;
+    });
+    document.querySelectorAll('#ad-sidebar [data-ad-panel]').forEach(function (btn) {
+      var key = btn.getAttribute('data-ad-panel');
+      btn.classList.toggle('is-on', panel !== 'form' && key === panel && btn.id !== 'ad-logo');
+    });
+    setAdminNavOpen(false);
+    if (panel === 'home') renderAdminChrome();
+    if (panel === 'users') loadWorkers();
+    if (panel === 'drawings' || panel === 'category') renderManage();
+    if (panel === 'access') renderAdminChrome();
+  }
+
   function openManage() {
     if (state.role !== 'admin') {
       alert('Enter the admin key to manage drawings.');
       return;
     }
-    if (!isOnline()) {
-      alert('Connect to the internet to manage drawings.');
-      return;
-    }
     closeSheet();
-    hideManageForm();
     showScreen('screen-manage');
+    renderAdminChrome();
     renderManage();
+    showManagePanel(state.managePanel || 'home');
     loadWorkers();
-    var codeEl = $('mg-host-code');
-    if (codeEl) {
-      if (state.accessCode) {
-        codeEl.hidden = false;
-        codeEl.textContent = 'Host access code for users: ' + state.accessCode;
-      } else {
-        codeEl.hidden = true;
-        codeEl.textContent = '';
-      }
-    }
   }
 
   function closeManage() {
     hideManageForm();
+    setAdminNavOpen(false);
     showScreen('screen-list');
     renderCats();
     renderList();
   }
 
   function hideManageForm() {
+    var wasForm = $('mg-form') && !$('mg-form').hidden;
     state.manageMode = null;
     if ($('mg-form')) $('mg-form').hidden = true;
-    if ($('mg-home')) $('mg-home').hidden = false;
     if ($('mg-file')) $('mg-file').value = '';
     if ($('mg-error')) $('mg-error').textContent = '';
     if ($('mg-file-name')) $('mg-file-name').textContent = 'No file selected';
+    if (wasForm) showManagePanel(state.managePanel || 'drawings');
   }
 
   function fillCategorySelect(selected) {
@@ -2101,10 +2201,10 @@
 
   function showManageForm(mode) {
     state.manageMode = mode;
-    var main = document.querySelector('#screen-manage .md-main');
+    state.managePanel = 'drawings';
+    var main = document.querySelector('#screen-manage .ad-content');
     if (main) main.scrollTop = 0;
-    $('mg-home').hidden = true;
-    $('mg-form').hidden = false;
+    showManagePanel('form');
     $('mg-error').textContent = '';
     $('mg-file').value = '';
     $('mg-file-name').textContent = 'No file selected';
@@ -2526,7 +2626,14 @@
         state.role = 'admin';
         try {
           var companyData = await fetchRemoteCatalog({ adminToken: session.adminToken });
-          await enterApp(companyData, { adminToken: session.adminToken, role: 'admin', email: session.email });
+          await enterApp(companyData, {
+            adminToken: session.adminToken,
+            role: 'admin',
+            email: session.email,
+            firstName: session.firstName,
+            lastName: session.lastName,
+            managerName: session.managerName || session.firstName || ''
+          });
         } catch (err) {
           var companyCache = await idbGet('meta', 'catalog');
           if (companyCache && companyCache.data) {
@@ -2663,7 +2770,20 @@
       else wtZoomBy(1 / 1.25);
     }
   });
-  on($('btn-manage-back'), 'click', closeManage);
+  on($('ad-menu-btn'), 'click', function () { setAdminNavOpen(true); });
+  on($('ad-scrim'), 'click', function () { setAdminNavOpen(false); });
+  on($('ad-sidebar'), 'click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-ad-panel]') : null;
+    if (!btn) return;
+    showManagePanel(btn.getAttribute('data-ad-panel'));
+  });
+  on($('btn-ad-wall-types'), 'click', function () {
+    setAdminNavOpen(false);
+    state.wallTypesFromManage = true;
+    openWallTypes();
+  });
+  on($('btn-ad-site'), 'click', closeManage);
+  on($('btn-ad-lock'), 'click', function () { handleSheet('lock'); });
   on($('mg-users'), 'change', showSelectedWorker);
   on($('btn-mg-add-cat'), 'click', addCategory);
   on($('mg-cat-input'), 'keydown', function (e) {
