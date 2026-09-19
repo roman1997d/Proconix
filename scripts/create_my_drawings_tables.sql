@@ -83,8 +83,12 @@ CREATE TABLE IF NOT EXISTS my_drawings_worker (
   pin_expires_at TIMESTAMPTZ,
   verified_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  access_suspended_until TIMESTAMPTZ,
   CONSTRAINT uq_my_drawings_worker_email UNIQUE (workspace_id, email)
 );
+
+ALTER TABLE my_drawings_worker
+  ADD COLUMN IF NOT EXISTS access_suspended_until TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_my_drawings_worker_ws ON my_drawings_worker(workspace_id);
 

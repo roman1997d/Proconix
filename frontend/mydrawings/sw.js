@@ -1,5 +1,5 @@
 /* My Drawings PWA — app shell + Wall Types catalog (offline). PDFs stay in IndexedDB. */
-var CACHE = 'mydrawings-shell-v45';
+var CACHE = 'mydrawings-shell-v46';
 var PRECACHE = [
   '/mydrawings/',
   '/mydrawings/index.html',

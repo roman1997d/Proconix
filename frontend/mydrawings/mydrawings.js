@@ -1876,88 +1876,163 @@
   }
 
   /* ---------- Manage ---------- */
-  function workerOptionLabel(w) {
-    var name = [w.firstName, w.lastName].filter(Boolean).join(' ').trim();
-    if (name && w.email) return name + ' — ' + w.email;
-    return name || w.email || ('User #' + w.id);
+  var ACCESS_CLOSE_DAYS = [1, 3, 7, 14, 30, 60, 90];
+
+  function workerFullName(w) {
+    return [w.firstName, w.lastName].filter(Boolean).join(' ').trim() || ('User #' + w.id);
   }
 
-  function fillWorkersSelect() {
-    var sel = $('mg-users');
-    if (!sel) return;
-    var list = state.workers || [];
-    var prev = sel.value;
-    sel.innerHTML = '';
-    var first = document.createElement('option');
-    first.value = '';
-    first.textContent = list.length
-      ? 'Select a user — ' + list.length + ' registered'
-      : 'No users registered yet';
-    sel.appendChild(first);
-    list.forEach(function (w) {
-      var o = document.createElement('option');
-      o.value = String(w.id);
-      o.textContent = workerOptionLabel(w);
-      sel.appendChild(o);
-    });
-    if (prev && Array.prototype.some.call(sel.options, function (opt) { return opt.value === prev; })) {
-      sel.value = prev;
-    }
-    showSelectedWorker();
+  function daysSelectHtml(selected) {
+    var current = String(selected || 7);
+    return '<select class="mg-user-days" data-user-days aria-label="Days to close access">' +
+      ACCESS_CLOSE_DAYS.map(function (n) {
+        return '<option value="' + n + '"' + (String(n) === current ? ' selected' : '') + '>' +
+          n + (n === 1 ? ' day' : ' days') + '</option>';
+      }).join('') +
+      '</select>';
   }
 
-  function showSelectedWorker() {
-    var box = $('mg-user-detail');
-    var sel = $('mg-users');
+  function renderWorkersTable() {
+    var box = $('mg-users-table');
+    var status = $('mg-users-status');
     if (!box) return;
-    var id = sel && sel.value ? String(sel.value) : '';
-    var w = null;
-    for (var i = 0; i < (state.workers || []).length; i++) {
-      if (String(state.workers[i].id) === id) {
-        w = state.workers[i];
-        break;
-      }
+    var list = state.workers || [];
+    if (status) {
+      status.textContent = list.length
+        ? list.length + (list.length === 1 ? ' registered user' : ' registered users')
+        : 'No users registered yet';
     }
-    if (!w) {
-      box.hidden = true;
+    if (!list.length) {
       box.innerHTML = '';
       return;
     }
-    var name = [w.firstName, w.lastName].filter(Boolean).join(' ').trim() || '—';
-    var devices = w.deviceCount === 1 ? '1 device' : String(w.deviceCount || 0) + ' devices';
-    box.hidden = false;
     box.innerHTML =
-      '<p><strong>' + escapeHtml(name) + '</strong></p>' +
-      '<p>' + escapeHtml(w.email || '—') + '</p>' +
-      '<p>Registered ' + escapeHtml(w.createdAt ? formatDate(String(w.createdAt).slice(0, 10)) : '—') +
-      ' · ' + (w.verifiedAt ? 'Verified' : 'Not verified') +
-      ' · ' + escapeHtml(devices) + '</p>' +
-      (w.lastSeenAt
-        ? '<p>Last seen ' + escapeHtml(formatActivityWhen(w.lastSeenAt)) + '</p>'
-        : '<p>No sign-in on a device yet</p>');
+      '<table class="mg-users-table">' +
+        '<thead><tr>' +
+          '<th>User</th>' +
+          '<th>Registered</th>' +
+          '<th>Last seen</th>' +
+          '<th>Access</th>' +
+          '<th></th>' +
+        '</tr></thead>' +
+        '<tbody>' +
+          list.map(function (w) {
+            var id = String(w.id);
+            var closed = !!w.accessClosed;
+            var accessCell = closed
+              ? '<span class="mg-user-closed">Closed until ' +
+                escapeHtml(formatDate(String(w.accessSuspendedUntil || '').slice(0, 10))) +
+                '</span>' +
+                '<button type="button" class="mg-user-btn" data-user-act="restore" data-user-id="' + id + '">Restore</button>'
+              : daysSelectHtml(7) +
+                '<button type="button" class="mg-user-btn" data-user-act="close" data-user-id="' + id + '">Close access</button>';
+            return '<tr class="' + (closed ? 'is-closed' : '') + '">' +
+              '<td data-label="User">' +
+                '<strong>' + escapeHtml(workerFullName(w)) + '</strong>' +
+                '<span class="mg-user-email">' + escapeHtml(w.email || '—') + '</span>' +
+              '</td>' +
+              '<td data-label="Registered">' +
+                escapeHtml(w.createdAt ? formatDate(String(w.createdAt).slice(0, 10)) : '—') +
+              '</td>' +
+              '<td data-label="Last seen">' +
+                (w.lastSeenAt ? escapeHtml(formatActivityWhen(w.lastSeenAt)) : 'Never') +
+              '</td>' +
+              '<td data-label="Access" class="mg-user-access">' + accessCell + '</td>' +
+              '<td data-label="">' +
+                '<button type="button" class="mg-user-btn is-danger" data-user-act="delete" data-user-id="' + id + '">Delete</button>' +
+              '</td>' +
+            '</tr>';
+          }).join('') +
+        '</tbody>' +
+      '</table>';
   }
 
   async function loadWorkers() {
-    var sel = $('mg-users');
-    if (sel && !(state.workers && state.workers.length)) {
-      sel.innerHTML = '<option value="">Loading…</option>';
+    var status = $('mg-users-status');
+    var box = $('mg-users-table');
+    if (status && !(state.workers && state.workers.length)) {
+      status.textContent = 'Loading users…';
     }
     try {
       var data = await apiJson('/workers');
       state.workers = data.workers || [];
     } catch (err) {
       state.workers = [];
-      if (sel) {
-        sel.innerHTML = '<option value="">Could not load users</option>';
-      }
-      var box = $('mg-user-detail');
-      if (box) {
-        box.hidden = false;
-        box.innerHTML = '<p>' + escapeHtml(err && err.message ? err.message : 'Could not load users.') + '</p>';
-      }
+      if (status) status.textContent = err && err.message ? err.message : 'Could not load users.';
+      if (box) box.innerHTML = '';
       return;
     }
-    fillWorkersSelect();
+    renderWorkersTable();
+  }
+
+  function workerById(id) {
+    var key = String(id || '');
+    for (var i = 0; i < (state.workers || []).length; i++) {
+      if (String(state.workers[i].id) === key) return state.workers[i];
+    }
+    return null;
+  }
+
+  async function closeWorkerAccess(id, days) {
+    var w = workerById(id);
+    var name = w ? workerFullName(w) : 'this user';
+    if (!confirm('Close access for ' + name + ' for ' + days + (days === 1 ? ' day' : ' days') + '? They will be signed out immediately.')) {
+      return;
+    }
+    try {
+      await apiJson('/workers/' + encodeURIComponent(id) + '/suspend', {
+        method: 'POST',
+        body: { days: days }
+      });
+      await loadWorkers();
+    } catch (err) {
+      alert(err && err.message ? err.message : 'Could not close access.');
+    }
+  }
+
+  async function restoreWorkerAccess(id) {
+    var w = workerById(id);
+    var name = w ? workerFullName(w) : 'this user';
+    if (!confirm('Restore access for ' + name + '?')) return;
+    try {
+      await apiJson('/workers/' + encodeURIComponent(id) + '/restore', { method: 'POST', body: {} });
+      await loadWorkers();
+    } catch (err) {
+      alert(err && err.message ? err.message : 'Could not restore access.');
+    }
+  }
+
+  async function deleteCompanyWorker(id) {
+    var w = workerById(id);
+    var name = w ? workerFullName(w) : 'this user';
+    if (!confirm('Delete ' + name + ' completely? This cannot be undone.')) return;
+    try {
+      await apiJson('/workers/' + encodeURIComponent(id), { method: 'DELETE' });
+      await loadWorkers();
+    } catch (err) {
+      alert(err && err.message ? err.message : 'Could not delete user.');
+    }
+  }
+
+  function handleUsersTableClick(e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-user-act]') : null;
+    if (!btn) return;
+    var id = btn.getAttribute('data-user-id');
+    var act = btn.getAttribute('data-user-act');
+    if (!id) return;
+    if (act === 'close') {
+      var row = btn.closest('tr') || btn.closest('.mg-user-access');
+      var sel = row && row.querySelector('[data-user-days]');
+      var days = sel ? parseInt(sel.value, 10) : 7;
+      if (!days) days = 7;
+      closeWorkerAccess(id, days);
+      return;
+    }
+    if (act === 'restore') {
+      restoreWorkerAccess(id);
+      return;
+    }
+    if (act === 'delete') deleteCompanyWorker(id);
   }
 
   var adminClockTimer = 0;
@@ -2800,7 +2875,7 @@
   });
   on($('btn-ad-site'), 'click', closeManage);
   on($('btn-ad-lock'), 'click', function () { handleSheet('lock'); });
-  on($('mg-users'), 'change', showSelectedWorker);
+  on($('mg-users-table'), 'click', handleUsersTableClick);
   on($('btn-mg-add-cat'), 'click', addCategory);
   on($('mg-cat-input'), 'keydown', function (e) {
     if (e.key === 'Enter') {

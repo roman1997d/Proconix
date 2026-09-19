@@ -36,6 +36,14 @@ async function requireMyDrawingsPin(req, res, next) {
     const bearer = readBearerToken(req);
     if (bearer) {
       const asJwt = await resolveJwtAuth(bearer);
+      if (asJwt && asJwt.blocked) {
+        return res.status(403).json({
+          success: false,
+          code: 'ACCESS_CLOSED',
+          accessClosedUntil: asJwt.until,
+          message: asJwt.message || 'Access to My Drawings is closed.',
+        });
+      }
       if (asJwt) {
         req.myDrawings = asJwt;
         return next();
@@ -68,6 +76,14 @@ async function requireMyDrawingsPin(req, res, next) {
     const device = readDevice(req);
     if (device) {
       const resolved = await resolveDeviceToken(device);
+      if (resolved && resolved.blocked) {
+        return res.status(403).json({
+          success: false,
+          code: 'ACCESS_CLOSED',
+          accessClosedUntil: resolved.until,
+          message: resolved.message || 'Access to My Drawings is closed.',
+        });
+      }
       if (!resolved) {
         return res.status(401).json({ success: false, message: 'This device is no longer signed in.' });
       }

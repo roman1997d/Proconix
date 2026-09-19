@@ -32,6 +32,9 @@ router.get('/catalog', requireMyDrawingsPin, ctrl.getCatalog);
 router.get('/drawings', requireMyDrawingsPin, ctrl.listDrawings);
 router.get('/activity', requireMyDrawingsPin, ctrl.getActivity);
 router.get('/workers', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.listWorkers);
+router.post('/workers/:id/suspend', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.suspendWorker);
+router.post('/workers/:id/restore', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.restoreWorker);
+router.delete('/workers/:id', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.deleteWorker);
 router.post('/devices/register', requireMyDrawingsPin, ctrl.registerDevice);
 
 router.post('/categories', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.addCategory);

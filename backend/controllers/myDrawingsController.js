@@ -170,6 +170,10 @@ async function ensureSchemaInner() {
     )
   `);
   await pool.query(`
+    ALTER TABLE my_drawings_worker
+    ADD COLUMN IF NOT EXISTS access_suspended_until TIMESTAMPTZ
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS my_drawings_device (
       id SERIAL PRIMARY KEY,
       worker_id INT NOT NULL REFERENCES my_drawings_worker(id) ON DELETE CASCADE,
@@ -524,7 +528,7 @@ async function resolveJwtAuth(token) {
   await ensureSchema();
   const result = await pool.query(
     `SELECT w.id AS worker_id, w.first_name, w.last_name, w.email, w.workspace_id,
-            ws.name AS workspace_name, ws.manager_name
+            w.access_suspended_until, ws.name AS workspace_name, ws.manager_name
      FROM my_drawings_worker w
      JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
      WHERE w.id = $1 AND w.workspace_id = $2`,
@@ -532,6 +536,10 @@ async function resolveJwtAuth(token) {
   );
   const row = result.rows[0];
   if (!row) return null;
+  const blockedUntil = suspendedUntil(row);
+  if (blockedUntil) {
+    return { blocked: true, until: blockedUntil, message: accessClosedMessage(blockedUntil) };
+  }
   const claimed = await pool.query(
     'SELECT id, name FROM my_drawings_project WHERE id = $1 AND workspace_id = $2',
     [claims.projectId, row.workspace_id]
@@ -552,6 +560,7 @@ async function resolveJwtAuth(token) {
 }
 
 async function issueWorkerSession(workspace, worker) {
+  throwIfSuspended(worker);
   const project = await getDefaultProject(workspace.id);
   if (!project) {
     const err = new Error('Company project is missing.');
@@ -605,7 +614,7 @@ async function findWorkspaceByAccessCode(code) {
 async function findWorkersByEmail(email) {
   const result = await pool.query(
     `SELECT w.id, w.workspace_id, w.first_name, w.last_name, w.email,
-            w.pin_hash, w.pin_expires_at,
+            w.pin_hash, w.pin_expires_at, w.access_suspended_until,
             ws.name AS workspace_name, ws.manager_name
      FROM my_drawings_worker w
      JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
@@ -622,6 +631,57 @@ function pinSha(pin) {
 
 function tokenSha(token) {
   return crypto.createHash('sha256').update('mydrawings-dev:' + token).digest('hex');
+}
+
+function suspendedUntil(row) {
+  if (!row) return null;
+  const raw = row.access_suspended_until || row.accessSuspendedUntil;
+  if (!raw) return null;
+  const until = raw instanceof Date ? raw : new Date(raw);
+  if (Number.isNaN(until.getTime()) || until.getTime() <= Date.now()) return null;
+  return until;
+}
+
+function formatUntilDate(until) {
+  const d = until instanceof Date ? until : new Date(until);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function accessClosedMessage(until) {
+  const label = formatUntilDate(until);
+  return label
+    ? 'Access to My Drawings is closed until ' + label + '.'
+    : 'Access to My Drawings is closed.';
+}
+
+function accessClosedPayload(until) {
+  return {
+    success: false,
+    code: 'ACCESS_CLOSED',
+    accessClosedUntil: until instanceof Date ? until.toISOString() : until,
+    message: accessClosedMessage(until),
+  };
+}
+
+async function revokeWorkerSessions(workerId) {
+  await pool.query('DELETE FROM my_drawings_device WHERE worker_id = $1', [workerId]);
+  await pool.query(
+    `UPDATE my_drawings_worker
+     SET pin_hash = NULL, pin_sha = NULL, pin_expires_at = NULL
+     WHERE id = $1`,
+    [workerId]
+  );
+  await pool.query('DELETE FROM user_devices WHERE user_id = $1', [workerId]).catch(() => {});
+}
+
+function throwIfSuspended(worker) {
+  const until = suspendedUntil(worker);
+  if (!until) return;
+  const err = new Error(accessClosedMessage(until));
+  err.code = 'ACCESS_CLOSED';
+  err.until = until;
+  throw err;
 }
 
 function clientIp(req) {
@@ -717,6 +777,7 @@ async function resolveDeviceToken(token) {
   const result = await pool.query(
     `SELECT d.id AS device_id,
             w.id AS worker_id, w.first_name, w.last_name, w.email,
+            w.access_suspended_until,
             ws.id AS workspace_id, ws.name AS workspace_name, ws.manager_name
      FROM my_drawings_device d
      JOIN my_drawings_worker w ON w.id = d.worker_id
@@ -726,6 +787,10 @@ async function resolveDeviceToken(token) {
   );
   const row = result.rows[0];
   if (!row) return null;
+  const blockedUntil = suspendedUntil(row);
+  if (blockedUntil) {
+    return { blocked: true, until: blockedUntil, message: accessClosedMessage(blockedUntil) };
+  }
   pool.query('UPDATE my_drawings_device SET last_seen_at = NOW() WHERE id = $1', [row.device_id]).catch(() => {});
   return {
     workspace: { id: row.workspace_id, name: row.workspace_name, managerName: row.manager_name || '' },
@@ -771,6 +836,14 @@ async function registerWorker(req, res) {
       [workspace.id, email]
     );
     if (existing.rows[0]) {
+      const current = await pool.query(
+        'SELECT access_suspended_until FROM my_drawings_worker WHERE id = $1',
+        [existing.rows[0].id]
+      );
+      const until = suspendedUntil(current.rows[0]);
+      if (until) {
+        return res.status(403).json(accessClosedPayload(until));
+      }
       await pool.query(
         `UPDATE my_drawings_worker
          SET first_name = $2, last_name = $3, pin_hash = $4, pin_sha = $5,
@@ -856,6 +929,10 @@ async function loginWorker(req, res) {
       });
     }
     const worker = rows[0];
+    const until = suspendedUntil(worker);
+    if (until) {
+      return res.status(403).json(accessClosedPayload(until));
+    }
     const workspace = {
       id: worker.workspace_id,
       name: worker.workspace_name,
@@ -864,6 +941,9 @@ async function loginWorker(req, res) {
     return res.json(await issueWorkerSession(workspace, worker));
   } catch (err) {
     console.error('myDrawings login:', err);
+    if (err && err.code === 'ACCESS_CLOSED') {
+      return res.status(403).json(accessClosedPayload(err.until));
+    }
     return res.status(500).json({ success: false, message: 'Could not sign in.' });
   }
 }
@@ -896,6 +976,10 @@ async function verifyWorker(req, res) {
     if (!worker || !worker.pin_hash) {
       return res.status(401).json({ success: false, message: 'Incorrect access key' });
     }
+    const until = suspendedUntil(worker);
+    if (until) {
+      return res.status(403).json(accessClosedPayload(until));
+    }
     if (worker.pin_expires_at && new Date(worker.pin_expires_at).getTime() < Date.now()) {
       return res.status(401).json({ success: false, message: 'That key has expired. Request a new one.' });
     }
@@ -917,6 +1001,9 @@ async function verifyWorker(req, res) {
     return res.json(await issueWorkerSession(workspace, worker));
   } catch (err) {
     console.error('myDrawings verify:', err);
+    if (err && err.code === 'ACCESS_CLOSED') {
+      return res.status(403).json(accessClosedPayload(err.until));
+    }
     return res.status(500).json({ success: false, message: 'Could not verify access key.' });
   }
 }
@@ -956,6 +1043,10 @@ async function requestAuthCode(req, res) {
       });
     }
     const worker = rows[0];
+    const until = suspendedUntil(worker);
+    if (until) {
+      return res.status(403).json(accessClosedPayload(until));
+    }
     const { pin, sha } = await issueUniquePin(worker.workspace_id);
     const pinHash = await bcrypt.hash(pin, 10);
     await pool.query(
@@ -1092,9 +1183,11 @@ async function getActivity(req, res) {
 
 async function listWorkers(req, res) {
   try {
+    await ensureSchema();
     const workspaceId = req.myDrawings.workspace.id;
     const rows = await pool.query(
       `SELECT w.id, w.first_name, w.last_name, w.email, w.verified_at, w.created_at,
+              w.access_suspended_until,
               (SELECT COUNT(*)::int FROM my_drawings_device d WHERE d.worker_id = w.id) AS device_count,
               (SELECT MAX(d.last_seen_at) FROM my_drawings_device d WHERE d.worker_id = w.id) AS last_seen_at
        FROM my_drawings_worker w
@@ -1104,20 +1197,109 @@ async function listWorkers(req, res) {
     );
     return res.json({
       success: true,
-      workers: rows.rows.map((r) => ({
-        id: r.id,
-        firstName: r.first_name,
-        lastName: r.last_name,
-        email: r.email,
-        verifiedAt: r.verified_at instanceof Date ? r.verified_at.toISOString() : r.verified_at,
-        createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
-        deviceCount: r.device_count || 0,
-        lastSeenAt: r.last_seen_at instanceof Date ? r.last_seen_at.toISOString() : r.last_seen_at,
-      })),
+      workers: rows.rows.map((r) => {
+        const until = suspendedUntil(r);
+        return {
+          id: r.id,
+          firstName: r.first_name,
+          lastName: r.last_name,
+          email: r.email,
+          verifiedAt: r.verified_at instanceof Date ? r.verified_at.toISOString() : r.verified_at,
+          createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+          deviceCount: r.device_count || 0,
+          lastSeenAt: r.last_seen_at instanceof Date ? r.last_seen_at.toISOString() : r.last_seen_at,
+          accessSuspendedUntil: until ? until.toISOString() : null,
+          accessClosed: !!until,
+        };
+      }),
     });
   } catch (err) {
     console.error('myDrawings listWorkers:', err);
     return res.status(500).json({ success: false, message: 'Could not load users.' });
+  }
+}
+
+async function findCompanyWorker(workspaceId, workerId) {
+  const id = parseInt(workerId, 10);
+  if (!Number.isInteger(id) || id < 1) return null;
+  const found = await pool.query(
+    `SELECT id, first_name, last_name, email, access_suspended_until
+     FROM my_drawings_worker
+     WHERE id = $1 AND workspace_id = $2`,
+    [id, workspaceId]
+  );
+  return found.rows[0] || null;
+}
+
+async function suspendWorker(req, res) {
+  try {
+    await ensureSchema();
+    const workspaceId = req.myDrawings.workspace.id;
+    const worker = await findCompanyWorker(workspaceId, req.params.id);
+    if (!worker) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    const days = parseInt(req.body && req.body.days, 10);
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      return res.status(400).json({ success: false, message: 'Select between 1 and 365 days.' });
+    }
+    const updated = await pool.query(
+      `UPDATE my_drawings_worker
+       SET access_suspended_until = NOW() + ($2::int * INTERVAL '1 day')
+       WHERE id = $1
+       RETURNING access_suspended_until`,
+      [worker.id, days]
+    );
+    await revokeWorkerSessions(worker.id);
+    const until = updated.rows[0] && updated.rows[0].access_suspended_until;
+    return res.json({
+      success: true,
+      message: 'Access closed until ' + formatUntilDate(until) + '.',
+      days,
+      accessSuspendedUntil: until instanceof Date ? until.toISOString() : until,
+    });
+  } catch (err) {
+    console.error('myDrawings suspendWorker:', err);
+    return res.status(500).json({ success: false, message: 'Could not close access.' });
+  }
+}
+
+async function restoreWorker(req, res) {
+  try {
+    await ensureSchema();
+    const workspaceId = req.myDrawings.workspace.id;
+    const worker = await findCompanyWorker(workspaceId, req.params.id);
+    if (!worker) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    await pool.query(
+      'UPDATE my_drawings_worker SET access_suspended_until = NULL WHERE id = $1',
+      [worker.id]
+    );
+    return res.json({ success: true, message: 'Access restored.' });
+  } catch (err) {
+    console.error('myDrawings restoreWorker:', err);
+    return res.status(500).json({ success: false, message: 'Could not restore access.' });
+  }
+}
+
+async function deleteWorker(req, res) {
+  try {
+    await ensureSchema();
+    const workspaceId = req.myDrawings.workspace.id;
+    const worker = await findCompanyWorker(workspaceId, req.params.id);
+    if (!worker) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    await revokeWorkerSessions(worker.id);
+    await pool.query(
+      'DELETE FROM my_drawings_worker WHERE id = $1 AND workspace_id = $2',
+      [worker.id, workspaceId]
+    );
+    return res.json({ success: true, message: 'User deleted.' });
+  } catch (err) {
+    console.error('myDrawings deleteWorker:', err);
+    return res.status(500).json({ success: false, message: 'Could not delete user.' });
   }
 }
 
@@ -1671,6 +1853,9 @@ module.exports = {
   listDrawings,
   getActivity,
   listWorkers,
+  suspendWorker,
+  restoreWorker,
+  deleteWorker,
   addCategory,
   renameCategory,
   reorderCategories,
