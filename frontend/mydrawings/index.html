@@ -58,15 +58,11 @@
     <section class="md-screen md-pin md-register" id="screen-login" aria-label="Sign in">
       <p class="md-pin-brand">My Drawings</p>
       <h2>Sign in</h2>
-      <p class="md-pin-hint" id="login-hint">Enter your email to sign in. Simple users stay signed in for 6 months.</p>
+      <p class="md-pin-hint" id="login-hint">Enter your email. You stay signed in for 6 months.</p>
       <form class="md-reg-form" id="login-form" autocomplete="on">
         <label class="mg-field">
           <span>Email</span>
           <input id="login-email" type="email" maxlength="254" autocomplete="username" autocapitalize="off" spellcheck="false" inputmode="email" required>
-        </label>
-        <label class="mg-field" id="login-password-wrap" hidden>
-          <span>Password</span>
-          <input id="login-password" type="password" maxlength="120" autocomplete="current-password">
         </label>
         <p class="md-error" id="login-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="login-continue">Sign in</button>
@@ -80,15 +76,11 @@
     <section class="md-screen md-pin md-register" id="screen-company" aria-label="Company sign in">
       <p class="md-pin-brand">My Drawings</p>
       <h2>Company sign in</h2>
-      <p class="md-pin-hint">Use the company email and password. After you sign in you can manage this company’s drawings. Users join with your host access code.</p>
+      <p class="md-pin-hint">Enter the company email. After you sign in you can manage this company’s drawings.</p>
       <form class="md-reg-form" id="company-form" autocomplete="on">
         <label class="mg-field">
           <span>Company email</span>
           <input id="company-email" type="email" maxlength="254" autocomplete="username" autocapitalize="off" spellcheck="false" inputmode="email" required>
-        </label>
-        <label class="mg-field">
-          <span>Password</span>
-          <input id="company-password" type="password" maxlength="120" autocomplete="current-password" required>
         </label>
         <p class="md-error" id="company-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="company-continue">Sign in</button>

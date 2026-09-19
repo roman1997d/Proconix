@@ -715,14 +715,9 @@
 
   function resetLoginExtras() {
     loginLookup = { email: '', kind: '' };
-    if ($('login-password-wrap')) $('login-password-wrap').hidden = true;
-    if ($('login-password')) {
-      $('login-password').value = '';
-      $('login-password').required = false;
-    }
     if ($('login-continue')) $('login-continue').textContent = 'Sign in';
     if ($('login-hint')) {
-      $('login-hint').textContent = 'Enter your email to sign in. Simple users stay signed in for 6 months.';
+      $('login-hint').textContent = 'Enter your email. You stay signed in for 6 months.';
     }
   }
 
@@ -740,7 +735,6 @@
 
   function showCompanyLogin() {
     if ($('company-error')) $('company-error').textContent = '';
-    if ($('company-password')) $('company-password').value = '';
     showScreen('screen-company');
     setTimeout(function () {
       var email = $('company-email');
@@ -874,7 +868,6 @@
   async function submitLogin(e) {
     if (e) e.preventDefault();
     var email = ($('login-email').value || '').trim().toLowerCase();
-    var password = $('login-password') ? $('login-password').value || '' : '';
     $('login-error').textContent = '';
     if (!isOnline()) {
       $('login-error').textContent = 'Connect to the internet to sign in.';
@@ -886,37 +879,9 @@
     }
     $('login-continue').disabled = true;
     try {
-      if (!loginLookup.kind || loginLookup.email !== email) {
-        var looked = await postJson('/auth/lookup', { email: email });
-        loginLookup = { email: email, kind: looked.kind || 'none' };
-        if (looked.kind === 'none') {
-          $('login-error').textContent = 'No account found for that email. Create an account first.';
-          $('login-continue').disabled = false;
-          return;
-        }
-        if (looked.kind === 'manager') {
-          if ($('login-password-wrap')) $('login-password-wrap').hidden = false;
-          if ($('login-password')) $('login-password').required = true;
-          if ($('login-hint')) $('login-hint').textContent = 'This is a company account. Enter your password.';
-          $('login-continue').disabled = false;
-          setTimeout(function () {
-            if ($('login-password')) $('login-password').focus();
-          }, 50);
-          return;
-        }
-      }
-      if (loginLookup.kind === 'manager') {
-        if (!password) {
-          $('login-error').textContent = 'Enter your password.';
-          $('login-continue').disabled = false;
-          return;
-        }
-        var companyData = await postJson('/company-login', { email: email, password: password });
-        await enterCompanySession(companyData, email);
-      } else {
-        var data = await postJson('/login', { email: email });
-        await enterWorkerSession(data, email);
-      }
+      var data = await postJson('/login', { email: email });
+      if (data.role === 'admin') await enterCompanySession(data, email);
+      else await enterWorkerSession(data, email);
     } catch (err) {
       $('login-error').textContent = err && err.message ? err.message : 'Could not sign in.';
     }
@@ -926,22 +891,26 @@
   async function submitCompanyLogin(e) {
     if (e) e.preventDefault();
     var email = ($('company-email').value || '').trim().toLowerCase();
-    var password = $('company-password').value || '';
     $('company-error').textContent = '';
     if (!isOnline()) {
       $('company-error').textContent = 'Connect to the internet to sign in.';
       return;
     }
-    if (!email || !password) {
-      $('company-error').textContent = 'Enter the company email and password.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      $('company-error').textContent = 'Enter a valid email address.';
       return;
     }
     $('company-continue').disabled = true;
     try {
-      var data = await postJson('/company-login', { email: email, password: password });
+      var data = await postJson('/login', { email: email });
+      if (data.role !== 'admin') {
+        $('company-error').textContent = 'This email is not a company account.';
+        $('company-continue').disabled = false;
+        return;
+      }
       await enterCompanySession(data, email);
     } catch (err) {
-      $('company-error').textContent = err && err.message ? err.message : 'Incorrect company email or password.';
+      $('company-error').textContent = err && err.message ? err.message : 'Could not sign in.';
     }
     $('company-continue').disabled = false;
   }

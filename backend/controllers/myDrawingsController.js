@@ -973,6 +973,17 @@ async function loginWorker(req, res) {
         || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
       return res.status(429).json({ success: false, message: 'Too many requests. Try again later.' });
     }
+    if (!accessCode) {
+      const manager = await pool.query(
+        `SELECT id, name, email, manager_name, access_code, project_mode, logo_path
+         FROM my_drawings_workspace
+         WHERE LOWER(email) = $1`,
+        [email]
+      );
+      if (manager.rows[0]) {
+        return res.json(await issueAdminSession(manager.rows[0]));
+      }
+    }
     let rows = await findWorkersByEmail(email);
     if (accessCode) {
       const workspace = await findWorkspaceByAccessCode(accessCode);
@@ -1458,7 +1469,7 @@ async function lookupAuth(req, res) {
       [email]
     );
     if (manager.rows[0]) {
-      return res.json({ success: true, kind: 'manager', needsPassword: true, needsAccessCode: false });
+      return res.json({ success: true, kind: 'manager', needsPassword: false, needsAccessCode: false });
     }
     const workers = await findWorkersByEmail(email);
     const open = workers.filter((row) => !suspendedUntil(row));
@@ -1567,8 +1578,8 @@ async function companyLogin(req, res) {
     await ensureSchema();
     const email = cleanEmail(req.body && req.body.email);
     const password = String((req.body && req.body.password) || '');
-    if (!EMAIL_RE.test(email) || !password) {
-      return res.status(400).json({ success: false, message: 'Enter the company email and password.' });
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ success: false, message: 'Enter the company email.' });
     }
     if (!allowRate('company:' + email, REGISTER_EMAIL_MAX, REGISTER_WINDOW_MS)
         || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
@@ -1581,12 +1592,13 @@ async function companyLogin(req, res) {
       [email]
     );
     const row = found.rows[0];
-    if (!row || !row.password_hash) {
-      return res.status(401).json({ success: false, message: 'Incorrect company email or password.' });
+    if (!row) {
+      return res.status(401).json({ success: false, message: 'No company account found for that email.' });
     }
-    const ok = await bcrypt.compare(password, row.password_hash);
-    if (!ok) {
-      return res.status(401).json({ success: false, message: 'Incorrect company email or password.' });
+    if (password) {
+      if (!row.password_hash || !(await bcrypt.compare(password, row.password_hash))) {
+        return res.status(401).json({ success: false, message: 'Incorrect company email or password.' });
+      }
     }
     return res.json(await issueAdminSession(row));
   } catch (err) {
