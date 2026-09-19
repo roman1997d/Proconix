@@ -516,7 +516,8 @@
         firstName: extra && extra.firstName != null ? extra.firstName : prev.firstName || '',
         lastName: extra && extra.lastName != null ? extra.lastName : prev.lastName || '',
         email: extra && extra.email != null ? extra.email : prev.email || '',
-        managerName: extra && extra.managerName != null ? extra.managerName : prev.managerName || ''
+        managerName: extra && extra.managerName != null ? extra.managerName : prev.managerName || '',
+        expiresAt: extra && extra.expiresAt != null ? extra.expiresAt : prev.expiresAt || ''
       };
       if (payload.role !== 'admin') {
         payload.pin = '';
@@ -693,6 +694,14 @@
     renderPinDots();
   }
 
+  function sessionStillValid(session) {
+    if (!session || !session.ok) return false;
+    if (!session.expiresAt) return true;
+    var t = Date.parse(session.expiresAt);
+    if (!t) return true;
+    return t > Date.now();
+  }
+
   function showRegister() {
     fillRegisterForm();
     showScreen('screen-register');
@@ -702,11 +711,29 @@
     }, 200);
   }
 
+  var loginLookup = { email: '', kind: '' };
+
+  function resetLoginExtras() {
+    loginLookup = { email: '', kind: '' };
+    if ($('login-password-wrap')) $('login-password-wrap').hidden = true;
+    if ($('login-code-wrap')) $('login-code-wrap').hidden = true;
+    if ($('login-password')) {
+      $('login-password').value = '';
+      $('login-password').required = false;
+    }
+    if ($('login-host-code')) $('login-host-code').required = false;
+    if ($('login-continue')) $('login-continue').textContent = 'Continue';
+    if ($('login-hint')) {
+      $('login-hint').textContent = 'Enter your email. Company accounts will be asked for a password. Simple users stay signed in for 6 months.';
+    }
+  }
+
   function showLogin() {
     var pending = readPending() || {};
     if ($('login-email')) $('login-email').value = pending.email || '';
     if ($('login-host-code')) $('login-host-code').value = pending.hostAccessCode || '';
     if ($('login-error')) $('login-error').textContent = '';
+    resetLoginExtras();
     showScreen('screen-login');
     setTimeout(function () {
       var email = $('login-email');
@@ -784,7 +811,7 @@
     var hostAccessCode = ($('reg-host-code').value || '').replace(/\s+/g, '').toUpperCase();
     $('reg-error').textContent = '';
     if (!isOnline()) {
-      $('reg-error').textContent = 'Connect to the internet to get your access key.';
+      $('reg-error').textContent = 'Connect to the internet to create an account.';
       return;
     }
     if (!firstName || !lastName) {
@@ -801,32 +828,56 @@
     }
     $('reg-continue').disabled = true;
     try {
-      var created = await postJson('/register', {
+      var data = await postJson('/register', {
         firstName: firstName,
         lastName: lastName,
         email: email,
         hostAccessCode: hostAccessCode
       });
-      writePending({
-        firstName: firstName,
-        lastName: lastName,
-        email: email,
-        hostAccessCode: hostAccessCode,
-        from: 'register'
+      await enterApp(data, {
+        deviceToken: data.deviceToken,
+        role: 'worker',
+        firstName: data.firstName || firstName,
+        lastName: data.lastName || lastName,
+        email: data.email || email,
+        expiresAt: data.expiresAt || ''
       });
-      showPin('worker');
-      if (created && created.companyName) {
-        $('pin-hint').textContent = 'We sent a 4-digit key to ' + email + ' for ' + created.companyName + '.';
-      }
     } catch (err) {
-      $('reg-error').textContent = err && err.message ? err.message : 'Could not send your access key.';
+      $('reg-error').textContent = err && err.message ? err.message : 'Could not create your account.';
     }
     $('reg-continue').disabled = false;
+  }
+
+  async function enterWorkerSession(data, email) {
+    await enterApp(data, {
+      deviceToken: data.deviceToken,
+      role: 'worker',
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      email: data.email || email,
+      expiresAt: data.expiresAt || ''
+    });
+  }
+
+  async function enterCompanySession(data, email) {
+    state.adminPin = '';
+    await enterApp(data, {
+      adminToken: data.adminToken,
+      pin: '',
+      role: 'admin',
+      email: data.email || email,
+      firstName: data.managerName || '',
+      lastName: '',
+      managerName: data.managerName || '',
+      expiresAt: data.expiresAt || ''
+    });
+    openManage();
   }
 
   async function submitLogin(e) {
     if (e) e.preventDefault();
     var email = ($('login-email').value || '').trim().toLowerCase();
+    var password = $('login-password') ? $('login-password').value || '' : '';
     var hostAccessCode = ($('login-host-code').value || '').replace(/\s+/g, '').toUpperCase();
     $('login-error').textContent = '';
     if (!isOnline()) {
@@ -839,18 +890,55 @@
     }
     $('login-continue').disabled = true;
     try {
-      var body = { email: email };
-      if (hostAccessCode) body.hostAccessCode = hostAccessCode;
-      var data = await postJson('/login', body);
-      await enterApp(data, {
-        deviceToken: data.deviceToken,
-        role: 'worker',
-        firstName: data.firstName || '',
-        lastName: data.lastName || '',
-        email: data.email || email
-      });
+      if (!loginLookup.kind || loginLookup.email !== email) {
+        var looked = await postJson('/auth/lookup', { email: email });
+        loginLookup = { email: email, kind: looked.kind || 'none' };
+        if (looked.kind === 'none') {
+          $('login-error').textContent = 'No account found for that email. Create an account first.';
+          $('login-continue').disabled = false;
+          return;
+        }
+        if (looked.kind === 'manager') {
+          if ($('login-password-wrap')) $('login-password-wrap').hidden = false;
+          if ($('login-code-wrap')) $('login-code-wrap').hidden = true;
+          if ($('login-password')) $('login-password').required = true;
+          if ($('login-continue')) $('login-continue').textContent = 'Sign in';
+          if ($('login-hint')) $('login-hint').textContent = 'This is a company account. Enter your password.';
+          $('login-continue').disabled = false;
+          setTimeout(function () {
+            if ($('login-password')) $('login-password').focus();
+          }, 50);
+          return;
+        }
+        if (looked.needsAccessCode) {
+          if ($('login-password-wrap')) $('login-password-wrap').hidden = true;
+          if ($('login-code-wrap')) $('login-code-wrap').hidden = false;
+          if ($('login-host-code')) $('login-host-code').required = true;
+          if ($('login-continue')) $('login-continue').textContent = 'Sign in';
+          if ($('login-hint')) $('login-hint').textContent = 'This email is used in more than one company. Enter the access code.';
+          $('login-continue').disabled = false;
+          setTimeout(function () {
+            if ($('login-host-code')) $('login-host-code').focus();
+          }, 50);
+          return;
+        }
+      }
+      if (loginLookup.kind === 'manager') {
+        if (!password) {
+          $('login-error').textContent = 'Enter your password.';
+          $('login-continue').disabled = false;
+          return;
+        }
+        var companyData = await postJson('/company-login', { email: email, password: password });
+        await enterCompanySession(companyData, email);
+      } else {
+        var body = { email: email };
+        if (hostAccessCode) body.hostAccessCode = hostAccessCode;
+        var data = await postJson('/login', body);
+        await enterWorkerSession(data, email);
+      }
     } catch (err) {
-      $('login-error').textContent = err && err.message ? err.message : 'No account found for that email.';
+      $('login-error').textContent = err && err.message ? err.message : 'Could not sign in.';
     }
     $('login-continue').disabled = false;
   }
@@ -871,17 +959,7 @@
     $('company-continue').disabled = true;
     try {
       var data = await postJson('/company-login', { email: email, password: password });
-      state.adminPin = '';
-      await enterApp(data, {
-        adminToken: data.adminToken,
-        pin: '',
-        role: 'admin',
-        email: data.email || email,
-        firstName: data.managerName || '',
-        lastName: '',
-        managerName: data.managerName || ''
-      });
-      openManage();
+      await enterCompanySession(data, email);
     } catch (err) {
       $('company-error').textContent = err && err.message ? err.message : 'Incorrect company email or password.';
     }
@@ -2722,6 +2800,10 @@
       renderPinDots();
 
       var session = readSession();
+      if (session && session.ok && !sessionStillValid(session)) {
+        writeSession(false);
+        session = null;
+      }
       if (session && session.ok && session.pin && session.role !== 'admin' && !session.deviceToken) {
         writeSession(false);
         session = null;
@@ -2746,7 +2828,7 @@
             ensureFloorThenHome({ from: 'boot' });
           } else if (err && err.code === 'bad_pin') {
             writeSession(false);
-            showRegister();
+            showLogin();
           } else if (cached && cached.data) {
             state.role = cached.role || session.role || 'worker';
             applyCatalog(cached.data);
@@ -2754,7 +2836,7 @@
             ensureFloorThenHome({ from: 'boot' });
           } else {
             writeSession(false);
-            showRegister();
+            showLogin();
           }
         }
       } else if (session && session.ok && session.adminToken && session.role === 'admin') {
@@ -2777,7 +2859,7 @@
             ensureFloorThenHome({ from: 'boot' });
           } else {
             writeSession(false);
-            showCompanyLogin();
+            showLogin();
           }
         }
       } else if (session && session.ok && session.pin && session.role === 'admin') {
@@ -2798,14 +2880,11 @@
         }
       } else {
         var pending = readPending();
-        if (pending && pending.email && pending.from !== 'login') showPin('worker');
-        else if (pending && pending.from === 'login') showLogin();
-        else showRegister();
+        if (pending && pending.from === 'register') showRegister();
+        else showLogin();
       }
     } catch (err) {
-      var pendingFail = readPending();
-      if (pendingFail && pendingFail.email && pendingFail.from !== 'login') showPin('worker');
-      else showRegister();
+      showLogin();
     }
     $('md-boot').classList.add('is-done');
   }
@@ -2825,11 +2904,15 @@
   on($('register-form'), 'submit', submitRegister);
   on($('login-form'), 'submit', submitLogin);
   on($('company-form'), 'submit', submitCompanyLogin);
+  on($('login-email'), 'input', function () {
+    var email = ($('login-email').value || '').trim().toLowerCase();
+    if (loginLookup.email && email !== loginLookup.email) resetLoginExtras();
+  });
   on($('btn-have-account'), 'click', showLogin);
   on($('btn-create-account'), 'click', showRegister);
   on($('btn-admin-login'), 'click', showCompanyLogin);
   on($('btn-admin-login-2'), 'click', showCompanyLogin);
-  on($('btn-company-back'), 'click', showRegister);
+  on($('btn-company-back'), 'click', showLogin);
   on($('btn-company-admin-key'), 'click', function () { showPin('admin', 'login'); });
   on($('pin-resend'), 'click', resendKey);
   on($('pin-change'), 'click', backFromPin);

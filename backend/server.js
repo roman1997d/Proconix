@@ -186,6 +186,10 @@ const myDrawingsHtmlPath = path.join(frontendDir, 'mydrawings', 'index.html');
 app.get(['/mydrawings', '/mydrawings/'], (req, res) => {
   res.sendFile(myDrawingsHtmlPath);
 });
+const companyStartHtmlPath = path.join(frontendDir, 'mydrawings', 'companystart.html');
+app.get(['/companystart', '/companystart/', '/mydrawings/companystart', '/mydrawings/companystart/'], (req, res) => {
+  res.sendFile(companyStartHtmlPath);
+});
 
 // Progress Drawings PWA (weekly digital booking)
 const progressDrawingsHtmlPath = path.join(frontendDir, 'progress-drawings', 'index.html');

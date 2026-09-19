@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <meta name="theme-color" content="#070b14">
+  <meta name="color-scheme" content="dark">
+  <title>Start a company — My Drawings</title>
+  <link rel="icon" href="/favicon_io/favicon.ico" sizes="any">
+  <link rel="stylesheet" href="/mydrawings/mydrawings.css">
+</head>
+<body>
+  <div class="md-app">
+    <section class="md-screen md-pin md-register is-active" aria-label="Start a company">
+      <p class="md-pin-brand">My Drawings</p>
+      <h2>Start a company</h2>
+      <p class="md-pin-hint">Create the company account for the head person. Workers will join later with the access code.</p>
+      <form class="md-reg-form" id="start-form" autocomplete="on">
+        <label class="mg-field">
+          <span>Head person email</span>
+          <input id="cs-email" type="email" maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email" required>
+        </label>
+        <label class="mg-field">
+          <span>Password</span>
+          <input id="cs-password" type="password" minlength="8" maxlength="120" autocomplete="new-password" required>
+        </label>
+        <label class="mg-field">
+          <span>Repeat password</span>
+          <input id="cs-password-2" type="password" minlength="8" maxlength="120" autocomplete="new-password" required>
+        </label>
+        <label class="mg-field">
+          <span>Company name</span>
+          <input id="cs-name" type="text" maxlength="160" autocomplete="organization" required>
+        </label>
+        <label class="mg-field">
+          <span>Company logo (optional)</span>
+          <input id="cs-logo" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+          <span class="md-file-name" id="cs-logo-name">No file selected</span>
+        </label>
+        <fieldset class="mg-field">
+          <span>Projects</span>
+          <div class="md-choice">
+            <label>
+              <input type="radio" name="cs-mode" value="single" checked>
+              <strong>Single project</strong>
+              <span>One live job</span>
+            </label>
+            <label>
+              <input type="radio" name="cs-mode" value="multi">
+              <strong>Multi project</strong>
+              <span>Several jobs</span>
+            </label>
+          </div>
+        </fieldset>
+        <p class="md-error" id="cs-error" role="alert"></p>
+        <button type="submit" class="md-btn md-btn-primary" id="cs-submit">Create company</button>
+      </form>
+      <div id="cs-done" hidden>
+        <p class="md-pin-hint">Company created. Give this access code to your workers:</p>
+        <p class="md-success-code" id="cs-code">—</p>
+        <a class="md-btn md-btn-primary" href="/mydrawings/">Sign in</a>
+      </div>
+      <p class="md-pin-actions">
+        <a class="md-link" href="/mydrawings/">Already have an account?</a>
+      </p>
+    </section>
+  </div>
+  <script src="/mydrawings/companystart.js"></script>
+</body>
+</html>

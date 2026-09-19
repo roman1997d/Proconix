@@ -22,6 +22,10 @@ ALTER TABLE my_drawings_workspace
   ADD COLUMN IF NOT EXISTS manager_name VARCHAR(160);
 ALTER TABLE my_drawings_workspace
   ADD COLUMN IF NOT EXISTS access_code VARCHAR(32);
+ALTER TABLE my_drawings_workspace
+  ADD COLUMN IF NOT EXISTS logo_path TEXT;
+ALTER TABLE my_drawings_workspace
+  ADD COLUMN IF NOT EXISTS project_mode VARCHAR(16) NOT NULL DEFAULT 'single';
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_workspace_access_code
   ON my_drawings_workspace (UPPER(access_code))
@@ -37,8 +41,12 @@ CREATE TABLE IF NOT EXISTS my_drawings_admin_session (
   token_hash VARCHAR(64) NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ,
   CONSTRAINT uq_my_drawings_admin_session_token UNIQUE (token_hash)
 );
+
+ALTER TABLE my_drawings_admin_session
+  ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS my_drawings_category (
   id SERIAL PRIMARY KEY,
@@ -98,8 +106,12 @@ CREATE TABLE IF NOT EXISTS my_drawings_device (
   token_hash VARCHAR(64) NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ,
   CONSTRAINT uq_my_drawings_device_token UNIQUE (token_hash)
 );
+
+ALTER TABLE my_drawings_device
+  ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_my_drawings_device_worker ON my_drawings_device(worker_id);
 

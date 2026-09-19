@@ -8,7 +8,7 @@
 const jwt = require('jsonwebtoken');
 
 const TOKEN_TYP = 'mydrawings';
-const DEFAULT_EXPIRES = '30d';
+const DEFAULT_EXPIRES = '180d';
 
 function jwtSecret() {
   const secret = String(process.env.MY_DRAWINGS_JWT_SECRET || process.env.JWT_SECRET || 'R7mK2pQ9xL').trim();

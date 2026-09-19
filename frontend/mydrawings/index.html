@@ -25,10 +25,10 @@
   </div>
 
   <div class="md-app" id="md-app">
-    <section class="md-screen md-pin md-register" id="screen-register" aria-label="Sign in">
+    <section class="md-screen md-pin md-register" id="screen-register" aria-label="Create account">
       <p class="md-pin-brand">My Drawings</p>
-      <h2>Get access</h2>
-      <p class="md-pin-hint">First time on this device — enter your details and the host access code from your company. We will email you a 4-digit key.</p>
+      <h2>Create account</h2>
+      <p class="md-pin-hint">Simple user — enter your name, email, and the host access code from your company.</p>
       <form class="md-reg-form" id="register-form" autocomplete="on">
         <label class="mg-field">
           <span>First name</span>
@@ -43,38 +43,42 @@
           <input id="reg-email" type="email" maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email" required>
         </label>
         <label class="mg-field">
-          <span>Host access code</span>
-          <input id="reg-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. 2026AA" required>
+          <span>Company access code</span>
+          <input id="reg-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="6–10 characters" required>
         </label>
         <p class="md-error" id="reg-error" role="alert"></p>
-        <button type="submit" class="md-btn md-btn-primary" id="reg-continue">Continue</button>
+        <button type="submit" class="md-btn md-btn-primary" id="reg-continue">Create account</button>
       </form>
       <p class="md-pin-actions">
         <button type="button" class="md-link" id="btn-have-account">Already have an account?</button>
+        <a class="md-link" href="/companystart">Start a company</a>
       </p>
-      <p class="md-admin-link"><button type="button" id="btn-admin-login">Company sign in</button></p>
     </section>
 
-    <section class="md-screen md-pin md-register" id="screen-login" aria-label="Sign in with email">
+    <section class="md-screen md-pin md-register" id="screen-login" aria-label="Sign in">
       <p class="md-pin-brand">My Drawings</p>
-      <h2>Welcome back</h2>
-      <p class="md-pin-hint">Enter the email you used before. If you work for more than one company, also enter that host access code.</p>
+      <h2>Sign in</h2>
+      <p class="md-pin-hint" id="login-hint">Enter your email. Company accounts will be asked for a password. Simple users stay signed in for 6 months.</p>
       <form class="md-reg-form" id="login-form" autocomplete="on">
         <label class="mg-field">
           <span>Email</span>
-          <input id="login-email" type="email" maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email" required>
+          <input id="login-email" type="email" maxlength="254" autocomplete="username" autocapitalize="off" spellcheck="false" inputmode="email" required>
         </label>
-        <label class="mg-field">
-          <span>Host access code (if needed)</span>
-          <input id="login-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. 2026AA">
+        <label class="mg-field" id="login-password-wrap" hidden>
+          <span>Password</span>
+          <input id="login-password" type="password" maxlength="120" autocomplete="current-password">
+        </label>
+        <label class="mg-field" id="login-code-wrap" hidden>
+          <span>Company access code</span>
+          <input id="login-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="6–10 characters">
         </label>
         <p class="md-error" id="login-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="login-continue">Continue</button>
       </form>
       <p class="md-pin-actions">
-        <button type="button" class="md-link" id="btn-create-account">Create an account</button>
+        <button type="button" class="md-link" id="btn-create-account">Create a simple user account</button>
+        <a class="md-link" href="/companystart">Start a company</a>
       </p>
-      <p class="md-admin-link"><button type="button" id="btn-admin-login-2">Company sign in</button></p>
     </section>
 
     <section class="md-screen md-pin md-register" id="screen-company" aria-label="Company sign in">

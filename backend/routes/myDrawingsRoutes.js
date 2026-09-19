@@ -7,16 +7,16 @@
 const express = require('express');
 const router = express.Router();
 const { requireMyDrawingsPin, requireMyDrawingsAdmin } = require('../middleware/requireMyDrawingsPin');
-const { uploadPdf } = require('../utils/myDrawingsUpload');
+const { uploadPdf, uploadCompanyLogo } = require('../utils/myDrawingsUpload');
 const ctrl = require('../controllers/myDrawingsController');
 
 function handleUploadError(err, req, res, next) {
   if (!err) return next();
-  if (err.message && (err.message.includes('Only PDF') || err.message.includes('Upload directory'))) {
+  if (err.message && (err.message.includes('Only PDF') || err.message.includes('Upload directory') || err.message.includes('Logo must'))) {
     return res.status(400).json({ success: false, message: err.message });
   }
   if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({ success: false, message: 'File too large (max 50 MB).' });
+    return res.status(400).json({ success: false, message: 'File too large.' });
   }
   return next(err);
 }
@@ -24,8 +24,10 @@ function handleUploadError(err, req, res, next) {
 router.post('/register', ctrl.registerWorker);
 router.post('/login', ctrl.loginWorker);
 router.post('/verify', ctrl.verifyWorker);
+router.post('/auth/lookup', ctrl.lookupAuth);
 router.post('/auth/request-code', ctrl.requestAuthCode);
 router.post('/auth/verify', ctrl.verifyWorker);
+router.post('/company-start', uploadCompanyLogo, handleUploadError, ctrl.startCompany);
 router.post('/company-login', ctrl.companyLogin);
 router.post('/unlock', ctrl.unlock);
 router.get('/catalog', requireMyDrawingsPin, ctrl.getCatalog);

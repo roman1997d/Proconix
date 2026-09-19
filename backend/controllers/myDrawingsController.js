@@ -223,6 +223,22 @@ async function ensureSchemaInner() {
     ADD COLUMN IF NOT EXISTS access_code VARCHAR(32)
   `);
   await pool.query(`
+    ALTER TABLE my_drawings_workspace
+    ADD COLUMN IF NOT EXISTS logo_path TEXT
+  `);
+  await pool.query(`
+    ALTER TABLE my_drawings_workspace
+    ADD COLUMN IF NOT EXISTS project_mode VARCHAR(16) NOT NULL DEFAULT 'single'
+  `);
+  await pool.query(`
+    ALTER TABLE my_drawings_device
+    ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ
+  `);
+  await pool.query(`
+    ALTER TABLE my_drawings_admin_session
+    ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ
+  `);
+  await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_workspace_access_code
     ON my_drawings_workspace (UPPER(access_code))
     WHERE access_code IS NOT NULL
@@ -315,6 +331,14 @@ function normalizeAccessCode(raw) {
 }
 
 const ACCESS_CODE_RE = /^[A-Z0-9]{6,10}$/;
+const SESSION_TTL_SQL = `INTERVAL '6 months'`;
+const BRANDING_DIR = path.join(UPLOADS_ROOT, 'mydrawings-branding');
+const LOGO_TYPES = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
 const ACCESS_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 function generateAccessCode(length) {
@@ -534,7 +558,8 @@ async function resolveAdminToken(token) {
             ws.access_code, ws.manager_name, ws.email
      FROM my_drawings_admin_session s
      JOIN my_drawings_workspace ws ON ws.id = s.workspace_id
-     WHERE s.token_hash = $1`,
+     WHERE s.token_hash = $1
+       AND (s.expires_at IS NULL OR s.expires_at > NOW())`,
     [hash]
   );
   const row = result.rows[0];
@@ -811,7 +836,8 @@ async function resolveDeviceToken(token) {
      FROM my_drawings_device d
      JOIN my_drawings_worker w ON w.id = d.worker_id
      JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
-     WHERE d.token_hash = $1`,
+     WHERE d.token_hash = $1
+       AND (d.expires_at IS NULL OR d.expires_at > NOW())`,
     [hash]
   );
   const row = result.rows[0];
@@ -835,6 +861,7 @@ async function resolveDeviceToken(token) {
 
 async function registerWorker(req, res) {
   try {
+    await ensureSchema();
     const firstName = cleanName(req.body && req.body.firstName);
     const lastName = cleanName(req.body && req.body.lastName);
     const email = cleanEmail(req.body && req.body.email);
@@ -854,63 +881,65 @@ async function registerWorker(req, res) {
         || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
       return res.status(429).json({ success: false, message: 'Too many requests. Try again later.' });
     }
+    const asCompany = await pool.query(
+      'SELECT id FROM my_drawings_workspace WHERE LOWER(email) = $1',
+      [email]
+    );
+    if (asCompany.rows[0]) {
+      return res.status(409).json({
+        success: false,
+        message: 'This email is a company account. Sign in with your password.',
+      });
+    }
     const workspace = await findWorkspaceByAccessCode(accessCode);
     if (!workspace) {
       return res.status(404).json({ success: false, message: 'That host access code is not valid.' });
     }
-    const { pin, sha } = await issueUniquePin(workspace.id);
-    const pinHash = await bcrypt.hash(pin, 10);
     const existing = await pool.query(
-      'SELECT id FROM my_drawings_worker WHERE workspace_id = $1 AND email = $2',
+      `SELECT id, first_name, last_name, email, access_suspended_until
+       FROM my_drawings_worker WHERE workspace_id = $1 AND email = $2`,
       [workspace.id, email]
     );
     if (existing.rows[0]) {
-      const current = await pool.query(
-        'SELECT access_suspended_until FROM my_drawings_worker WHERE id = $1',
-        [existing.rows[0].id]
-      );
-      const until = suspendedUntil(current.rows[0]);
+      const until = suspendedUntil(existing.rows[0]);
       if (until) {
         return res.status(403).json(accessClosedPayload(until));
       }
-      await pool.query(
-        `UPDATE my_drawings_worker
-         SET first_name = $2, last_name = $3, pin_hash = $4, pin_sha = $5,
-             pin_expires_at = NOW() + INTERVAL '24 hours'
-         WHERE id = $1`,
-        [existing.rows[0].id, firstName, lastName, pinHash, sha]
-      );
-    } else {
-      await pool.query(
-        `INSERT INTO my_drawings_worker
-          (workspace_id, first_name, last_name, email, pin_hash, pin_sha, pin_expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '24 hours')`,
-        [workspace.id, firstName, lastName, email, pinHash, sha]
-      );
+      return res.status(409).json({
+        success: false,
+        message: 'This email is already registered. Sign in instead.',
+      });
     }
-    await sendPasskeyEmail({ to: email, firstName, pin });
+    const inserted = await pool.query(
+      `INSERT INTO my_drawings_worker (workspace_id, first_name, last_name, email, verified_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       RETURNING id, first_name, last_name, email, access_suspended_until`,
+      [workspace.id, firstName, lastName, email]
+    );
+    const session = await issueWorkerSession(
+      { id: workspace.id, name: workspace.name, managerName: workspace.manager_name || '' },
+      inserted.rows[0]
+    );
     return res.json({
+      ...session,
       success: true,
-      email,
-      companyName: workspace.name,
-      message: 'We sent a 4-digit key to your email.',
+      message: 'Account created.',
     });
   } catch (err) {
     console.error('myDrawings register:', err);
-    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
-      return res.status(503).json({ success: false, message: err.message });
+    if (err && err.code === 'ACCESS_CLOSED') {
+      return res.status(403).json(accessClosedPayload(err.until));
     }
-    if (err && err.code === 'PIN_ALLOC') {
-      return res.status(500).json({ success: false, message: err.message });
-    }
-    return res.status(500).json({ success: false, message: 'Could not send your access key.' });
+    return res.status(500).json({ success: false, message: 'Could not create your account.' });
   }
 }
 
 async function openWorkerDevice(workspace, worker) {
   const deviceToken = crypto.randomBytes(32).toString('hex');
-  await pool.query(
-    `INSERT INTO my_drawings_device (worker_id, token_hash) VALUES ($1, $2)`,
+  const opened = await pool.query(
+    `INSERT INTO my_drawings_device (worker_id, token_hash, expires_at)
+     VALUES ($1, $2, NOW() + ${SESSION_TTL_SQL})
+     RETURNING expires_at`,
     [worker.id, tokenSha(deviceToken)]
   );
   await pool.query(
@@ -918,12 +947,14 @@ async function openWorkerDevice(workspace, worker) {
     [worker.id]
   );
   const catalog = await loadCatalog(workspace, 'worker');
+  const expiresAt = opened.rows[0] && opened.rows[0].expires_at;
   return {
     ...catalog,
     deviceToken,
     firstName: worker.first_name,
     lastName: worker.last_name,
     email: worker.email,
+    expiresAt: expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt,
   };
 }
 
@@ -1374,6 +1405,166 @@ async function updateAccessCode(req, res) {
   }
 }
 
+function publicLogoUrl(logoPath) {
+  if (!logoPath) return '';
+  return '/uploads/' + String(logoPath).split(path.sep).join('/');
+}
+
+function saveCompanyLogo(workspaceId, file) {
+  if (!file || !file.buffer || !file.buffer.length) return '';
+  const ext = LOGO_TYPES[file.mimetype] || (String(file.originalname || '').toLowerCase().match(/\.(jpe?g|png|webp|gif)$/) || [])[0] || '.png';
+  const dir = path.join(BRANDING_DIR, String(workspaceId));
+  fs.mkdirSync(dir, { recursive: true });
+  const filename = 'logo' + (ext.startsWith('.') ? ext : '.' + ext);
+  fs.writeFileSync(path.join(dir, filename), file.buffer);
+  return path.posix.join('mydrawings-branding', String(workspaceId), filename);
+}
+
+async function issueAdminSession(row) {
+  const adminToken = crypto.randomBytes(32).toString('hex');
+  const opened = await pool.query(
+    `INSERT INTO my_drawings_admin_session (workspace_id, token_hash, expires_at)
+     VALUES ($1, $2, NOW() + ${SESSION_TTL_SQL})
+     RETURNING expires_at`,
+    [row.id, tokenSha(adminToken)]
+  );
+  const catalog = await loadCatalog(
+    { id: row.id, name: row.name, access_code: row.access_code, managerName: row.manager_name || '' },
+    'admin'
+  );
+  const expiresAt = opened.rows[0] && opened.rows[0].expires_at;
+  return {
+    ...catalog,
+    adminToken,
+    accessCode: row.access_code || catalog.accessCode || '',
+    managerName: row.manager_name || '',
+    email: row.email || '',
+    projectMode: row.project_mode === 'multi' ? 'multi' : 'single',
+    logoUrl: publicLogoUrl(row.logo_path),
+    expiresAt: expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt,
+  };
+}
+
+async function lookupAuth(req, res) {
+  try {
+    await ensureSchema();
+    const email = cleanEmail(req.body && req.body.email);
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+    }
+    if (!allowRate('lookup:' + email, REGISTER_EMAIL_MAX, REGISTER_WINDOW_MS)
+        || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
+      return res.status(429).json({ success: false, message: 'Too many requests. Try again later.' });
+    }
+    const manager = await pool.query(
+      'SELECT id FROM my_drawings_workspace WHERE LOWER(email) = $1',
+      [email]
+    );
+    if (manager.rows[0]) {
+      return res.json({ success: true, kind: 'manager', needsPassword: true, needsAccessCode: false });
+    }
+    const workers = await findWorkersByEmail(email);
+    const open = workers.filter((row) => !suspendedUntil(row));
+    if (!open.length && workers.length) {
+      return res.status(403).json(accessClosedPayload(suspendedUntil(workers[0])));
+    }
+    if (!open.length) {
+      return res.json({ success: true, kind: 'none', needsPassword: false, needsAccessCode: false });
+    }
+    if (open.length > 1) {
+      return res.json({ success: true, kind: 'worker', needsPassword: false, needsAccessCode: true });
+    }
+    return res.json({ success: true, kind: 'worker', needsPassword: false, needsAccessCode: false });
+  } catch (err) {
+    console.error('myDrawings lookupAuth:', err);
+    return res.status(500).json({ success: false, message: 'Could not check that email.' });
+  }
+}
+
+async function startCompany(req, res) {
+  try {
+    await ensureSchema();
+    const email = cleanEmail(req.body && req.body.email);
+    const password = String((req.body && req.body.password) || '');
+    const passwordRepeat = String((req.body && (req.body.passwordRepeat || req.body.repeatPassword)) || '');
+    const companyName = String((req.body && (req.body.companyName || req.body.name)) || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 160);
+    const projectMode = String((req.body && req.body.projectMode) || 'single').toLowerCase() === 'multi'
+      ? 'multi'
+      : 'single';
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+    }
+    if (companyName.length < 2) {
+      return res.status(400).json({ success: false, message: 'Enter the company name.' });
+    }
+    if (password.length < 8 || password.length > 120) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
+    }
+    if (password !== passwordRepeat) {
+      return res.status(400).json({ success: false, message: 'Passwords do not match.' });
+    }
+    if (!allowRate('company-start:' + email, 3, REGISTER_WINDOW_MS)
+        || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
+      return res.status(429).json({ success: false, message: 'Too many requests. Try again later.' });
+    }
+    const taken = await pool.query(
+      'SELECT id FROM my_drawings_workspace WHERE LOWER(email) = $1',
+      [email]
+    );
+    if (taken.rows[0]) {
+      return res.status(409).json({
+        success: false,
+        message: 'A company is already registered with this email. Sign in instead.',
+      });
+    }
+    const accessHash = await dummyPinHash();
+    const adminHash = await dummyPinHash();
+    const passwordHash = await bcrypt.hash(password, 10);
+    const accessCode = await allocateAccessCode(0);
+    const managerName = email.split('@')[0] || companyName;
+    const inserted = await pool.query(
+      `INSERT INTO my_drawings_workspace
+        (name, access_pin_hash, admin_pin_hash, email, password_hash, manager_name, access_code, project_mode, demo_cleared_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+       RETURNING id, name, email, manager_name, access_code, project_mode, logo_path`,
+      [companyName, accessHash, adminHash, email, passwordHash, managerName, accessCode, projectMode]
+    );
+    const row = inserted.rows[0];
+    let logoPath = '';
+    try {
+      logoPath = saveCompanyLogo(row.id, req.file);
+      if (logoPath) {
+        await pool.query('UPDATE my_drawings_workspace SET logo_path = $2 WHERE id = $1', [row.id, logoPath]);
+        row.logo_path = logoPath;
+      }
+    } catch (logoErr) {
+      console.warn('myDrawings company logo:', logoErr && logoErr.message ? logoErr.message : logoErr);
+    }
+    await getDefaultProject(row.id);
+    const session = await issueAdminSession(row);
+    return res.json({
+      ...session,
+      success: true,
+      message: 'Company created.',
+    });
+  } catch (err) {
+    console.error('myDrawings startCompany:', err);
+    if (err && err.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message: 'A company is already registered with this email. Sign in instead.',
+      });
+    }
+    if (err && err.code === 'ACCESS_CODE_ALLOC') {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+    return res.status(500).json({ success: false, message: 'Could not create the company.' });
+  }
+}
+
 async function companyLogin(req, res) {
   try {
     await ensureSchema();
@@ -1387,7 +1578,7 @@ async function companyLogin(req, res) {
       return res.status(429).json({ success: false, message: 'Too many requests. Try again later.' });
     }
     const found = await pool.query(
-      `SELECT id, name, email, password_hash, manager_name, access_code
+      `SELECT id, name, email, password_hash, manager_name, access_code, project_mode, logo_path
        FROM my_drawings_workspace
        WHERE LOWER(email) = $1`,
       [email]
@@ -1400,19 +1591,7 @@ async function companyLogin(req, res) {
     if (!ok) {
       return res.status(401).json({ success: false, message: 'Incorrect company email or password.' });
     }
-    const adminToken = crypto.randomBytes(32).toString('hex');
-    await pool.query(
-      `INSERT INTO my_drawings_admin_session (workspace_id, token_hash) VALUES ($1, $2)`,
-      [row.id, tokenSha(adminToken)]
-    );
-    const catalog = await loadCatalog({ id: row.id, name: row.name }, 'admin');
-    return res.json({
-      ...catalog,
-      adminToken,
-      accessCode: row.access_code || '',
-      managerName: row.manager_name || '',
-      email: row.email || email,
-    });
+    return res.json(await issueAdminSession(row));
   } catch (err) {
     console.error('myDrawings companyLogin:', err);
     return res.status(500).json({ success: false, message: 'Could not sign in as company.' });
@@ -1918,6 +2097,8 @@ module.exports = {
   loginWorker,
   verifyWorker,
   requestAuthCode,
+  lookupAuth,
+  startCompany,
   companyLogin,
   unlock,
   getCatalog,
