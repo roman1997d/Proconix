@@ -8,6 +8,7 @@ const {
   resolveAdminToken,
   resolveJwtAuth,
 } = require('../controllers/myDrawingsController');
+const { attachCurrentSite } = require('../lib/myDrawingsSiteScope');
 const { readBearerToken } = require('../lib/myDrawingsJwt');
 
 function readDevice(req) {
@@ -45,7 +46,7 @@ async function requireMyDrawingsPin(req, res, next) {
         });
       }
       if (asJwt) {
-        req.myDrawings = asJwt;
+        req.myDrawings = await attachCurrentSite(req, asJwt);
         return next();
       }
       return res.status(401).json({ success: false, message: 'Session expired. Request a new access key.' });
@@ -54,7 +55,7 @@ async function requireMyDrawingsPin(req, res, next) {
     if (adminToken) {
       const asAdmin = await resolveAdminToken(adminToken);
       if (asAdmin) {
-        req.myDrawings = asAdmin;
+        req.myDrawings = await attachCurrentSite(req, asAdmin);
         return next();
       }
     }
@@ -62,7 +63,7 @@ async function requireMyDrawingsPin(req, res, next) {
     if (/^\d{4}$/.test(pin)) {
       const byPin = await resolveWorkspaceByPin(pin);
       if (byPin && byPin.role === 'admin') {
-        req.myDrawings = byPin;
+        req.myDrawings = await attachCurrentSite(req, byPin);
         const device = readDevice(req);
         if (device) {
           try {
@@ -87,7 +88,7 @@ async function requireMyDrawingsPin(req, res, next) {
       if (!resolved) {
         return res.status(401).json({ success: false, message: 'This device is no longer signed in.' });
       }
-      req.myDrawings = resolved;
+      req.myDrawings = await attachCurrentSite(req, resolved);
       return next();
     }
     return res.status(401).json({ success: false, message: 'Incorrect access key' });
@@ -98,10 +99,18 @@ async function requireMyDrawingsPin(req, res, next) {
 }
 
 function requireMyDrawingsAdmin(req, res, next) {
-  if (!req.myDrawings || req.myDrawings.role !== 'admin') {
-    return res.status(403).json({ success: false, message: 'Admin key required to manage drawings.' });
+  const role = req.myDrawings && req.myDrawings.role;
+  if (role !== 'admin' && role !== 'site_manager') {
+    return res.status(403).json({ success: false, message: 'Site manager or company access is required to manage this site.' });
   }
   return next();
 }
 
-module.exports = { requireMyDrawingsPin, requireMyDrawingsAdmin };
+function requireMyDrawingsCompanyAdmin(req, res, next) {
+  if (!req.myDrawings || req.myDrawings.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'Only the company head can do this.' });
+  }
+  return next();
+}
+
+module.exports = { requireMyDrawingsPin, requireMyDrawingsAdmin, requireMyDrawingsCompanyAdmin };

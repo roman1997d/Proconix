@@ -1091,6 +1091,10 @@ a.md-link { color: var(--md-accent); }
   padding: 12px;
   margin-bottom: 8px;
 }
+.mg-item.is-on {
+  border-color: #1b4f72;
+  box-shadow: inset 0 0 0 1px #1b4f72;
+}
 .mg-item-title { margin: 0 0 2px; font-weight: 800; font-size: 1.05rem; }
 .mg-item-num { margin: 0 0 4px; font-size: 0.9rem; color: var(--md-muted); }
 .mg-item-meta { margin: 0 0 10px; font-size: 0.76rem; color: var(--md-muted); }

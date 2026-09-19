@@ -22,6 +22,15 @@ const {
   downloadWallTypeImage,
   sendSpecImportRequest,
 } = require('../lib/myDrawingsWallTypes');
+const {
+  listWorkspaceSites,
+  loadSiteRow,
+  findSiteByAccessCode,
+  attachCurrentSite,
+  canManageSite,
+  isCompanyHead,
+  currentSiteId,
+} = require('../lib/myDrawingsSiteScope');
 
 const ACCESS_PIN = String(process.env.MY_DRAWINGS_ACCESS_PIN || '2580');
 const ADMIN_PIN = '2026';
@@ -342,12 +351,122 @@ async function ensureSchemaInner() {
     `CREATE INDEX IF NOT EXISTS idx_my_drawings_wall_type_ws
      ON my_drawings_wall_type (workspace_id, sort_order, id)`
   );
+  await addSiteColumns();
 
   ensureUploadDir();
   await seedTenants();
   await seedDefaultProjects();
+  await migrateSitesOntoProjects();
   await migrateStoredDrawingsToTenantDirs();
   await clearAutoSeededWallTypesOnce();
+}
+
+async function addSiteColumns() {
+  await pool.query(`ALTER TABLE my_drawings_project ADD COLUMN IF NOT EXISTS access_code VARCHAR(32)`);
+  await pool.query(`ALTER TABLE my_drawings_project ADD COLUMN IF NOT EXISTS wall_types_pack JSONB`);
+  await pool.query(`ALTER TABLE my_drawings_project ADD COLUMN IF NOT EXISTS manager_worker_id INT`);
+  await pool.query(`ALTER TABLE my_drawings_worker ADD COLUMN IF NOT EXISTS project_id INT`);
+  await pool.query(`ALTER TABLE my_drawings_wall_type ADD COLUMN IF NOT EXISTS project_id INT`);
+  await pool.query(`ALTER TABLE my_drawings_category ADD COLUMN IF NOT EXISTS project_id INT`);
+  await pool.query(`ALTER TABLE my_drawings_activity ADD COLUMN IF NOT EXISTS project_id INT`);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_project_access_code
+    ON my_drawings_project (UPPER(access_code))
+    WHERE access_code IS NOT NULL
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_my_drawings_worker_project ON my_drawings_worker(project_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_my_drawings_wall_type_project ON my_drawings_wall_type(project_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_my_drawings_category_project ON my_drawings_category(project_id)`);
+  try {
+    await pool.query('ALTER TABLE my_drawings_category DROP CONSTRAINT IF EXISTS uq_my_drawings_category');
+  } catch (_) {}
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_category_project
+    ON my_drawings_category (project_id, LOWER(name))
+    WHERE project_id IS NOT NULL
+  `);
+  try {
+    await pool.query('ALTER TABLE my_drawings_item DROP CONSTRAINT IF EXISTS uq_my_drawings_item_number');
+  } catch (_) {}
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_item_project_number
+    ON my_drawings_item (project_id, LOWER(number))
+    WHERE project_id IS NOT NULL
+  `);
+  try {
+    await pool.query('ALTER TABLE my_drawings_worker DROP CONSTRAINT IF EXISTS uq_my_drawings_worker_email');
+  } catch (_) {}
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_worker_project_email
+    ON my_drawings_worker (project_id, LOWER(email))
+    WHERE project_id IS NOT NULL
+  `);
+  await pool.query('DROP INDEX IF EXISTS uq_my_drawings_wall_type_code');
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_wall_type_project_code
+    ON my_drawings_wall_type (project_id, UPPER(code))
+    WHERE project_id IS NOT NULL
+  `);
+}
+
+async function migrateSitesOntoProjects() {
+  const workspaces = await pool.query(
+    'SELECT id, name, access_code, wall_types_pack FROM my_drawings_workspace ORDER BY id ASC'
+  );
+  for (const ws of workspaces.rows) {
+    const project = await getDefaultProject(ws.id);
+    if (!project) continue;
+    if (!project.access_code && ws.access_code) {
+      const taken = await accessCodeTaken(ws.access_code, ws.id, project.id);
+      if (!taken) {
+        await pool.query('UPDATE my_drawings_project SET access_code = $2 WHERE id = $1', [
+          project.id,
+          ws.access_code,
+        ]);
+        project.access_code = ws.access_code;
+      }
+    }
+    if (!project.access_code) {
+      try {
+        const code = await allocateAccessCode(ws.id, project.id);
+        await pool.query('UPDATE my_drawings_project SET access_code = $2 WHERE id = $1', [project.id, code]);
+        project.access_code = code;
+      } catch (_) {}
+    }
+    await pool.query(
+      `UPDATE my_drawings_project
+       SET wall_types_pack = $2::jsonb
+       WHERE id = $1 AND (wall_types_pack IS NULL OR wall_types_pack = '{}'::jsonb)
+         AND $2::jsonb IS NOT NULL AND $2::jsonb <> '{}'::jsonb`,
+      [project.id, JSON.stringify(ws.wall_types_pack && typeof ws.wall_types_pack === 'object' ? ws.wall_types_pack : {})]
+    );
+    await pool.query(
+      'UPDATE my_drawings_worker SET project_id = $1 WHERE workspace_id = $2 AND project_id IS NULL',
+      [project.id, ws.id]
+    );
+    await pool.query(
+      'UPDATE my_drawings_wall_type SET project_id = $1 WHERE workspace_id = $2 AND project_id IS NULL',
+      [project.id, ws.id]
+    );
+    await pool.query(
+      'UPDATE my_drawings_category SET project_id = $1 WHERE workspace_id = $2 AND project_id IS NULL',
+      [project.id, ws.id]
+    );
+    await pool.query(
+      'UPDATE my_drawings_activity SET project_id = $1 WHERE workspace_id = $2 AND project_id IS NULL',
+      [project.id, ws.id]
+    );
+    await pool.query(
+      `UPDATE my_drawings_project p
+       SET manager_worker_id = (
+         SELECT w.id FROM my_drawings_worker w
+         WHERE w.project_id = p.id AND w.is_admin = TRUE
+         ORDER BY w.id ASC LIMIT 1
+       )
+       WHERE p.id = $1 AND p.manager_worker_id IS NULL`,
+      [project.id]
+    );
+  }
 }
 
 async function clearWorkspaceCatalog(workspaceId) {
@@ -407,19 +526,26 @@ function generateAccessCode(length) {
   return out;
 }
 
-async function accessCodeTaken(code, exceptWorkspaceId) {
-  const result = await pool.query(
+async function accessCodeTaken(code, exceptWorkspaceId, exceptProjectId) {
+  const normalized = normalizeAccessCode(code);
+  const ws = await pool.query(
     `SELECT id FROM my_drawings_workspace
      WHERE UPPER(access_code) = $1 AND id <> $2`,
-    [code, exceptWorkspaceId || 0]
+    [normalized, exceptWorkspaceId || 0]
   );
-  return !!result.rows[0];
+  if (ws.rows[0]) return true;
+  const site = await pool.query(
+    `SELECT id FROM my_drawings_project
+     WHERE UPPER(access_code) = $1 AND id <> $2`,
+    [normalized, exceptProjectId || 0]
+  );
+  return !!site.rows[0];
 }
 
-async function allocateAccessCode(exceptWorkspaceId) {
+async function allocateAccessCode(exceptWorkspaceId, exceptProjectId) {
   for (let i = 0; i < 30; i++) {
     const code = generateAccessCode(8);
-    if (!(await accessCodeTaken(code, exceptWorkspaceId))) return code;
+    if (!(await accessCodeTaken(code, exceptWorkspaceId, exceptProjectId))) return code;
   }
   const err = new Error('Could not generate a unique access code.');
   err.code = 'ACCESS_CODE_ALLOC';
@@ -522,15 +648,17 @@ async function getDefaultProject(workspaceId) {
   const wsId = positiveInt(workspaceId);
   if (!wsId) return null;
   const found = await pool.query(
-    'SELECT id, name FROM my_drawings_project WHERE workspace_id = $1 ORDER BY id ASC LIMIT 1',
+    'SELECT id, name, access_code, manager_worker_id, wall_types_pack FROM my_drawings_project WHERE workspace_id = $1 ORDER BY id ASC LIMIT 1',
     [wsId]
   );
   if (found.rows[0]) return found.rows[0];
-  const ws = await pool.query('SELECT name FROM my_drawings_workspace WHERE id = $1', [wsId]);
+  const ws = await pool.query('SELECT name, access_code FROM my_drawings_workspace WHERE id = $1', [wsId]);
   const name = (ws.rows[0] && ws.rows[0].name) || DEFAULT_PROJECT_NAME;
   const inserted = await pool.query(
-    `INSERT INTO my_drawings_project (workspace_id, name) VALUES ($1, $2) RETURNING id, name`,
-    [wsId, name]
+    `INSERT INTO my_drawings_project (workspace_id, name, access_code, wall_types_pack)
+     VALUES ($1, $2, $3, '{}'::jsonb)
+     RETURNING id, name, access_code, manager_worker_id, wall_types_pack`,
+    [wsId, name, (ws.rows[0] && ws.rows[0].access_code) || null]
   );
   return inserted.rows[0];
 }
@@ -638,7 +766,7 @@ async function resolveJwtAuth(token) {
   if (!claims) return null;
   await ensureSchema();
   const result = await pool.query(
-    `SELECT w.id AS worker_id, w.first_name, w.last_name, w.email, w.workspace_id,
+    `SELECT w.id AS worker_id, w.first_name, w.last_name, w.email, w.workspace_id, w.project_id,
             w.access_suspended_until, w.is_admin, ws.name AS workspace_name, ws.manager_name
      FROM my_drawings_worker w
      JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
@@ -651,15 +779,16 @@ async function resolveJwtAuth(token) {
   if (blockedUntil) {
     return { blocked: true, until: blockedUntil, message: accessClosedMessage(blockedUntil) };
   }
+  const siteId = row.project_id || claims.projectId;
   const claimed = await pool.query(
-    'SELECT id, name FROM my_drawings_project WHERE id = $1 AND workspace_id = $2',
-    [claims.projectId, row.workspace_id]
+    'SELECT id, name, access_code FROM my_drawings_project WHERE id = $1 AND workspace_id = $2',
+    [siteId, row.workspace_id]
   );
   const project = claimed.rows[0] || (await getDefaultProject(row.workspace_id));
   if (!project) return null;
   return {
     workspace: { id: row.workspace_id, name: row.workspace_name, managerName: row.manager_name || '' },
-    role: row.is_admin ? 'admin' : 'worker',
+    role: row.is_admin ? 'site_manager' : 'worker',
     worker: {
       id: row.worker_id,
       firstName: row.first_name,
@@ -672,13 +801,20 @@ async function resolveJwtAuth(token) {
 
 async function issueWorkerSession(workspace, worker) {
   throwIfSuspended(worker);
-  const project = await getDefaultProject(workspace.id);
+  const projectId = positiveInt(worker.project_id) || positiveInt(worker.projectId);
+  const project = (projectId
+    ? (await pool.query(
+      'SELECT id, name, access_code FROM my_drawings_project WHERE id = $1 AND workspace_id = $2',
+      [projectId, workspace.id]
+    )).rows[0]
+    : null) || (await getDefaultProject(workspace.id));
   if (!project) {
-    const err = new Error('Company project is missing.');
+    const err = new Error('Site is missing.');
     err.code = 'PROJECT_MISSING';
     throw err;
   }
-  const opened = await openWorkerDevice(workspace, worker);
+  const role = worker.is_admin ? 'site_manager' : 'worker';
+  const opened = await openWorkerDevice(workspace, worker, project, role);
   let token = null;
   try {
     token = signMyDrawingsJwt({
@@ -686,7 +822,7 @@ async function issueWorkerSession(workspace, worker) {
       companyId: workspace.id,
       projectId: project.id,
       email: worker.email,
-      role: 'worker',
+      role,
     });
   } catch (err) {
     if (err && err.code !== 'JWT_NOT_CONFIGURED') throw err;
@@ -694,6 +830,7 @@ async function issueWorkerSession(workspace, worker) {
   }
   return {
     ...opened,
+    role,
     company: {
       id: workspace.id,
       name: workspace.name,
@@ -710,25 +847,26 @@ async function issueWorkerSession(workspace, worker) {
 }
 
 async function findWorkspaceByAccessCode(code) {
-  await ensureSchema();
-  const normalized = normalizeAccessCode(code);
-  if (!ACCESS_CODE_RE.test(normalized)) return null;
-  const result = await pool.query(
-    `SELECT id, name, email, manager_name, access_code
-     FROM my_drawings_workspace
-     WHERE UPPER(access_code) = $1`,
-    [normalized]
-  );
-  return result.rows[0] || null;
+  const site = await findSiteByAccessCode(code);
+  if (!site) return null;
+  return {
+    id: site.workspace_id,
+    name: site.workspace_name,
+    email: site.workspace_email,
+    manager_name: site.manager_name,
+    access_code: site.access_code,
+    site,
+  };
 }
 
 async function findWorkersByEmail(email) {
   const result = await pool.query(
-    `SELECT w.id, w.workspace_id, w.first_name, w.last_name, w.email,
+    `SELECT w.id, w.workspace_id, w.project_id, w.first_name, w.last_name, w.email,
             w.pin_hash, w.pin_expires_at, w.access_suspended_until, w.is_admin,
-            ws.name AS workspace_name, ws.manager_name
+            ws.name AS workspace_name, ws.manager_name, p.name AS site_name, p.access_code AS site_access_code
      FROM my_drawings_worker w
      JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
+     LEFT JOIN my_drawings_project p ON p.id = w.project_id
      WHERE w.email = $1
      ORDER BY (
        SELECT MAX(d.last_seen_at) FROM my_drawings_device d WHERE d.worker_id = w.id
@@ -889,13 +1027,15 @@ async function resolveDeviceToken(token) {
   const hash = tokenSha(raw);
   const result = await pool.query(
     `SELECT d.id AS device_id,
-            w.id AS worker_id, w.first_name, w.last_name, w.email,
+            w.id AS worker_id, w.first_name, w.last_name, w.email, w.project_id,
             w.access_suspended_until,
             w.is_admin,
-            ws.id AS workspace_id, ws.name AS workspace_name, ws.manager_name
+            ws.id AS workspace_id, ws.name AS workspace_name, ws.manager_name,
+            p.id AS site_id, p.name AS site_name
      FROM my_drawings_device d
      JOIN my_drawings_worker w ON w.id = d.worker_id
      JOIN my_drawings_workspace ws ON ws.id = w.workspace_id
+     LEFT JOIN my_drawings_project p ON p.id = w.project_id
      WHERE d.token_hash = $1
        AND (d.expires_at IS NULL OR d.expires_at > NOW())`,
     [hash]
@@ -907,15 +1047,19 @@ async function resolveDeviceToken(token) {
     return { blocked: true, until: blockedUntil, message: accessClosedMessage(blockedUntil) };
   }
   pool.query('UPDATE my_drawings_device SET last_seen_at = NOW() WHERE id = $1', [row.device_id]).catch(() => {});
+  const project = row.site_id
+    ? { id: row.site_id, name: row.site_name }
+    : (await getDefaultProject(row.workspace_id));
   return {
     workspace: { id: row.workspace_id, name: row.workspace_name, managerName: row.manager_name || '' },
-    role: row.is_admin ? 'admin' : 'worker',
+    role: row.is_admin ? 'site_manager' : 'worker',
     worker: {
       id: row.worker_id,
       firstName: row.first_name,
       lastName: row.last_name,
       email: row.email,
     },
+    project: project ? { id: project.id, name: project.name } : null,
   };
 }
 
@@ -935,7 +1079,7 @@ async function registerWorker(req, res) {
       return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
     }
     if (!ACCESS_CODE_RE.test(accessCode)) {
-      return res.status(400).json({ success: false, message: 'Enter the host access code from your company.' });
+      return res.status(400).json({ success: false, message: 'Enter the site access code from your site manager.' });
     }
     if (!allowRate('email:' + email, REGISTER_EMAIL_MAX, REGISTER_WINDOW_MS)
         || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
@@ -953,12 +1097,13 @@ async function registerWorker(req, res) {
     }
     const workspace = await findWorkspaceByAccessCode(accessCode);
     if (!workspace) {
-      return res.status(404).json({ success: false, message: 'That host access code is not valid.' });
+      return res.status(404).json({ success: false, message: 'That site access code is not valid.' });
     }
+    const siteId = workspace.site && workspace.site.id;
     const existing = await pool.query(
       `SELECT id, first_name, last_name, email, access_suspended_until
-       FROM my_drawings_worker WHERE workspace_id = $1 AND email = $2`,
-      [workspace.id, email]
+       FROM my_drawings_worker WHERE project_id = $1 AND LOWER(email) = LOWER($2)`,
+      [siteId, email]
     );
     if (existing.rows[0]) {
       const until = suspendedUntil(existing.rows[0]);
@@ -971,10 +1116,10 @@ async function registerWorker(req, res) {
       });
     }
     const inserted = await pool.query(
-      `INSERT INTO my_drawings_worker (workspace_id, first_name, last_name, email, verified_at)
-       VALUES ($1, $2, $3, $4, NOW())
-       RETURNING id, first_name, last_name, email, access_suspended_until`,
-      [workspace.id, firstName, lastName, email]
+      `INSERT INTO my_drawings_worker (workspace_id, project_id, first_name, last_name, email, verified_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       RETURNING id, first_name, last_name, email, access_suspended_until, project_id, is_admin`,
+      [workspace.id, siteId, firstName, lastName, email]
     );
     const session = await issueWorkerSession(
       { id: workspace.id, name: workspace.name, managerName: workspace.manager_name || '' },
@@ -994,7 +1139,7 @@ async function registerWorker(req, res) {
   }
 }
 
-async function openWorkerDevice(workspace, worker) {
+async function openWorkerDevice(workspace, worker, project, role) {
   const deviceToken = crypto.randomBytes(32).toString('hex');
   const opened = await pool.query(
     `INSERT INTO my_drawings_device (worker_id, token_hash, expires_at)
@@ -1006,7 +1151,7 @@ async function openWorkerDevice(workspace, worker) {
     `UPDATE my_drawings_worker SET verified_at = COALESCE(verified_at, NOW()) WHERE id = $1`,
     [worker.id]
   );
-  const catalog = await loadCatalog(workspace, 'worker');
+  const catalog = await loadCatalog(workspace, role || 'worker', project);
   const expiresAt = opened.rows[0] && opened.rows[0].expires_at;
   return {
     ...catalog,
@@ -1047,9 +1192,13 @@ async function loginWorker(req, res) {
     if (accessCode) {
       const workspace = await findWorkspaceByAccessCode(accessCode);
       if (!workspace) {
-        return res.status(404).json({ success: false, message: 'That host access code is not valid.' });
+        return res.status(404).json({ success: false, message: 'That site access code is not valid.' });
       }
-      rows = rows.filter((row) => Number(row.workspace_id) === Number(workspace.id));
+      rows = rows.filter((row) => Number(row.project_id || 0) === Number(workspace.site && workspace.site.id)
+        || Number(row.workspace_id) === Number(workspace.id));
+      if (workspace.site) {
+        rows = rows.filter((row) => !row.project_id || Number(row.project_id) === Number(workspace.site.id));
+      }
     }
     rows = rows.filter((row) => !suspendedUntil(row));
     if (!rows.length) {
@@ -1059,18 +1208,13 @@ async function loginWorker(req, res) {
       }
       return res.status(404).json({ success: false, message: 'No account found for that email.' });
     }
-    const worker = rows[0];
-    if (worker.is_admin) {
-      const wsRow = await pool.query(
-        `SELECT id, name, email, manager_name, access_code, project_mode, logo_path
-         FROM my_drawings_workspace WHERE id = $1`,
-        [worker.workspace_id]
-      );
-      const display = [worker.first_name, worker.last_name].filter(Boolean).join(' ').trim();
-      if (wsRow.rows[0]) {
-        return res.json(await issueAdminSession(wsRow.rows[0], display));
-      }
+    if (rows.length > 1 && !accessCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'Enter the site access code for the site you want to open.',
+      });
     }
+    const worker = rows[0];
     const workspace = {
       id: worker.workspace_id,
       name: worker.workspace_name,
@@ -1101,13 +1245,15 @@ async function verifyWorker(req, res) {
     if (accessCode) {
       const workspace = await findWorkspaceByAccessCode(accessCode);
       if (workspace) {
-        rows = rows.filter((row) => Number(row.workspace_id) === Number(workspace.id));
+        const siteId = workspace.site && workspace.site.id;
+        rows = rows.filter((row) => Number(row.project_id || 0) === Number(siteId)
+          || (!row.project_id && Number(row.workspace_id) === Number(workspace.id)));
       }
     }
     if (rows.length > 1) {
       return res.status(400).json({
         success: false,
-        message: 'Enter the host access code for the company you want to open.',
+        message: 'Enter the site access code for the site you want to open.',
       });
     }
     const worker = rows[0];
@@ -1164,20 +1310,22 @@ async function requestAuthCode(req, res) {
     if (accessCode) {
       const workspace = await findWorkspaceByAccessCode(accessCode);
       if (!workspace) {
-        return res.status(404).json({ success: false, message: 'That host access code is not valid.' });
+        return res.status(404).json({ success: false, message: 'That site access code is not valid.' });
       }
-      rows = rows.filter((row) => Number(row.workspace_id) === Number(workspace.id));
+      const siteId = workspace.site && workspace.site.id;
+      rows = rows.filter((row) => Number(row.project_id || 0) === Number(siteId)
+        || (!row.project_id && Number(row.workspace_id) === Number(workspace.id)));
     }
     if (!rows.length) {
       return res.status(404).json({
         success: false,
-        message: 'No account found for that email. Create an account with the host access code first.',
+        message: 'No account found for that email. Create an account with the site access code first.',
       });
     }
     if (rows.length > 1) {
       return res.status(400).json({
         success: false,
-        message: 'Enter the host access code for the company you want to open.',
+        message: 'Enter the site access code for the site you want to open.',
       });
     }
     const worker = rows[0];
@@ -1212,43 +1360,65 @@ async function requestAuthCode(req, res) {
   }
 }
 
-async function loadCatalog(workspace, role) {
+async function loadCatalog(workspace, role, site) {
+  const workspaceId = workspace.id;
+  const project = site && site.id
+    ? site
+    : await getDefaultProject(workspaceId);
+  const projectId = project && project.id;
   const cats = await pool.query(
-    'SELECT id, name FROM my_drawings_category WHERE workspace_id = $1 ORDER BY sort_order ASC, name ASC',
-    [workspace.id]
+    `SELECT id, name FROM my_drawings_category
+     WHERE workspace_id = $1 AND ($2::int IS NULL OR project_id = $2)
+     ORDER BY sort_order ASC, name ASC`,
+    [workspaceId, projectId || null]
   );
   const items = await pool.query(
     `SELECT i.id, i.number, i.title, i.revision, i.size_bytes, i.updated_at, i.floors, c.name AS category
      FROM my_drawings_item i
      LEFT JOIN my_drawings_category c ON c.id = i.category_id
-     WHERE i.workspace_id = $1
+     WHERE i.workspace_id = $1 AND ($2::int IS NULL OR i.project_id = $2)
      ORDER BY i.number ASC`,
-    [workspace.id]
+    [workspaceId, projectId || null]
   );
-  let accessCode = workspace.access_code || '';
-  if ((role || 'worker') === 'admin' && !accessCode) {
-    const extra = await pool.query(
-      'SELECT access_code FROM my_drawings_workspace WHERE id = $1',
-      [workspace.id]
-    );
-    accessCode = (extra.rows[0] && extra.rows[0].access_code) || '';
-  }
-  const project = await getDefaultProject(workspace.id);
+  const sites = await listWorkspaceSites(workspaceId);
+  const current = sites.find((s) => Number(s.id) === Number(projectId)) || sites[0] || null;
+  const manage = role === 'admin' || role === 'site_manager';
+  let accessCode = (project && project.access_code) || (current && current.accessCode) || '';
+  if (manage && !accessCode && current) accessCode = current.accessCode || '';
+  const wsRow = await pool.query(
+    'SELECT project_mode, manager_name FROM my_drawings_workspace WHERE id = $1',
+    [workspaceId]
+  );
+  const projectMode = wsRow.rows[0] && wsRow.rows[0].project_mode === 'multi' ? 'multi' : 'single';
   return {
     success: true,
     role: role || 'worker',
+    canManage: manage,
+    projectMode,
+    siteCount: sites.length,
     company: {
       id: workspace.id,
       name: workspace.name,
-      managerName: workspace.managerName || workspace.manager_name || '',
+      managerName: workspace.managerName || workspace.manager_name || (wsRow.rows[0] && wsRow.rows[0].manager_name) || '',
     },
+    site: current
+      ? {
+        id: current.id,
+        name: current.name,
+        accessCode: manage ? (current.accessCode || '') : undefined,
+        managerName: current.managerName || '',
+        drawingCount: current.drawingCount,
+        workerCount: current.workerCount,
+      }
+      : null,
+    sites: role === 'admin' ? sites : undefined,
     project: {
-      id: `ws-${workspace.id}`,
-      name: workspace.name,
+      id: projectId,
+      name: (current && current.name) || (project && project.name) || workspace.name,
       companyId: workspace.id,
-      projectId: project ? project.id : null,
+      projectId,
     },
-    accessCode: (role || 'worker') === 'admin' ? accessCode : undefined,
+    accessCode: manage ? accessCode : undefined,
     categories: cats.rows.map((r) => r.name),
     drawings: items.rows.map((d) => ({
       id: String(d.id),
@@ -1265,7 +1435,7 @@ async function loadCatalog(workspace, role) {
 }
 
 async function catalogResponse(req, res) {
-  const payload = await loadCatalog(req.myDrawings.workspace, req.myDrawings.role);
+  const payload = await loadCatalog(req.myDrawings.workspace, req.myDrawings.role, req.myDrawings.project);
   return res.json(payload);
 }
 
@@ -1278,10 +1448,11 @@ function actorName(req) {
 async function logActivity(req, action, title, number) {
   try {
     await pool.query(
-      `INSERT INTO my_drawings_activity (workspace_id, actor_name, action, drawing_title, drawing_number)
-       VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO my_drawings_activity (workspace_id, project_id, actor_name, action, drawing_title, drawing_number)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
         req.myDrawings.workspace.id,
+        currentSiteId(req.myDrawings),
         actorName(req),
         action,
         title ? String(title).slice(0, 200) : '',
@@ -1298,10 +1469,10 @@ async function getActivity(req, res) {
     const rows = await pool.query(
       `SELECT actor_name, action, drawing_title, drawing_number, created_at
        FROM my_drawings_activity
-       WHERE workspace_id = $1
+       WHERE workspace_id = $1 AND ($2::int IS NULL OR project_id = $2)
        ORDER BY created_at DESC, id DESC
        LIMIT 200`,
-      [req.myDrawings.workspace.id]
+      [req.myDrawings.workspace.id, currentSiteId(req.myDrawings)]
     );
     return res.json({
       success: true,
@@ -1323,15 +1494,16 @@ async function listWorkers(req, res) {
   try {
     await ensureSchema();
     const workspaceId = req.myDrawings.workspace.id;
+    const projectId = currentSiteId(req.myDrawings);
     const rows = await pool.query(
       `SELECT w.id, w.first_name, w.last_name, w.email, w.verified_at, w.created_at,
               w.access_suspended_until, w.is_admin,
               (SELECT COUNT(*)::int FROM my_drawings_device d WHERE d.worker_id = w.id) AS device_count,
               (SELECT MAX(d.last_seen_at) FROM my_drawings_device d WHERE d.worker_id = w.id) AS last_seen_at
        FROM my_drawings_worker w
-       WHERE w.workspace_id = $1
+       WHERE w.workspace_id = $1 AND ($2::int IS NULL OR w.project_id = $2)
        ORDER BY w.last_name ASC, w.first_name ASC, w.id ASC`,
-      [workspaceId]
+      [workspaceId, projectId]
     );
     return res.json({
       success: true,
@@ -1349,6 +1521,7 @@ async function listWorkers(req, res) {
           accessSuspendedUntil: until ? until.toISOString() : null,
           accessClosed: !!until,
           isAdmin: !!r.is_admin,
+          isSiteManager: !!r.is_admin,
         };
       }),
     });
@@ -1358,14 +1531,14 @@ async function listWorkers(req, res) {
   }
 }
 
-async function findCompanyWorker(workspaceId, workerId) {
+async function findCompanyWorker(workspaceId, workerId, projectId) {
   const id = parseInt(workerId, 10);
   if (!Number.isInteger(id) || id < 1) return null;
   const found = await pool.query(
-    `SELECT id, first_name, last_name, email, access_suspended_until
+    `SELECT id, first_name, last_name, email, access_suspended_until, is_admin, project_id
      FROM my_drawings_worker
-     WHERE id = $1 AND workspace_id = $2`,
-    [id, workspaceId]
+     WHERE id = $1 AND workspace_id = $2 AND ($3::int IS NULL OR project_id = $3)`,
+    [id, workspaceId, projectId || null]
   );
   return found.rows[0] || null;
 }
@@ -1374,7 +1547,7 @@ async function suspendWorker(req, res) {
   try {
     await ensureSchema();
     const workspaceId = req.myDrawings.workspace.id;
-    const worker = await findCompanyWorker(workspaceId, req.params.id);
+    const worker = await findCompanyWorker(workspaceId, req.params.id, currentSiteId(req.myDrawings));
     if (!worker) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
@@ -1407,7 +1580,7 @@ async function restoreWorker(req, res) {
   try {
     await ensureSchema();
     const workspaceId = req.myDrawings.workspace.id;
-    const worker = await findCompanyWorker(workspaceId, req.params.id);
+    const worker = await findCompanyWorker(workspaceId, req.params.id, currentSiteId(req.myDrawings));
     if (!worker) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
@@ -1426,7 +1599,7 @@ async function deleteWorker(req, res) {
   try {
     await ensureSchema();
     const workspaceId = req.myDrawings.workspace.id;
-    const worker = await findCompanyWorker(workspaceId, req.params.id);
+    const worker = await findCompanyWorker(workspaceId, req.params.id, currentSiteId(req.myDrawings));
     if (!worker) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
@@ -1445,8 +1618,11 @@ async function deleteWorker(req, res) {
 async function makeWorkerAdmin(req, res) {
   try {
     await ensureSchema();
+    if (!isCompanyHead(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Only the company head can appoint a site manager.' });
+    }
     const workspaceId = req.myDrawings.workspace.id;
-    const worker = await findCompanyWorker(workspaceId, req.params.id);
+    const worker = await findCompanyWorker(workspaceId, req.params.id, currentSiteId(req.myDrawings));
     if (!worker) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
@@ -1456,7 +1632,18 @@ async function makeWorkerAdmin(req, res) {
        WHERE id = $1`,
       [worker.id]
     );
-    return res.json({ success: true, message: 'This user is now an administrator.', isAdmin: true });
+    const siteId = currentSiteId(req.myDrawings);
+    if (siteId) {
+      await pool.query(
+        'UPDATE my_drawings_worker SET is_admin = FALSE WHERE project_id = $1 AND id <> $2',
+        [siteId, worker.id]
+      );
+      await pool.query(
+        'UPDATE my_drawings_project SET manager_worker_id = $2 WHERE id = $1',
+        [siteId, worker.id]
+      );
+    }
+    return res.json({ success: true, message: 'This user is now the site manager.', isAdmin: true, isSiteManager: true });
   } catch (err) {
     console.error('myDrawings makeWorkerAdmin:', err);
     return res.status(500).json({ success: false, message: 'Could not make this user an administrator.' });
@@ -1466,8 +1653,11 @@ async function makeWorkerAdmin(req, res) {
 async function removeWorkerAdmin(req, res) {
   try {
     await ensureSchema();
+    if (!isCompanyHead(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Only the company head can change the site manager.' });
+    }
     const workspaceId = req.myDrawings.workspace.id;
-    const worker = await findCompanyWorker(workspaceId, req.params.id);
+    const worker = await findCompanyWorker(workspaceId, req.params.id, currentSiteId(req.myDrawings));
     if (!worker) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
@@ -1475,7 +1665,14 @@ async function removeWorkerAdmin(req, res) {
       'UPDATE my_drawings_worker SET is_admin = FALSE WHERE id = $1',
       [worker.id]
     );
-    return res.json({ success: true, message: 'Administrator access removed.', isAdmin: false });
+    const siteId = currentSiteId(req.myDrawings);
+    if (siteId) {
+      await pool.query(
+        'UPDATE my_drawings_project SET manager_worker_id = NULL WHERE id = $1 AND manager_worker_id = $2',
+        [siteId, worker.id]
+      );
+    }
+    return res.json({ success: true, message: 'Site manager access removed.', isAdmin: false, isSiteManager: false });
   } catch (err) {
     console.error('myDrawings removeWorkerAdmin:', err);
     return res.status(500).json({ success: false, message: 'Could not remove administrator access.' });
@@ -1486,24 +1683,35 @@ async function updateAccessCode(req, res) {
   try {
     await ensureSchema();
     const workspaceId = req.myDrawings.workspace.id;
+    const siteId = currentSiteId(req.myDrawings);
+    if (!siteId) {
+      return res.status(400).json({ success: false, message: 'Select a site first.' });
+    }
     const generate = !!(req.body && (req.body.generate === true || req.body.generate === 'true'));
-    let code = generate ? await allocateAccessCode(workspaceId) : normalizeAccessCode(req.body && req.body.accessCode);
+    let code = generate ? await allocateAccessCode(workspaceId, siteId) : normalizeAccessCode(req.body && req.body.accessCode);
     if (!ACCESS_CODE_RE.test(code)) {
       return res.status(400).json({
         success: false,
         message: 'Access code must be 6 to 10 letters or numbers.',
       });
     }
-    if (await accessCodeTaken(code, workspaceId)) {
+    if (await accessCodeTaken(code, workspaceId, siteId)) {
       return res.status(409).json({
         success: false,
         message: 'That access code is already in use. Choose another.',
       });
     }
     await pool.query(
-      'UPDATE my_drawings_workspace SET access_code = $2 WHERE id = $1',
-      [workspaceId, code]
+      'UPDATE my_drawings_project SET access_code = $2 WHERE id = $1 AND workspace_id = $3',
+      [siteId, code, workspaceId]
     );
+    const only = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM my_drawings_project WHERE workspace_id = $1',
+      [workspaceId]
+    );
+    if (only.rows[0] && only.rows[0].n === 1) {
+      await pool.query('UPDATE my_drawings_workspace SET access_code = $2 WHERE id = $1', [workspaceId, code]);
+    }
     return res.json({
       success: true,
       accessCode: code,
@@ -1556,7 +1764,7 @@ async function issueAdminSession(row, managerName) {
   return {
     ...catalog,
     adminToken,
-    accessCode: row.access_code || catalog.accessCode || '',
+    accessCode: catalog.accessCode || row.access_code || '',
     managerName: displayName,
     email: row.email || '',
     projectMode: row.project_mode === 'multi' ? 'multi' : 'single',
@@ -1664,6 +1872,12 @@ async function startCompany(req, res) {
       console.warn('myDrawings company logo:', logoErr && logoErr.message ? logoErr.message : logoErr);
     }
     await getDefaultProject(row.id);
+    if (row.project_mode === 'multi') {
+      await pool.query(
+        `UPDATE my_drawings_workspace SET project_mode = 'multi' WHERE id = $1`,
+        [row.id]
+      );
+    }
     const session = await issueAdminSession(row);
     return res.json({
       ...session,
@@ -1747,19 +1961,20 @@ async function getCatalog(req, res) {
   }
 }
 
-async function getOrCreateCategory(workspaceId, name) {
+async function getOrCreateCategory(workspaceId, name, projectId) {
   const trimmed = String(name || '').trim().slice(0, 80);
   if (!trimmed) return null;
   const found = await pool.query(
-    'SELECT id, name FROM my_drawings_category WHERE workspace_id = $1 AND LOWER(name) = LOWER($2)',
-    [workspaceId, trimmed]
+    `SELECT id, name FROM my_drawings_category
+     WHERE workspace_id = $1 AND LOWER(name) = LOWER($2) AND ($3::int IS NULL OR project_id = $3)`,
+    [workspaceId, trimmed, projectId || null]
   );
   if (found.rows[0]) return found.rows[0];
   const inserted = await pool.query(
-    `INSERT INTO my_drawings_category (workspace_id, name, sort_order)
-     VALUES ($1, $2, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM my_drawings_category WHERE workspace_id = $1))
+    `INSERT INTO my_drawings_category (workspace_id, project_id, name, sort_order)
+     VALUES ($1, $2, $3, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM my_drawings_category WHERE workspace_id = $1 AND ($2::int IS NULL OR project_id = $2)))
      RETURNING id, name`,
-    [workspaceId, trimmed]
+    [workspaceId, projectId || null, trimmed]
   );
   return inserted.rows[0];
 }
@@ -1769,14 +1984,16 @@ async function addCategory(req, res) {
     const name = String((req.body && req.body.name) || '').trim().slice(0, 80);
     if (!name) return res.status(400).json({ success: false, message: 'Category name is required.' });
     const workspaceId = req.myDrawings.workspace.id;
+    const projectId = currentSiteId(req.myDrawings);
     const exists = await pool.query(
-      'SELECT id FROM my_drawings_category WHERE workspace_id = $1 AND LOWER(name) = LOWER($2)',
-      [workspaceId, name]
+      `SELECT id FROM my_drawings_category
+       WHERE workspace_id = $1 AND LOWER(name) = LOWER($2) AND ($3::int IS NULL OR project_id = $3)`,
+      [workspaceId, name, projectId]
     );
     if (exists.rows[0]) {
       return res.status(400).json({ success: false, message: 'That category already exists.' });
     }
-    await getOrCreateCategory(workspaceId, name);
+    await getOrCreateCategory(workspaceId, name, projectId);
     await logActivity(req, 'added_category', name, '');
     return catalogResponse(req, res);
   } catch (err) {
@@ -1798,14 +2015,17 @@ async function renameCategory(req, res) {
       return catalogResponse(req, res);
     }
     const workspaceId = req.myDrawings.workspace.id;
+    const projectId = currentSiteId(req.myDrawings);
     const cat = await pool.query(
-      'SELECT id, name FROM my_drawings_category WHERE workspace_id = $1 AND LOWER(name) = LOWER($2)',
-      [workspaceId, from]
+      `SELECT id, name FROM my_drawings_category
+       WHERE workspace_id = $1 AND LOWER(name) = LOWER($2) AND ($3::int IS NULL OR project_id = $3)`,
+      [workspaceId, from, projectId]
     );
     if (!cat.rows[0]) return res.status(404).json({ success: false, message: 'Category not found.' });
     const clash = await pool.query(
-      'SELECT id FROM my_drawings_category WHERE workspace_id = $1 AND LOWER(name) = LOWER($2) AND id <> $3',
-      [workspaceId, to, cat.rows[0].id]
+      `SELECT id FROM my_drawings_category
+       WHERE workspace_id = $1 AND LOWER(name) = LOWER($2) AND id <> $3 AND ($4::int IS NULL OR project_id = $4)`,
+      [workspaceId, to, cat.rows[0].id, projectId]
     );
     if (clash.rows[0]) {
       return res.status(400).json({ success: false, message: 'That category name already exists.' });
@@ -1826,9 +2046,10 @@ async function reorderCategories(req, res) {
       return res.status(400).json({ success: false, message: 'Category order is required.' });
     }
     const workspaceId = req.myDrawings.workspace.id;
+    const projectId = currentSiteId(req.myDrawings);
     const existing = await pool.query(
-      'SELECT id, name FROM my_drawings_category WHERE workspace_id = $1',
-      [workspaceId]
+      `SELECT id, name FROM my_drawings_category WHERE workspace_id = $1 AND ($2::int IS NULL OR project_id = $2)`,
+      [workspaceId, projectId]
     );
     const byName = new Map(existing.rows.map((r) => [r.name, r.id]));
     const client = await pool.connect();
@@ -1910,14 +2131,14 @@ async function addDrawing(req, res) {
     const workspaceId = req.myDrawings.workspace.id;
     const project = req.myDrawings.project || (await getDefaultProject(workspaceId));
     const clash = await pool.query(
-      'SELECT id FROM my_drawings_item WHERE workspace_id = $1 AND LOWER(number) = LOWER($2)',
-      [workspaceId, number]
+      'SELECT id FROM my_drawings_item WHERE project_id = $1 AND LOWER(number) = LOWER($2)',
+      [project && project.id, number]
     );
     if (clash.rows[0]) {
       removeStoredFile(relativeFromAbs(req.file.path));
       return res.status(400).json({ success: false, message: 'A drawing with that number already exists. Use Update to replace it.' });
     }
-    const cat = await getOrCreateCategory(workspaceId, categoryName || 'Uncategorised');
+    const cat = await getOrCreateCategory(workspaceId, categoryName || 'Uncategorised', project && project.id);
     const meta = fileMeta(req.file);
     const inserted = await pool.query(
       `INSERT INTO my_drawings_item
@@ -1942,19 +2163,20 @@ async function addDrawing(req, res) {
   }
 }
 
-async function loadItem(workspaceId, id) {
+async function loadItem(workspaceId, id, projectId) {
   const n = parseInt(id, 10);
   if (!Number.isInteger(n) || n < 1) return null;
   const row = await pool.query(
-    'SELECT * FROM my_drawings_item WHERE id = $1 AND workspace_id = $2',
-    [n, workspaceId]
+    `SELECT * FROM my_drawings_item
+     WHERE id = $1 AND workspace_id = $2 AND ($3::int IS NULL OR project_id = $3)`,
+    [n, workspaceId, projectId || null]
   );
   return row.rows[0] || null;
 }
 
 async function editDrawing(req, res) {
   try {
-    const item = await loadItem(req.myDrawings.workspace.id, req.params.id);
+    const item = await loadItem(req.myDrawings.workspace.id, req.params.id, currentSiteId(req.myDrawings));
     if (!item) {
       if (req.file) removeStoredFile(relativeFromAbs(req.file.path));
       return res.status(404).json({ success: false, message: 'Drawing not found.' });
@@ -1972,14 +2194,14 @@ async function editDrawing(req, res) {
       return res.status(400).json({ success: false, message: 'Number and title are required.' });
     }
     const clash = await pool.query(
-      'SELECT id FROM my_drawings_item WHERE workspace_id = $1 AND LOWER(number) = LOWER($2) AND id <> $3',
-      [req.myDrawings.workspace.id, number, item.id]
+      'SELECT id FROM my_drawings_item WHERE project_id = $1 AND LOWER(number) = LOWER($2) AND id <> $3',
+      [item.project_id, number, item.id]
     );
     if (clash.rows[0]) {
       if (req.file) removeStoredFile(relativeFromAbs(req.file.path));
       return res.status(400).json({ success: false, message: 'Another drawing already uses that number.' });
     }
-    const cat = await getOrCreateCategory(req.myDrawings.workspace.id, categoryName || 'Uncategorised');
+    const cat = await getOrCreateCategory(req.myDrawings.workspace.id, categoryName || 'Uncategorised', item.project_id);
     let meta = {
       size_bytes: item.size_bytes,
       stored_filename: item.stored_filename,
@@ -2016,7 +2238,7 @@ async function editDrawing(req, res) {
 async function updateDrawingFile(req, res) {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'Choose the new PDF to replace the old one.' });
-    const item = await loadItem(req.myDrawings.workspace.id, req.params.id);
+    const item = await loadItem(req.myDrawings.workspace.id, req.params.id, currentSiteId(req.myDrawings));
     if (!item) {
       removeStoredFile(relativeFromAbs(req.file.path));
       return res.status(404).json({ success: false, message: 'Drawing not found.' });
@@ -2049,7 +2271,7 @@ async function updateDrawingFile(req, res) {
 
 async function deleteDrawing(req, res) {
   try {
-    const item = await loadItem(req.myDrawings.workspace.id, req.params.id);
+    const item = await loadItem(req.myDrawings.workspace.id, req.params.id, currentSiteId(req.myDrawings));
     if (!item) return res.status(404).json({ success: false, message: 'Drawing not found.' });
     await pool.query('DELETE FROM my_drawings_item WHERE id = $1', [item.id]);
     removeStoredFile(item.relative_path);
@@ -2063,7 +2285,7 @@ async function deleteDrawing(req, res) {
 
 async function downloadFile(req, res) {
   try {
-    const item = await loadItem(req.myDrawings.workspace.id, req.params.id);
+    const item = await loadItem(req.myDrawings.workspace.id, req.params.id, currentSiteId(req.myDrawings));
     if (!item) return res.status(404).json({ success: false, message: 'Drawing not found.' });
     const scopedProject = req.myDrawings.project && req.myDrawings.project.id;
     if (scopedProject && item.project_id && Number(item.project_id) !== Number(scopedProject)) {
@@ -2128,7 +2350,7 @@ async function listDrawings(req, res) {
       SELECT i.id, i.number, i.title, i.revision, i.size_bytes, i.updated_at, i.floors, c.name AS category
       FROM my_drawings_item i
       LEFT JOIN my_drawings_category c ON c.id = i.category_id
-      WHERE i.workspace_id = $1 AND (i.project_id = $2 OR i.project_id IS NULL)
+      WHERE i.workspace_id = $1 AND i.project_id = $2
     `;
     if (floor) {
       params.push(floor);
@@ -2141,8 +2363,10 @@ async function listDrawings(req, res) {
     sql += ' ORDER BY i.number ASC';
     const items = await pool.query(sql, params);
     const cats = await pool.query(
-      'SELECT name FROM my_drawings_category WHERE workspace_id = $1 ORDER BY sort_order ASC, name ASC',
-      [workspaceId]
+      `SELECT name FROM my_drawings_category
+       WHERE workspace_id = $1 AND ($2::int IS NULL OR project_id = $2)
+       ORDER BY sort_order ASC, name ASC`,
+      [workspaceId, project.id]
     );
     return res.json({
       success: true,
@@ -2208,6 +2432,136 @@ async function registerDevice(req, res) {
   }
 }
 
+async function listSites(req, res) {
+  try {
+    if (!isCompanyHead(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Only the company head can manage sites.' });
+    }
+    const sites = await listWorkspaceSites(req.myDrawings.workspace.id);
+    return res.json({
+      success: true,
+      sites,
+      siteCount: sites.length,
+      currentSiteId: currentSiteId(req.myDrawings),
+    });
+  } catch (err) {
+    console.error('myDrawings listSites:', err);
+    return res.status(500).json({ success: false, message: 'Could not load sites.' });
+  }
+}
+
+async function addSite(req, res) {
+  try {
+    if (!isCompanyHead(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Only the company head can add a site.' });
+    }
+    const workspaceId = req.myDrawings.workspace.id;
+    const name = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Site name is required.' });
+    }
+    const clash = await pool.query(
+      'SELECT id FROM my_drawings_project WHERE workspace_id = $1 AND LOWER(name) = LOWER($2)',
+      [workspaceId, name]
+    );
+    if (clash.rows[0]) {
+      return res.status(409).json({ success: false, message: 'A site with that name already exists.' });
+    }
+    const code = await allocateAccessCode(workspaceId);
+    const inserted = await pool.query(
+      `INSERT INTO my_drawings_project (workspace_id, name, access_code, wall_types_pack)
+       VALUES ($1, $2, $3, '{}'::jsonb)
+       RETURNING id, name, access_code`,
+      [workspaceId, name, code]
+    );
+    await pool.query(
+      `UPDATE my_drawings_workspace SET project_mode = 'multi' WHERE id = $1`,
+      [workspaceId]
+    );
+    req.myDrawings.project = inserted.rows[0];
+    const payload = await loadCatalog(req.myDrawings.workspace, 'admin', inserted.rows[0]);
+    payload.message = 'Site created.';
+    payload.accessCode = code;
+    return res.json(payload);
+  } catch (err) {
+    console.error('myDrawings addSite:', err);
+    if (err && err.code === 'ACCESS_CODE_ALLOC') {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+    return res.status(500).json({ success: false, message: 'Could not add the site.' });
+  }
+}
+
+async function renameSite(req, res) {
+  try {
+    if (!isCompanyHead(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Only the company head can rename a site.' });
+    }
+    const workspaceId = req.myDrawings.workspace.id;
+    const site = await loadSiteRow(workspaceId, req.params.id);
+    if (!site) return res.status(404).json({ success: false, message: 'Site not found.' });
+    const name = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!name) return res.status(400).json({ success: false, message: 'Site name is required.' });
+    const clash = await pool.query(
+      'SELECT id FROM my_drawings_project WHERE workspace_id = $1 AND LOWER(name) = LOWER($2) AND id <> $3',
+      [workspaceId, name, site.id]
+    );
+    if (clash.rows[0]) {
+      return res.status(409).json({ success: false, message: 'A site with that name already exists.' });
+    }
+    await pool.query('UPDATE my_drawings_project SET name = $2 WHERE id = $1', [site.id, name]);
+    req.myDrawings.project = { ...site, name };
+    return catalogResponse(req, res);
+  } catch (err) {
+    console.error('myDrawings renameSite:', err);
+    return res.status(500).json({ success: false, message: 'Could not rename the site.' });
+  }
+}
+
+async function deleteSite(req, res) {
+  try {
+    if (!isCompanyHead(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Only the company head can close a site.' });
+    }
+    const workspaceId = req.myDrawings.workspace.id;
+    const site = await loadSiteRow(workspaceId, req.params.id);
+    if (!site) return res.status(404).json({ success: false, message: 'Site not found.' });
+    const count = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM my_drawings_project WHERE workspace_id = $1',
+      [workspaceId]
+    );
+    if (count.rows[0] && count.rows[0].n < 2) {
+      return res.status(400).json({ success: false, message: 'A company must keep at least one site.' });
+    }
+    const files = await pool.query(
+      'SELECT relative_path FROM my_drawings_item WHERE project_id = $1',
+      [site.id]
+    );
+    files.rows.forEach((row) => removeStoredFile(row.relative_path));
+    const images = await pool.query(
+      'SELECT detail_image_path FROM my_drawings_wall_type WHERE project_id = $1',
+      [site.id]
+    );
+    images.rows.forEach((row) => removeStoredFile(row.detail_image_path));
+    await pool.query('DELETE FROM my_drawings_project WHERE id = $1 AND workspace_id = $2', [site.id, workspaceId]);
+    const next = await getDefaultProject(workspaceId);
+    req.myDrawings.project = next;
+    const remaining = await pool.query(
+      'SELECT COUNT(*)::int AS n FROM my_drawings_project WHERE workspace_id = $1',
+      [workspaceId]
+    );
+    if (remaining.rows[0] && remaining.rows[0].n < 2) {
+      await pool.query(`UPDATE my_drawings_workspace SET project_mode = 'single' WHERE id = $1`, [workspaceId]);
+    }
+    const payload = await loadCatalog(req.myDrawings.workspace, 'admin', next);
+    payload.message = 'Site closed.';
+    return res.json(payload);
+  } catch (err) {
+    console.error('myDrawings deleteSite:', err);
+    return res.status(500).json({ success: false, message: 'Could not close the site.' });
+  }
+}
+
 module.exports = {
   ensureSchema,
   resolveWorkspaceByPin,
@@ -2242,6 +2596,10 @@ module.exports = {
   downloadFile,
   registerDevice,
   prepareUploadDir,
+  listSites,
+  addSite,
+  renameSite,
+  deleteSite,
   listWallTypes,
   updateWallTypesPack,
   seedStarterWallTypes,

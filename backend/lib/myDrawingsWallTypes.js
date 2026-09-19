@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { createTransport } = require('./sendCallbackRequestEmail');
 const { pool } = require('../db/pool');
 const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
+const { currentSiteId } = require('./myDrawingsSiteScope');
 
 const UPLOAD_DIR = path.join(UPLOADS_ROOT, 'mydrawings');
 const STARTER_PACK_JSON = path.join(
@@ -131,32 +132,44 @@ function parsePackPages(body) {
   return out;
 }
 
-function ensureWallTypesDir(workspaceId) {
-  const dir = path.join(UPLOAD_DIR, String(workspaceId), 'wall-types');
+function siteIdOrThrow(req) {
+  const id = currentSiteId(req && req.myDrawings);
+  if (!id) {
+    const err = new Error('Select a site first.');
+    err.status = 400;
+    throw err;
+  }
+  return id;
+}
+
+function ensureWallTypesDir(workspaceId, projectId) {
+  const dir = projectId
+    ? path.join(UPLOAD_DIR, String(workspaceId), String(projectId), 'wall-types')
+    : path.join(UPLOAD_DIR, String(workspaceId), 'wall-types');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
 
-function saveWallTypeImageFile(workspaceId, file) {
+function saveWallTypeImageFile(workspaceId, file, projectId) {
   if (!file || !file.buffer || !file.buffer.length) return '';
   const ext = WT_IMAGE_TYPES[file.mimetype]
     || (String(file.originalname || '').toLowerCase().match(/\.(jpe?g|png|webp|gif)$/) || [])[0]
     || '.jpg';
-  const dir = ensureWallTypesDir(workspaceId);
+  const dir = ensureWallTypesDir(workspaceId, projectId);
   const filename = `wt-${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext.startsWith('.') ? ext : '.' + ext}`;
   const abs = path.join(dir, filename);
   fs.writeFileSync(abs, file.buffer);
   return relativeFromAbs(abs);
 }
 
-function copyStarterImage(workspaceId, detailImage) {
+function copyStarterImage(workspaceId, detailImage, projectId) {
   const name = path.basename(String(detailImage || ''));
   if (!name || name === '.' || name === '..') return '';
   const src = path.resolve(STARTER_IMAGES_DIR, name);
   const root = path.resolve(STARTER_IMAGES_DIR) + path.sep;
   if (src !== path.resolve(STARTER_IMAGES_DIR) && !src.startsWith(root)) return '';
   if (!fs.existsSync(src)) return '';
-  const dir = ensureWallTypesDir(workspaceId);
+  const dir = ensureWallTypesDir(workspaceId, projectId);
   const dest = path.join(dir, name);
   fs.copyFileSync(src, dest);
   return relativeFromAbs(dest);
@@ -192,7 +205,16 @@ function wallTypeToClient(row) {
   };
 }
 
-async function loadWorkspacePack(workspaceId, fallbackName) {
+async function loadWorkspacePack(workspaceId, fallbackName, projectId) {
+  if (projectId) {
+    const found = await pool.query(
+      'SELECT name, wall_types_pack FROM my_drawings_project WHERE id = $1 AND workspace_id = $2',
+      [projectId, workspaceId]
+    );
+    const row = found.rows[0] || {};
+    const stored = row.wall_types_pack && typeof row.wall_types_pack === 'object' ? row.wall_types_pack : {};
+    return packFromJson(stored, row.name || fallbackName);
+  }
   const found = await pool.query(
     'SELECT name, wall_types_pack FROM my_drawings_workspace WHERE id = $1',
     [workspaceId]
@@ -208,44 +230,48 @@ async function loadWorkspacePack(workspaceId, fallbackName) {
   return packed;
 }
 
-async function listWorkspaceWallTypes(workspaceId) {
+async function listWorkspaceWallTypes(workspaceId, projectId) {
   const rows = await pool.query(
     `SELECT id, code, kind, name, system_ref, system_type, fire_minutes, fire_class,
             acoustic, thickness, max_height_m, duty, buildup, pack_pages, detail_image_path, updated_at
      FROM my_drawings_wall_type
-     WHERE workspace_id = $1
+     WHERE workspace_id = $1 AND ($2::int IS NULL OR project_id = $2)
      ORDER BY sort_order ASC, code ASC, id ASC`,
-    [workspaceId]
+    [workspaceId, projectId || null]
   );
   return rows.rows;
 }
 
 async function wallTypesPayload(req) {
   const workspace = req.myDrawings.workspace;
-  const pack = await loadWorkspacePack(workspace.id, workspace.name);
-  const rows = await listWorkspaceWallTypes(workspace.id);
+  const projectId = currentSiteId(req.myDrawings);
+  const pack = await loadWorkspacePack(workspace.id, (req.myDrawings.project && req.myDrawings.project.name) || workspace.name, projectId);
+  const rows = await listWorkspaceWallTypes(workspace.id, projectId);
+  const role = req.myDrawings.role;
   return {
     success: true,
     project: pack.project,
     pack: pack.pack,
     wallTypes: rows.map(wallTypeToClient),
-    canEdit: req.myDrawings.role === 'admin',
+    canEdit: role === 'admin' || role === 'site_manager',
   };
 }
 
-async function insertWallTypeRow(workspaceId, fields) {
+async function insertWallTypeRow(workspaceId, fields, projectId) {
   const next = await pool.query(
-    'SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM my_drawings_wall_type WHERE workspace_id = $1',
-    [workspaceId]
+    `SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM my_drawings_wall_type
+     WHERE workspace_id = $1 AND ($2::int IS NULL OR project_id = $2)`,
+    [workspaceId, projectId || null]
   );
   const inserted = await pool.query(
     `INSERT INTO my_drawings_wall_type
-      (workspace_id, code, kind, name, system_ref, system_type, fire_minutes, fire_class,
+      (workspace_id, project_id, code, kind, name, system_ref, system_type, fire_minutes, fire_class,
        acoustic, thickness, max_height_m, duty, buildup, pack_pages, detail_image_path, sort_order)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15::jsonb,$16,$17)
      RETURNING *`,
     [
       workspaceId,
+      projectId || null,
       fields.code,
       fields.kind,
       fields.name,
@@ -290,16 +316,24 @@ function fieldsFromStarter(entry) {
   };
 }
 
-async function copyStarterWallTypes(workspaceId) {
+async function copyStarterWallTypes(workspaceId, projectId) {
   const data = loadStarterPackFile();
   const pack = packFromJson(data, 'Wall Types');
-  await pool.query(
-    'UPDATE my_drawings_workspace SET wall_types_pack = $2::jsonb WHERE id = $1',
-    [workspaceId, JSON.stringify(pack)]
-  );
+  if (projectId) {
+    await pool.query(
+      'UPDATE my_drawings_project SET wall_types_pack = $2::jsonb WHERE id = $1',
+      [projectId, JSON.stringify(pack)]
+    );
+  } else {
+    await pool.query(
+      'UPDATE my_drawings_workspace SET wall_types_pack = $2::jsonb WHERE id = $1',
+      [workspaceId, JSON.stringify(pack)]
+    );
+  }
   const existing = await pool.query(
-    'SELECT UPPER(code) AS code FROM my_drawings_wall_type WHERE workspace_id = $1',
-    [workspaceId]
+    `SELECT UPPER(code) AS code FROM my_drawings_wall_type
+     WHERE workspace_id = $1 AND ($2::int IS NULL OR project_id = $2)`,
+    [workspaceId, projectId || null]
   );
   const have = new Set(existing.rows.map((row) => row.code));
   let added = 0;
@@ -312,8 +346,8 @@ async function copyStarterWallTypes(workspaceId) {
       if (alt && WT_CODE_RE.test(alt) && !have.has(alt)) fields.code = alt;
       else continue;
     }
-    fields.detailImagePath = copyStarterImage(workspaceId, list[i].detailImage);
-    await insertWallTypeRow(workspaceId, fields);
+    fields.detailImagePath = copyStarterImage(workspaceId, list[i].detailImage, projectId);
+    await insertWallTypeRow(workspaceId, fields, projectId);
     have.add(fields.code);
     added += 1;
   }
@@ -375,12 +409,13 @@ function readWallTypeFields(body) {
   };
 }
 
-async function loadWallType(workspaceId, id) {
+async function loadWallType(workspaceId, id, projectId) {
   const n = positiveInt(id);
   if (!n) return null;
   const found = await pool.query(
-    'SELECT * FROM my_drawings_wall_type WHERE id = $1 AND workspace_id = $2',
-    [n, workspaceId]
+    `SELECT * FROM my_drawings_wall_type
+     WHERE id = $1 AND workspace_id = $2 AND ($3::int IS NULL OR project_id = $3)`,
+    [n, workspaceId, projectId || null]
   );
   return found.rows[0] || null;
 }
@@ -390,10 +425,11 @@ async function logWallTypeActivity(req, action, title, number) {
     const worker = req.myDrawings && req.myDrawings.worker;
     const name = [worker && worker.firstName, worker && worker.lastName].filter(Boolean).join(' ').trim();
     await pool.query(
-      `INSERT INTO my_drawings_activity (workspace_id, actor_name, action, drawing_title, drawing_number)
-       VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO my_drawings_activity (workspace_id, project_id, actor_name, action, drawing_title, drawing_number)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
         req.myDrawings.workspace.id,
+        currentSiteId(req.myDrawings),
         name || 'Administrator',
         action,
         title ? String(title).slice(0, 200) : '',
@@ -417,7 +453,8 @@ async function listWallTypes(req, res) {
 async function updateWallTypesPack(req, res) {
   try {
     const workspaceId = req.myDrawings.workspace.id;
-    const current = await loadWorkspacePack(workspaceId, req.myDrawings.workspace.name);
+    const projectId = siteIdOrThrow(req);
+    const current = await loadWorkspacePack(workspaceId, req.myDrawings.workspace.name, projectId);
     const body = req.body || {};
     const pack = {
       project: {
@@ -434,8 +471,8 @@ async function updateWallTypesPack(req, res) {
       },
     };
     await pool.query(
-      'UPDATE my_drawings_workspace SET wall_types_pack = $2::jsonb WHERE id = $1',
-      [workspaceId, JSON.stringify(pack)]
+      'UPDATE my_drawings_project SET wall_types_pack = $2::jsonb WHERE id = $1',
+      [projectId, JSON.stringify(pack)]
     );
     return res.json(await wallTypesPayload(req));
   } catch (err) {
@@ -447,12 +484,13 @@ async function updateWallTypesPack(req, res) {
 async function seedStarterWallTypes(req, res) {
   try {
     const workspaceId = req.myDrawings.workspace.id;
-    const result = await copyStarterWallTypes(workspaceId);
+    const projectId = siteIdOrThrow(req);
+    const result = await copyStarterWallTypes(workspaceId, projectId);
     await logWallTypeActivity(req, 'seeded_wall_types', result.pack.project.name, String(result.added));
     const payload = await wallTypesPayload(req);
     payload.message = result.added
       ? `Added ${result.added} wall type${result.added === 1 ? '' : 's'} from the starter pack.`
-      : 'Starter pack types are already in this company.';
+      : 'Starter pack types are already on this site.';
     payload.added = result.added;
     return res.json(payload);
   } catch (err) {
@@ -467,14 +505,15 @@ async function seedStarterWallTypes(req, res) {
 async function addWallType(req, res) {
   try {
     const workspaceId = req.myDrawings.workspace.id;
+    const projectId = siteIdOrThrow(req);
     const fields = readWallTypeFields(req.body || {});
-    if (req.file) fields.detailImagePath = saveWallTypeImageFile(workspaceId, req.file);
-    const row = await insertWallTypeRow(workspaceId, fields);
+    if (req.file) fields.detailImagePath = saveWallTypeImageFile(workspaceId, req.file, projectId);
+    const row = await insertWallTypeRow(workspaceId, fields, projectId);
     await pool.query(
-      `UPDATE my_drawings_workspace
+      `UPDATE my_drawings_project
        SET wall_types_pack = COALESCE(wall_types_pack, '{}'::jsonb)
        WHERE id = $1 AND wall_types_pack IS NULL`,
-      [workspaceId]
+      [projectId]
     );
     await logWallTypeActivity(req, 'added_wall_type', fields.name || fields.code, fields.code);
     const payload = await wallTypesPayload(req);
@@ -495,12 +534,13 @@ async function addWallType(req, res) {
 async function editWallType(req, res) {
   try {
     const workspaceId = req.myDrawings.workspace.id;
-    const item = await loadWallType(workspaceId, req.params.id);
+    const projectId = siteIdOrThrow(req);
+    const item = await loadWallType(workspaceId, req.params.id, projectId);
     if (!item) return res.status(404).json({ success: false, message: 'Wall type not found.' });
     const fields = readWallTypeFields(req.body || {});
     let imagePath = item.detail_image_path;
     if (req.file) {
-      const nextPath = saveWallTypeImageFile(workspaceId, req.file);
+      const nextPath = saveWallTypeImageFile(workspaceId, req.file, projectId);
       if (nextPath) {
         if (imagePath && imagePath !== nextPath) removeStoredFile(imagePath);
         imagePath = nextPath;
@@ -550,7 +590,7 @@ async function editWallType(req, res) {
 
 async function deleteWallType(req, res) {
   try {
-    const item = await loadWallType(req.myDrawings.workspace.id, req.params.id);
+    const item = await loadWallType(req.myDrawings.workspace.id, req.params.id, currentSiteId(req.myDrawings));
     if (!item) return res.status(404).json({ success: false, message: 'Wall type not found.' });
     await pool.query('DELETE FROM my_drawings_wall_type WHERE id = $1', [item.id]);
     removeStoredFile(item.detail_image_path);
@@ -564,7 +604,7 @@ async function deleteWallType(req, res) {
 
 async function downloadWallTypeImage(req, res) {
   try {
-    const item = await loadWallType(req.myDrawings.workspace.id, req.params.id);
+    const item = await loadWallType(req.myDrawings.workspace.id, req.params.id, currentSiteId(req.myDrawings));
     if (!item || !item.detail_image_path) {
       return res.status(404).json({ success: false, message: 'Image not found.' });
     }
@@ -646,7 +686,7 @@ async function sendSpecImportRequest(req, res) {
     const originalName = String(file.originalname || 'specifications.pdf').replace(/[^\w.\- ()]+/g, '_').slice(0, 120)
       || 'specifications.pdf';
 
-    const dir = path.join(UPLOAD_DIR, String(workspaceId), 'spec-requests');
+    const dir = path.join(UPLOAD_DIR, String(workspaceId), String(siteIdOrThrow(req)), 'spec-requests');
     fs.mkdirSync(dir, { recursive: true });
     const storedName = `spec-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.pdf`;
     fs.writeFileSync(path.join(dir, storedName), file.buffer);

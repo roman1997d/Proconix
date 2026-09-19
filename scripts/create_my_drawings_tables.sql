@@ -141,7 +141,25 @@ CREATE TABLE IF NOT EXISTS my_drawings_project (
   CONSTRAINT uq_my_drawings_project UNIQUE (workspace_id, name)
 );
 
-CREATE INDEX IF NOT EXISTS idx_my_drawings_project_ws ON my_drawings_project(workspace_id);
+ALTER TABLE my_drawings_project
+  ADD COLUMN IF NOT EXISTS access_code VARCHAR(32);
+ALTER TABLE my_drawings_project
+  ADD COLUMN IF NOT EXISTS wall_types_pack JSONB;
+ALTER TABLE my_drawings_project
+  ADD COLUMN IF NOT EXISTS manager_worker_id INT;
+
+ALTER TABLE my_drawings_worker
+  ADD COLUMN IF NOT EXISTS project_id INT;
+ALTER TABLE my_drawings_wall_type
+  ADD COLUMN IF NOT EXISTS project_id INT;
+ALTER TABLE my_drawings_category
+  ADD COLUMN IF NOT EXISTS project_id INT;
+ALTER TABLE my_drawings_activity
+  ADD COLUMN IF NOT EXISTS project_id INT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_my_drawings_project_access_code
+  ON my_drawings_project (UPPER(access_code))
+  WHERE access_code IS NOT NULL;
 
 ALTER TABLE my_drawings_item
   ADD COLUMN IF NOT EXISTS project_id INT REFERENCES my_drawings_project(id) ON DELETE CASCADE;

@@ -28,7 +28,7 @@
     <section class="md-screen md-pin md-register" id="screen-register" aria-label="Create account">
       <p class="md-pin-brand">My Drawings</p>
       <h2>Create account</h2>
-      <p class="md-pin-hint">Simple user — enter your name, email, and the host access code from your company.</p>
+      <p class="md-pin-hint">Simple user — enter your name, email, and the site access code from your site manager.</p>
       <form class="md-reg-form" id="register-form" autocomplete="on">
         <label class="mg-field">
           <span>First name</span>
@@ -43,7 +43,7 @@
           <input id="reg-email" type="email" maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email" required>
         </label>
         <label class="mg-field">
-          <span>Company access code</span>
+          <span>Site access code</span>
           <input id="reg-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="6–10 characters" required>
         </label>
         <p class="md-error" id="reg-error" role="alert"></p>
@@ -63,6 +63,10 @@
         <label class="mg-field">
           <span>Email</span>
           <input id="login-email" type="email" maxlength="254" autocomplete="username" autocapitalize="off" spellcheck="false" inputmode="email" required>
+        </label>
+        <label class="mg-field">
+          <span>Site access code (if you work on more than one site)</span>
+          <input id="login-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Optional">
         </label>
         <p class="md-error" id="login-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="login-continue">Sign in</button>
@@ -197,6 +201,10 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v3H8z"/><path d="M6 7h12v13H6z"/><path d="M9 12h6M9 16h6"/></svg>
               SPEC
             </button>
+            <button type="button" data-ad-panel="sites" id="ad-nav-sites" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V8l8-4 8 4v12"/><path d="M9 20v-6h6v6"/></svg>
+              SITES
+            </button>
             <span class="ad-nav-line" aria-hidden="true"></span>
             <button type="button" data-ad-panel="users">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.6-3 2.8-5 5.5-5s4.9 2 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.2.4 3.8 2.2 4.3 4.8"/></svg>
@@ -245,6 +253,7 @@
                 </div>
                 <ul class="ad-stats">
                   <li><strong id="ad-stat-drawings">0</strong> DRAWINGS</li>
+                  <li><strong id="ad-stat-sites">0</strong> SITES</li>
                   <li><strong id="ad-stat-published">0</strong> Publisheet</li>
                   <li><strong id="ad-stat-draft">0</strong> DRAFT</li>
                 </ul>
@@ -291,7 +300,7 @@
                     <button type="button" class="mg-add-dwg" id="btn-wt-spec-open">Send specifications to Proconix</button>
                   </div>
                 </div>
-                <p class="mg-form-note">Only this company’s wall types. Add the specifications your site uses — they are not shared with other companies.</p>
+                <p class="mg-form-note">Wall types for this site only. They are not shared with other sites or companies.</p>
                 <label class="mg-field">
                   <span>Project / site name</span>
                   <input id="wt-pack-project" type="text" maxlength="200" autocomplete="off" placeholder="Site name">
@@ -313,12 +322,26 @@
                 <div id="mg-wt-list"></div>
               </section>
             </div>
+            <div class="ad-panel" id="ad-panel-sites" hidden>
+              <section class="mg-block">
+                <div class="mg-block-head">
+                  <h2>Sites</h2>
+                </div>
+                <p class="mg-form-note">Each site has its own drawings, SPEC, workers, and site manager.</p>
+                <div class="mg-add-row">
+                  <input id="mg-site-input" type="text" maxlength="200" placeholder="New site name" autocomplete="off">
+                  <button type="button" class="md-btn md-btn-ghost" id="btn-mg-add-site">Add site</button>
+                </div>
+                <p class="md-error" id="mg-sites-error" role="alert"></p>
+                <div id="mg-sites-list"></div>
+              </section>
+            </div>
             <div class="ad-panel" id="ad-panel-users" hidden>
               <section class="mg-block">
                 <div class="mg-block-head">
                   <h2>Users</h2>
                 </div>
-                <p class="mg-form-note">Everyone registered in My Drawings for this company. Close access, make a user administrator, or delete the account.</p>
+                <p class="mg-form-note">People registered on this site. Close access, appoint a site manager, or delete the account.</p>
                 <p class="mg-form-note" id="mg-users-status">Loading users…</p>
                 <div class="mg-users-table-wrap" id="mg-users-table"></div>
               </section>
@@ -328,7 +351,7 @@
                 <div class="mg-block-head">
                   <h2>Access code</h2>
                 </div>
-                <p class="mg-form-note">Give this host code to workers when they create an account. They will only see this company’s drawings.</p>
+                <p class="mg-form-note">Give this code to workers and the site manager for this site. They will only see this site’s drawings and SPEC.</p>
                 <p class="ad-access-code" id="mg-host-code">—</p>
                 <label class="mg-field">
                   <span>New access code</span>

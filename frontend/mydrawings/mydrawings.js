@@ -63,7 +63,12 @@
     managerName: '',
     companyName: '',
     managePanel: 'home',
-    wallTypesFromManage: false
+    wallTypesFromManage: false,
+    sites: [],
+    siteId: '',
+    siteName: '',
+    siteCount: 0,
+    projectMode: 'single'
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -250,6 +255,14 @@
     return sessionDevice() || sessionPin() || sessionAdminToken();
   }
 
+  function canManageCatalog() {
+    return state.role === 'admin' || state.role === 'site_manager';
+  }
+
+  function isCompanyHead() {
+    return state.role === 'admin';
+  }
+
   function pinHeaders(extra) {
     var headers = extra ? Object.assign({}, extra) : {};
     var adminPin = state.adminPin || (state.role === 'admin' ? sessionPin() : '');
@@ -260,6 +273,7 @@
     if (adminPin) headers['X-MyDrawings-Pin'] = adminPin;
     if (device) headers['X-MyDrawings-Device'] = device;
     else if (!adminPin && !adminToken && pin) headers['X-MyDrawings-Pin'] = pin;
+    if (state.siteId) headers['X-MyDrawings-Site'] = String(state.siteId);
     return headers;
   }
 
@@ -347,13 +361,13 @@
           res = await fetch('/api/my-drawings/catalog', {
             method: 'GET',
             credentials: 'same-origin',
-            headers: { 'X-MyDrawings-Device': opts.deviceToken }
+            headers: pinHeaders({ 'X-MyDrawings-Device': opts.deviceToken })
           });
         } else if (opts.adminToken) {
           res = await fetch('/api/my-drawings/catalog', {
             method: 'GET',
             credentials: 'same-origin',
-            headers: { 'X-MyDrawings-Admin': opts.adminToken }
+            headers: pinHeaders({ 'X-MyDrawings-Admin': opts.adminToken })
           });
         } else if (opts.verify) {
           res = await fetch('/api/my-drawings/verify', {
@@ -519,7 +533,8 @@
         lastName: extra && extra.lastName != null ? extra.lastName : prev.lastName || '',
         email: extra && extra.email != null ? extra.email : prev.email || '',
         managerName: extra && extra.managerName != null ? extra.managerName : prev.managerName || '',
-        expiresAt: extra && extra.expiresAt != null ? extra.expiresAt : prev.expiresAt || ''
+        expiresAt: extra && extra.expiresAt != null ? extra.expiresAt : prev.expiresAt || '',
+        siteId: extra && extra.siteId != null ? extra.siteId : (prev.siteId || state.siteId || '')
       };
       if (payload.role !== 'admin') {
         payload.pin = '';
@@ -613,7 +628,7 @@
 
   function ensureFloorThenHome(opts) {
     opts = opts || {};
-    if (state.role === 'admin') {
+    if (state.role === 'admin' || state.role === 'site_manager') {
       openManage();
       return;
     }
@@ -768,11 +783,11 @@
   async function enterApp(data, extra) {
     if (extra && extra.role) state.role = extra.role;
     else if (data && data.role) state.role = data.role;
-    writeSession(true, extra);
+    applyCatalog(data);
+    writeSession(true, Object.assign({}, extra || {}, { siteId: state.siteId, role: state.role }));
     writePending(null);
     $('pin-input').value = '';
     renderPinDots();
-    applyCatalog(data);
     wallTypesCache = null;
     await cacheCatalog(data, (extra && extra.deviceToken) || (extra && extra.pin) || sessionSecret());
     await dropStaleOfflineCopies();
@@ -817,7 +832,7 @@
       return;
     }
     if (!/^[A-Z0-9]{6,10}$/.test(hostAccessCode)) {
-      $('reg-error').textContent = 'Enter the 6–10 character host access code from your company.';
+      $('reg-error').textContent = 'Enter the 6–10 character site access code from your site manager.';
       return;
     }
     $('reg-continue').disabled = true;
@@ -830,8 +845,7 @@
       });
       await enterApp(data, {
         deviceToken: data.deviceToken,
-        role: 'worker',
-        firstName: data.firstName || firstName,
+      role: data.role || 'worker',
         lastName: data.lastName || lastName,
         email: data.email || email,
         expiresAt: data.expiresAt || ''
@@ -845,8 +859,7 @@
   async function enterWorkerSession(data, email) {
     await enterApp(data, {
       deviceToken: data.deviceToken,
-      role: 'worker',
-      firstName: data.firstName || '',
+      role: data.role || 'worker',
       lastName: data.lastName || '',
       email: data.email || email,
       expiresAt: data.expiresAt || ''
@@ -882,7 +895,10 @@
     }
     $('login-continue').disabled = true;
     try {
-      var data = await postJson('/login', { email: email });
+      var host = ($('login-host-code') && $('login-host-code').value || '').replace(/\s+/g, '').toUpperCase();
+      var body = { email: email };
+      if (host) body.hostAccessCode = host;
+      var data = await postJson('/login', body);
       if (data.role === 'admin') await enterCompanySession(data, email);
       else await enterWorkerSession(data, email);
     } catch (err) {
@@ -1006,7 +1022,17 @@
     if (data.company && data.company.name) state.companyName = data.company.name;
     else if (data.project && data.project.name) state.companyName = data.project.name;
     if (data.company && data.company.managerName) state.managerName = data.company.managerName;
-    $('project-name').textContent = state.project.name || 'Project';
+    if (data.sites) state.sites = data.sites;
+    if (data.siteCount != null) state.siteCount = data.siteCount;
+    if (data.projectMode) state.projectMode = data.projectMode;
+    if (data.site && data.site.id) {
+      state.siteId = data.site.id;
+      state.siteName = data.site.name || '';
+    } else if (data.project && data.project.projectId) {
+      state.siteId = data.project.projectId;
+      state.siteName = data.project.name || state.siteName;
+    }
+    $('project-name').textContent = state.siteName || state.project.name || 'Project';
     updateHeaderFloor();
     renderCats();
     if ($('screen-manage') && $('screen-manage').classList.contains('is-active')) {
@@ -1272,7 +1298,7 @@
     state.viewerFrom = '';
     getViewer().close();
     document.getElementById('md-app').classList.remove('is-fs');
-    if (fromManage && state.role === 'admin') {
+    if (fromManage && canManageCatalog()) {
       showScreen('screen-manage');
       showManagePanel('drawings');
       renderManage();
@@ -1477,9 +1503,9 @@
     }
     if (!all.length) {
       host.innerHTML = '<div class="md-empty"><h3>No wall types yet</h3><p>' +
-        (state.role === 'admin'
-          ? 'Open SPEC in Manage and add this company’s wall types.'
-          : 'Ask your company administrator to add wall type specifications.') +
+        (canManageCatalog()
+          ? 'Open SPEC in Manage and add wall types for this site.'
+          : 'Ask your site manager to add wall type specifications.') +
         '</p></div>';
       return;
     }
@@ -1866,7 +1892,7 @@
       openViewer(returnId, false, state.viewerFrom || '');
       return;
     }
-    if (state.wallTypesFromManage && state.role === 'admin') {
+    if (state.wallTypesFromManage && canManageCatalog()) {
       state.wallTypesFromManage = false;
       openManage();
       showManagePanel('spec');
@@ -1996,7 +2022,7 @@
           '<th>Registered</th>' +
           '<th>Last seen</th>' +
           '<th>Access</th>' +
-          '<th>Admin</th>' +
+          '<th>Site manager</th>' +
           '<th></th>' +
         '</tr></thead>' +
         '<tbody>' +
@@ -2011,10 +2037,12 @@
                 '<button type="button" class="mg-user-btn" data-user-act="restore" data-user-id="' + id + '">Restore</button>'
               : daysSelectHtml(7) +
                 '<button type="button" class="mg-user-btn" data-user-act="close" data-user-id="' + id + '">Close access</button>';
-            var adminCell = admin
-              ? '<span class="mg-user-admin">Administrator</span>' +
-                '<button type="button" class="mg-user-btn" data-user-act="remove-admin" data-user-id="' + id + '">Remove admin</button>'
-              : '<button type="button" class="mg-user-btn" data-user-act="make-admin" data-user-id="' + id + '">Make administrator</button>';
+            var adminCell = !isCompanyHead()
+              ? (admin ? '<span class="mg-user-admin">Site manager</span>' : '—')
+              : (admin
+              ? '<span class="mg-user-admin">Site manager</span>' +
+                '<button type="button" class="mg-user-btn" data-user-act="remove-admin" data-user-id="' + id + '">Remove</button>'
+              : '<button type="button" class="mg-user-btn" data-user-act="make-admin" data-user-id="' + id + '">Make site manager</button>');
             return '<tr class="' + (closed ? 'is-closed' : '') + (admin ? ' is-admin' : '') + '">' +
               '<td data-label="User">' +
                 '<strong>' + escapeHtml(workerFullName(w)) + '</strong>' +
@@ -2211,12 +2239,16 @@
     if (welcome) welcome.textContent = 'Welcome : ' + formatWelcomeName();
     var company = $('ad-company');
     var name = state.companyName || (state.project && state.project.name) || '';
-    if (company) company.textContent = name ? name + ' &' : '';
+    var siteBit = state.siteName ? ' · ' + state.siteName : '';
+    if (company) company.textContent = name ? name + siteBit : '';
     var total = (state.drawings || []).length;
     var drafts = (state.drawings || []).filter(function (d) { return d && d.status === 'draft'; }).length;
     if ($('ad-stat-drawings')) $('ad-stat-drawings').textContent = String(total);
+    if ($('ad-stat-sites')) $('ad-stat-sites').textContent = String(state.siteCount || (state.sites || []).length || 1);
     if ($('ad-stat-published')) $('ad-stat-published').textContent = String(Math.max(0, total - drafts));
     if ($('ad-stat-draft')) $('ad-stat-draft').textContent = String(drafts);
+    var sitesNav = $('ad-nav-sites');
+    if (sitesNav) sitesNav.hidden = !isCompanyHead();
     var codeEl = $('mg-host-code');
     if (codeEl) {
       codeEl.hidden = false;
@@ -2224,6 +2256,93 @@
     }
     var input = $('mg-access-input');
     if (input && !input.value && state.accessCode) input.value = state.accessCode;
+  }
+
+  function setSitesStatus(msg, isError) {
+    var el = $('mg-sites-error');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.toggle('is-ok', !!msg && !isError);
+  }
+
+  function renderSites() {
+    var box = $('mg-sites-list');
+    if (!box) return;
+    var list = state.sites || [];
+    if (!list.length) {
+      box.innerHTML = '<p class="mg-form-note">No sites yet.</p>';
+      return;
+    }
+    box.innerHTML = list.map(function (site) {
+      var id = String(site.id);
+      var on = String(state.siteId) === id;
+      var manager = site.managerName || 'No site manager yet';
+      return '<div class="mg-item' + (on ? ' is-on' : '') + '">' +
+        '<div>' +
+          '<p class="mg-item-title">' + escapeHtml(site.name || 'Site') + (on ? ' · current' : '') + '</p>' +
+          '<p class="mg-item-meta">' + escapeHtml(manager) +
+            ' · ' + String(site.drawingCount || 0) + ' drawings · ' + String(site.workerCount || 0) + ' users</p>' +
+          (site.accessCode ? '<p class="mg-item-meta">Code ' + escapeHtml(site.accessCode) + '</p>' : '') +
+        '</div>' +
+        '<div class="mg-item-actions">' +
+          (on ? '' : '<button type="button" class="mg-user-btn" data-site-act="open" data-site-id="' + id + '">Open</button>') +
+          '<button type="button" class="mg-user-btn is-danger" data-site-act="close" data-site-id="' + id + '">Close site</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  async function addSite() {
+    var input = $('mg-site-input');
+    var name = input ? String(input.value || '').replace(/\s+/g, ' ').trim() : '';
+    setSitesStatus('');
+    if (!name) {
+      setSitesStatus('Enter a site name.', true);
+      return;
+    }
+    try {
+      var data = await apiJson('/sites', { method: 'POST', body: { name: name } });
+      if (input) input.value = '';
+      applyCatalog(data);
+      renderSites();
+      renderAdminChrome();
+      setSitesStatus(data.message || 'Site created.', false);
+    } catch (err) {
+      setSitesStatus(err && err.message ? err.message : 'Could not add the site.', true);
+    }
+  }
+
+  async function openSite(id) {
+    state.siteId = id;
+    wallTypesCache = null;
+    try {
+      var data = await apiJson('/catalog');
+      applyCatalog(data);
+      renderSites();
+      renderAdminChrome();
+      showManagePanel('drawings');
+    } catch (err) {
+      setSitesStatus(err && err.message ? err.message : 'Could not open that site.', true);
+    }
+  }
+
+  async function closeSite(id) {
+    var site = null;
+    for (var i = 0; i < (state.sites || []).length; i++) {
+      if (String(state.sites[i].id) === String(id)) site = state.sites[i];
+    }
+    if (!site) return;
+    if (!confirm('Close ' + (site.name || 'this site') + '? Drawings, SPEC, and users on this site will be removed.')) return;
+    setSitesStatus('');
+    try {
+      var data = await apiJson('/sites/' + encodeURIComponent(id), { method: 'DELETE' });
+      applyCatalog(data);
+      renderSites();
+      renderAdminChrome();
+      setSitesStatus(data.message || 'Site closed.', false);
+    } catch (err) {
+      setSitesStatus(err && err.message ? err.message : 'Could not close the site.', true);
+    }
   }
 
   function setAccessCodeStatus(message, isError) {
@@ -2273,7 +2392,7 @@
     var panel = name || state.managePanel || 'home';
     if ($('mg-form')) $('mg-form').hidden = panel !== 'form';
     if ($('wt-form')) $('wt-form').hidden = panel !== 'wt-form';
-    var ids = ['home', 'drawings', 'category', 'spec', 'users', 'access', 'settings'];
+    var ids = ['home', 'drawings', 'category', 'spec', 'sites', 'users', 'access', 'settings'];
     for (var i = 0; i < ids.length; i++) {
       var el = $('ad-panel-' + ids[i]);
       if (el) el.hidden = panel !== ids[i];
@@ -2288,6 +2407,7 @@
     setAdminNavOpen(false);
     if (panel === 'home') renderAdminChrome();
     if (panel === 'users') loadWorkers();
+    if (panel === 'sites') renderSites();
     if (panel === 'drawings' || panel === 'category') renderManage();
     if (panel === 'access') renderAdminChrome();
     if (panel === 'spec') loadSpecWallTypes();
@@ -2295,8 +2415,8 @@
   }
 
   function openManage() {
-    if (state.role !== 'admin') {
-      alert('Enter the admin key to manage drawings.');
+    if (!canManageCatalog()) {
+      alert('Sign in as the company head or site manager to manage this site.');
       return;
     }
     closeSheet();
@@ -2942,7 +3062,7 @@
       '<button type="button" class="md-sheet-item" data-sheet="download-all"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Download all drawings</button>' +
       installItem +
       '<button type="button" class="md-sheet-item" data-sheet="clear-offline"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 14h10l1-14"/></svg>Remove all offline copies</button>' +
-      (state.role === 'admin'
+      (canManageCatalog()
         ? '<button type="button" class="md-sheet-item is-danger" data-sheet="lock"><svg class="md-icon" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Exit administration</button>'
         : '') +
       (ios && !standalone ? '<p class="md-sheet-note">On iPhone: Share → Add to Home Screen.</p>' : '')
@@ -2988,7 +3108,7 @@
     }
     closeSheet();
     if (act === 'administration') {
-      if (state.role === 'admin') {
+      if (canManageCatalog()) {
         openManage();
         return;
       }
@@ -3111,6 +3231,7 @@
       }
       if (session && session.ok && session.deviceToken) {
         state.role = session.role || 'worker';
+        if (session.siteId) state.siteId = session.siteId;
         try {
           var data = await fetchRemoteCatalog({ deviceToken: session.deviceToken });
           await enterApp(data, {
@@ -3142,6 +3263,7 @@
         }
       } else if (session && session.ok && session.adminToken && session.role === 'admin') {
         state.role = 'admin';
+        if (session.siteId) state.siteId = session.siteId;
         try {
           var companyData = await fetchRemoteCatalog({ adminToken: session.adminToken });
           await enterApp(companyData, {
@@ -3357,6 +3479,21 @@
   });
   on($('mg-users-table'), 'click', handleUsersTableClick);
   on($('btn-mg-add-cat'), 'click', addCategory);
+  on($('btn-mg-add-site'), 'click', addSite);
+  on($('mg-site-input'), 'keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addSite();
+    }
+  });
+  on($('mg-sites-list'), 'click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-site-act]') : null;
+    if (!btn) return;
+    var id = btn.getAttribute('data-site-id');
+    var act = btn.getAttribute('data-site-act');
+    if (act === 'open') openSite(id);
+    if (act === 'close') closeSite(id);
+  });
   on($('mg-cat-input'), 'keydown', function (e) {
     if (e.key === 'Enter') {
       e.preventDefault();
