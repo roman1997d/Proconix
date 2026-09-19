@@ -153,18 +153,19 @@ function buildMyDrawingsOutreachText() {
 function buildFamiliarOutreachHtml(firstName, lastName) {
   const page = presentationUrl();
   const join = registerUrl();
-  const name = personName(firstName, lastName) || 'echipă';
+  const name = personName(firstName, lastName) || 'there';
   const safeName = escapeHtml(name);
+  const home = PUBLIC_URL;
   return `<!DOCTYPE html>
-<html lang="ro">
+<html lang="en-GB">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>My Drawings — o soluție pentru șantier</title>
+  <title>My Drawings — keep your team on the latest drawing</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f1ea;color:#2a241c;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
-    Bună, ${safeName}. Din propria experiență știm cât de greu e paperwork-ul de pe șantier.
+    From our own experience, we know how difficult it can be to keep a site team on the latest drawing.
   </div>
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f1ea;padding:28px 12px;">
     <tr>
@@ -177,28 +178,25 @@ function buildFamiliarOutreachHtml(firstName, lastName) {
           </tr>
           <tr>
             <td style="padding:8px 28px 18px;font-family:Georgia,Times,serif;font-size:26px;line-height:1.3;color:#2a241c;">
-              Bună, ${safeName},
+              Hi ${safeName},
             </td>
           </tr>
           <tr>
             <td style="padding:0 28px 16px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6;color:#4a4338;">
-              Din propria experiență înțelegem cât este de dificil să ții echipa pe ultima revizie:
-              printuri în cabină, foldere de PDF-uri, paperwork pe șantier și oameni care întreabă
-              „care drawing e cel bun?”.
+              From our own experience, we know how difficult it can be to keep a site team working from the latest drawing
+              — printed copies in the cabin, folders full of PDFs, paperwork on site, and people asking,
+              “Which drawing are we working from?”
             </td>
           </tr>
           <tr>
             <td style="padding:0 28px 16px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6;color:#4a4338;">
-              Venim cu o soluție foarte bună, creată special pentru muncitorii de șantier.
-              Noi vrem să le ușurăm partea de paperwork: My Drawings le pune desenele
-              și specificațiile de wall type pe telefon — nu le adaugă încă o corvoadă.
+              That’s why we created My Drawings — a simple app built specifically for construction teams.
             </td>
           </tr>
           <tr>
             <td style="padding:0 28px 16px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6;color:#4a4338;">
-              Aplicația ajută la: ultima revizie pe telefon, Wall Types lângă drawing,
-              notificare când un drawing e adăugat sau actualizat, și lucru offline
-              când semnalul dispare în subsol sau în core.
+              It puts the latest drawings and Wall Type specifications on your phone, with revision notifications
+              and offline access when the signal disappears in basements, cores or other parts of the site.
             </td>
           </tr>
           <tr>
@@ -207,13 +205,13 @@ function buildFamiliarOutreachHtml(firstName, lastName) {
                 <tr>
                   <td style="border-radius:999px;background:#2a241c;">
                     <a href="${page}" style="display:inline-block;padding:12px 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;color:#fffdf8;text-decoration:none;">
-                      Pagina de prezentare
+                      View My Drawings
                     </a>
                   </td>
                   <td width="10"></td>
                   <td style="border-radius:999px;border:1px solid #2a241c;">
                     <a href="${join}" style="display:inline-block;padding:12px 20px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;color:#2a241c;text-decoration:none;">
-                      Înregistrare
+                      Create a free account
                     </a>
                   </td>
                 </tr>
@@ -222,22 +220,20 @@ function buildFamiliarOutreachHtml(firstName, lastName) {
           </tr>
           <tr>
             <td style="padding:0 28px 16px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6;color:#4a4338;">
-              Dacă sunteți interesat, puteți vizualiza pagina noastră de prezentare
-              sau mergeți direct la înregistrare.
-              Aplicația este <strong>gratis pentru clienții noi</strong> — nu pierdeți nimic, doar câștigați.
+              My Drawings is currently <strong>free for new customers</strong>, so you can give it a try and see if it works for your team.
             </td>
           </tr>
           <tr>
             <td style="padding:0 28px 8px;font-family:Georgia,Times,serif;font-size:18px;line-height:1.5;color:#2a241c;">
-              Vom fi bucuroși să vă avem alături.
+              We’d be really pleased to have you on board.
             </td>
           </tr>
           <tr>
             <td style="padding:20px 28px 28px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#8a7d6b;">
+              Best regards,<br>
+              The Proconix Team<br><br>
               <a href="mailto:info@proconix.uk" style="color:#2a241c;text-decoration:none;">info@proconix.uk</a><br>
-              <a href="${page}" style="color:#8a7d6b;">${page.replace(/^https?:\/\//, '')}</a>
-              ·
-              <a href="${join}" style="color:#8a7d6b;">${join.replace(/^https?:\/\//, '')}</a>
+              <a href="${home}" style="color:#8a7d6b;">${home.replace(/^https?:\/\//, '')}</a>
             </td>
           </tr>
         </table>
@@ -251,27 +247,31 @@ function buildFamiliarOutreachHtml(firstName, lastName) {
 function buildFamiliarOutreachText(firstName, lastName) {
   const page = presentationUrl();
   const join = registerUrl();
-  const name = personName(firstName, lastName) || 'echipă';
+  const name = personName(firstName, lastName) || 'there';
   return [
-    `Bună, ${name},`,
+    `Hi ${name},`,
     '',
-    'Din propria experiență înțelegem cât este de dificil să ții echipa pe ultima revizie: printuri în cabină, foldere de PDF-uri, paperwork pe șantier.',
+    'From our own experience, we know how difficult it can be to keep a site team working from the latest drawing — printed copies in the cabin, folders full of PDFs, paperwork on site, and people asking, “Which drawing are we working from?”',
     '',
-    'Venim cu o soluție foarte bună, creată special pentru muncitorii de șantier. Vrem să le ușurăm partea de paperwork: My Drawings le pune desenele și wall type-urile pe telefon.',
+    'That’s why we created My Drawings — a simple app built specifically for construction teams.',
     '',
-    'Ajută la ultima revizie pe telefon, Wall Types lângă drawing, notificare la update și lucru offline.',
+    'It puts the latest drawings and Wall Type specifications on your phone, with revision notifications and offline access when the signal disappears in basements, cores or other parts of the site.',
     '',
-    'Pagina de prezentare:',
+    'View My Drawings:',
     page,
     '',
-    'Înregistrare:',
+    'Create a free account:',
     join,
     '',
-    'Aplicația este gratis pentru clienții noi — nu pierdeți nimic, doar câștigați.',
+    'My Drawings is currently free for new customers, so you can give it a try and see if it works for your team.',
     '',
-    'Vom fi bucuroși să vă avem alături.',
+    'We’d be really pleased to have you on board.',
+    '',
+    'Best regards,',
+    'The Proconix Team',
     '',
     'info@proconix.uk',
+    'proconix.uk',
   ].join('\n');
 }
 
@@ -289,7 +289,7 @@ async function sendMyDrawingsOutreachEmail({ to, adminEmail, template, firstName
     to,
     replyTo: familiar ? 'info@proconix.uk' : (adminEmail || 'info@proconix.uk'),
     subject: familiar
-      ? 'My Drawings — o soluție pentru paperwork-ul de pe șantier'
+      ? 'My Drawings — keep your team on the latest drawing'
       : 'Stop building from outdated drawings',
     text: familiar
       ? buildFamiliarOutreachText(firstName, lastName)
