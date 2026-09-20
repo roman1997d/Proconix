@@ -20,6 +20,9 @@ const {
   updateBillingSubscription,
   sendClientEmail,
   sendMyDrawingsOutreach,
+  getEmailHistory,
+  patchEmailHistory,
+  cancelEmailHistory,
   createDemoRecords,
   sendDemoLoginEmail,
   createBackup,
@@ -64,6 +67,9 @@ router.post('/panic-alert/test', requirePlatformAdminAuth, postPanicAlertTest);
 router.post('/panic-alert/run', requirePlatformAdminAuth, postPanicAlertRun);
 router.post('/send-client-email', requirePlatformAdminAuth, sendClientEmail);
 router.post('/send-mydrawings-outreach', requirePlatformAdminAuth, sendMyDrawingsOutreach);
+router.get('/email-history', requirePlatformAdminAuth, getEmailHistory);
+router.patch('/email-history/:id', requirePlatformAdminAuth, patchEmailHistory);
+router.post('/email-history/:id/cancel', requirePlatformAdminAuth, cancelEmailHistory);
 router.post('/create-demo-records', requirePlatformAdminAuth, createDemoRecords);
 router.post('/send-demo-login-email', requirePlatformAdminAuth, sendDemoLoginEmail);
 router.post('/backup', requirePlatformAdminAuth, createBackup);

@@ -4,6 +4,7 @@
 
 const { pool } = require('../db/pool');
 const { createTransport } = require('./sendCallbackRequestEmail');
+const { ensureEmailHistoryTable } = require('./platformEmailHistory');
 
 const PRESENTATION_URL = (
   process.env.MYDRAWINGS_PRESENTATION_URL || 'https://proconix.uk/mydrawings-prezentation'
@@ -301,21 +302,7 @@ async function sendMyDrawingsOutreachEmail({ to, adminEmail, template, firstName
 }
 
 async function ensureScheduleTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS platform_scheduled_email (
-      id SERIAL PRIMARY KEY,
-      kind TEXT NOT NULL,
-      to_email TEXT NOT NULL,
-      send_at TIMESTAMPTZ NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      admin_email TEXT,
-      admin_name TEXT,
-      error TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      sent_at TIMESTAMPTZ
-    )
-  `);
-  await pool.query(`ALTER TABLE platform_scheduled_email ADD COLUMN IF NOT EXISTS payload JSONB NOT NULL DEFAULT '{}'::jsonb`);
+  await ensureEmailHistoryTable();
 }
 
 async function queueMyDrawingsOutreach({ to, sendAt, adminEmail, adminName, template, firstName, lastName }) {
@@ -347,25 +334,44 @@ async function queueMyDrawingsOutreach({ to, sendAt, adminEmail, adminName, temp
   }
 
   await ensureScheduleTable();
-  if (when.getTime() <= Date.now() + 20000) {
-    await sendMyDrawingsOutreachEmail({
-      to: email,
-      adminEmail,
-      template: tpl,
-      firstName: first,
-      lastName: last,
-    });
-    return { queued: false, sent: true, sendAt: when.toISOString() };
-  }
-
   const payload = { template: tpl, firstName: first, lastName: last };
-  await pool.query(
+  const inserted = await pool.query(
     `INSERT INTO platform_scheduled_email
       (kind, to_email, send_at, status, admin_email, admin_name, payload)
-     VALUES ('mydrawings_outreach', $1, $2, 'pending', $3, $4, $5::jsonb)`,
+     VALUES ('mydrawings_outreach', $1, $2, 'pending', $3, $4, $5::jsonb)
+     RETURNING id`,
     [email, when.toISOString(), adminEmail || '', adminName || '', JSON.stringify(payload)]
   );
-  return { queued: true, sent: false, sendAt: when.toISOString() };
+  const id = inserted.rows[0] && inserted.rows[0].id;
+
+  if (when.getTime() <= Date.now() + 20000) {
+    try {
+      await sendMyDrawingsOutreachEmail({
+        to: email,
+        adminEmail,
+        template: tpl,
+        firstName: first,
+        lastName: last,
+      });
+      await pool.query(
+        `UPDATE platform_scheduled_email
+         SET status = 'sent', sent_at = NOW(), error = NULL
+         WHERE id = $1`,
+        [id]
+      );
+      return { queued: false, sent: true, sendAt: when.toISOString(), id };
+    } catch (err) {
+      await pool.query(
+        `UPDATE platform_scheduled_email
+         SET status = 'failed', error = $2
+         WHERE id = $1`,
+        [id, err && err.message ? String(err.message).slice(0, 400) : 'send failed']
+      );
+      throw err;
+    }
+  }
+
+  return { queued: true, sent: false, sendAt: when.toISOString(), id };
 }
 
 let flushing = false;

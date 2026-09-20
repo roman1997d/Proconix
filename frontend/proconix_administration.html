@@ -860,6 +860,60 @@
                 </div>
               </div>
             </form>
+
+            <section class="px-email-history mt-5" id="pxEmailHistory" aria-labelledby="pxEmailHistoryTitle">
+              <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+                <div>
+                  <h3 class="h6 text-white mb-1" id="pxEmailHistoryTitle">Email history</h3>
+                  <p class="text-white-50 small mb-0">
+                    Who you wrote to, which template, when it is due, whether it went out, and how they replied.
+                    Mark a reply as positive or negative after you hear back.
+                  </p>
+                </div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="pxEmailHistoryRefresh">
+                  <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i> Refresh
+                </button>
+              </div>
+              <div class="px-email-history-stats" id="pxEmailHistoryStats"></div>
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Filter email history">
+                  <button type="button" class="btn btn-outline-light active" data-px-hist-filter="all">All</button>
+                  <button type="button" class="btn btn-outline-light" data-px-hist-filter="pending">Scheduled</button>
+                  <button type="button" class="btn btn-outline-light" data-px-hist-filter="sent">Sent</button>
+                  <button type="button" class="btn btn-outline-light" data-px-hist-filter="awaiting">Awaiting</button>
+                  <button type="button" class="btn btn-outline-light" data-px-hist-filter="positive">Positive</button>
+                  <button type="button" class="btn btn-outline-light" data-px-hist-filter="negative">Negative</button>
+                  <button type="button" class="btn btn-outline-light" data-px-hist-filter="failed">Failed</button>
+                </div>
+                <input
+                  type="search"
+                  class="form-control form-control-sm bg-dark text-white border-secondary px-email-history-search"
+                  id="pxEmailHistorySearch"
+                  placeholder="Search name or email"
+                  maxlength="80"
+                >
+              </div>
+              <div id="pxEmailHistoryAlert" class="alert d-none py-2 small" role="alert"></div>
+              <div class="table-responsive">
+                <table class="table table-dark table-sm table-hover px-admin-data-table px-email-history-table mb-0">
+                  <thead>
+                    <tr>
+                      <th scope="col">Contact</th>
+                      <th scope="col">Template</th>
+                      <th scope="col">When</th>
+                      <th scope="col">Send</th>
+                      <th scope="col">Reply</th>
+                      <th scope="col" class="text-end">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pxEmailHistoryBody">
+                    <tr>
+                      <td colspan="6" class="text-white-50">Open this panel to load history.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
         </div>
 

@@ -2138,6 +2138,7 @@
             mdOutreachWhen.value = again.toISOString().slice(0, 16);
             var problemRadio = mdOutreachForm.querySelector('input[name="pxMdOutreachTemplate"][value="problem"]');
             if (problemRadio) problemRadio.checked = true;
+            loadEmailHistory();
             return;
           }
           showContentEmailAlert((out.data && out.data.message) || 'Send failed.', 'error');
@@ -2187,6 +2188,7 @@
           if (out.status === 200 && out.data && out.data.success) {
             showContentEmailAlert(out.data.message || 'Email sent.', 'success');
             contentEmailForm.reset();
+            loadEmailHistory();
             return;
           }
           showContentEmailAlert((out.data && out.data.message) || 'Send failed.', 'error');
@@ -2201,6 +2203,336 @@
     contentEmailClear.addEventListener('click', function () {
       hideContentEmailAlert();
       if (contentEmailForm) contentEmailForm.reset();
+    });
+  }
+
+  var emailHistoryFilter = 'all';
+  var emailHistorySearchTimer = null;
+  var emailHistoryItems = [];
+
+  function fmtEmailWhen(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  function emailTemplateLabel(item) {
+    if (item.template === 'familiar') return '2 · Familiar';
+    if (item.template === 'custom') {
+      return item.subject ? 'Custom · ' + item.subject : 'Custom';
+    }
+    return '1 · Problem';
+  }
+
+  function makeChip(kind, text) {
+    var span = document.createElement('span');
+    span.className = 'px-email-chip px-email-chip--' + kind;
+    span.textContent = text;
+    return span;
+  }
+
+  function showEmailHistoryAlert(text, kind) {
+    var el = document.getElementById('pxEmailHistoryAlert');
+    if (!el) return;
+    el.textContent = text || '';
+    el.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-warning');
+    if (!text) {
+      el.classList.add('d-none');
+      return;
+    }
+    el.classList.add(kind === 'success' ? 'alert-success' : kind === 'error' ? 'alert-danger' : 'alert-warning');
+  }
+
+  function renderEmailHistoryStats(counts) {
+    var host = document.getElementById('pxEmailHistoryStats');
+    if (!host) return;
+    host.textContent = '';
+    var cards = [
+      { key: 'total', label: 'All' },
+      { key: 'pending', label: 'Scheduled' },
+      { key: 'sent', label: 'Sent' },
+      { key: 'awaiting', label: 'Awaiting' },
+      { key: 'positive', label: 'Positive' },
+      { key: 'negative', label: 'Negative' },
+    ];
+    cards.forEach(function (card) {
+      var box = document.createElement('div');
+      box.className = 'px-email-history-stat';
+      var strong = document.createElement('strong');
+      strong.textContent = counts && counts[card.key] != null ? String(counts[card.key]) : '0';
+      var label = document.createElement('span');
+      label.textContent = card.label;
+      box.appendChild(strong);
+      box.appendChild(label);
+      host.appendChild(box);
+    });
+  }
+
+  function renderEmailHistoryRows(items) {
+    var body = document.getElementById('pxEmailHistoryBody');
+    if (!body) return;
+    body.textContent = '';
+    if (!items || !items.length) {
+      var empty = document.createElement('tr');
+      var td = document.createElement('td');
+      td.colSpan = 6;
+      td.className = 'text-white-50';
+      td.textContent = 'No emails in this view yet.';
+      empty.appendChild(td);
+      body.appendChild(empty);
+      return;
+    }
+    items.forEach(function (item) {
+      var tr = document.createElement('tr');
+
+      var contactTd = document.createElement('td');
+      if (item.name) {
+        var nameEl = document.createElement('div');
+        nameEl.className = 'text-white';
+        nameEl.textContent = item.name;
+        contactTd.appendChild(nameEl);
+      }
+      var mailEl = document.createElement('div');
+      mailEl.className = 'font-monospace small text-white-50';
+      mailEl.textContent = item.to || '';
+      contactTd.appendChild(mailEl);
+      tr.appendChild(contactTd);
+
+      var tplTd = document.createElement('td');
+      tplTd.textContent = emailTemplateLabel(item);
+      tr.appendChild(tplTd);
+
+      var whenTd = document.createElement('td');
+      var whenMain = document.createElement('div');
+      whenMain.textContent = item.status === 'sent' ? fmtEmailWhen(item.sentAt || item.sendAt) : fmtEmailWhen(item.sendAt);
+      whenTd.appendChild(whenMain);
+      if (item.status === 'pending') {
+        var due = document.createElement('div');
+        due.className = 'small text-white-50';
+        due.textContent = 'Scheduled';
+        whenTd.appendChild(due);
+      } else if (item.status === 'sent' && item.sendAt && item.sentAt) {
+        var planned = document.createElement('div');
+        planned.className = 'small text-white-50';
+        planned.textContent = 'Planned ' + fmtEmailWhen(item.sendAt);
+        whenTd.appendChild(planned);
+      }
+      tr.appendChild(whenTd);
+
+      var sendTd = document.createElement('td');
+      if (item.status === 'pending') sendTd.appendChild(makeChip('pending', 'Scheduled'));
+      else if (item.status === 'sent') sendTd.appendChild(makeChip('sent', 'Sent'));
+      else if (item.status === 'failed') sendTd.appendChild(makeChip('failed', 'Failed'));
+      else sendTd.appendChild(makeChip('cancelled', 'Cancelled'));
+      if (item.error) {
+        var errEl = document.createElement('div');
+        errEl.className = 'small text-danger mt-1';
+        errEl.textContent = item.error;
+        sendTd.appendChild(errEl);
+      }
+      tr.appendChild(sendTd);
+
+      var replyTd = document.createElement('td');
+      if (item.replyStatus === 'positive') replyTd.appendChild(makeChip('positive', 'Positive'));
+      else if (item.replyStatus === 'negative') replyTd.appendChild(makeChip('negative', 'Negative'));
+      else if (item.status === 'sent') replyTd.appendChild(makeChip('awaiting', 'Awaiting reply'));
+      else {
+        var dash = document.createElement('span');
+        dash.className = 'text-white-50';
+        dash.textContent = '—';
+        replyTd.appendChild(dash);
+      }
+      if (item.replyNote) {
+        var note = document.createElement('span');
+        note.className = 'px-email-note';
+        note.textContent = item.replyNote;
+        replyTd.appendChild(note);
+      }
+      tr.appendChild(replyTd);
+
+      var actTd = document.createElement('td');
+      actTd.className = 'text-end';
+      var wrap = document.createElement('div');
+      wrap.className = 'd-inline-flex flex-wrap justify-content-end gap-1';
+      if (item.status === 'sent') {
+        var posBtn = document.createElement('button');
+        posBtn.type = 'button';
+        posBtn.className = 'btn btn-outline-success btn-sm';
+        posBtn.textContent = 'Positive';
+        posBtn.addEventListener('click', function () {
+          patchEmailHistoryRow(item.id, 'positive', item.replyNote);
+        });
+        var negBtn = document.createElement('button');
+        negBtn.type = 'button';
+        negBtn.className = 'btn btn-outline-danger btn-sm';
+        negBtn.textContent = 'Negative';
+        negBtn.addEventListener('click', function () {
+          patchEmailHistoryRow(item.id, 'negative', item.replyNote);
+        });
+        wrap.appendChild(posBtn);
+        wrap.appendChild(negBtn);
+        if (item.replyStatus !== 'none') {
+          var clearBtn = document.createElement('button');
+          clearBtn.type = 'button';
+          clearBtn.className = 'btn btn-outline-secondary btn-sm';
+          clearBtn.textContent = 'Clear';
+          clearBtn.addEventListener('click', function () {
+            patchEmailHistoryRow(item.id, 'none', '');
+          });
+          wrap.appendChild(clearBtn);
+        }
+        var noteBtn = document.createElement('button');
+        noteBtn.type = 'button';
+        noteBtn.className = 'btn btn-outline-light btn-sm';
+        noteBtn.textContent = 'Note';
+        noteBtn.addEventListener('click', function () {
+          var next = window.prompt('Reply note', item.replyNote || '');
+          if (next == null) return;
+          patchEmailHistoryRow(item.id, item.replyStatus || 'none', next);
+        });
+        wrap.appendChild(noteBtn);
+      } else if (item.status === 'pending') {
+        var cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'btn btn-outline-warning btn-sm';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', function () {
+          if (!window.confirm('Cancel this scheduled email?')) return;
+          cancelEmailHistoryRow(item.id);
+        });
+        wrap.appendChild(cancelBtn);
+      }
+      actTd.appendChild(wrap);
+      tr.appendChild(actTd);
+      body.appendChild(tr);
+    });
+  }
+
+  function emailHistoryQuery() {
+    var params = new URLSearchParams();
+    if (emailHistoryFilter === 'positive' || emailHistoryFilter === 'negative') {
+      params.set('reply', emailHistoryFilter);
+    } else if (emailHistoryFilter !== 'all') {
+      params.set('status', emailHistoryFilter);
+    }
+    var searchEl = document.getElementById('pxEmailHistorySearch');
+    var q = searchEl ? searchEl.value.trim() : '';
+    if (q) params.set('q', q);
+    var qs = params.toString();
+    return '/api/platform-admin/email-history' + (qs ? '?' + qs : '');
+  }
+
+  function loadEmailHistory() {
+    var body = document.getElementById('pxEmailHistoryBody');
+    if (!body) return;
+    fetch(emailHistoryQuery(), {
+      method: 'GET',
+      headers: sessionHeaders(session),
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (out.status === 401) {
+          clearSession();
+          window.location.replace(LOGIN_URL);
+          return;
+        }
+        if (out.status !== 200 || !out.data || !out.data.success) {
+          showEmailHistoryAlert((out.data && out.data.message) || 'Could not load email history.', 'error');
+          return;
+        }
+        showEmailHistoryAlert('', '');
+        emailHistoryItems = out.data.items || [];
+        renderEmailHistoryStats(out.data.counts || {});
+        renderEmailHistoryRows(emailHistoryItems);
+      })
+      .catch(function () {
+        showEmailHistoryAlert('Network error while loading email history.', 'error');
+      });
+  }
+
+  function patchEmailHistoryRow(id, replyStatus, replyNote) {
+    fetch('/api/platform-admin/email-history/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+      credentials: 'same-origin',
+      body: JSON.stringify({ replyStatus: replyStatus, replyNote: replyNote == null ? '' : replyNote }),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (out.status === 401) {
+          clearSession();
+          window.location.replace(LOGIN_URL);
+          return;
+        }
+        if (out.status !== 200 || !out.data || !out.data.success) {
+          showEmailHistoryAlert((out.data && out.data.message) || 'Could not update reply.', 'error');
+          return;
+        }
+        loadEmailHistory();
+      })
+      .catch(function () {
+        showEmailHistoryAlert('Network error while updating reply.', 'error');
+      });
+  }
+
+  function cancelEmailHistoryRow(id) {
+    fetch('/api/platform-admin/email-history/' + encodeURIComponent(id) + '/cancel', {
+      method: 'POST',
+      headers: sessionHeaders(session),
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (out.status === 401) {
+          clearSession();
+          window.location.replace(LOGIN_URL);
+          return;
+        }
+        if (out.status !== 200 || !out.data || !out.data.success) {
+          showEmailHistoryAlert((out.data && out.data.message) || 'Could not cancel email.', 'error');
+          return;
+        }
+        loadEmailHistory();
+      })
+      .catch(function () {
+        showEmailHistoryAlert('Network error while cancelling.', 'error');
+      });
+  }
+
+  var emailHistoryRefresh = document.getElementById('pxEmailHistoryRefresh');
+  if (emailHistoryRefresh) {
+    emailHistoryRefresh.addEventListener('click', function () {
+      loadEmailHistory();
+    });
+  }
+  document.querySelectorAll('[data-px-hist-filter]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      emailHistoryFilter = btn.getAttribute('data-px-hist-filter') || 'all';
+      document.querySelectorAll('[data-px-hist-filter]').forEach(function (other) {
+        other.classList.toggle('active', other === btn);
+      });
+      loadEmailHistory();
+    });
+  });
+  var emailHistorySearch = document.getElementById('pxEmailHistorySearch');
+  if (emailHistorySearch) {
+    emailHistorySearch.addEventListener('input', function () {
+      clearTimeout(emailHistorySearchTimer);
+      emailHistorySearchTimer = setTimeout(loadEmailHistory, 250);
     });
   }
 
@@ -2697,6 +3029,9 @@
       if (id === 'server-memory') {
         loadSystemHealthPanel(session);
         scheduleSysPoll(session);
+      }
+      if (id === 'content') {
+        loadEmailHistory();
       }
       if (id === 'settings') {
         loadPanicAlertPanel(session);

@@ -16,6 +16,12 @@ const {
   sendDemoTenantWelcomeEmail,
 } = require('../lib/sendCallbackRequestEmail');
 const { queueMyDrawingsOutreach } = require('../lib/myDrawingsOutreachEmail');
+const {
+  listEmailHistory,
+  updateEmailReply,
+  cancelScheduledEmail,
+  recordCustomClientEmail,
+} = require('../lib/platformEmailHistory');
 const { countCompanySeats } = require('../utils/companyUserSeats');
 const { runCreateDemoRecords } = require('../lib/createDemoRecords');
 const {
@@ -1344,6 +1350,11 @@ async function sendClientEmail(req, res) {
       adminEmail,
       adminName,
     });
+    try {
+      await recordCustomClientEmail({ to, subject, adminEmail, adminName });
+    } catch (histErr) {
+      console.error('platformAdmin recordCustomClientEmail:', histErr && histErr.message ? histErr.message : histErr);
+    }
     return res.status(200).json({
       success: true,
       message: 'Email sent successfully.',
@@ -1412,6 +1423,60 @@ async function sendMyDrawingsOutreach(req, res) {
       success: false,
       message: err.message || 'Failed to send or schedule the email.',
     });
+  }
+}
+
+/**
+ * GET /api/platform-admin/email-history
+ */
+async function getEmailHistory(req, res) {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    const status = typeof req.query.status === 'string' ? req.query.status : '';
+    const reply = typeof req.query.reply === 'string' ? req.query.reply : '';
+    const data = await listEmailHistory({ q, status, reply });
+    return res.status(200).json({ success: true, ...data });
+  } catch (err) {
+    console.error('platformAdmin getEmailHistory error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load email history.' });
+  }
+}
+
+/**
+ * PATCH /api/platform-admin/email-history/:id
+ * Body: { replyStatus, replyNote? }
+ */
+async function patchEmailHistory(req, res) {
+  try {
+    const raw = req.body || {};
+    const result = await updateEmailReply({
+      id: req.params.id,
+      replyStatus: raw.replyStatus || raw.reply_status,
+      replyNote: raw.replyNote != null ? raw.replyNote : raw.reply_note,
+    });
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    if (err && err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    console.error('platformAdmin patchEmailHistory error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to update reply.' });
+  }
+}
+
+/**
+ * POST /api/platform-admin/email-history/:id/cancel
+ */
+async function cancelEmailHistory(req, res) {
+  try {
+    const result = await cancelScheduledEmail(req.params.id);
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    if (err && err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    console.error('platformAdmin cancelEmailHistory error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to cancel email.' });
   }
 }
 
@@ -2262,6 +2327,9 @@ module.exports = {
   updateBillingSubscription,
   sendClientEmail,
   sendMyDrawingsOutreach,
+  getEmailHistory,
+  patchEmailHistory,
+  cancelEmailHistory,
   createDemoRecords,
   sendDemoLoginEmail,
   createBackup,
