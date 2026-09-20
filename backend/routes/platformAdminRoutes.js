@@ -23,6 +23,7 @@ const {
   getEmailHistory,
   patchEmailHistory,
   patchEmailContactNote,
+  deleteEmailContact,
   cancelEmailHistory,
   createDemoRecords,
   sendDemoLoginEmail,
@@ -70,6 +71,7 @@ router.post('/send-client-email', requirePlatformAdminAuth, sendClientEmail);
 router.post('/send-mydrawings-outreach', requirePlatformAdminAuth, sendMyDrawingsOutreach);
 router.get('/email-history', requirePlatformAdminAuth, getEmailHistory);
 router.patch('/email-history/contact-note', requirePlatformAdminAuth, patchEmailContactNote);
+router.delete('/email-history/contact', requirePlatformAdminAuth, deleteEmailContact);
 router.patch('/email-history/:id', requirePlatformAdminAuth, patchEmailHistory);
 router.post('/email-history/:id/cancel', requirePlatformAdminAuth, cancelEmailHistory);
 router.post('/create-demo-records', requirePlatformAdminAuth, createDemoRecords);

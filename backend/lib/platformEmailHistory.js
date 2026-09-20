@@ -224,6 +224,34 @@ async function upsertContactNote({ to, note }) {
   return { to: email, note: text };
 }
 
+async function deleteContact(to) {
+  const email = normalizeContactEmail(to);
+  if (!EMAIL_RE.test(email)) {
+    const err = new Error('A valid contact email is required.');
+    err.status = 400;
+    throw err;
+  }
+  await ensureEmailHistoryTable();
+  const emails = await pool.query(
+    `DELETE FROM platform_scheduled_email
+     WHERE LOWER(to_email) = $1
+     RETURNING id`,
+    [email]
+  );
+  const notes = await pool.query(
+    `DELETE FROM platform_email_contact_note
+     WHERE email = $1
+     RETURNING email`,
+    [email]
+  );
+  if (!emails.rowCount && !notes.rowCount) {
+    const err = new Error('Contact not found.');
+    err.status = 404;
+    throw err;
+  }
+  return { to: email, removedEmails: emails.rowCount, removedNote: Boolean(notes.rowCount) };
+}
+
 module.exports = {
   EMAIL_RE,
   ensureEmailHistoryTable,
@@ -232,4 +260,5 @@ module.exports = {
   updateEmailReply,
   cancelScheduledEmail,
   upsertContactNote,
+  deleteContact,
 };

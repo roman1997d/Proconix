@@ -2211,6 +2211,8 @@
   var emailHistoryItems = [];
   var contactNoteEmail = '';
   var contactNoteModal = null;
+  var contactDeleteEmail = '';
+  var contactDeleteModal = null;
 
   function fmtEmailWhen(iso) {
     if (!iso) return '—';
@@ -2308,7 +2310,15 @@
       notesBtn.addEventListener('click', function () {
         openContactNotes(item);
       });
+      var deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'btn btn-outline-danger btn-sm';
+      deleteBtn.textContent = 'Delete contact';
+      deleteBtn.addEventListener('click', function () {
+        openDeleteContact(item);
+      });
       contactActions.appendChild(notesBtn);
+      contactActions.appendChild(deleteBtn);
       contactTd.appendChild(contactActions);
       if (item.contactNote) {
         var notePreview = document.createElement('span');
@@ -2480,6 +2490,64 @@
   var contactNoteSave = document.getElementById('pxEmailContactNoteSave');
   if (contactNoteSave) {
     contactNoteSave.addEventListener('click', saveContactNotes);
+  }
+
+  function getContactDeleteModal() {
+    var el = document.getElementById('pxEmailContactDeleteModal');
+    if (!el || !window.bootstrap || !window.bootstrap.Modal) return null;
+    if (!contactDeleteModal) contactDeleteModal = window.bootstrap.Modal.getOrCreateInstance(el);
+    return contactDeleteModal;
+  }
+
+  function openDeleteContact(item) {
+    if (!item || !item.to) return;
+    contactDeleteEmail = item.to;
+    var who = document.getElementById('pxEmailContactDeleteWho');
+    if (who) who.textContent = (item.name ? item.name + ' · ' : '') + item.to;
+    var modal = getContactDeleteModal();
+    if (modal) modal.show();
+  }
+
+  function confirmDeleteContact() {
+    if (!contactDeleteEmail) return;
+    var btn = document.getElementById('pxEmailContactDeleteConfirm');
+    if (btn) btn.disabled = true;
+    fetch('/api/platform-admin/email-history/contact', {
+      method: 'DELETE',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+      credentials: 'same-origin',
+      body: JSON.stringify({ to: contactDeleteEmail }),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (btn) btn.disabled = false;
+        if (out.status === 401) {
+          clearSession();
+          window.location.replace(LOGIN_URL);
+          return;
+        }
+        if (out.status !== 200 || !out.data || !out.data.success) {
+          showEmailHistoryAlert((out.data && out.data.message) || 'Could not delete contact.', 'error');
+          return;
+        }
+        contactDeleteEmail = '';
+        var modal = getContactDeleteModal();
+        if (modal) modal.hide();
+        loadEmailHistory();
+      })
+      .catch(function () {
+        if (btn) btn.disabled = false;
+        showEmailHistoryAlert('Network error while deleting contact.', 'error');
+      });
+  }
+
+  var contactDeleteConfirm = document.getElementById('pxEmailContactDeleteConfirm');
+  if (contactDeleteConfirm) {
+    contactDeleteConfirm.addEventListener('click', confirmDeleteContact);
   }
 
   function fillAnotherEmail(item) {

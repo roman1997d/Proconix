@@ -22,6 +22,7 @@ const {
   cancelScheduledEmail,
   recordCustomClientEmail,
   upsertContactNote,
+  deleteContact,
 } = require('../lib/platformEmailHistory');
 const { countCompanySeats } = require('../utils/companyUserSeats');
 const { runCreateDemoRecords } = require('../lib/createDemoRecords');
@@ -1487,6 +1488,24 @@ async function patchEmailContactNote(req, res) {
 }
 
 /**
+ * DELETE /api/platform-admin/email-history/contact
+ * Body: { to }
+ */
+async function deleteEmailContact(req, res) {
+  try {
+    const raw = req.body || {};
+    const result = await deleteContact(raw.to);
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    if (err && err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    console.error('platformAdmin deleteEmailContact error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to delete contact.' });
+  }
+}
+
+/**
  * POST /api/platform-admin/email-history/:id/cancel
  */
 async function cancelEmailHistory(req, res) {
@@ -2352,6 +2371,7 @@ module.exports = {
   getEmailHistory,
   patchEmailHistory,
   patchEmailContactNote,
+  deleteEmailContact,
   cancelEmailHistory,
   createDemoRecords,
   sendDemoLoginEmail,
