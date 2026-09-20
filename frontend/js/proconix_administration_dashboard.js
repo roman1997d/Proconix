@@ -2313,7 +2313,12 @@
       var deleteBtn = document.createElement('button');
       deleteBtn.type = 'button';
       deleteBtn.className = 'btn btn-outline-danger btn-sm';
-      deleteBtn.textContent = 'Delete contact';
+      deleteBtn.setAttribute('aria-label', 'Delete contact');
+      deleteBtn.title = 'Delete contact';
+      var deleteIcon = document.createElement('i');
+      deleteIcon.className = 'bi bi-trash3';
+      deleteIcon.setAttribute('aria-hidden', 'true');
+      deleteBtn.appendChild(deleteIcon);
       deleteBtn.addEventListener('click', function () {
         openDeleteContact(item);
       });
