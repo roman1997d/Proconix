@@ -1,6 +1,8 @@
 /**
  * Finds files under backend/uploads with no matching row in scanned DB paths
- * nor Site Cloud index JSON trash/active entries.
+ * nor Site Cloud index JSON. My Drawings PDFs, wall-type images, and logos
+ * under uploads/mydrawings and uploads/mydrawings-branding are never treated
+ * as orphans — delete those from the My Drawings app.
  */
 
 const fs = require('fs');
@@ -85,6 +87,18 @@ function addCloudIndexReferencedPaths(set) {
   }
 }
 
+function isProtectedMyDrawingsUpload(absFile) {
+  const n = normalizeAbs(absFile);
+  if (!n) return false;
+  const roots = [
+    normalizeAbs(path.join(UPLOADS_ROOT, 'mydrawings')),
+    normalizeAbs(path.join(UPLOADS_ROOT, 'mydrawings-branding')),
+  ];
+  return roots.some(function (root) {
+    return n === root || n.startsWith(root + path.sep);
+  });
+}
+
 function walkAllFilesSync(root, onFile) {
   const q = [root];
   while (q.length) {
@@ -145,7 +159,7 @@ async function scanUploadOrphans(dbPool, maxListLength) {
     totalScanned += 1;
     const n = normalizeAbs(absFile);
     if (!n || (n !== rootR && !n.startsWith(rootR + path.sep))) return;
-    if (refNorm.has(n)) return;
+    if (refNorm.has(n) || isProtectedMyDrawingsUpload(absFile)) return;
     totalOrphans += 1;
     if (orphans.length >= cap) return;
     try {
@@ -196,6 +210,9 @@ function assertSafeRelativeUploadPath(relPath) {
 function deleteOrphanFileByRelPath(relPath) {
   const check = assertSafeRelativeUploadPath(relPath);
   if (!check.ok) return { ok: false, message: check.message };
+  if (isProtectedMyDrawingsUpload(check.full)) {
+    return { ok: false, message: 'My Drawings files are not treated as orphans. Delete the drawing from My Drawings instead.' };
+  }
   try {
     fs.unlinkSync(check.full);
     return { ok: true, message: 'File deleted.' };
@@ -215,7 +232,7 @@ async function purgeAllUploadOrphans(dbPool) {
   walkAllFilesSync(UPLOADS_ROOT, function (absFile) {
     const n = normalizeAbs(absFile);
     if (!n || (n !== rootR && !n.startsWith(rootR + path.sep))) return;
-    if (refNorm.has(n)) return;
+    if (refNorm.has(n) || isProtectedMyDrawingsUpload(absFile)) return;
     try {
       const st = fs.statSync(absFile);
       if (!st.isFile()) return;

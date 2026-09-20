@@ -919,7 +919,8 @@
     }
     var n = orphanScanLastTotal;
     var msg =
-      'This will DELETE every file under backend/uploads that is NOT matched by the orphan scan heuristic (fresh DB snapshot).\n\n' +
+      'This will DELETE every file under backend/uploads that is NOT matched by the orphan scan (fresh DB snapshot).\n\n' +
+      'My Drawings PDFs, wall-type images, and logos are excluded.\n\n' +
       'Last scan reported approximately ' +
       String(n) +
       ' orphan file(s). The server will delete all current orphans — not only the rows in the table.\n\n' +
@@ -1782,9 +1783,9 @@
     backupCreateBtn.addEventListener('click', function () {
       hideBackupAlert();
       resetBackupDownloadUrl();
-      setBackupStatus('Generating backup (database + files + Site Cloud)… please wait');
+      setBackupStatus('Generating backup (database + files + Site Cloud + My Drawings)… please wait');
       backupCreateBtn.disabled = true;
-      showGlobalLoader('Generating backup package (including Site Cloud)...');
+      showGlobalLoader('Generating backup package (Site Cloud and My Drawings)...');
 
       fetch('/api/admin/backup', {
         method: 'POST',
@@ -1844,7 +1845,7 @@
             backupDownloadBtn.classList.remove('d-none');
           }
           setBackupStatus('Backup ready');
-          showBackupAlert('Backup generated successfully (including Site Cloud). Click Download backup.', 'success');
+          showBackupAlert('Backup generated successfully (Site Cloud and My Drawings included). Click Download backup.', 'success');
           showBottomToast('Backup generated successfully.', 'success');
           refreshBackupList();
         })

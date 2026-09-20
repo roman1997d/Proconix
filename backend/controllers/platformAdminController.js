@@ -37,6 +37,12 @@ const {
   purgeAllUploadOrphans,
 } = require('../lib/uploadOrphanAudit');
 const { UPLOADS_ROOT, sanitizeCompanyFolderName } = require('../middleware/resolveCompanyDocsDir');
+const {
+  PROJECT_ROOT,
+  RESTORE_WIPE_ROOTS,
+  existingSnapshotRels,
+  snapshotMeta,
+} = require('../lib/platformFileSnapshot');
 
 const SALT_ROUNDS = 10;
 const BACKUP_AUDIT_LOG_PATH = path.resolve(__dirname, '../logs/platform-admin-backup-audit.log');
@@ -248,7 +254,7 @@ async function generateBackupToServer(options) {
   const actorEmail = opts.actorEmail || '';
   const actorIp = opts.actorIp || '';
   const startedAt = new Date();
-  const projectRoot = path.resolve(__dirname, '../..');
+  const projectRoot = PROJECT_ROOT;
   const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'proconix-backup-'));
   const stamp = formatBackupFileStamp(startedAt);
   const dbDumpPath = path.join(tempRoot, 'db.dump');
@@ -286,12 +292,7 @@ async function generateBackupToServer(options) {
     step = 'pg_dump';
     await runCommand(pgDumpCmd, dumpArgs, { env: cmdEnv, cwd: projectRoot });
 
-    const fileSources = [];
-    // Includes tenant Site Cloud because it lives under backend/uploads/*_docs/cloud.
-    ['backend/uploads', 'backend/output', 'output'].forEach((rel) => {
-      const abs = path.join(projectRoot, rel);
-      if (fs.existsSync(abs)) fileSources.push(rel);
-    });
+    const fileSources = existingSnapshotRels();
     const tarCmd = resolveExecutable([
       process.env.TAR_PATH,
       '/usr/bin/tar',
@@ -311,6 +312,7 @@ async function generateBackupToServer(options) {
     await createZipWithFallback(finalZipPath, [dbDumpPath, filesArchivePath], tempRoot);
 
     const st = await fsp.stat(finalZipPath);
+    const packed = snapshotMeta(fileSources);
     const meta = {
       file_name: finalZipName,
       created_at: startedAt.toISOString(),
@@ -319,7 +321,10 @@ async function generateBackupToServer(options) {
       actor_email: actorEmail,
       actor_ip: actorIp,
       size_bytes: st.size,
-      includes_site_cloud: true,
+      includes_site_cloud: packed.includes_site_cloud,
+      includes_my_drawings: packed.includes_my_drawings,
+      includes_hg_drawings: packed.includes_hg_drawings,
+      file_roots: packed.file_roots,
     };
     await fsp.writeFile(path.join(BACKUP_STORAGE_DIR, `${finalZipName}.json`), JSON.stringify(meta, null, 2), 'utf8');
     await cleanupOldBackups();
@@ -374,7 +379,7 @@ async function runRestoreFromZip(zipPath, restoreContext) {
   const adminEmail = ctx.adminEmail || '';
   const backupIp = ctx.backupIp || '';
   const sourceLabel = ctx.sourceLabel || path.basename(zipPath || 'backup.zip');
-  const projectRoot = path.resolve(__dirname, '../..');
+  const projectRoot = PROJECT_ROOT;
   const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'proconix-restore-'));
   const unzipDir = path.join(tempRoot, 'unzipped');
   let step = 'init';
@@ -422,8 +427,7 @@ async function runRestoreFromZip(zipPath, restoreContext) {
     await runCommand(pgRestoreCmd, pgRestoreArgs, { env: cmdEnv, cwd: projectRoot });
 
     step = 'restore_files_prepare';
-    const fileTargets = ['backend/uploads', 'backend/output', 'output'];
-    for (const rel of fileTargets) {
+    for (const rel of RESTORE_WIPE_ROOTS) {
       const abs = path.join(projectRoot, rel);
       await fsp.rm(abs, { recursive: true, force: true }).catch(() => {});
       await fsp.mkdir(abs, { recursive: true }).catch(() => {});
@@ -1756,7 +1760,7 @@ async function restoreBackup(req, res) {
 
     return res.json({
       success: true,
-      message: 'Restore completed successfully. Database and files were restored from backup package.',
+      message: 'Restore completed successfully. Database and files were restored from backup package (Site Cloud and My Drawings included).',
     });
   } catch (err) {
     console.error('restoreBackup error:', err);
@@ -2216,7 +2220,7 @@ async function scanBackendUploadOrphans(req, res) {
       success: true,
       ...out,
       note:
-        'These files are not referenced by the scanned tables (uploads, issues, work logs, documents, QA, chat, My Drawings, drawing versions, tenant cloud indexes). Custom or future references may be missing — verify before deleting.',
+        'These files are not referenced by scanned tables, Site Cloud indexes, or My Drawings (PDF catalog, wall-type images, company logos). Verify before deleting.',
     });
   } catch (err) {
     console.error('platformAdmin scanBackendUploadOrphans error:', err);

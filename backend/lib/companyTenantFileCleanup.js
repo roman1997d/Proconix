@@ -467,6 +467,16 @@ async function collectGlobalDbReferencedUploadAbsolutePaths(dbClient) {
     addRelativeUploadPathToSet(set, r.detail_image_path);
   });
 
+  const logos = await safeQueryRows(
+    dbClient,
+    `SELECT logo_path FROM my_drawings_workspace
+     WHERE logo_path IS NOT NULL AND TRIM(logo_path) <> ''`,
+    []
+  );
+  logos.forEach(function (r) {
+    addRelativeUploadPathToSet(set, r.logo_path);
+  });
+
   return set;
 }
 
