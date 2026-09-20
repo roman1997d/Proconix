@@ -14,6 +14,7 @@ const { notifyDrawingChange } = require('../lib/myDrawingsPushService');
 const {
   clearAutoSeededWallTypesOnce,
   importNorfolkMedlockSpecsOnce,
+  restoreMissingWallTypeImages,
   listWallTypes,
   updateWallTypesPack,
   seedStarterWallTypes,
@@ -504,6 +505,7 @@ async function ensureSchemaInner() {
   await restoreMissingDrawingsFromHg();
   await clearAutoSeededWallTypesOnce();
   await importNorfolkMedlockSpecsOnce();
+  await restoreMissingWallTypeImages();
 }
 
 async function addSiteColumns() {

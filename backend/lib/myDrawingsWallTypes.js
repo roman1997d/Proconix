@@ -788,6 +788,103 @@ async function sendSpecImportRequest(req, res) {
   }
 }
 
+function starterImageNameMap() {
+  const map = new Map();
+  try {
+    const data = loadStarterPackFile();
+    const list = Array.isArray(data.wallTypes) ? data.wallTypes : [];
+    list.forEach((item) => {
+      const name = path.basename(String((item && item.detailImage) || ''));
+      if (!name || name === '.' || name === '..') return;
+      const code = normalizeWallTypeCode(item && item.code);
+      if (code) map.set(code, name);
+      const idCode = normalizeWallTypeCode(String((item && item.id) || '').replace(/^wt/i, 'WT'));
+      if (idCode && !map.has(idCode)) map.set(idCode, name);
+    });
+  } catch (_) {}
+  try {
+    fs.readdirSync(STARTER_IMAGES_DIR).forEach((name) => {
+      if (!/\.(jpe?g|png|webp|gif)$/i.test(name)) return;
+      const stem = name.replace(/\.[^.]+$/, '');
+      const asCode = normalizeWallTypeCode(stem.replace(/^wt/i, 'WT'));
+      if (asCode && !map.has(asCode)) map.set(asCode, name);
+      const raw = normalizeWallTypeCode(stem);
+      if (raw && !map.has(raw)) map.set(raw, name);
+    });
+  } catch (_) {}
+  return map;
+}
+
+/**
+ * Recopy Medlock/Siniat detail images from the repo pack when the tenant file is missing.
+ * Does not delete or replace files that still exist on disk.
+ */
+async function restoreMissingWallTypeImages() {
+  const map = starterImageNameMap();
+  let rows;
+  try {
+    rows = await pool.query(
+      `SELECT id, workspace_id, project_id, code, detail_image_path
+       FROM my_drawings_wall_type`
+    );
+  } catch (err) {
+    console.warn(
+      'myDrawings restoreMissingWallTypeImages:',
+      err && err.message ? err.message : err
+    );
+    return { restored: 0, skipped: 0, unmatched: 0 };
+  }
+  let restored = 0;
+  let skipped = 0;
+  let unmatched = 0;
+  for (let i = 0; i < rows.rows.length; i++) {
+    const row = rows.rows[i];
+    const existingAbs = absFromRelative(row.detail_image_path);
+    if (existingAbs && fs.existsSync(existingAbs)) {
+      skipped += 1;
+      continue;
+    }
+    const code = normalizeWallTypeCode(row.code);
+    const fromPath = path.basename(String(row.detail_image_path || ''));
+    const fileName =
+      map.get(code) ||
+      (fromPath && map.get(normalizeWallTypeCode(fromPath.replace(/\.[^.]+$/, '').replace(/^wt/i, 'WT')))) ||
+      (fromPath && /\.(jpe?g|png|webp|gif)$/i.test(fromPath) && fs.existsSync(path.join(STARTER_IMAGES_DIR, fromPath))
+        ? fromPath
+        : '');
+    if (!fileName) {
+      unmatched += 1;
+      continue;
+    }
+    const rel = copyStarterImage(row.workspace_id, fileName, row.project_id);
+    if (!rel) {
+      unmatched += 1;
+      continue;
+    }
+    try {
+      await pool.query(
+        'UPDATE my_drawings_wall_type SET detail_image_path = $1, updated_at = NOW() WHERE id = $2',
+        [rel, row.id]
+      );
+      restored += 1;
+    } catch (err) {
+      unmatched += 1;
+      console.warn('myDrawings restore wall type image:', row.id, err && err.message ? err.message : err);
+    }
+  }
+  if (restored) {
+    console.log(
+      '[My Drawings] Restored',
+      restored,
+      'missing wall-type images from the spec pack (skipped',
+      skipped,
+      ', unmatched',
+      unmatched + ')'
+    );
+  }
+  return { restored, skipped, unmatched };
+}
+
 async function importNorfolkMedlockSpecsOnce() {
   try {
     await pool.query(`
@@ -851,6 +948,7 @@ async function importNorfolkMedlockSpecsOnce() {
 module.exports = {
   clearAutoSeededWallTypesOnce,
   importNorfolkMedlockSpecsOnce,
+  restoreMissingWallTypeImages,
   copyStarterWallTypes,
   listWallTypes,
   updateWallTypesPack,
