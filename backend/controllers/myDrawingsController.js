@@ -202,13 +202,71 @@ function locateStoredDrawingFile(item) {
     const found = findNamedFile(UPLOAD_DIR, name, 4);
     if (isFile(found)) return found;
   }
+  const number = String(item.number || '').trim();
+  if (number.length >= 4) {
+    const hgDir = path.join(__dirname, '..', '..', 'HG Drawings');
+    const byNumber =
+      findFileContaining(path.join(UPLOAD_DIR, String(ws || '')), number, 4) ||
+      findFileContaining(UPLOAD_DIR, number, 4) ||
+      findFileContaining(hgDir, number, 1);
+    if (isFile(byNumber)) return byNumber;
+  }
   return null;
+}
+
+function findFileContaining(dir, token, depth) {
+  if (!token || depth < 0 || !dir) return null;
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (_) {
+    return null;
+  }
+  const needle = String(token).toLowerCase();
+  for (const ent of entries) {
+    if (ent.isFile() && /\.pdf$/i.test(ent.name) && ent.name.toLowerCase().includes(needle)) {
+      return path.join(dir, ent.name);
+    }
+  }
+  for (const ent of entries) {
+    if (!ent.isDirectory() || ent.name.startsWith('.')) continue;
+    const found = findFileContaining(path.join(dir, ent.name), token, depth - 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+function isAllowedDrawingAbs(abs) {
+  if (!abs) return false;
+  const resolved = path.resolve(abs);
+  const roots = [
+    path.resolve(UPLOAD_DIR),
+    path.resolve(__dirname, '..', '..', 'HG Drawings'),
+  ];
+  return roots.some((root) => resolved === root || resolved.startsWith(root + path.sep));
+}
+
+function copyDrawingIntoTenant(item, abs) {
+  const cid = positiveInt(item && item.workspace_id);
+  const pid = positiveInt(item && item.project_id);
+  if (!cid || !pid || !isFile(abs)) return abs;
+  try {
+    const destDir = ensureTenantUploadDir(cid, pid);
+    const destName = item.stored_filename || path.basename(abs);
+    const destAbs = path.join(destDir, destName);
+    if (path.resolve(abs) === path.resolve(destAbs)) return destAbs;
+    if (!isFile(destAbs)) fs.copyFileSync(abs, destAbs);
+    return isFile(destAbs) ? destAbs : abs;
+  } catch (_) {
+    return abs;
+  }
 }
 
 async function healDrawingPath(item, abs) {
   if (!item || !item.id || !abs) return;
   const next = relativeFromAbs(abs);
-  if (!next || next === normalizeStoredRel(item.relative_path)) return;
+  if (!next || next.startsWith('..') || !next.startsWith('mydrawings/')) return;
+  if (next === normalizeStoredRel(item.relative_path)) return;
   try {
     await pool.query('UPDATE my_drawings_item SET relative_path = $1 WHERE id = $2', [next, item.id]);
     item.relative_path = next;
@@ -2398,6 +2456,23 @@ async function loadItem(workspaceId, id, projectId) {
   return row.rows[0] || null;
 }
 
+async function loadDrawingForRead(req, id) {
+  const workspaceId = req.myDrawings && req.myDrawings.workspace && req.myDrawings.workspace.id;
+  const n = parseInt(id, 10);
+  if (!workspaceId || !Number.isInteger(n) || n < 1) return null;
+  const row = await pool.query(
+    'SELECT * FROM my_drawings_item WHERE id = $1 AND workspace_id = $2',
+    [n, workspaceId]
+  );
+  const item = row.rows[0];
+  if (!item) return null;
+  const role = req.myDrawings.role;
+  if (role === 'admin' || role === 'site_manager') return item;
+  const siteId = currentSiteId(req.myDrawings);
+  if (item.project_id && siteId && Number(item.project_id) !== Number(siteId)) return null;
+  return item;
+}
+
 async function editDrawing(req, res) {
   try {
     const item = await loadItem(req.myDrawings.workspace.id, req.params.id, currentSiteId(req.myDrawings));
@@ -2509,16 +2584,13 @@ async function deleteDrawing(req, res) {
 
 async function downloadFile(req, res) {
   try {
-    const item = await loadItem(req.myDrawings.workspace.id, req.params.id, currentSiteId(req.myDrawings));
+    const item = await loadDrawingForRead(req, req.params.id);
     if (!item) return res.status(404).json({ success: false, message: 'Drawing not found.' });
-    const scopedProject = req.myDrawings.project && req.myDrawings.project.id;
-    if (scopedProject && item.project_id && Number(item.project_id) !== Number(scopedProject)) {
-      return res.status(404).json({ success: false, message: 'Drawing not found.' });
-    }
-    const abs = locateStoredDrawingFile(item);
+    let abs = locateStoredDrawingFile(item);
     if (!abs) {
       console.warn('myDrawings file missing', {
         id: item.id,
+        number: item.number,
         relative_path: item.relative_path,
         stored_filename: item.stored_filename,
         workspace_id: item.workspace_id,
@@ -2526,20 +2598,18 @@ async function downloadFile(req, res) {
       });
       return res.status(404).json({ success: false, message: 'File missing on server.' });
     }
+    abs = copyDrawingIntoTenant(item, abs);
     await healDrawingPath(item, abs);
-    const uploadRoot = path.resolve(UPLOAD_DIR);
-    const resolved = path.resolve(abs);
-    const uploadPrefix = uploadRoot.endsWith(path.sep) ? uploadRoot : uploadRoot + path.sep;
-    if (resolved !== uploadRoot && !resolved.startsWith(uploadPrefix)) {
+    if (!isAllowedDrawingAbs(abs)) {
       return res.status(404).json({ success: false, message: 'File missing on server.' });
     }
     const download = req.query.download === '1' || req.query.download === 'true';
-    res.setHeader('Content-Type', item.mime_type || 'application/pdf');
+    res.setHeader('Content-Type', download ? (item.mime_type || 'application/pdf') : 'application/octet-stream');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (download) {
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(item.number || 'drawing')}.pdf"`);
     } else {
-      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Content-Disposition', 'inline; filename="drawing.bin"');
     }
     return res.sendFile(abs);
   } catch (err) {

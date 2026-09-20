@@ -470,13 +470,17 @@
 
   async function fetchDrawingFile(drawing, onProgress) {
     var local = await idbGet('files', drawing.id);
-    if (local && local.blob) {
+    if (local && local.blob && local.blob.size > 500) {
       if (local.updatedAt && drawing.updatedAt && local.updatedAt === drawing.updatedAt) return local.blob;
       if (!drawing.updatedAt) return local.blob;
     }
     if (!drawing.fileUrl) throw new Error('This drawing has no file on the server.');
     if (!isOnline()) throw new Error('This drawing is not available offline.');
-    var res = await fetch(drawing.fileUrl, { credentials: 'same-origin', headers: pinHeaders() });
+    var url = drawing.fileUrl;
+    if (drawing.updatedAt) {
+      url += (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + encodeURIComponent(drawing.updatedAt);
+    }
+    var res = await fetch(url, { credentials: 'same-origin', headers: pinHeaders() });
     if (!res.ok) {
       var msg = 'Could not load drawing.';
       try {
@@ -485,24 +489,10 @@
       } catch (e) {}
       throw new Error(msg);
     }
-    var total = Number(res.headers.get('Content-Length') || drawing.sizeBytes || 0);
-    if (!res.body || !res.body.getReader) {
-      var blobFast = await res.blob();
-      if (onProgress) onProgress(1, blobFast.size);
-      return blobFast;
-    }
-    var reader = res.body.getReader();
-    var chunks = [];
-    var received = 0;
-    while (true) {
-      var step = await reader.read();
-      if (step.done) break;
-      chunks.push(step.value);
-      received += step.value.length;
-      if (onProgress) onProgress(total ? received / total : 0, received);
-    }
-    if (onProgress) onProgress(1, received);
-    return new Blob(chunks, { type: 'application/pdf' });
+    var blob = await res.blob();
+    if (!blob || blob.size < 20) throw new Error('Could not load drawing.');
+    if (onProgress) onProgress(1, blob.size);
+    return blob;
   }
 
   /* ---------- Session ---------- */
@@ -1295,7 +1285,11 @@
       var blob = await fetchDrawingFile(d, null);
       if (state.viewing && state.viewing.id === id) await getViewer().open(blob, d);
     } catch (err) {
-      getViewer().setStatus(err.message || 'Could not open drawing.');
+      var msg = err && err.message ? err.message : 'Could not open drawing.';
+      if (/Invalid PDF|password|worker|Missing PDF/i.test(msg)) {
+        msg = 'Could not open this PDF. Try again or re-upload the drawing.';
+      }
+      getViewer().setStatus(msg);
     }
   }
 
