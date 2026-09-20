@@ -18,6 +18,8 @@ const router = express.Router();
 
 function send(res, overall, body, criticalError) {
   const code = criticalError || overall === 'error' ? 503 : 200;
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.set('Pragma', 'no-cache');
   return res.status(code).json(body);
 }
 
@@ -29,7 +31,7 @@ router.get('/', async (req, res) => {
       checkDisk(),
     ]);
     const memory = checkMemory();
-    const critical = database.status === 'error' || storage.status === 'error';
+    const critical = [database.status, storage.status, memory.status, disk.status].indexOf('error') !== -1;
     const status = critical ? 'error' : 'ok';
     return send(res, status, {
       status,

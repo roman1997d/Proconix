@@ -205,7 +205,9 @@ function isCriticalError(checks) {
   return (
     (checks.api && checks.api.status === 'error') ||
     (checks.database && checks.database.status === 'error') ||
-    (checks.storage && checks.storage.status === 'error')
+    (checks.storage && checks.storage.status === 'error') ||
+    (checks.memory && checks.memory.status === 'error') ||
+    (checks.disk && checks.disk.status === 'error')
   );
 }
 
