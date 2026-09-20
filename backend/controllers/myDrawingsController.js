@@ -1735,6 +1735,16 @@ async function loadCatalog(workspace, role, site) {
 
 async function catalogResponse(req, res) {
   const payload = await loadCatalog(req.myDrawings.workspace, req.myDrawings.role, req.myDrawings.project);
+  const worker = req.myDrawings && req.myDrawings.worker;
+  if (worker) {
+    payload.firstName = worker.firstName || worker.first_name || '';
+    payload.lastName = worker.lastName || worker.last_name || '';
+  } else if (req.myDrawings && req.myDrawings.role === 'admin') {
+    const companyName = (payload.company && payload.company.managerName) || '';
+    const parts = String(companyName).trim().split(/\s+/).filter(Boolean);
+    payload.firstName = parts[0] || '';
+    payload.lastName = parts.slice(1).join(' ');
+  }
   return res.json(payload);
 }
 

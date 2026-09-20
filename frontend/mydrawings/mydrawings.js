@@ -75,7 +75,9 @@
     siteExtraDraft: [],
     editingSiteLocationsId: '',
     floorQuery: '',
-    manageLocationIds: []
+    manageLocationIds: [],
+    firstName: '',
+    lastName: ''
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -900,8 +902,17 @@
   async function enterApp(data, extra) {
     if (extra && extra.role) state.role = extra.role;
     else if (data && data.role) state.role = data.role;
+    if (extra && extra.firstName) state.firstName = String(extra.firstName).trim();
+    else if (data && data.firstName) state.firstName = String(data.firstName).trim();
+    if (extra && extra.lastName) state.lastName = String(extra.lastName).trim();
+    else if (data && data.lastName) state.lastName = String(data.lastName).trim();
     applyCatalog(data);
-    writeSession(true, Object.assign({}, extra || {}, { siteId: state.siteId, role: state.role }));
+    writeSession(true, Object.assign({}, extra || {}, {
+      siteId: state.siteId,
+      role: state.role,
+      firstName: state.firstName,
+      lastName: state.lastName
+    }));
     writePending(null);
     $('pin-input').value = '';
     renderPinDots();
@@ -962,7 +973,8 @@
       });
       await enterApp(data, {
         deviceToken: data.deviceToken,
-      role: data.role || 'worker',
+        role: data.role || 'worker',
+        firstName: data.firstName || firstName,
         lastName: data.lastName || lastName,
         email: data.email || email,
         expiresAt: data.expiresAt || ''
@@ -977,6 +989,7 @@
     await enterApp(data, {
       deviceToken: data.deviceToken,
       role: data.role || 'worker',
+      firstName: data.firstName || '',
       lastName: data.lastName || '',
       email: data.email || email,
       expiresAt: data.expiresAt || ''
@@ -1135,6 +1148,8 @@
     state.categories = data.categories || [];
     state.drawings = data.drawings || [];
     state.accessCode = data.accessCode || state.accessCode || '';
+    if (data.firstName) state.firstName = String(data.firstName).trim();
+    if (data.lastName) state.lastName = String(data.lastName).trim();
     if (data.managerName) state.managerName = data.managerName;
     if (data.company && data.company.name) state.companyName = data.company.name;
     else if (data.project && data.project.name) state.companyName = data.project.name;
@@ -2317,15 +2332,15 @@
 
   function formatWelcomeName() {
     var session = readSession() || {};
-    var first = (state.managerName || session.managerName || session.firstName || '').trim();
-    var last = (session.lastName || '').trim();
-    if (first && last) return first.toLowerCase() + ' ' + last.toUpperCase();
-    if (first) {
-      var parts = first.split(/\s+/);
-      if (parts.length >= 2) return parts[0].toLowerCase() + ' ' + parts.slice(1).join(' ').toUpperCase();
-      return first;
+    var first = (state.firstName || session.firstName || '').trim();
+    var last = (state.lastName || session.lastName || '').trim();
+    var name = [first, last].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    if (!name) name = (state.managerName || session.managerName || '').trim();
+    if (!name) {
+      var email = (session.email || '').trim();
+      if (email.indexOf('@') > 0) name = email.split('@')[0];
     }
-    return 'Administrator';
+    return name || 'Administrator';
   }
 
   function tickAdminClock() {
@@ -2362,7 +2377,7 @@
 
   function renderAdminChrome() {
     var welcome = $('ad-welcome');
-    if (welcome) welcome.textContent = 'Welcome : ' + formatWelcomeName();
+    if (welcome) welcome.textContent = 'Welcome ' + formatWelcomeName();
     var company = $('ad-company');
     var name = state.companyName || (state.project && state.project.name) || '';
     var siteBit = state.siteName ? ' · ' + state.siteName : '';
@@ -3558,13 +3573,15 @@
       if (session && session.ok && session.deviceToken) {
         state.role = session.role || 'worker';
         if (session.siteId) state.siteId = session.siteId;
+        if (session.firstName) state.firstName = session.firstName;
+        if (session.lastName) state.lastName = session.lastName;
         try {
           var data = await fetchRemoteCatalog({ deviceToken: session.deviceToken });
           await enterApp(data, {
             deviceToken: session.deviceToken,
             role: data.role || 'worker',
-            firstName: session.firstName,
-            lastName: session.lastName,
+            firstName: data.firstName || session.firstName,
+            lastName: data.lastName || session.lastName,
             email: session.email
           });
         } catch (err) {
@@ -3590,14 +3607,16 @@
       } else if (session && session.ok && session.adminToken && session.role === 'admin') {
         state.role = 'admin';
         if (session.siteId) state.siteId = session.siteId;
+        if (session.firstName) state.firstName = session.firstName;
+        if (session.lastName) state.lastName = session.lastName;
         try {
           var companyData = await fetchRemoteCatalog({ adminToken: session.adminToken });
           await enterApp(companyData, {
             adminToken: session.adminToken,
             role: 'admin',
             email: session.email,
-            firstName: session.firstName,
-            lastName: session.lastName,
+            firstName: companyData.firstName || session.firstName,
+            lastName: companyData.lastName || session.lastName,
             managerName: session.managerName || session.firstName || ''
           });
         } catch (err) {
