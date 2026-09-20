@@ -44,7 +44,7 @@ const digitalDocumentsRoutes = require('./routes/digitalDocumentsRoutes');
 const siteCloudRoutes = require('./routes/siteCloudRoutes');
 const { startShareLinkCleanupScheduler, startDeletedFilesCleanupScheduler } = require('./controllers/siteCloudController');
 const { metricsMiddleware } = require('./middleware/metricsMiddleware');
-const { printStartupConsoleBanner } = require('./lib/startupConsoleBanner');
+const healthRoutes = require('./routes/healthRoutes');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -56,32 +56,7 @@ app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '25mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(metricsMiddleware);
 
-// Health check (database connectivity)
-app.get('/api/health', async (req, res) => {
-  try {
-    const result = await testConnection();
-    if (result.ok) {
-      return res.status(200).json({
-        status: 'ok',
-        connected: true,
-        database: result.message,
-        message: 'Database is connected.',
-      });
-    }
-    return res.status(503).json({
-      status: 'error',
-      connected: false,
-      database: result.error,
-      message: 'Database is not connected.',
-    });
-  } catch (err) {
-    return res.status(503).json({
-      status: 'error',
-      connected: false,
-      error: err.message,
-    });
-  }
-});
+app.use('/api/health', healthRoutes);
 
 // Company API
 app.use('/api/companies', companyRoutes);

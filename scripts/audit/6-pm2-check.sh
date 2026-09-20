@@ -20,5 +20,5 @@ pm2 show proconix 2>/dev/null || pm2 show 0 2>/dev/null || true
 
 echo ""
 echo "--- Recomandare: --max-memory-restart ---"
-echo "   Exemplu: pm2 start index.js --name proconix --max-memory-restart 500M"
-echo "   Sau în ecosystem.config.js: max_memory_restart: '500M'"
+echo "   Exemplu: pm2 start ecosystem.config.cjs --env production"
+echo "   max_memory_restart 800M, min_uptime 10s, restart_delay 4s (evită restart loop)"

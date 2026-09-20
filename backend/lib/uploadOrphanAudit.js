@@ -99,6 +99,12 @@ function isProtectedMyDrawingsUpload(absFile) {
   });
 }
 
+function isHealthProbeUpload(absFile) {
+  const n = normalizeAbs(absFile);
+  const root = normalizeAbs(path.join(UPLOADS_ROOT, '.health'));
+  return n === root || n.startsWith(root + path.sep);
+}
+
 function walkAllFilesSync(root, onFile) {
   const q = [root];
   while (q.length) {
@@ -159,7 +165,7 @@ async function scanUploadOrphans(dbPool, maxListLength) {
     totalScanned += 1;
     const n = normalizeAbs(absFile);
     if (!n || (n !== rootR && !n.startsWith(rootR + path.sep))) return;
-    if (refNorm.has(n) || isProtectedMyDrawingsUpload(absFile)) return;
+    if (refNorm.has(n) || isProtectedMyDrawingsUpload(absFile) || isHealthProbeUpload(absFile)) return;
     totalOrphans += 1;
     if (orphans.length >= cap) return;
     try {
@@ -210,6 +216,9 @@ function assertSafeRelativeUploadPath(relPath) {
 function deleteOrphanFileByRelPath(relPath) {
   const check = assertSafeRelativeUploadPath(relPath);
   if (!check.ok) return { ok: false, message: check.message };
+  if (isHealthProbeUpload(check.full)) {
+    return { ok: false, message: 'Health-check probe files are not treated as orphans.' };
+  }
   if (isProtectedMyDrawingsUpload(check.full)) {
     return { ok: false, message: 'My Drawings files are not treated as orphans. Delete the drawing from My Drawings instead.' };
   }
@@ -232,7 +241,7 @@ async function purgeAllUploadOrphans(dbPool) {
   walkAllFilesSync(UPLOADS_ROOT, function (absFile) {
     const n = normalizeAbs(absFile);
     if (!n || (n !== rootR && !n.startsWith(rootR + path.sep))) return;
-    if (refNorm.has(n) || isProtectedMyDrawingsUpload(absFile)) return;
+    if (refNorm.has(n) || isProtectedMyDrawingsUpload(absFile) || isHealthProbeUpload(absFile)) return;
     try {
       const st = fs.statSync(absFile);
       if (!st.isFile()) return;

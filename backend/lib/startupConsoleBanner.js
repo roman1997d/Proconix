@@ -19,6 +19,7 @@ function getStartupConsoleBannerLines(opts) {
     `  Proconix:     http://${HOST}:${PORT}/`,
     `  Register:     http://${HOST}:${PORT}/register_company.html`,
     `  API health:   http://${HOST}:${PORT}/api/health`,
+    `  Health full:  http://${HOST}:${PORT}/api/health/full`,
     `  API create:   POST http://${HOST}:${PORT}/api/companies/create`,
     '-------------------------------------------',
   ];

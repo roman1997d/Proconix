@@ -106,11 +106,12 @@ function checkHttpHealth() {
             });
             return;
           }
+          const dbOk = json && json.database && json.database.status === 'ok';
           const alive =
             res.statusCode === 200 &&
             json &&
             json.status === 'ok' &&
-            json.connected === true;
+            (json.connected === true || dbOk === true);
           resolve({
             ok: alive,
             url,
