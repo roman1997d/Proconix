@@ -13,7 +13,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
   <link href="css/styles.css" rel="stylesheet">
-  <link href="css/proconix_administration.css" rel="stylesheet">
+  <link href="css/proconix_administration.css?v=health-monitor-1" rel="stylesheet">
 </head>
 <body class="px-admin-app-body">
   <header class="px-admin-topbar">
@@ -392,11 +392,129 @@
               </div>
             </div>
             <p class="text-white-50 small mb-3">
-              <strong class="text-white-50">Operational</strong> view: API and database reachability, process uptime, host load, Node memory/CPU, request latency chart, and connection pool. For logs, disk usage, slow-query hints, and <code class="text-info">FEATURE_*</code> flags, open <strong>Audit &amp; logs</strong>.
+              Live supervision of Proconix: public health endpoints, PostgreSQL, uploads, My Drawings PDF/image downloads, memory and disk.
+              Auto-refresh every 30 seconds. Red means a user would fail to open a drawing or hit the API. For logs and orphan files, open <strong>Audit &amp; logs</strong>.
             </p>
             <div id="pxAdminSysAlert" class="alert alert-danger d-none" role="alert"></div>
             <div id="pxAdminSysLoading" class="text-white-50 py-3 d-none">Loading system metrics…</div>
             <div id="pxAdminSysContent" class="d-none">
+              <div id="pxAdminHealthMonitor" class="mb-4">
+                <div class="px-admin-health-banner mb-3" id="pxAdminHealthBanner" data-status="unknown">
+                  <div>
+                    <div class="px-admin-health-kicker">Live monitor</div>
+                    <div class="px-admin-health-banner-title" id="pxAdminHealthBannerTitle">Checking…</div>
+                    <div class="small" id="pxAdminHealthBannerSub">Same probes UptimeRobot uses, plus My Drawings file downloads.</div>
+                  </div>
+                  <div class="text-md-end">
+                    <span class="px-admin-health-pill" id="pxAdminHealthBannerPill">—</span>
+                    <div class="small mt-2" id="pxAdminHealthCheckedAt"></div>
+                    <div class="small" id="pxAdminHealthHttpHint"></div>
+                  </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                  <div class="col-sm-6 col-xl-4 col-xxl-2">
+                    <div class="px-admin-stat-card px-admin-health-card h-100" id="pxAdminHealthCardApi" data-status="unknown">
+                      <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="text-white-50 small">API</div>
+                        <span class="px-admin-health-pill px-admin-health-pill-sm" id="pxAdminHealthApiPill">—</span>
+                      </div>
+                      <div class="px-admin-health-card-value" id="pxAdminHealthApiValue">—</div>
+                      <div class="small text-white-50" id="pxAdminHealthApiDetail">Express + modules</div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6 col-xl-4 col-xxl-2">
+                    <div class="px-admin-stat-card px-admin-health-card h-100" id="pxAdminHealthCardDatabase" data-status="unknown">
+                      <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="text-white-50 small">Database</div>
+                        <span class="px-admin-health-pill px-admin-health-pill-sm" id="pxAdminHealthDbPill">—</span>
+                      </div>
+                      <div class="px-admin-health-card-value" id="pxAdminHealthDbValue">—</div>
+                      <div class="small text-white-50" id="pxAdminHealthDbDetail">PostgreSQL SELECT 1</div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6 col-xl-4 col-xxl-2">
+                    <div class="px-admin-stat-card px-admin-health-card h-100" id="pxAdminHealthCardStorage" data-status="unknown">
+                      <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="text-white-50 small">Storage</div>
+                        <span class="px-admin-health-pill px-admin-health-pill-sm" id="pxAdminHealthStoragePill">—</span>
+                      </div>
+                      <div class="px-admin-health-card-value" id="pxAdminHealthStorageValue">—</div>
+                      <div class="small text-white-50" id="pxAdminHealthStorageDetail">uploads read / write</div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6 col-xl-4 col-xxl-2">
+                    <div class="px-admin-stat-card px-admin-health-card h-100" id="pxAdminHealthCardDrawings" data-status="unknown">
+                      <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="text-white-50 small">Drawings</div>
+                        <span class="px-admin-health-pill px-admin-health-pill-sm" id="pxAdminHealthDrawingsPill">—</span>
+                      </div>
+                      <div class="px-admin-health-card-value" id="pxAdminHealthDrawingsValue">—</div>
+                      <div class="small text-white-50" id="pxAdminHealthDrawingsDetail">PDF + wall-type images</div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6 col-xl-4 col-xxl-2">
+                    <div class="px-admin-stat-card px-admin-health-card h-100" id="pxAdminHealthCardMemory" data-status="unknown">
+                      <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="text-white-50 small">Memory</div>
+                        <span class="px-admin-health-pill px-admin-health-pill-sm" id="pxAdminHealthMemoryPill">—</span>
+                      </div>
+                      <div class="px-admin-health-card-value" id="pxAdminHealthMemoryValue">—</div>
+                      <div class="small text-white-50" id="pxAdminHealthMemoryDetail">Node RSS vs 800 MB</div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6 col-xl-4 col-xxl-2">
+                    <div class="px-admin-stat-card px-admin-health-card h-100" id="pxAdminHealthCardDisk" data-status="unknown">
+                      <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="text-white-50 small">Disk</div>
+                        <span class="px-admin-health-pill px-admin-health-pill-sm" id="pxAdminHealthDiskPill">—</span>
+                      </div>
+                      <div class="px-admin-health-card-value" id="pxAdminHealthDiskValue">—</div>
+                      <div class="small text-white-50" id="pxAdminHealthDiskDetail">Volume for uploads</div>
+                    </div>
+                  </div>
+                </div>
+
+                <h3 class="h6 text-white mb-2">My Drawings file pipeline</h3>
+                <p class="small text-white-50 mb-2">
+                  Canary PDF and JPEG requested through the same download routes as the PWA and the native app. This is not a customer file.
+                </p>
+                <div class="table-responsive mb-4">
+                  <table class="table table-dark table-sm px-admin-data-table mb-0">
+                    <thead>
+                      <tr>
+                        <th scope="col">Check</th>
+                        <th scope="col">Route</th>
+                        <th scope="col">HTTP</th>
+                        <th scope="col">Body</th>
+                        <th scope="col">Latency</th>
+                      </tr>
+                    </thead>
+                    <tbody id="pxAdminHealthDrawingsBody"></tbody>
+                  </table>
+                </div>
+
+                <h3 class="h6 text-white mb-2">UptimeRobot monitors</h3>
+                <p class="small text-white-50 mb-2">
+                  HTTP(s) monitors, alert when status is not 200. No auth. These URLs never return user data or secrets.
+                </p>
+                <div class="table-responsive mb-4">
+                  <table class="table table-dark table-sm px-admin-data-table mb-0">
+                    <thead>
+                      <tr>
+                        <th scope="col">Monitor</th>
+                        <th scope="col">URL</th>
+                        <th scope="col">OK / fail</th>
+                        <th scope="col">Checks</th>
+                        <th scope="col"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="pxAdminHealthMonitorsBody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <h3 class="h6 text-white mb-2">Process snapshot</h3>
               <div class="row g-3 mb-3">
                 <div class="col-sm-6 col-xl-3">
                   <div class="px-admin-stat-card h-100">
@@ -1425,6 +1543,6 @@
       }
     })();
   </script>
-  <script src="js/proconix_administration_dashboard.js"></script>
+  <script src="js/proconix_administration_dashboard.js?v=health-monitor-1"></script>
 </body>
 </html>

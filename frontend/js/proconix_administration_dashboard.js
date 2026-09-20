@@ -968,6 +968,275 @@
       });
   }
 
+  function healthStatusLabel(status) {
+    if (status === 'ok') return 'OK';
+    if (status === 'degraded') return 'Degraded';
+    if (status === 'error') return 'Error';
+    return '—';
+  }
+
+  function setHealthPill(el, status) {
+    if (!el) return;
+    el.textContent = healthStatusLabel(status);
+    el.setAttribute('data-status', status || 'unknown');
+  }
+
+  function setHealthCard(cardId, status) {
+    var card = document.getElementById(cardId);
+    if (card) card.setAttribute('data-status', status || 'unknown');
+  }
+
+  function formatHealthBytes(n) {
+    var b = Number(n || 0);
+    if (b < 1024) return b + ' B';
+    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+    return (b / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function drawingRowHtml(label, route, probe) {
+    var p = probe || {};
+    var status = p.status || 'error';
+    var http = p.http_status != null ? String(p.http_status) : '—';
+    var body = '—';
+    if (p.pdf) body = 'PDF · ' + formatHealthBytes(p.bytes);
+    else if (p.jpeg) body = 'JPEG · ' + formatHealthBytes(p.bytes);
+    else if (p.code) body = String(p.code);
+    else if (p.bytes != null) body = formatHealthBytes(p.bytes);
+    var lat = p.latency_ms != null ? String(p.latency_ms) + ' ms' : '—';
+    var tone = status === 'ok' ? 'text-success' : status === 'degraded' ? 'text-warning' : 'text-danger';
+    return (
+      '<tr>' +
+      '<td><span class="px-admin-health-pill px-admin-health-pill-sm" data-status="' +
+      cellText(status) +
+      '">' +
+      cellText(healthStatusLabel(status)) +
+      '</span> <span class="ms-1">' +
+      cellText(label) +
+      '</span></td>' +
+      '<td class="font-monospace small">' +
+      cellText(route) +
+      '</td>' +
+      '<td class="' +
+      tone +
+      '">' +
+      cellText(http) +
+      '</td>' +
+      '<td class="small">' +
+      cellText(body) +
+      '</td>' +
+      '<td class="text-nowrap small text-white-50">' +
+      cellText(lat) +
+      '</td>' +
+      '</tr>'
+    );
+  }
+
+  function renderLiveHealth(d) {
+    var health = d && d.live_health;
+    var banner = document.getElementById('pxAdminHealthBanner');
+    var title = document.getElementById('pxAdminHealthBannerTitle');
+    var sub = document.getElementById('pxAdminHealthBannerSub');
+    var pill = document.getElementById('pxAdminHealthBannerPill');
+    var checkedEl = document.getElementById('pxAdminHealthCheckedAt');
+    var httpHint = document.getElementById('pxAdminHealthHttpHint');
+    if (!health) {
+      if (banner) banner.setAttribute('data-status', 'degraded');
+      if (title) title.textContent = 'Live probes unavailable';
+      if (sub) {
+        sub.textContent = 'Restart Node after git pull so this panel can run /api/health checks.';
+      }
+      setHealthPill(pill, 'degraded');
+      return;
+    }
+    var overall = health.status || 'error';
+    if (banner) banner.setAttribute('data-status', overall);
+    if (title) {
+      title.textContent =
+        overall === 'ok'
+          ? 'All systems operational'
+          : overall === 'degraded'
+            ? 'Degraded — still serving, with warnings'
+            : 'Incident — a critical component is down';
+    }
+    if (sub) {
+      sub.textContent =
+        overall === 'ok'
+          ? 'API, database, storage, My Drawings downloads, memory and disk all passed.'
+          : 'Open the cards below to see which probe failed. Users cannot view drawings if Drawings is Error.';
+    }
+    setHealthPill(pill, overall);
+    if (checkedEl && health.checked_at) {
+      var when = new Date(health.checked_at);
+      checkedEl.textContent = Number.isNaN(when.getTime())
+        ? String(health.checked_at)
+        : 'Checked ' + when.toLocaleString();
+    }
+    if (httpHint) {
+      httpHint.textContent =
+        'Public /api/health would return HTTP ' + String(health.http_status || (overall === 'error' ? 503 : 200));
+    }
+
+    var checks = health.checks || {};
+    var details = health.details || {};
+    var api = details.api || {};
+    var database = details.database || {};
+    var storage = details.storage || {};
+    var drawings = details.drawings || {};
+    var memory = details.memory || {};
+    var disk = details.disk || {};
+
+    function fillCard(cardId, pillId, valueId, detailId, status, value, detail) {
+      setHealthCard(cardId, status);
+      setHealthPill(document.getElementById(pillId), status);
+      var v = document.getElementById(valueId);
+      var dtl = document.getElementById(detailId);
+      if (v) v.textContent = value;
+      if (dtl) dtl.textContent = detail;
+    }
+
+    var moduleFails = [];
+    var mods = api.modules || {};
+    Object.keys(mods).forEach(function (k) {
+      if (mods[k] && mods[k] !== 'ok') moduleFails.push(k);
+    });
+    fillCard(
+      'pxAdminHealthCardApi',
+      'pxAdminHealthApiPill',
+      'pxAdminHealthApiValue',
+      'pxAdminHealthApiDetail',
+      checks.api,
+      healthStatusLabel(checks.api),
+      moduleFails.length ? 'Modules: ' + moduleFails.join(', ') : 'Express + loaded modules'
+    );
+    fillCard(
+      'pxAdminHealthCardDatabase',
+      'pxAdminHealthDbPill',
+      'pxAdminHealthDbValue',
+      'pxAdminHealthDbDetail',
+      checks.database,
+      healthStatusLabel(checks.database),
+      database.latency_ms != null
+        ? 'SELECT 1 · ' + String(database.latency_ms) + ' ms'
+        : database.code
+          ? String(database.code)
+          : 'PostgreSQL'
+    );
+    fillCard(
+      'pxAdminHealthCardStorage',
+      'pxAdminHealthStoragePill',
+      'pxAdminHealthStorageValue',
+      'pxAdminHealthStorageDetail',
+      checks.storage,
+      healthStatusLabel(checks.storage),
+      storage.writable
+        ? 'uploads readable and writable'
+        : storage.readable
+          ? 'readable, write failed'
+          : storage.code
+            ? String(storage.code)
+            : 'uploads probe'
+    );
+    fillCard(
+      'pxAdminHealthCardDrawings',
+      'pxAdminHealthDrawingsPill',
+      'pxAdminHealthDrawingsValue',
+      'pxAdminHealthDrawingsDetail',
+      checks.drawings,
+      healthStatusLabel(checks.drawings),
+      checks.drawings === 'ok'
+        ? 'PWA + app PDF and wall-type images'
+        : 'Download route failed — users cannot open files'
+    );
+    var memLine = 'Node RSS';
+    if (memory.rss_mb != null && memory.limit_mb != null) {
+      memLine = String(memory.rss_mb) + ' / ' + String(memory.limit_mb) + ' MB';
+      if (memory.rss_pct_of_limit != null) memLine += ' (' + String(memory.rss_pct_of_limit) + '%)';
+    }
+    fillCard(
+      'pxAdminHealthCardMemory',
+      'pxAdminHealthMemoryPill',
+      'pxAdminHealthMemoryValue',
+      'pxAdminHealthMemoryDetail',
+      checks.memory,
+      healthStatusLabel(checks.memory),
+      memLine
+    );
+    var diskLine = 'uploads volume';
+    if (disk.percent_used != null) {
+      diskLine = String(disk.percent_used) + '% used';
+      if (disk.free_mb != null) diskLine += ' · ' + String(disk.free_mb) + ' MB free';
+    } else if (disk.code) diskLine = String(disk.code);
+    fillCard(
+      'pxAdminHealthCardDisk',
+      'pxAdminHealthDiskPill',
+      'pxAdminHealthDiskValue',
+      'pxAdminHealthDiskDetail',
+      checks.disk,
+      healthStatusLabel(checks.disk),
+      diskLine
+    );
+
+    var dBody = document.getElementById('pxAdminHealthDrawingsBody');
+    if (dBody) {
+      dBody.innerHTML =
+        drawingRowHtml('Web PDF', '/api/my-drawings/drawings/:id/file', drawings.web) +
+        drawingRowHtml('Mobile PDF', '/api/drawings/:id/file', drawings.mobile) +
+        drawingRowHtml('Web wall-type image', '/api/my-drawings/wall-types/:id/image', drawings.image) +
+        drawingRowHtml('Mobile wall-type image', '/api/wall-types/:id/image', drawings.image_mobile);
+    }
+
+    var mBody = document.getElementById('pxAdminHealthMonitorsBody');
+    if (mBody) {
+      mBody.innerHTML = '';
+      var monitors = health.monitors || [];
+      var origin = window.location.origin || 'https://proconix.uk';
+      monitors.forEach(function (mon) {
+        var tr = document.createElement('tr');
+        var fullUrl = origin + String(mon.path || '');
+        tr.innerHTML =
+          '<td class="text-nowrap">' +
+          cellText(mon.name || '—') +
+          '</td>' +
+          '<td class="font-monospace small"><a class="link-info" href="' +
+          cellText(fullUrl) +
+          '" target="_blank" rel="noopener noreferrer">' +
+          cellText(fullUrl) +
+          '</a></td>' +
+          '<td class="text-nowrap small">HTTP ' +
+          cellText(mon.ok_http) +
+          ' / ' +
+          cellText(mon.fail_http) +
+          '</td>' +
+          '<td class="small text-white-50">' +
+          cellText(mon.checks || '') +
+          '</td>' +
+          '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-info px-admin-health-copy" data-health-url="' +
+          encodeURIComponent(fullUrl) +
+          '">Copy</button></td>';
+        mBody.appendChild(tr);
+      });
+      if (!mBody.__pxBoundCopy) {
+        mBody.__pxBoundCopy = true;
+        mBody.addEventListener('click', function (ev) {
+          var btn = ev.target.closest('.px-admin-health-copy');
+          if (!btn) return;
+          var url = decodeURIComponent(btn.getAttribute('data-health-url') || '');
+          if (!url) return;
+          var done = function () {
+            if (window.pxAdminShowToast) window.pxAdminShowToast('Copied ' + url, 'success');
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(done).catch(function () {
+              window.prompt('Copy this URL', url);
+            });
+          } else {
+            window.prompt('Copy this URL', url);
+          }
+        });
+      }
+    }
+  }
+
   function loadSystemHealthPanel(sess) {
     var loading = document.getElementById('pxAdminSysLoading');
     var auditLoading = document.getElementById('pxAdminAuditLoading');
@@ -1208,6 +1477,7 @@
           return;
         }
         var d = out.data;
+        renderLiveHealth(d);
         var consolePre = document.getElementById('pxAdminAuditConsole');
         if (consolePre) {
           if (d.console_banner && d.console_banner.lines && d.console_banner.lines.length) {

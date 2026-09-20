@@ -276,6 +276,90 @@
   margin: 0.25rem 0;
 }
 
+.px-admin-health-banner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  border-radius: 14px;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.72);
+}
+.px-admin-health-banner[data-status="ok"] {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: linear-gradient(135deg, rgba(22, 101, 52, 0.28), rgba(15, 23, 42, 0.8));
+}
+.px-admin-health-banner[data-status="degraded"] {
+  border-color: rgba(234, 179, 8, 0.5);
+  background: linear-gradient(135deg, rgba(113, 63, 18, 0.35), rgba(15, 23, 42, 0.8));
+}
+.px-admin-health-banner[data-status="error"] {
+  border-color: rgba(239, 68, 68, 0.55);
+  background: linear-gradient(135deg, rgba(127, 29, 29, 0.38), rgba(15, 23, 42, 0.8));
+}
+.px-admin-health-kicker {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.7);
+  margin-bottom: 0.2rem;
+}
+.px-admin-health-banner-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #fff;
+}
+.px-admin-health-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+}
+.px-admin-health-pill-sm {
+  font-size: 0.65rem;
+  padding: 0.12rem 0.5rem;
+}
+.px-admin-health-pill[data-status="ok"],
+.px-admin-health-card[data-status="ok"] .px-admin-health-pill {
+  background: rgba(34, 197, 94, 0.22);
+  color: #86efac;
+}
+.px-admin-health-pill[data-status="degraded"],
+.px-admin-health-card[data-status="degraded"] .px-admin-health-pill {
+  background: rgba(234, 179, 8, 0.22);
+  color: #fde68a;
+}
+.px-admin-health-pill[data-status="error"],
+.px-admin-health-card[data-status="error"] .px-admin-health-pill {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fecaca;
+}
+.px-admin-health-card[data-status="ok"] {
+  border-color: rgba(34, 197, 94, 0.28);
+}
+.px-admin-health-card[data-status="degraded"] {
+  border-color: rgba(234, 179, 8, 0.35);
+}
+.px-admin-health-card[data-status="error"] {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.px-admin-health-card-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fff;
+  margin: 0.45rem 0 0.2rem;
+}
+.px-admin-health-copy {
+  white-space: nowrap;
+}
+
 .px-admin-dev-banner {
   background: rgba(14, 165, 233, 0.15) !important;
   border: 1px solid rgba(14, 165, 233, 0.35);

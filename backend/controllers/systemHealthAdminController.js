@@ -5,6 +5,11 @@
 const os = require('os');
 const { pool } = require('../db/pool');
 const { getProjectDiskUsageCached } = require('../lib/projectDiskUsage');
+const {
+  runAllChecks,
+  worstStatus,
+  isCriticalError,
+} = require('../lib/healthChecks');
 
 /** For approximate Node CPU % between consecutive GET /system-health calls. */
 let _nodeCpuMark = null;
@@ -61,6 +66,141 @@ function buildNodeProcessMetrics() {
 const { getBuckets } = require('../lib/apiMetricsStore');
 const { getStartupConsoleBannerLines } = require('../lib/startupConsoleBanner');
 
+function publicProbeSlice(probe) {
+  if (!probe || typeof probe !== 'object') return { status: 'error' };
+  const out = { status: probe.status || 'error' };
+  if (probe.http_status != null) out.http_status = probe.http_status;
+  if (probe.bytes != null) out.bytes = probe.bytes;
+  if (probe.latency_ms != null) out.latency_ms = probe.latency_ms;
+  if (probe.pdf != null) out.pdf = !!probe.pdf;
+  if (probe.jpeg != null) out.jpeg = !!probe.jpeg;
+  if (probe.code) out.code = String(probe.code);
+  return out;
+}
+
+function buildLiveHealth(checks) {
+  if (!checks) {
+    return {
+      status: 'error',
+      http_status: 503,
+      checked_at: new Date().toISOString(),
+      checks: {
+        api: 'error',
+        database: 'error',
+        storage: 'error',
+        drawings: 'error',
+        memory: 'error',
+        disk: 'error',
+      },
+      details: {},
+      monitors: healthMonitorCatalog(),
+    };
+  }
+  const mix = worstStatus([
+    checks.api && checks.api.status,
+    checks.database && checks.database.status,
+    checks.storage && checks.storage.status,
+    checks.drawings && checks.drawings.status,
+    checks.memory && checks.memory.status,
+    checks.disk && checks.disk.status,
+  ]);
+  const critical = isCriticalError(checks);
+  const drawings = checks.drawings || {};
+  return {
+    status: mix,
+    http_status: critical || mix === 'error' ? 503 : 200,
+    checked_at: new Date().toISOString(),
+    checks: {
+      api: (checks.api && checks.api.status) || 'error',
+      database: (checks.database && checks.database.status) || 'error',
+      storage: (checks.storage && checks.storage.status) || 'error',
+      drawings: drawings.status || 'error',
+      memory: (checks.memory && checks.memory.status) || 'error',
+      disk: (checks.disk && checks.disk.status) || 'error',
+    },
+    details: {
+      api: {
+        status: checks.api && checks.api.status,
+        uptime_seconds: checks.api && checks.api.uptime_seconds,
+        node: checks.api && checks.api.node,
+        modules: (checks.api && checks.api.modules) || {},
+      },
+      database: {
+        status: checks.database && checks.database.status,
+        latency_ms: checks.database && checks.database.latency_ms,
+        code: checks.database && checks.database.code,
+      },
+      storage: {
+        status: checks.storage && checks.storage.status,
+        readable: !!(checks.storage && checks.storage.readable),
+        writable: !!(checks.storage && checks.storage.writable),
+        code: checks.storage && checks.storage.code,
+      },
+      drawings: {
+        status: drawings.status,
+        web: publicProbeSlice(drawings.web),
+        mobile: publicProbeSlice(drawings.mobile),
+        image: publicProbeSlice(drawings.image),
+        image_mobile: publicProbeSlice(drawings.image_mobile),
+      },
+      memory: {
+        status: checks.memory && checks.memory.status,
+        rss_mb: checks.memory && checks.memory.rss_mb,
+        heap_used_mb: checks.memory && checks.memory.heap_used_mb,
+        limit_mb: checks.memory && checks.memory.limit_mb,
+        rss_pct_of_limit: checks.memory && checks.memory.rss_pct_of_limit,
+      },
+      disk: {
+        status: checks.disk && checks.disk.status,
+        percent_used: checks.disk && checks.disk.percent_used,
+        free_mb: checks.disk && checks.disk.free_mb,
+        code: checks.disk && checks.disk.code,
+      },
+    },
+    monitors: healthMonitorCatalog(),
+  };
+}
+
+function healthMonitorCatalog() {
+  return [
+    {
+      name: 'Overall',
+      path: '/api/health',
+      ok_http: 200,
+      fail_http: 503,
+      checks: 'API, database, storage, My Drawings downloads, memory, disk',
+    },
+    {
+      name: 'API',
+      path: '/api/health/api',
+      ok_http: 200,
+      fail_http: 503,
+      checks: 'Express modules and My Drawings download routes',
+    },
+    {
+      name: 'Storage',
+      path: '/api/health/storage',
+      ok_http: 200,
+      fail_http: 503,
+      checks: 'Uploads read/write plus My Drawings file pipeline',
+    },
+    {
+      name: 'My Drawings',
+      path: '/api/health/mydrawings',
+      ok_http: 200,
+      fail_http: 503,
+      checks: 'Real PDF and image download through the same APIs users hit',
+    },
+    {
+      name: 'Full',
+      path: '/api/health/full',
+      ok_http: 200,
+      fail_http: 503,
+      checks: 'All components in one JSON payload',
+    },
+  ];
+}
+
 function collectFeatureFlags() {
   const out = [];
   const envKeys = Object.keys(process.env).sort();
@@ -99,6 +239,13 @@ function collectFeatureFlags() {
  * GET /api/platform-admin/system-health
  */
 async function getSystemHealth(req, res) {
+  const healthPromise = runAllChecks()
+    .then((checks) => ({ checks: checks, error: null }))
+    .catch((e) => ({
+      checks: null,
+      error: e && e.message ? String(e.message) : 'health failed',
+    }));
+
   const uptimeSeconds = Math.round(process.uptime());
 
   let dbOk = false;
@@ -231,10 +378,15 @@ async function getSystemHealth(req, res) {
 
   const metricsBuckets = getBuckets();
 
+  const healthResult = await healthPromise;
+  const liveHealth = buildLiveHealth(healthResult.checks);
+  if (healthResult.error) liveHealth.error = 'probe_failed';
+
   return res.status(200).json({
     success: true,
     uptime_seconds: uptimeSeconds,
-    api: { ok: true },
+    live_health: liveHealth,
+    api: { ok: !!(liveHealth.checks && liveHealth.checks.api === 'ok') },
     database: {
       ok: dbOk,
       latency_ms: dbLatencyMs,
