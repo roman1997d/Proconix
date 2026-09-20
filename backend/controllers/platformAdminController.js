@@ -2216,7 +2216,7 @@ async function scanBackendUploadOrphans(req, res) {
       success: true,
       ...out,
       note:
-        'These files are not referenced by the scanned tables (uploads, issues, work logs, documents, QA, chat, drawings, tenant cloud indexes). Custom or future references may be missing — verify before deleting.',
+        'These files are not referenced by the scanned tables (uploads, issues, work logs, documents, QA, chat, My Drawings, drawing versions, tenant cloud indexes). Custom or future references may be missing — verify before deleting.',
     });
   } catch (err) {
     console.error('platformAdmin scanBackendUploadOrphans error:', err);

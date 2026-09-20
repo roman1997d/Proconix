@@ -184,11 +184,11 @@ function locateStoredDrawingFile(item) {
   }
   const number = String(item.number || '').trim();
   if (number.length >= 4) {
-    const hgDir = path.join(__dirname, '..', '..', 'HG Drawings');
+    const hgDir = hgDrawingsDir();
     const byNumber =
       findFileContaining(path.join(UPLOAD_DIR, String(ws || '')), number, 4) ||
       findFileContaining(UPLOAD_DIR, number, 4) ||
-      findFileContaining(hgDir, number, 1);
+      findFileContaining(hgDir, number, 2);
     if (isFile(byNumber)) return byNumber;
   }
   return null;
@@ -221,9 +221,20 @@ function isAllowedDrawingAbs(abs) {
   const resolved = path.resolve(abs);
   const roots = [
     path.resolve(UPLOAD_DIR),
-    path.resolve(__dirname, '..', '..', 'HG Drawings'),
+    hgDrawingsDir(),
   ];
   return roots.some((root) => resolved === root || resolved.startsWith(root + path.sep));
+}
+
+function hgDrawingsDir() {
+  return path.resolve(__dirname, '..', '..', 'HG Drawings');
+}
+
+function isUnderDir(abs, dir) {
+  if (!abs || !dir) return false;
+  const resolved = path.resolve(abs);
+  const root = path.resolve(dir);
+  return resolved === root || resolved.startsWith(root + path.sep);
 }
 
 function copyDrawingIntoTenant(item, abs) {
@@ -486,6 +497,7 @@ async function ensureSchemaInner() {
   await seedDefaultProjects();
   await migrateSitesOntoProjects();
   await migrateStoredDrawingsToTenantDirs();
+  await restoreMissingDrawingsFromHg();
   await clearAutoSeededWallTypesOnce();
   await importNorfolkMedlockSpecsOnce();
 }
@@ -834,21 +846,53 @@ async function migrateStoredDrawingsToTenantDirs() {
       }
       continue;
     }
+    const keepSource = isUnderDir(abs, hgDrawingsDir()) || !isUnderDir(abs, UPLOAD_DIR);
     try {
-      fs.renameSync(abs, destAbs);
-    } catch (_) {
-      try {
-        fs.copyFileSync(abs, destAbs);
-        fs.unlinkSync(abs);
-      } catch (err) {
-        console.warn('myDrawings migrate file failed:', abs, err.message || err);
-        continue;
+      if (keepSource) {
+        if (!isFile(destAbs)) fs.copyFileSync(abs, destAbs);
+      } else {
+        try {
+          fs.renameSync(abs, destAbs);
+        } catch (_) {
+          fs.copyFileSync(abs, destAbs);
+          fs.unlinkSync(abs);
+        }
       }
+    } catch (err) {
+      console.warn('myDrawings migrate file failed:', abs, err.message || err);
+      continue;
     }
+    if (!isFile(destAbs)) continue;
     await pool.query(
       'UPDATE my_drawings_item SET relative_path = $1, stored_filename = $2 WHERE id = $3',
       [relativeFromAbs(destAbs), destName, row.id]
     );
+  }
+}
+
+async function restoreMissingDrawingsFromHg() {
+  const hgDir = hgDrawingsDir();
+  let hgOk = false;
+  try { hgOk = fs.existsSync(hgDir); } catch (_) {}
+  if (!hgOk) return;
+  const items = await pool.query(
+    `SELECT id, number, workspace_id, project_id, relative_path, stored_filename
+     FROM my_drawings_item`
+  );
+  let restored = 0;
+  for (const row of items.rows) {
+    if (locateStoredDrawingFile(row)) continue;
+    const number = String(row.number || '').trim();
+    if (number.length < 4) continue;
+    const found = findFileContaining(hgDir, number, 2);
+    if (!isFile(found)) continue;
+    const dest = copyDrawingIntoTenant(row, found);
+    if (!isFile(dest) || isUnderDir(dest, hgDir)) continue;
+    await healDrawingPath(row, dest);
+    restored += 1;
+  }
+  if (restored) {
+    console.warn('myDrawings restored', restored, 'missing PDF(s) from HG Drawings');
   }
 }
 

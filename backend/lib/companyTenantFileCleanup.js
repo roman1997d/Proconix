@@ -435,6 +435,38 @@ async function collectGlobalDbReferencedUploadAbsolutePaths(dbClient) {
     addRelativeUploadPathToSet(set, `${folder}/cloud/${stored}`);
   });
 
+  const myDrawings = await safeQueryRows(
+    dbClient,
+    `SELECT workspace_id, project_id, relative_path, stored_filename
+     FROM my_drawings_item
+     WHERE relative_path IS NOT NULL OR stored_filename IS NOT NULL`,
+    []
+  );
+  myDrawings.forEach(function (r) {
+    if (r.relative_path) addRelativeUploadPathToSet(set, r.relative_path);
+    const name = r.stored_filename != null ? String(r.stored_filename).trim() : '';
+    if (!name || name.includes('/') || name.includes('..')) return;
+    const ws = Number(r.workspace_id);
+    const pid = Number(r.project_id);
+    if (Number.isInteger(ws) && ws > 0) {
+      addRelativeUploadPathToSet(set, `mydrawings/${ws}/${name}`);
+      if (Number.isInteger(pid) && pid > 0) {
+        addRelativeUploadPathToSet(set, `mydrawings/${ws}/${pid}/${name}`);
+      }
+    }
+    addRelativeUploadPathToSet(set, `mydrawings/${name}`);
+  });
+
+  const wallTypeImages = await safeQueryRows(
+    dbClient,
+    `SELECT detail_image_path FROM my_drawings_wall_type
+     WHERE detail_image_path IS NOT NULL AND TRIM(detail_image_path) <> ''`,
+    []
+  );
+  wallTypeImages.forEach(function (r) {
+    addRelativeUploadPathToSet(set, r.detail_image_path);
+  });
+
   return set;
 }
 
