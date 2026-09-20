@@ -2355,6 +2355,14 @@
       actTd.className = 'text-end';
       var wrap = document.createElement('div');
       wrap.className = 'd-inline-flex flex-wrap justify-content-end gap-1';
+      var againBtn = document.createElement('button');
+      againBtn.type = 'button';
+      againBtn.className = 'btn btn-outline-info btn-sm';
+      againBtn.textContent = 'Send another email';
+      againBtn.addEventListener('click', function () {
+        fillAnotherEmail(item);
+      });
+      wrap.appendChild(againBtn);
       if (item.status === 'sent') {
         var posBtn = document.createElement('button');
         posBtn.type = 'button';
@@ -2407,6 +2415,49 @@
       tr.appendChild(actTd);
       body.appendChild(tr);
     });
+  }
+
+  function fillAnotherEmail(item) {
+    hideContentEmailAlert();
+    if (!item || !item.to) return;
+    if (item.template === 'custom') {
+      var customTo = document.getElementById('pxContentEmailTo');
+      var customSubj = document.getElementById('pxContentEmailSubject');
+      var customBody = document.getElementById('pxContentEmailBody');
+      if (customTo) customTo.value = item.to;
+      if (customSubj) {
+        var subject = item.subject || '';
+        customSubj.value = subject && !/^re:\s/i.test(subject) ? 'Re: ' + subject : subject;
+      }
+      var customForm = document.getElementById('pxContentClientEmailForm');
+      if (customForm && customForm.scrollIntoView) {
+        customForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      if (customBody) customBody.focus();
+      showContentEmailAlert('Form filled for a follow-up. Write the message and send.', 'success');
+      return;
+    }
+    var firstEl = document.getElementById('pxMdOutreachFirst');
+    var lastEl = document.getElementById('pxMdOutreachLast');
+    var toEl = document.getElementById('pxMdOutreachTo');
+    var whenEl = document.getElementById('pxMdOutreachWhen');
+    var form = document.getElementById('pxMdOutreachForm');
+    if (firstEl) firstEl.value = item.firstName || '';
+    if (lastEl) lastEl.value = item.lastName || '';
+    if (toEl) toEl.value = item.to;
+    var tplValue = item.template === 'familiar' ? 'familiar' : 'problem';
+    var radio = form && form.querySelector('input[name="pxMdOutreachTemplate"][value="' + tplValue + '"]');
+    if (radio) radio.checked = true;
+    if (whenEl) {
+      var now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      whenEl.value = now.toISOString().slice(0, 16);
+    }
+    if (form && form.scrollIntoView) {
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    if (whenEl) whenEl.focus();
+    showContentEmailAlert('Form filled for a follow-up. Check the template and send time, then send.', 'success');
   }
 
   function emailHistoryQuery() {
