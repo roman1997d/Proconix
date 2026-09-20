@@ -21,6 +21,7 @@ const {
   updateEmailReply,
   cancelScheduledEmail,
   recordCustomClientEmail,
+  upsertContactNote,
 } = require('../lib/platformEmailHistory');
 const { countCompanySeats } = require('../utils/companyUserSeats');
 const { runCreateDemoRecords } = require('../lib/createDemoRecords');
@@ -1465,6 +1466,27 @@ async function patchEmailHistory(req, res) {
 }
 
 /**
+ * PATCH /api/platform-admin/email-history/contact-note
+ * Body: { to, note }
+ */
+async function patchEmailContactNote(req, res) {
+  try {
+    const raw = req.body || {};
+    const result = await upsertContactNote({
+      to: raw.to,
+      note: raw.note,
+    });
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    if (err && err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    console.error('platformAdmin patchEmailContactNote error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to save notes.' });
+  }
+}
+
+/**
  * POST /api/platform-admin/email-history/:id/cancel
  */
 async function cancelEmailHistory(req, res) {
@@ -2329,6 +2351,7 @@ module.exports = {
   sendMyDrawingsOutreach,
   getEmailHistory,
   patchEmailHistory,
+  patchEmailContactNote,
   cancelEmailHistory,
   createDemoRecords,
   sendDemoLoginEmail,

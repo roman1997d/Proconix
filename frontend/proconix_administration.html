@@ -978,6 +978,32 @@
     </main>
   </div>
 
+  <div class="modal fade" id="pxEmailContactNoteModal" tabindex="-1" aria-labelledby="pxEmailContactNoteTitle" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content px-admin-modal-content">
+        <div class="modal-header border-secondary">
+          <h2 class="modal-title h5" id="pxEmailContactNoteTitle">Notes</h2>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-white-50 small mb-2" id="pxEmailContactNoteWho"></p>
+          <label class="form-label text-white-50 small mb-1" for="pxEmailContactNoteText">Notes for this contact</label>
+          <textarea
+            class="form-control form-control-sm bg-dark text-white border-secondary"
+            id="pxEmailContactNoteText"
+            rows="8"
+            maxlength="4000"
+            placeholder="Called on Monday, asked for a demo next week…"
+          ></textarea>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary btn-sm" id="pxEmailContactNoteSave">Save notes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Platform user (manager / operative) edit modal -->
   <div class="modal fade" id="pxAdminPuModal" tabindex="-1" aria-labelledby="pxAdminPuModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">

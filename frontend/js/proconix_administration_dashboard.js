@@ -2209,6 +2209,8 @@
   var emailHistoryFilter = 'all';
   var emailHistorySearchTimer = null;
   var emailHistoryItems = [];
+  var contactNoteEmail = '';
+  var contactNoteModal = null;
 
   function fmtEmailWhen(iso) {
     if (!iso) return '—';
@@ -2297,6 +2299,25 @@
       mailEl.className = 'font-monospace small text-white-50';
       mailEl.textContent = item.to || '';
       contactTd.appendChild(mailEl);
+      var contactActions = document.createElement('div');
+      contactActions.className = 'px-email-contact-actions';
+      var notesBtn = document.createElement('button');
+      notesBtn.type = 'button';
+      notesBtn.className = 'btn btn-outline-light btn-sm';
+      notesBtn.textContent = 'Notes';
+      notesBtn.addEventListener('click', function () {
+        openContactNotes(item);
+      });
+      contactActions.appendChild(notesBtn);
+      contactTd.appendChild(contactActions);
+      if (item.contactNote) {
+        var notePreview = document.createElement('span');
+        notePreview.className = 'px-email-note';
+        notePreview.textContent = item.contactNote.length > 90
+          ? item.contactNote.slice(0, 90) + '…'
+          : item.contactNote;
+        contactTd.appendChild(notePreview);
+      }
       tr.appendChild(contactTd);
 
       var tplTd = document.createElement('td');
@@ -2343,12 +2364,6 @@
         dash.textContent = '—';
         replyTd.appendChild(dash);
       }
-      if (item.replyNote) {
-        var note = document.createElement('span');
-        note.className = 'px-email-note';
-        note.textContent = item.replyNote;
-        replyTd.appendChild(note);
-      }
       tr.appendChild(replyTd);
 
       var actTd = document.createElement('td');
@@ -2390,16 +2405,6 @@
           });
           wrap.appendChild(clearBtn);
         }
-        var noteBtn = document.createElement('button');
-        noteBtn.type = 'button';
-        noteBtn.className = 'btn btn-outline-light btn-sm';
-        noteBtn.textContent = 'Note';
-        noteBtn.addEventListener('click', function () {
-          var next = window.prompt('Reply note', item.replyNote || '');
-          if (next == null) return;
-          patchEmailHistoryRow(item.id, item.replyStatus || 'none', next);
-        });
-        wrap.appendChild(noteBtn);
       } else if (item.status === 'pending') {
         var cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
@@ -2415,6 +2420,66 @@
       tr.appendChild(actTd);
       body.appendChild(tr);
     });
+  }
+
+  function getContactNoteModal() {
+    var el = document.getElementById('pxEmailContactNoteModal');
+    if (!el || !window.bootstrap || !window.bootstrap.Modal) return null;
+    if (!contactNoteModal) contactNoteModal = window.bootstrap.Modal.getOrCreateInstance(el);
+    return contactNoteModal;
+  }
+
+  function openContactNotes(item) {
+    if (!item || !item.to) return;
+    contactNoteEmail = item.to;
+    var who = document.getElementById('pxEmailContactNoteWho');
+    var text = document.getElementById('pxEmailContactNoteText');
+    if (who) who.textContent = (item.name ? item.name + ' · ' : '') + item.to;
+    if (text) text.value = item.contactNote || '';
+    var modal = getContactNoteModal();
+    if (modal) modal.show();
+    else if (text) text.focus();
+  }
+
+  function saveContactNotes() {
+    var text = document.getElementById('pxEmailContactNoteText');
+    if (!contactNoteEmail) return;
+    fetch('/api/platform-admin/email-history/contact-note', {
+      method: 'PATCH',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        to: contactNoteEmail,
+        note: text ? text.value : '',
+      }),
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (out.status === 401) {
+          clearSession();
+          window.location.replace(LOGIN_URL);
+          return;
+        }
+        if (out.status !== 200 || !out.data || !out.data.success) {
+          showEmailHistoryAlert((out.data && out.data.message) || 'Could not save notes.', 'error');
+          return;
+        }
+        var modal = getContactNoteModal();
+        if (modal) modal.hide();
+        loadEmailHistory();
+      })
+      .catch(function () {
+        showEmailHistoryAlert('Network error while saving notes.', 'error');
+      });
+  }
+
+  var contactNoteSave = document.getElementById('pxEmailContactNoteSave');
+  if (contactNoteSave) {
+    contactNoteSave.addEventListener('click', saveContactNotes);
   }
 
   function fillAnotherEmail(item) {
