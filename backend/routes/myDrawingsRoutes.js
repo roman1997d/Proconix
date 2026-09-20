@@ -43,8 +43,10 @@ router.post('/access-code', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.u
 router.get('/sites', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.listSites);
 router.post('/sites', requireMyDrawingsPin, requireMyDrawingsCompanyAdmin, ctrl.addSite);
 router.put('/sites/:id', requireMyDrawingsPin, requireMyDrawingsCompanyAdmin, ctrl.renameSite);
+router.put('/sites/:id/locations', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.updateSiteLocations);
 router.delete('/sites/:id', requireMyDrawingsPin, requireMyDrawingsCompanyAdmin, ctrl.deleteSite);
 router.post('/devices/register', requireMyDrawingsPin, ctrl.registerDevice);
+router.delete('/account', requireMyDrawingsPin, ctrl.deleteMyAccount);
 
 router.post('/categories', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.addCategory);
 router.post('/categories/rename', requireMyDrawingsPin, requireMyDrawingsAdmin, ctrl.renameCategory);

@@ -9,7 +9,8 @@
   var DB_NAME = 'proconix-mydrawings';
   var DB_VER = 2;
   var PDFJS_WORKER = '/mydrawings/lib/pdf.worker.min.js';
-  var FLOORS = [
+  var MAX_FLOOR_COUNT = 80;
+  var DEFAULT_LOCATIONS = [
     { id: 'ground', label: 'Ground Floor' },
     { id: '1', label: 'Floor 1' },
     { id: '2', label: 'Floor 2' },
@@ -68,7 +69,13 @@
     siteId: '',
     siteName: '',
     siteCount: 0,
-    projectMode: 'single'
+    projectMode: 'single',
+    locations: DEFAULT_LOCATIONS.slice(),
+    occupiedLocations: [],
+    siteExtraDraft: [],
+    editingSiteLocationsId: '',
+    floorQuery: '',
+    manageLocationIds: []
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -123,6 +130,76 @@
       if (state.drawings[i].id === id) return state.drawings[i];
     }
     return null;
+  }
+
+  function slugLocation(label) {
+    return String(label || '')
+      .trim()
+      .toLowerCase()
+      .replace(/['’]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48);
+  }
+
+  function buildSiteLocations(floorCount, extraLabels) {
+    var n = parseInt(floorCount, 10);
+    if (!n || n < 1) n = 5;
+    if (n > MAX_FLOOR_COUNT) n = MAX_FLOOR_COUNT;
+    var list = [{ id: 'ground', label: 'Ground Floor' }];
+    var i;
+    for (i = 1; i <= n; i++) list.push({ id: String(i), label: 'Floor ' + i });
+    (extraLabels || []).forEach(function (label) {
+      var text = String(label || '').replace(/\s+/g, ' ').trim();
+      var id = slugLocation(text);
+      if (!text || !id || id === 'ground' || /^\d+$/.test(id)) return;
+      list.push({ id: id, label: text });
+    });
+    return list;
+  }
+
+  function siteLocations() {
+    return (state.locations && state.locations.length) ? state.locations : DEFAULT_LOCATIONS;
+  }
+
+  function occupiedSiteLocations() {
+    if (state.occupiedLocations && state.occupiedLocations.length) return state.occupiedLocations;
+    var byId = {};
+    siteLocations().forEach(function (loc) { byId[loc.id] = loc; });
+    var seen = {};
+    var out = [];
+    (state.drawings || []).forEach(function (d) {
+      (d.floors || []).forEach(function (id) {
+        var key = String(id || '');
+        if (!key || seen[key]) return;
+        seen[key] = true;
+        out.push(byId[key] || {
+          id: key,
+          label: key === 'ground' ? 'Ground Floor' : (/^\d+$/.test(key) ? 'Floor ' + key : key)
+        });
+      });
+    });
+    out.sort(function (a, b) {
+      if (a.id === 'ground') return -1;
+      if (b.id === 'ground') return 1;
+      var an = /^\d+$/.test(a.id) ? parseInt(a.id, 10) : null;
+      var bn = /^\d+$/.test(b.id) ? parseInt(b.id, 10) : null;
+      if (an != null && bn != null) return an - bn;
+      if (an != null) return -1;
+      if (bn != null) return 1;
+      return String(a.label).localeCompare(String(b.label));
+    });
+    return out;
+  }
+
+  function locationMatchesQuery(loc, q) {
+    if (!q) return true;
+    var nq = String(q).toLowerCase().trim();
+    if (!nq) return true;
+    if (String(loc.id).toLowerCase() === nq) return true;
+    if (String(loc.label).toLowerCase().indexOf(nq) !== -1) return true;
+    if (String(loc.id) === nq.replace(/^floor\s+/, '')) return true;
+    return false;
   }
 
   /* ---------- IndexedDB ---------- */
@@ -556,47 +633,72 @@
     } catch (e) {}
   }
 
-  function floorById(id) {
-    for (var i = 0; i < FLOORS.length; i++) {
-      if (FLOORS[i].id === id) return FLOORS[i];
+  function floorStorageKey() {
+    return FLOOR_KEY + ':' + String(state.siteId || (state.project && (state.project.projectId || state.project.id)) || 'default');
+  }
+
+  function floorById(id, list) {
+    var pool = list || siteLocations();
+    for (var i = 0; i < pool.length; i++) {
+      if (pool[i].id === id) return pool[i];
     }
     return null;
   }
 
   function readFloor() {
     try {
-      return floorById(localStorage.getItem(FLOOR_KEY) || '');
+      var id = localStorage.getItem(floorStorageKey()) || localStorage.getItem(FLOOR_KEY) || '';
+      return floorById(id, occupiedSiteLocations()) || floorById(id);
     } catch (e) { return null; }
   }
 
   function writeFloor(id) {
-    var floor = floorById(id);
+    var floor = floorById(id, occupiedSiteLocations()) || floorById(id);
     if (!floor) return null;
-    try { localStorage.setItem(FLOOR_KEY, floor.id); } catch (e) {}
+    try {
+      localStorage.setItem(floorStorageKey(), floor.id);
+      localStorage.setItem(FLOOR_KEY, floor.id);
+    } catch (e) {}
     state.floor = floor;
     return floor;
   }
 
   function updateHeaderFloor() {
     var chip = $('btn-floor');
+    var occupied = occupiedSiteLocations();
     var floor = state.floor || readFloor();
+    if (floor && occupied.length && !floorById(floor.id, occupied)) floor = null;
     state.floor = floor;
     if (!chip) return;
+    if (!occupied.length) {
+      chip.textContent = 'Location';
+      chip.hidden = true;
+      return;
+    }
     if (floor) {
       chip.textContent = floor.label;
       chip.hidden = false;
     } else {
-      chip.textContent = 'Floor';
-      chip.hidden = true;
+      chip.textContent = 'Location';
+      chip.hidden = false;
     }
   }
 
   function renderFloorOptions() {
     var host = $('floor-grid');
     if (!host) return;
+    var occupied = occupiedSiteLocations();
+    var q = state.floorQuery || '';
+    var shown = occupied.filter(function (f) { return locationMatchesQuery(f, q); });
+    var searchWrap = $('floor-search-wrap');
+    if (searchWrap) searchWrap.hidden = occupied.length < 9;
     var current = (state.floor || readFloor() || {}).id || '';
-    host.innerHTML = FLOORS.map(function (f) {
-      var wide = f.id === 'ground' ? ' md-floor-wide' : '';
+    if (!shown.length) {
+      host.innerHTML = '<p class="md-pin-hint">No matching location with drawings.</p>';
+      return;
+    }
+    host.innerHTML = shown.map(function (f) {
+      var wide = (f.id === 'ground' || !/^\d+$/.test(f.id)) ? ' md-floor-wide' : '';
       var on = f.id === current ? ' is-on' : '';
       return '<button type="button" class="md-floor-btn' + wide + on + '" data-floor="' + escapeHtml(f.id) + '">' +
         escapeHtml(f.label) + '</button>';
@@ -605,10 +707,16 @@
 
   function showFloorPicker(from) {
     state.floorFrom = from || '';
+    state.floorQuery = '';
+    if ($('floor-search')) $('floor-search').value = '';
+    var occupied = occupiedSiteLocations();
     var canCancel = !!(state.floor || readFloor()) && state.floorFrom !== 'boot';
     if ($('floor-back-wrap')) $('floor-back-wrap').hidden = !canCancel;
     renderFloorOptions();
     showScreen('screen-floor');
+    if (occupied.length >= 9 && $('floor-search')) {
+      try { $('floor-search').focus(); } catch (e) {}
+    }
   }
 
   function openFloorHome() {
@@ -630,7 +738,19 @@
       return;
     }
     if (opts.deepLink) state.pendingDeepLink = opts.deepLink;
+    var occupied = occupiedSiteLocations();
+    if (!occupied.length) {
+      state.floor = null;
+      openFloorHome();
+      return;
+    }
     var floor = readFloor();
+    if (floor && !floorById(floor.id, occupied)) floor = null;
+    if (!floor && occupied.length === 1) {
+      writeFloor(occupied[0].id);
+      openFloorHome();
+      return;
+    }
     if (!floor) {
       showFloorPicker(opts.from || 'boot');
       return;
@@ -1029,6 +1149,13 @@
       state.siteId = data.project.projectId;
       state.siteName = data.project.name || state.siteName;
     }
+    state.locations = (data.locations && data.locations.length)
+      ? data.locations
+      : (data.site && data.site.locations) || buildSiteLocations(
+        data.site && data.site.floorCount,
+        data.site && data.site.extraLocations
+      );
+    state.occupiedLocations = data.occupiedLocations || [];
     $('project-name').textContent = state.siteName || state.project.name || 'Project';
     updateHeaderFloor();
     renderCats();
@@ -1084,7 +1211,7 @@
     $('list-count').textContent = items.length + (items.length === 1 ? ' drawing' : ' drawings');
     if (!items.length) {
       var floorHint = state.floor ? ' for ' + escapeHtml(state.floor.label) : '';
-      host.innerHTML = '<div class="md-empty"><h3>No drawings' + floorHint + '</h3><p>Try another search, category, or floor.</p></div>';
+      host.innerHTML = '<div class="md-empty"><h3>No drawings' + floorHint + '</h3><p>Try another search, category, or location.</p></div>';
       updateDownloadAllBtn();
       return;
     }
@@ -2248,8 +2375,7 @@
     if ($('ad-stat-draft')) $('ad-stat-draft').textContent = String(drafts);
     var sitesNav = $('ad-nav-sites');
     if (sitesNav) sitesNav.hidden = !canManageCatalog();
-    var addRow = document.querySelector('#ad-panel-sites .mg-add-row');
-    if (addRow) addRow.hidden = !isCompanyHead();
+    updateSiteFormChrome();
     var codeEl = $('mg-host-code');
     if (codeEl) {
       codeEl.hidden = false;
@@ -2266,6 +2392,81 @@
     el.classList.toggle('is-ok', !!msg && !isError);
   }
 
+  function extraLocationsSummary(site) {
+    var extras = (site && site.extraLocations) || [];
+    if (!extras.length) return '';
+    return ' · ' + extras.slice(0, 3).join(', ') + (extras.length > 3 ? '…' : '');
+  }
+
+  function renderSiteExtraChips() {
+    var host = $('mg-site-extra-chips');
+    if (!host) return;
+    var list = state.siteExtraDraft || [];
+    host.innerHTML = list.map(function (label, i) {
+      return '<span class="mg-loc-chip"><span>' + escapeHtml(label) + '</span>' +
+        '<button type="button" data-extra-remove="' + i + '" aria-label="Remove">×</button></span>';
+    }).join('');
+  }
+
+  function addSiteExtraFromInput() {
+    var input = $('mg-site-extra-input');
+    var raw = input ? String(input.value || '') : '';
+    var parts = raw.split(/[,|;]+/);
+    var added = false;
+    parts.forEach(function (part) {
+      var label = String(part || '').replace(/\s+/g, ' ').trim();
+      var id = slugLocation(label);
+      if (!label || !id) return;
+      if (id === 'ground' || /^\d+$/.test(id)) {
+        setSitesStatus('Use the floor count for numbered floors. Extra locations are names like Bin store.', true);
+        return;
+      }
+      var exists = (state.siteExtraDraft || []).some(function (item) {
+        return slugLocation(item) === id;
+      });
+      if (exists) return;
+      state.siteExtraDraft = (state.siteExtraDraft || []).concat([label]);
+      added = true;
+    });
+    if (input && added) input.value = '';
+    renderSiteExtraChips();
+  }
+
+  function resetSiteForm() {
+    state.editingSiteLocationsId = '';
+    state.siteExtraDraft = [];
+    if ($('mg-site-input')) $('mg-site-input').value = '';
+    if ($('mg-site-floors')) $('mg-site-floors').value = '';
+    if ($('mg-site-extra-input')) $('mg-site-extra-input').value = '';
+    if ($('btn-mg-add-site')) $('btn-mg-add-site').textContent = 'Add site';
+    if ($('btn-mg-cancel-site-edit')) $('btn-mg-cancel-site-edit').hidden = true;
+    renderSiteExtraChips();
+    updateSiteFormChrome();
+  }
+
+  function updateSiteFormChrome() {
+    var form = $('mg-site-form');
+    var editing = !!state.editingSiteLocationsId;
+    if (form) form.hidden = !isCompanyHead() && !editing;
+    if ($('mg-site-name-wrap')) $('mg-site-name-wrap').hidden = editing && !isCompanyHead();
+    if ($('btn-mg-add-site')) $('btn-mg-add-site').textContent = editing ? 'Save locations' : 'Add site';
+    if ($('btn-mg-cancel-site-edit')) $('btn-mg-cancel-site-edit').hidden = !editing;
+  }
+
+  function fillSiteLocationForm(site) {
+    if (!site) return;
+    state.editingSiteLocationsId = String(site.id);
+    state.siteExtraDraft = (site.extraLocations || []).slice();
+    if ($('mg-site-input')) $('mg-site-input').value = site.name || '';
+    if ($('mg-site-floors')) $('mg-site-floors').value = site.floorCount || '';
+    if ($('mg-site-extra-input')) $('mg-site-extra-input').value = '';
+    renderSiteExtraChips();
+    updateSiteFormChrome();
+    setSitesStatus('Editing locations for ' + (site.name || 'this site') + '.', false);
+    var floors = $('mg-site-floors');
+    if (floors) try { floors.focus(); } catch (e) {}
+  }
+
   function renderSites() {
     var box = $('mg-sites-list');
     if (!box) return;
@@ -2278,25 +2479,41 @@
       var id = String(site.id);
       var on = String(state.siteId) === id;
       var manager = site.managerName || 'No site manager yet';
+      var locBit = (site.floorCount ? site.floorCount + ' floors' : 'Floors not set') + extraLocationsSummary(site);
       return '<div class="mg-item' + (on ? ' is-on' : '') + '">' +
         '<div>' +
           '<p class="mg-item-title">' + escapeHtml(site.name || 'Site') + (on ? ' · current' : '') + '</p>' +
           '<p class="mg-item-meta">' + escapeHtml(manager) +
             ' · ' + String(site.drawingCount || 0) + ' drawings · ' + String(site.workerCount || 0) + ' users</p>' +
+          '<p class="mg-item-meta">' + escapeHtml(locBit) + '</p>' +
           (site.accessCode ? '<p class="mg-item-meta">Code ' + escapeHtml(site.accessCode) + '</p>' : '') +
         '</div>' +
         '<div class="mg-item-actions">' +
           (on ? '' : '<button type="button" class="mg-user-btn" data-site-act="open" data-site-id="' + id + '">Open</button>') +
+          '<button type="button" class="mg-user-btn" data-site-act="locations" data-site-id="' + id + '">Locations</button>' +
           (isCompanyHead() ? '<button type="button" class="mg-user-btn is-danger" data-site-act="close" data-site-id="' + id + '">Close site</button>' : '') +
         '</div>' +
       '</div>';
     }).join('');
   }
 
+  function siteFormPayload() {
+    var floors = parseInt($('mg-site-floors') && $('mg-site-floors').value, 10);
+    return {
+      floorCount: floors,
+      extraLocations: (state.siteExtraDraft || []).slice()
+    };
+  }
+
   async function addSite() {
+    setSitesStatus('');
+    if (state.editingSiteLocationsId) {
+      await saveSiteLocations();
+      return;
+    }
     var input = $('mg-site-input');
     var name = input ? String(input.value || '').replace(/\s+/g, ' ').trim() : '';
-    setSitesStatus('');
+    var payload = siteFormPayload();
     if (!isCompanyHead()) {
       setSitesStatus('Only the company head can add a site.', true);
       return;
@@ -2305,15 +2522,45 @@
       setSitesStatus('Enter a site name.', true);
       return;
     }
+    if (!payload.floorCount || payload.floorCount < 1) {
+      setSitesStatus('Enter how many floors this site has.', true);
+      return;
+    }
     try {
-      var data = await apiJson('/sites', { method: 'POST', body: { name: name } });
-      if (input) input.value = '';
+      var data = await apiJson('/sites', {
+        method: 'POST',
+        body: { name: name, floorCount: payload.floorCount, extraLocations: payload.extraLocations }
+      });
+      resetSiteForm();
       applyCatalog(data);
       renderSites();
       renderAdminChrome();
       setSitesStatus(data.message || 'Site created.', false);
     } catch (err) {
       setSitesStatus(err && err.message ? err.message : 'Could not add the site.', true);
+    }
+  }
+
+  async function saveSiteLocations() {
+    var id = state.editingSiteLocationsId;
+    var payload = siteFormPayload();
+    if (!id) return;
+    if (!payload.floorCount || payload.floorCount < 1) {
+      setSitesStatus('Enter how many floors this site has.', true);
+      return;
+    }
+    try {
+      var data = await apiJson('/sites/' + encodeURIComponent(id) + '/locations', {
+        method: 'PUT',
+        body: { floorCount: payload.floorCount, extraLocations: payload.extraLocations }
+      });
+      resetSiteForm();
+      applyCatalog(data);
+      renderSites();
+      renderAdminChrome();
+      setSitesStatus(data.message || 'Locations saved.', false);
+    } catch (err) {
+      setSitesStatus(err && err.message ? err.message : 'Could not save locations.', true);
     }
   }
 
@@ -2824,22 +3071,83 @@
   }
 
   function selectedManageFloors() {
-    var host = $('mg-floors');
-    if (!host) return [];
-    return Array.prototype.map.call(host.querySelectorAll('input[type="checkbox"]:checked'), function (el) {
-      return el.value;
+    return (state.manageLocationIds || []).slice();
+  }
+
+  function locationById(id) {
+    return floorById(id, siteLocations());
+  }
+
+  function renderManageLocationChips() {
+    var host = $('mg-loc-chips');
+    if (!host) return;
+    host.innerHTML = (state.manageLocationIds || []).map(function (id) {
+      var loc = locationById(id);
+      var label = loc ? loc.label : id;
+      return '<span class="mg-loc-chip"><span>' + escapeHtml(label) + '</span>' +
+        '<button type="button" data-loc-remove="' + escapeHtml(id) + '" aria-label="Remove">×</button></span>';
+    }).join('');
+  }
+
+  function hideLocationSuggest() {
+    var box = $('mg-loc-suggest');
+    if (box) {
+      box.hidden = true;
+      box.innerHTML = '';
+    }
+  }
+
+  function locationSuggestList(q) {
+    var selected = {};
+    (state.manageLocationIds || []).forEach(function (id) { selected[id] = true; });
+    return siteLocations().filter(function (loc) {
+      return !selected[loc.id] && locationMatchesQuery(loc, q);
+    }).slice(0, 8);
+  }
+
+  function renderLocationSuggest() {
+    var input = $('mg-loc-search');
+    var box = $('mg-loc-suggest');
+    if (!input || !box) return;
+    var q = String(input.value || '').trim();
+    if (!q) {
+      hideLocationSuggest();
+      return;
+    }
+    var matches = locationSuggestList(q);
+    if (!matches.length) {
+      hideLocationSuggest();
+      return;
+    }
+    box.hidden = false;
+    box.innerHTML = matches.map(function (loc, i) {
+      return '<button type="button" data-loc-pick="' + escapeHtml(loc.id) + '"' +
+        (i === 0 ? ' class="is-on"' : '') + '>' + escapeHtml(loc.label) + '</button>';
+    }).join('');
+  }
+
+  function addManageLocation(id) {
+    var loc = locationById(id);
+    if (!loc) return;
+    if ((state.manageLocationIds || []).indexOf(loc.id) !== -1) return;
+    state.manageLocationIds = (state.manageLocationIds || []).concat([loc.id]);
+    if ($('mg-loc-search')) $('mg-loc-search').value = '';
+    hideLocationSuggest();
+    renderManageLocationChips();
+  }
+
+  function removeManageLocation(id) {
+    state.manageLocationIds = (state.manageLocationIds || []).filter(function (item) {
+      return item !== id;
     });
+    renderManageLocationChips();
   }
 
   function setManageFloors(floors) {
-    var host = $('mg-floors');
-    if (!host) return;
-    var set = {};
-    (floors || []).forEach(function (f) { set[f] = true; });
-    Array.prototype.forEach.call(host.querySelectorAll('input[type="checkbox"]'), function (el) {
-      el.checked = !!set[el.value];
-      el.disabled = false;
-    });
+    state.manageLocationIds = (floors || []).slice();
+    if ($('mg-loc-search')) $('mg-loc-search').value = '';
+    hideLocationSuggest();
+    renderManageLocationChips();
   }
 
   function showManageForm(mode) {
@@ -2873,7 +3181,7 @@
       $('btn-mg-save').textContent = 'Add drawing';
     } else if (mode.type === 'edit') {
       $('mg-form-title').textContent = 'Edit drawing';
-      $('mg-form-note').textContent = 'Change number, title, category, floors or revision. Leave the file empty to keep the current PDF.';
+      $('mg-form-note').textContent = 'Change number, title, category, location or revision. Leave the file empty to keep the current PDF.';
       $('mg-number').value = d.number;
       $('mg-title').value = d.title;
       $('mg-rev').value = d.revision || '';
@@ -3380,6 +3688,10 @@
     if (!btn) return;
     selectFloor(btn.getAttribute('data-floor'));
   });
+  on($('floor-search'), 'input', function () {
+    state.floorQuery = ($('floor-search') && $('floor-search').value) || '';
+    renderFloorOptions();
+  });
   on($('btn-floor'), 'click', function () { showFloorPicker('header'); });
   on($('btn-floor-back'), 'click', function () {
     if (state.floor || readFloor()) openFloorHome();
@@ -3489,7 +3801,32 @@
   on($('mg-users-table'), 'click', handleUsersTableClick);
   on($('btn-mg-add-cat'), 'click', addCategory);
   on($('btn-mg-add-site'), 'click', addSite);
+  on($('btn-mg-cancel-site-edit'), 'click', function () {
+    resetSiteForm();
+    setSitesStatus('');
+  });
+  on($('btn-mg-add-extra'), 'click', addSiteExtraFromInput);
+  on($('mg-site-extra-input'), 'keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addSiteExtraFromInput();
+    }
+  });
+  on($('mg-site-extra-chips'), 'click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-extra-remove]') : null;
+    if (!btn) return;
+    var idx = parseInt(btn.getAttribute('data-extra-remove'), 10);
+    if (isNaN(idx)) return;
+    state.siteExtraDraft = (state.siteExtraDraft || []).filter(function (_, i) { return i !== idx; });
+    renderSiteExtraChips();
+  });
   on($('mg-site-input'), 'keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addSite();
+    }
+  });
+  on($('mg-site-floors'), 'keydown', function (e) {
     if (e.key === 'Enter') {
       e.preventDefault();
       addSite();
@@ -3502,6 +3839,13 @@
     var act = btn.getAttribute('data-site-act');
     if (act === 'open') openSite(id);
     if (act === 'close') closeSite(id);
+    if (act === 'locations') {
+      var site = null;
+      for (var i = 0; i < (state.sites || []).length; i++) {
+        if (String(state.sites[i].id) === String(id)) site = state.sites[i];
+      }
+      fillSiteLocationForm(site);
+    }
   });
   on($('mg-cat-input'), 'keydown', function (e) {
     if (e.key === 'Enter') {
@@ -3512,6 +3856,42 @@
   on($('btn-mg-add'), 'click', function () { showManageForm({ type: 'add' }); });
   on($('btn-mg-cancel'), 'click', hideManageForm);
   on($('mg-form'), 'submit', submitManageForm);
+  on($('mg-loc-search'), 'input', renderLocationSuggest);
+  on($('mg-loc-search'), 'focus', renderLocationSuggest);
+  on($('mg-loc-search'), 'keydown', function (e) {
+    var box = $('mg-loc-suggest');
+    if (e.key === 'Escape') {
+      hideLocationSuggest();
+      return;
+    }
+    if (e.key === 'Enter') {
+      var first = box && !box.hidden ? box.querySelector('[data-loc-pick]') : null;
+      if (first) {
+        e.preventDefault();
+        addManageLocation(first.getAttribute('data-loc-pick'));
+      }
+      return;
+    }
+    if (e.key === 'Backspace' && $('mg-loc-search') && !$('mg-loc-search').value && state.manageLocationIds && state.manageLocationIds.length) {
+      removeManageLocation(state.manageLocationIds[state.manageLocationIds.length - 1]);
+    }
+  });
+  on($('mg-loc-suggest'), 'mousedown', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-loc-pick]') : null;
+    if (!btn) return;
+    e.preventDefault();
+    addManageLocation(btn.getAttribute('data-loc-pick'));
+  });
+  on($('mg-loc-chips'), 'click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-loc-remove]') : null;
+    if (!btn) return;
+    removeManageLocation(btn.getAttribute('data-loc-remove'));
+  });
+  on(document, 'click', function (e) {
+    var picker = $('mg-loc-picker');
+    if (!picker || picker.contains(e.target)) return;
+    hideLocationSuggest();
+  });
   on($('mg-file'), 'change', function () {
     var f = $('mg-file').files && $('mg-file').files[0];
     $('mg-file-name').textContent = f ? f.name : 'No file selected';

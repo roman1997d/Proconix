@@ -32,6 +32,16 @@ const {
   isCompanyHead,
   currentSiteId,
 } = require('../lib/myDrawingsSiteScope');
+const {
+  parseFloorCount,
+  parseExtraLocations,
+  parseLocationIds,
+  allowedLocationIds,
+  locationsFromProject,
+  occupiedLocations,
+  siteLocationFields,
+  normalizeLocationId,
+} = require('../lib/myDrawingsLocations');
 
 const ACCESS_PIN = String(process.env.MY_DRAWINGS_ACCESS_PIN || '2580');
 const ADMIN_PIN = '2026';
@@ -56,43 +66,13 @@ function isoDate(value) {
   return `${y}-${m}-${day}`;
 }
 
-const FLOOR_IDS = new Set(['ground', '1', '2', '3', '4', '5']);
-
-function normalizeFloorId(raw) {
-  let v = String(raw == null ? '' : raw).trim().toLowerCase();
-  if (!v) return null;
-  v = v.replace(/^floor\s+/, '');
-  if (v === '0' || v === 'gf' || v === 'g' || v === 'ground floor' || v === 'groundfloor') return 'ground';
-  if (FLOOR_IDS.has(v)) return v;
-  return null;
-}
-
-/** Parse floors from JSON array, CSV string, or form field. Empty/missing => null (all floors). */
-function parseFloors(raw) {
-  if (raw == null || raw === '') return null;
-  let arr = raw;
-  if (typeof raw === 'string') {
-    const s = raw.trim();
-    if (!s) return null;
-    try {
-      arr = JSON.parse(s);
-    } catch (e) {
-      arr = s.split(/[,|;]+/);
-    }
-  }
-  if (!Array.isArray(arr)) arr = [arr];
-  const out = [];
-  for (let i = 0; i < arr.length; i++) {
-    const id = normalizeFloorId(arr[i]);
-    if (id && out.indexOf(id) === -1) out.push(id);
-  }
-  return out.length ? out : null;
-}
-
 function floorsForClient(value) {
   if (!value) return [];
-  if (Array.isArray(value)) return value.map(normalizeFloorId).filter(Boolean);
-  return parseFloors(value) || [];
+  return parseLocationIds(value, null) || [];
+}
+
+function parseProjectFloors(raw, project) {
+  return parseLocationIds(raw, allowedLocationIds(project));
 }
 
 function ensureUploadDir() {
@@ -514,6 +494,8 @@ async function addSiteColumns() {
   await pool.query(`ALTER TABLE my_drawings_project ADD COLUMN IF NOT EXISTS access_code VARCHAR(32)`);
   await pool.query(`ALTER TABLE my_drawings_project ADD COLUMN IF NOT EXISTS wall_types_pack JSONB`);
   await pool.query(`ALTER TABLE my_drawings_project ADD COLUMN IF NOT EXISTS manager_worker_id INT`);
+  await pool.query(`ALTER TABLE my_drawings_project ADD COLUMN IF NOT EXISTS floor_count INT`);
+  await pool.query(`ALTER TABLE my_drawings_project ADD COLUMN IF NOT EXISTS extra_locations TEXT[]`);
   await pool.query(`ALTER TABLE my_drawings_worker ADD COLUMN IF NOT EXISTS project_id INT`);
   await pool.query(`ALTER TABLE my_drawings_wall_type ADD COLUMN IF NOT EXISTS project_id INT`);
   await pool.query(`ALTER TABLE my_drawings_category ADD COLUMN IF NOT EXISTS project_id INT`);
@@ -797,7 +779,7 @@ async function getDefaultProject(workspaceId) {
   const wsId = positiveInt(workspaceId);
   if (!wsId) return null;
   const found = await pool.query(
-    'SELECT id, name, access_code, manager_worker_id, wall_types_pack FROM my_drawings_project WHERE workspace_id = $1 ORDER BY id ASC LIMIT 1',
+    'SELECT id, name, access_code, manager_worker_id, wall_types_pack, floor_count, extra_locations FROM my_drawings_project WHERE workspace_id = $1 ORDER BY id ASC LIMIT 1',
     [wsId]
   );
   if (found.rows[0]) return found.rows[0];
@@ -806,7 +788,7 @@ async function getDefaultProject(workspaceId) {
   const inserted = await pool.query(
     `INSERT INTO my_drawings_project (workspace_id, name, access_code, wall_types_pack)
      VALUES ($1, $2, $3, '{}'::jsonb)
-     RETURNING id, name, access_code, manager_worker_id, wall_types_pack`,
+     RETURNING id, name, access_code, manager_worker_id, wall_types_pack, floor_count, extra_locations`,
     [wsId, name, (ws.rows[0] && ws.rows[0].access_code) || null]
   );
   return inserted.rows[0];
@@ -1650,6 +1632,18 @@ async function loadCatalog(workspace, role, site) {
     [workspaceId]
   );
   const projectMode = wsRow.rows[0] && wsRow.rows[0].project_mode === 'multi' ? 'multi' : 'single';
+  const drawings = items.rows.map((d) => ({
+    id: String(d.id),
+    number: d.number,
+    title: d.title,
+    category: d.category || 'Uncategorised',
+    revision: d.revision,
+    floors: floorsForClient(d.floors),
+    updatedAt: isoDate(d.updated_at),
+    sizeBytes: Number(d.size_bytes) || 0,
+    fileUrl: `/api/my-drawings/drawings/${d.id}/file`,
+  }));
+  const locations = (current && current.locations) || locationsFromProject(current || project);
   return {
     success: true,
     role: role || 'worker',
@@ -1669,6 +1663,9 @@ async function loadCatalog(workspace, role, site) {
         managerName: current.managerName || '',
         drawingCount: current.drawingCount,
         workerCount: current.workerCount,
+        floorCount: current.floorCount,
+        extraLocations: current.extraLocations || [],
+        locations: current.locations || locations,
       }
       : null,
     sites: manage ? sites : undefined,
@@ -1679,18 +1676,10 @@ async function loadCatalog(workspace, role, site) {
       projectId,
     },
     accessCode: manage ? accessCode : undefined,
+    locations,
+    occupiedLocations: occupiedLocations(drawings, locations),
     categories: cats.rows.map((r) => r.name),
-    drawings: items.rows.map((d) => ({
-      id: String(d.id),
-      number: d.number,
-      title: d.title,
-      category: d.category || 'Uncategorised',
-      revision: d.revision,
-      floors: floorsForClient(d.floors),
-      updatedAt: isoDate(d.updated_at),
-      sizeBytes: Number(d.size_bytes) || 0,
-      fileUrl: `/api/my-drawings/drawings/${d.id}/file`,
-    })),
+    drawings,
   };
 }
 
@@ -2405,13 +2394,13 @@ async function addDrawing(req, res) {
     const title = String((req.body && req.body.title) || '').trim().slice(0, 200);
     const revision = String((req.body && req.body.revision) || 'A').trim().toUpperCase().slice(0, 12) || 'A';
     const categoryName = String((req.body && req.body.category) || '').trim();
-    const floors = parseFloors(req.body && req.body.floors);
+    const workspaceId = req.myDrawings.workspace.id;
+    const project = req.myDrawings.project || (await getDefaultProject(workspaceId));
+    const floors = parseProjectFloors(req.body && req.body.floors, project);
     if (!number || !title) {
       removeStoredFile(relativeFromAbs(req.file.path));
       return res.status(400).json({ success: false, message: 'Number and title are required.' });
     }
-    const workspaceId = req.myDrawings.workspace.id;
-    const project = req.myDrawings.project || (await getDefaultProject(workspaceId));
     const clash = await pool.query(
       'SELECT id FROM my_drawings_item WHERE project_id = $1 AND LOWER(number) = LOWER($2)',
       [project && project.id, number]
@@ -2484,9 +2473,10 @@ async function editDrawing(req, res) {
     const title = String((req.body && req.body.title) || item.title).trim().slice(0, 200);
     const revision = String((req.body && req.body.revision) || item.revision).trim().toUpperCase().slice(0, 12) || 'A';
     const categoryName = String((req.body && req.body.category) || '').trim();
+    const site = req.myDrawings.project || (await loadSiteRow(req.myDrawings.workspace.id, item.project_id));
     const floors =
       req.body && Object.prototype.hasOwnProperty.call(req.body, 'floors')
-        ? parseFloors(req.body.floors)
+        ? parseProjectFloors(req.body.floors, site)
         : item.floors || null;
     if (!number || !title) {
       if (req.file) removeStoredFile(relativeFromAbs(req.file.path));
@@ -2639,7 +2629,7 @@ async function listDrawings(req, res) {
     let project = defaultProject;
     if (requestedProject) {
       const owned = await pool.query(
-        'SELECT id, name FROM my_drawings_project WHERE id = $1 AND workspace_id = $2',
+        'SELECT id, name, floor_count, extra_locations FROM my_drawings_project WHERE id = $1 AND workspace_id = $2',
         [requestedProject, workspaceId]
       );
       if (!owned.rows[0]) {
@@ -2647,7 +2637,7 @@ async function listDrawings(req, res) {
       }
       project = owned.rows[0];
     }
-    const floor = normalizeFloorId(req.query.floor);
+    const floor = normalizeLocationId(req.query.floor);
     const category = String(req.query.category || '').trim();
     const params = [workspaceId, project.id];
     let sql = `
@@ -2672,6 +2662,18 @@ async function listDrawings(req, res) {
        ORDER BY sort_order ASC, name ASC`,
       [workspaceId, project.id]
     );
+    const drawings = items.rows.map((d) => ({
+      id: d.id,
+      number: d.number,
+      title: d.title,
+      category: d.category || 'Uncategorised',
+      revision: d.revision,
+      floors: floorsForClient(d.floors),
+      updatedAt: isoDate(d.updated_at),
+      sizeBytes: Number(d.size_bytes) || 0,
+      fileUrl: `/api/drawings/${d.id}/file`,
+    }));
+    const loc = siteLocationFields(project);
     return res.json({
       success: true,
       company: {
@@ -2680,18 +2682,10 @@ async function listDrawings(req, res) {
         managerName: req.myDrawings.workspace.managerName || req.myDrawings.workspace.manager_name || '',
       },
       project: { id: project.id, name: project.name },
+      locations: loc.locations,
+      occupiedLocations: occupiedLocations(drawings, loc.locations),
       categories: cats.rows.map((r) => r.name),
-      drawings: items.rows.map((d) => ({
-        id: d.id,
-        number: d.number,
-        title: d.title,
-        category: d.category || 'Uncategorised',
-        revision: d.revision,
-        floors: floorsForClient(d.floors),
-        updatedAt: isoDate(d.updated_at),
-        sizeBytes: Number(d.size_bytes) || 0,
-        fileUrl: `/api/drawings/${d.id}/file`,
-      })),
+      drawings,
     });
   } catch (err) {
     console.error('myDrawings listDrawings:', err);
@@ -2764,6 +2758,11 @@ async function addSite(req, res) {
     if (!name) {
       return res.status(400).json({ success: false, message: 'Site name is required.' });
     }
+    const floorCount = parseFloorCount(req.body && (req.body.floorCount != null ? req.body.floorCount : req.body.floorsCount), null);
+    if (floorCount == null) {
+      return res.status(400).json({ success: false, message: 'Enter how many floors this site has.' });
+    }
+    const extraLocations = parseExtraLocations(req.body && (req.body.extraLocations || req.body.locations));
     const clash = await pool.query(
       'SELECT id FROM my_drawings_project WHERE workspace_id = $1 AND LOWER(name) = LOWER($2)',
       [workspaceId, name]
@@ -2773,10 +2772,10 @@ async function addSite(req, res) {
     }
     const code = await allocateAccessCode(workspaceId);
     const inserted = await pool.query(
-      `INSERT INTO my_drawings_project (workspace_id, name, access_code, wall_types_pack)
-       VALUES ($1, $2, $3, '{}'::jsonb)
-       RETURNING id, name, access_code`,
-      [workspaceId, name, code]
+      `INSERT INTO my_drawings_project (workspace_id, name, access_code, wall_types_pack, floor_count, extra_locations)
+       VALUES ($1, $2, $3, '{}'::jsonb, $4, $5)
+       RETURNING id, name, access_code, floor_count, extra_locations`,
+      [workspaceId, name, code, floorCount, extraLocations]
     );
     await pool.query(
       `UPDATE my_drawings_workspace SET project_mode = 'multi' WHERE id = $1`,
@@ -2819,6 +2818,33 @@ async function renameSite(req, res) {
   } catch (err) {
     console.error('myDrawings renameSite:', err);
     return res.status(500).json({ success: false, message: 'Could not rename the site.' });
+  }
+}
+
+async function updateSiteLocations(req, res) {
+  try {
+    if (!canManageSite(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Site manager or company access is required.' });
+    }
+    const workspaceId = req.myDrawings.workspace.id;
+    const site = await loadSiteRow(workspaceId, req.params.id);
+    if (!site) return res.status(404).json({ success: false, message: 'Site not found.' });
+    const floorCount = parseFloorCount(req.body && (req.body.floorCount != null ? req.body.floorCount : req.body.floorsCount), null);
+    if (floorCount == null) {
+      return res.status(400).json({ success: false, message: 'Enter how many floors this site has.' });
+    }
+    const extraLocations = parseExtraLocations(req.body && (req.body.extraLocations || req.body.locations));
+    await pool.query(
+      'UPDATE my_drawings_project SET floor_count = $2, extra_locations = $3 WHERE id = $1 AND workspace_id = $4',
+      [site.id, floorCount, extraLocations, workspaceId]
+    );
+    req.myDrawings.project = { ...site, floor_count: floorCount, extra_locations: extraLocations };
+    const payload = await loadCatalog(req.myDrawings.workspace, req.myDrawings.role, req.myDrawings.project);
+    payload.message = 'Site locations saved.';
+    return res.json(payload);
+  } catch (err) {
+    console.error('myDrawings updateSiteLocations:', err);
+    return res.status(500).json({ success: false, message: 'Could not save site locations.' });
   }
 }
 
@@ -2904,6 +2930,7 @@ module.exports = {
   listSites,
   addSite,
   renameSite,
+  updateSiteLocations,
   deleteSite,
   listWallTypes,
   updateWallTypesPack,

@@ -130,10 +130,14 @@
       </p>
     </section>
 
-    <section class="md-screen md-pin md-floor" id="screen-floor" aria-label="Select floor">
+    <section class="md-screen md-pin md-floor" id="screen-floor" aria-label="Select location">
       <p class="md-pin-brand">My Drawings</p>
-      <h2>Which floor are you on?</h2>
-      <p class="md-pin-hint">We will remember this for next time. You can change it later from the header.</p>
+      <h2>Where are you working?</h2>
+      <p class="md-pin-hint">Only floors and places that have drawings are listed. We will remember this for next time.</p>
+      <label class="md-search md-floor-search" id="floor-search-wrap" hidden>
+        <svg class="md-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="floor-search" type="search" placeholder="Find a floor or location" enterkeyhint="search" autocapitalize="off" autocomplete="off" spellcheck="false">
+      </label>
       <div class="md-floor-grid" id="floor-grid" role="list"></div>
       <p class="md-pin-actions" id="floor-back-wrap" hidden>
         <button type="button" class="md-link" id="btn-floor-back">Cancel</button>
@@ -145,7 +149,7 @@
         <div class="md-header-text">
           <h1 class="md-header-title">My Drawings</h1>
           <p class="md-header-sub">
-            <button type="button" class="md-floor-chip" id="btn-floor" aria-label="Change floor">Floor</button>
+            <button type="button" class="md-floor-chip" id="btn-floor" aria-label="Change location">Location</button>
             <span class="md-header-sep" aria-hidden="true">·</span>
             <span id="project-name">Project</span>
           </p>
@@ -327,10 +331,29 @@
                 <div class="mg-block-head">
                   <h2>Sites</h2>
                 </div>
-                <p class="mg-form-note">Each site has its own drawings, SPEC, workers, and site manager.</p>
-                <div class="mg-add-row">
-                  <input id="mg-site-input" type="text" maxlength="200" placeholder="New site name" autocomplete="off">
-                  <button type="button" class="md-btn md-btn-ghost" id="btn-mg-add-site">Add site</button>
+                <p class="mg-form-note">Each site has its own drawings, SPEC, workers, site manager, floors, and locations.</p>
+                <div class="mg-site-form" id="mg-site-form">
+                  <label class="mg-field" id="mg-site-name-wrap">
+                    <span>Site name</span>
+                    <input id="mg-site-input" type="text" maxlength="200" placeholder="New site name" autocomplete="off">
+                  </label>
+                  <label class="mg-field">
+                    <span>Number of floors</span>
+                    <input id="mg-site-floors" type="number" min="1" max="80" inputmode="numeric" placeholder="e.g. 12" autocomplete="off">
+                  </label>
+                  <p class="mg-form-note">Ground Floor plus Floor 1 to this number. Workers only see locations that already have a drawing.</p>
+                  <label class="mg-field">
+                    <span>Extra locations</span>
+                    <div class="mg-add-row">
+                      <input id="mg-site-extra-input" type="text" maxlength="80" placeholder="Bin store, Utility, Plant room" autocomplete="off">
+                      <button type="button" class="md-btn md-btn-ghost" id="btn-mg-add-extra">Add</button>
+                    </div>
+                    <div class="mg-loc-chips" id="mg-site-extra-chips"></div>
+                  </label>
+                  <div class="mg-add-row">
+                    <button type="button" class="md-btn md-btn-primary" id="btn-mg-add-site">Add site</button>
+                    <button type="button" class="md-btn md-btn-ghost" id="btn-mg-cancel-site-edit" hidden>Cancel</button>
+                  </div>
                 </div>
                 <p class="md-error" id="mg-sites-error" role="alert"></p>
                 <div id="mg-sites-list"></div>
@@ -397,16 +420,13 @@
             <input id="mg-rev" type="text" maxlength="12" placeholder="A" autocomplete="off">
           </label>
           <fieldset class="mg-field mg-floors" id="mg-floors-wrap">
-            <span>Floors</span>
-            <div class="mg-floor-checks" id="mg-floors">
-              <label><input type="checkbox" value="ground"> Ground Floor</label>
-              <label><input type="checkbox" value="1"> Floor 1</label>
-              <label><input type="checkbox" value="2"> Floor 2</label>
-              <label><input type="checkbox" value="3"> Floor 3</label>
-              <label><input type="checkbox" value="4"> Floor 4</label>
-              <label><input type="checkbox" value="5"> Floor 5</label>
+            <span>Floor / location</span>
+            <div class="mg-loc-picker" id="mg-loc-picker">
+              <div class="mg-loc-chips" id="mg-loc-chips"></div>
+              <input id="mg-loc-search" type="text" maxlength="80" placeholder="Type 12 or bin…" autocomplete="off" autocapitalize="off" spellcheck="false">
+              <div class="mg-loc-suggest" id="mg-loc-suggest" hidden></div>
             </div>
-            <span class="mg-floors-hint">Leave all unchecked to show on every floor.</span>
+            <span class="mg-floors-hint">Pick from this site’s list. Leave empty to show on every location.</span>
           </fieldset>
           <label class="mg-field" id="mg-file-wrap">
             <span id="mg-file-label">PDF file</span>

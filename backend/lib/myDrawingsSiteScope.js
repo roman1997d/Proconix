@@ -4,6 +4,7 @@
  */
 
 const { pool } = require('../db/pool');
+const { siteLocationFields } = require('./myDrawingsLocations');
 
 function positiveInt(value) {
   const n = Number(value);
@@ -22,6 +23,7 @@ async function listWorkspaceSites(workspaceId) {
   if (!wsId) return [];
   const rows = await pool.query(
     `SELECT p.id, p.name, p.access_code, p.manager_worker_id, p.created_at,
+            p.floor_count, p.extra_locations,
             w.first_name AS manager_first, w.last_name AS manager_last, w.email AS manager_email,
             (SELECT COUNT(*)::int FROM my_drawings_item i WHERE i.project_id = p.id) AS drawing_count,
             (SELECT COUNT(*)::int FROM my_drawings_worker u WHERE u.project_id = p.id) AS worker_count
@@ -36,6 +38,7 @@ async function listWorkspaceSites(workspaceId) {
 
 function siteToClient(row) {
   const managerName = [row.manager_first, row.manager_last].filter(Boolean).join(' ').trim();
+  const loc = siteLocationFields(row);
   return {
     id: row.id,
     name: row.name,
@@ -45,6 +48,9 @@ function siteToClient(row) {
     managerEmail: row.manager_email || '',
     drawingCount: row.drawing_count || 0,
     workerCount: row.worker_count || 0,
+    floorCount: loc.floorCount,
+    extraLocations: loc.extraLocations,
+    locations: loc.locations,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
   };
 }
@@ -54,7 +60,7 @@ async function loadSiteRow(workspaceId, siteId) {
   const id = positiveInt(siteId);
   if (!wsId || !id) return null;
   const found = await pool.query(
-    'SELECT id, name, access_code, manager_worker_id, wall_types_pack FROM my_drawings_project WHERE id = $1 AND workspace_id = $2',
+    'SELECT id, name, access_code, manager_worker_id, wall_types_pack, floor_count, extra_locations FROM my_drawings_project WHERE id = $1 AND workspace_id = $2',
     [id, wsId]
   );
   return found.rows[0] || null;
