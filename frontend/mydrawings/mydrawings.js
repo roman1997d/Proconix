@@ -477,7 +477,14 @@
     if (!drawing.fileUrl) throw new Error('This drawing has no file on the server.');
     if (!isOnline()) throw new Error('This drawing is not available offline.');
     var res = await fetch(drawing.fileUrl, { credentials: 'same-origin', headers: pinHeaders() });
-    if (!res.ok) throw new Error('Could not load drawing.');
+    if (!res.ok) {
+      var msg = 'Could not load drawing.';
+      try {
+        var errData = await res.json();
+        if (errData && errData.message) msg = errData.message;
+      } catch (e) {}
+      throw new Error(msg);
+    }
     var total = Number(res.headers.get('Content-Length') || drawing.sizeBytes || 0);
     if (!res.body || !res.body.getReader) {
       var blobFast = await res.blob();

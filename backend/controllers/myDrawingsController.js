@@ -120,12 +120,101 @@ function relativeFromAbs(absPath) {
   return path.relative(UPLOADS_ROOT, absPath).split(path.sep).join('/');
 }
 
+function normalizeStoredRel(relativePath) {
+  if (!relativePath) return '';
+  let rel = String(relativePath).trim().replace(/\\/g, '/');
+  if (!rel) return '';
+  const marker = '/uploads/';
+  const idx = rel.toLowerCase().lastIndexOf(marker);
+  if (idx !== -1 && (rel.startsWith('/') || /^[A-Za-z]:\//.test(rel))) {
+    rel = rel.slice(idx + marker.length);
+  }
+  rel = rel.replace(/^\/+/, '');
+  if (rel.startsWith('backend/uploads/')) rel = rel.slice('backend/uploads/'.length);
+  if (rel.startsWith('uploads/')) rel = rel.slice('uploads/'.length);
+  rel = rel.replace(/^(mydrawings\/)+/, 'mydrawings/');
+  return rel;
+}
+
+function isFile(abs) {
+  try {
+    return !!(abs && fs.existsSync(abs) && fs.statSync(abs).isFile());
+  } catch (_) {
+    return false;
+  }
+}
+
 function absFromRelative(relativePath) {
-  if (!relativePath) return null;
-  const abs = path.resolve(UPLOADS_ROOT, String(relativePath).split('/').join(path.sep));
-  const root = UPLOADS_ROOT.endsWith(path.sep) ? UPLOADS_ROOT : UPLOADS_ROOT + path.sep;
-  if (abs !== UPLOADS_ROOT && !abs.startsWith(root)) return null;
+  const rel = normalizeStoredRel(relativePath);
+  if (!rel) return null;
+  const abs = path.resolve(UPLOADS_ROOT, rel.split('/').join(path.sep));
+  const root = path.resolve(UPLOADS_ROOT);
+  const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+  if (abs !== root && !abs.startsWith(prefix)) return null;
   return abs;
+}
+
+function findNamedFile(dir, filename, depth) {
+  if (!filename || depth < 0 || !dir) return null;
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (_) {
+    return null;
+  }
+  for (const ent of entries) {
+    if (ent.isFile() && ent.name === filename) return path.join(dir, ent.name);
+  }
+  for (const ent of entries) {
+    if (!ent.isDirectory() || ent.name.startsWith('.')) continue;
+    const found = findNamedFile(path.join(dir, ent.name), filename, depth - 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+function locateStoredDrawingFile(item) {
+  if (!item) return null;
+  const rel = normalizeStoredRel(item.relative_path);
+  const name = item.stored_filename || path.basename(rel);
+  const ws = item.workspace_id;
+  const pid = item.project_id;
+  const candidates = [];
+  function push(value) {
+    const abs = absFromRelative(value);
+    if (abs && !candidates.includes(abs)) candidates.push(abs);
+  }
+  push(item.relative_path);
+  push(rel);
+  if (name && ws && pid) push(`mydrawings/${ws}/${pid}/${name}`);
+  if (name && ws) push(`mydrawings/${ws}/${name}`);
+  if (name) push(`mydrawings/${name}`);
+  const nested = rel.match(/^mydrawings\/(\d+)\/([^/]+)$/);
+  if (nested && pid) push(`mydrawings/${nested[1]}/${pid}/${nested[2]}`);
+  for (const abs of candidates) {
+    if (isFile(abs)) return abs;
+  }
+  if (name && ws) {
+    const found = findNamedFile(path.join(UPLOAD_DIR, String(ws)), name, 4);
+    if (isFile(found)) return found;
+  }
+  if (name) {
+    const found = findNamedFile(UPLOAD_DIR, name, 4);
+    if (isFile(found)) return found;
+  }
+  return null;
+}
+
+async function healDrawingPath(item, abs) {
+  if (!item || !item.id || !abs) return;
+  const next = relativeFromAbs(abs);
+  if (!next || next === normalizeStoredRel(item.relative_path)) return;
+  try {
+    await pool.query('UPDATE my_drawings_item SET relative_path = $1 WHERE id = $2', [next, item.id]);
+    item.relative_path = next;
+  } catch (err) {
+    console.warn('myDrawings heal path:', err && err.message ? err.message : err);
+  }
 }
 
 function removeStoredFile(relativePath) {
@@ -687,13 +776,24 @@ async function migrateStoredDrawingsToTenantDirs() {
     const projectId = positiveInt(row.project_id);
     if (!projectId) continue;
     const expectedPrefix = `mydrawings/${row.workspace_id}/${projectId}/`;
-    if (String(row.relative_path).startsWith(expectedPrefix)) continue;
-    const abs = absFromRelative(row.relative_path);
-    if (!abs || !fs.existsSync(abs)) continue;
+    if (String(normalizeStoredRel(row.relative_path)).startsWith(expectedPrefix) && isFile(absFromRelative(row.relative_path))) {
+      continue;
+    }
+    const abs = locateStoredDrawingFile(row);
+    if (!abs) continue;
     const destDir = ensureTenantUploadDir(row.workspace_id, projectId);
     const destName = row.stored_filename || path.basename(abs);
     const destAbs = path.join(destDir, destName);
-    if (path.resolve(abs) === path.resolve(destAbs)) continue;
+    if (path.resolve(abs) === path.resolve(destAbs)) {
+      const rel = relativeFromAbs(destAbs);
+      if (rel && rel !== normalizeStoredRel(row.relative_path)) {
+        await pool.query(
+          'UPDATE my_drawings_item SET relative_path = $1, stored_filename = $2 WHERE id = $3',
+          [rel, destName, row.id]
+        );
+      }
+      continue;
+    }
     try {
       fs.renameSync(abs, destAbs);
     } catch (_) {
@@ -963,6 +1063,80 @@ function cleanEmail(value) {
   return String(value || '').trim().toLowerCase().slice(0, 254);
 }
 
+const REVIEW_DEMO_EMAIL = 'test@mydrawings.uk';
+const REVIEW_DEMO_PIN = '1111';
+const REVIEW_DEMO_HOST = '2026AA';
+
+function isReviewDemoEmail(email) {
+  return cleanEmail(email) === REVIEW_DEMO_EMAIL;
+}
+
+async function setWorkerPin(workerId, pin, days) {
+  const sha = pinSha(pin);
+  const pinHash = await bcrypt.hash(pin, 10);
+  const holdDays = Number.isInteger(days) && days > 0 ? days : 365;
+  const workspace = await pool.query(
+    'SELECT workspace_id FROM my_drawings_worker WHERE id = $1',
+    [workerId]
+  );
+  const workspaceId = workspace.rows[0] && workspace.rows[0].workspace_id;
+  if (workspaceId) {
+    await pool.query(
+      `UPDATE my_drawings_worker
+       SET pin_hash = NULL, pin_sha = NULL, pin_expires_at = NULL
+       WHERE workspace_id = $1 AND pin_sha = $2 AND id <> $3`,
+      [workspaceId, sha, workerId]
+    );
+  }
+  await pool.query(
+    `UPDATE my_drawings_worker
+     SET pin_hash = $2, pin_sha = $3, pin_expires_at = NOW() + ($4::int * INTERVAL '1 day')
+     WHERE id = $1`,
+    [workerId, pinHash, sha, holdDays]
+  );
+}
+
+async function ensureReviewDemoWorker() {
+  const workspace = await findWorkspaceByAccessCode(REVIEW_DEMO_HOST);
+  if (!workspace) {
+    const err = new Error('Review demo host code is not configured.');
+    err.code = 'DEMO_HOST';
+    throw err;
+  }
+  const siteId = workspace.site && workspace.site.id;
+  const existing = await pool.query(
+    `SELECT id, project_id FROM my_drawings_worker
+     WHERE workspace_id = $1 AND LOWER(email) = $2
+     LIMIT 1`,
+    [workspace.id, REVIEW_DEMO_EMAIL]
+  );
+  let workerId = existing.rows[0] && existing.rows[0].id;
+  if (!workerId) {
+    const inserted = await pool.query(
+      `INSERT INTO my_drawings_worker
+        (workspace_id, project_id, first_name, last_name, email, verified_at, is_admin)
+       VALUES ($1, $2, 'Apple', 'Review', $3, NOW(), false)
+       RETURNING id`,
+      [workspace.id, siteId || null, REVIEW_DEMO_EMAIL]
+    );
+    workerId = inserted.rows[0].id;
+  } else if (siteId && !existing.rows[0].project_id) {
+    await pool.query('UPDATE my_drawings_worker SET project_id = $2 WHERE id = $1', [workerId, siteId]);
+  }
+  await setWorkerPin(workerId, REVIEW_DEMO_PIN, 365);
+  const rows = await findWorkersByEmail(REVIEW_DEMO_EMAIL);
+  const match = rows.find((row) => Number(row.id) === Number(workerId));
+  return match || rows[0];
+}
+
+function reviewDemoMessage() {
+  return {
+    success: true,
+    email: REVIEW_DEMO_EMAIL,
+    message: 'Enter the 4-digit demo key 1111.',
+  };
+}
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -1082,6 +1256,13 @@ async function registerWorker(req, res) {
     }
     if (!ACCESS_CODE_RE.test(accessCode)) {
       return res.status(400).json({ success: false, message: 'Enter the site access code from your site manager.' });
+    }
+    if (isReviewDemoEmail(email) && accessCode === REVIEW_DEMO_HOST) {
+      const worker = await ensureReviewDemoWorker();
+      return res.json({
+        ...reviewDemoMessage(),
+        companyName: worker.workspace_name,
+      });
     }
     if (!allowRate('email:' + email, REGISTER_EMAIL_MAX, REGISTER_WINDOW_MS)
         || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
@@ -1243,6 +1424,15 @@ async function verifyWorker(req, res) {
     if (!EMAIL_RE.test(email) || !/^\d{4}$/.test(pin)) {
       return res.status(401).json({ success: false, message: 'Incorrect access key' });
     }
+    if (isReviewDemoEmail(email) && pin === REVIEW_DEMO_PIN) {
+      const demo = await ensureReviewDemoWorker();
+      const workspace = {
+        id: demo.workspace_id,
+        name: demo.workspace_name,
+        managerName: demo.manager_name || '',
+      };
+      return res.json(await issueWorkerSession(workspace, demo));
+    }
     let rows = await findWorkersByEmail(email);
     if (accessCode) {
       const workspace = await findWorkspaceByAccessCode(accessCode);
@@ -1303,6 +1493,16 @@ async function requestAuthCode(req, res) {
     );
     if (!EMAIL_RE.test(email)) {
       return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+    }
+    if (isReviewDemoEmail(email)) {
+      if (accessCode && accessCode !== REVIEW_DEMO_HOST) {
+        return res.status(404).json({ success: false, message: 'That site access code is not valid.' });
+      }
+      const worker = await ensureReviewDemoWorker();
+      return res.json({
+        ...reviewDemoMessage(),
+        companyName: worker.workspace_name,
+      });
     }
     if (!allowRate('email:' + email, REGISTER_EMAIL_MAX, REGISTER_WINDOW_MS)
         || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
@@ -1594,6 +1794,28 @@ async function restoreWorker(req, res) {
   } catch (err) {
     console.error('myDrawings restoreWorker:', err);
     return res.status(500).json({ success: false, message: 'Could not restore access.' });
+  }
+}
+
+async function deleteMyAccount(req, res) {
+  try {
+    await ensureSchema();
+    const worker = req.myDrawings && req.myDrawings.worker;
+    const workspace = req.myDrawings && req.myDrawings.workspace;
+    const workerId = worker && worker.id;
+    const workspaceId = workspace && workspace.id;
+    if (!workerId || !workspaceId) {
+      return res.status(400).json({ success: false, message: 'No worker account on this session.' });
+    }
+    await revokeWorkerSessions(workerId);
+    await pool.query(
+      'DELETE FROM my_drawings_worker WHERE id = $1 AND workspace_id = $2',
+      [workerId, workspaceId]
+    );
+    return res.json({ success: true, message: 'Your account has been deleted.' });
+  } catch (err) {
+    console.error('myDrawings deleteMyAccount:', err);
+    return res.status(500).json({ success: false, message: 'Could not delete your account.' });
   }
 }
 
@@ -2293,12 +2515,22 @@ async function downloadFile(req, res) {
     if (scopedProject && item.project_id && Number(item.project_id) !== Number(scopedProject)) {
       return res.status(404).json({ success: false, message: 'Drawing not found.' });
     }
-    const abs = absFromRelative(item.relative_path);
-    if (!abs || !fs.existsSync(abs)) {
+    const abs = locateStoredDrawingFile(item);
+    if (!abs) {
+      console.warn('myDrawings file missing', {
+        id: item.id,
+        relative_path: item.relative_path,
+        stored_filename: item.stored_filename,
+        workspace_id: item.workspace_id,
+        project_id: item.project_id,
+      });
       return res.status(404).json({ success: false, message: 'File missing on server.' });
     }
-    const expectedRoot = path.join(UPLOAD_DIR, String(req.myDrawings.workspace.id)) + path.sep;
-    if (!abs.startsWith(expectedRoot) && !abs.startsWith(UPLOAD_DIR + path.sep)) {
+    await healDrawingPath(item, abs);
+    const uploadRoot = path.resolve(UPLOAD_DIR);
+    const resolved = path.resolve(abs);
+    const uploadPrefix = uploadRoot.endsWith(path.sep) ? uploadRoot : uploadRoot + path.sep;
+    if (resolved !== uploadRoot && !resolved.startsWith(uploadPrefix)) {
       return res.status(404).json({ success: false, message: 'File missing on server.' });
     }
     const download = req.query.download === '1' || req.query.download === 'true';
@@ -2584,6 +2816,7 @@ module.exports = {
   listWorkers,
   suspendWorker,
   restoreWorker,
+  deleteMyAccount,
   deleteWorker,
   makeWorkerAdmin,
   removeWorkerAdmin,
