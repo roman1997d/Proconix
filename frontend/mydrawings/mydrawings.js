@@ -3512,11 +3512,20 @@
   }
 
   /* ---------- PWA ---------- */
+  function isStandalonePwa() {
+    return window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+  }
+
   function promptInstall() {
     var bar = $('install-bar');
-    if (state.installPrompt) {
-      state.installPrompt.prompt();
-      state.installPrompt.userChoice.then(function () {
+    if (state.installPrompt && typeof state.installPrompt.prompt === 'function') {
+      Promise.resolve(state.installPrompt.prompt()).then(function () {
+        return state.installPrompt && state.installPrompt.userChoice;
+      }).then(function () {
+        state.installPrompt = null;
+        if (bar) bar.classList.remove('is-on');
+      }).catch(function () {
         state.installPrompt = null;
         if (bar) bar.classList.remove('is-on');
       });
@@ -3950,10 +3959,11 @@
   });
 
   on(window, 'beforeinstallprompt', function (e) {
+    if (isStandalonePwa()) return;
     e.preventDefault();
     state.installPrompt = e;
-    var standalone = window.matchMedia('(display-mode: standalone)').matches;
-    if (!standalone) $('install-bar').classList.add('is-on');
+    var bar = $('install-bar');
+    if (bar) bar.classList.add('is-on');
   });
 
   if ('serviceWorker' in navigator) {
