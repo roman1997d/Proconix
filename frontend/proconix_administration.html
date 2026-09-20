@@ -13,7 +13,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
   <link href="css/styles.css" rel="stylesheet">
-  <link href="css/proconix_administration.css?v=health-monitor-1" rel="stylesheet">
+  <link href="css/proconix_administration.css?v=health-monitor-2" rel="stylesheet">
 </head>
 <body class="px-admin-app-body">
   <header class="px-admin-topbar">
@@ -392,8 +392,7 @@
               </div>
             </div>
             <p class="text-white-50 small mb-3">
-              Live supervision of Proconix: public health endpoints, PostgreSQL, uploads, My Drawings PDF/image downloads, memory and disk.
-              Auto-refresh every 30 seconds. Red means a user would fail to open a drawing or hit the API. For logs and orphan files, open <strong>Audit &amp; logs</strong>.
+              Live probes for API, PostgreSQL, uploads, My Drawings downloads, memory and disk. Auto-refresh every 30 seconds.
             </p>
             <div id="pxAdminSysAlert" class="alert alert-danger d-none" role="alert"></div>
             <div id="pxAdminSysLoading" class="text-white-50 py-3 d-none">Loading system metrics…</div>
@@ -403,7 +402,7 @@
                   <div>
                     <div class="px-admin-health-kicker">Live monitor</div>
                     <div class="px-admin-health-banner-title" id="pxAdminHealthBannerTitle">Checking…</div>
-                    <div class="small" id="pxAdminHealthBannerSub">Same probes UptimeRobot uses, plus My Drawings file downloads.</div>
+                    <div class="small" id="pxAdminHealthBannerSub">Uptime and last check appear on the right.</div>
                   </div>
                   <div class="text-md-end">
                     <span class="px-admin-health-pill" id="pxAdminHealthBannerPill">—</span>
@@ -420,7 +419,7 @@
                         <span class="px-admin-health-pill px-admin-health-pill-sm" id="pxAdminHealthApiPill">—</span>
                       </div>
                       <div class="px-admin-health-card-value" id="pxAdminHealthApiValue">—</div>
-                      <div class="small text-white-50" id="pxAdminHealthApiDetail">Express + modules</div>
+                      <div class="small text-white-50" id="pxAdminHealthApiDetail">Uptime</div>
                     </div>
                   </div>
                   <div class="col-sm-6 col-xl-4 col-xxl-2">
@@ -430,7 +429,7 @@
                         <span class="px-admin-health-pill px-admin-health-pill-sm" id="pxAdminHealthDbPill">—</span>
                       </div>
                       <div class="px-admin-health-card-value" id="pxAdminHealthDbValue">—</div>
-                      <div class="small text-white-50" id="pxAdminHealthDbDetail">PostgreSQL SELECT 1</div>
+                      <div class="small text-white-50" id="pxAdminHealthDbDetail">PostgreSQL</div>
                     </div>
                   </div>
                   <div class="col-sm-6 col-xl-4 col-xxl-2">
@@ -440,7 +439,7 @@
                         <span class="px-admin-health-pill px-admin-health-pill-sm" id="pxAdminHealthStoragePill">—</span>
                       </div>
                       <div class="px-admin-health-card-value" id="pxAdminHealthStorageValue">—</div>
-                      <div class="small text-white-50" id="pxAdminHealthStorageDetail">uploads read / write</div>
+                      <div class="small text-white-50" id="pxAdminHealthStorageDetail">uploads</div>
                     </div>
                   </div>
                   <div class="col-sm-6 col-xl-4 col-xxl-2">
@@ -450,7 +449,7 @@
                         <span class="px-admin-health-pill px-admin-health-pill-sm" id="pxAdminHealthDrawingsPill">—</span>
                       </div>
                       <div class="px-admin-health-card-value" id="pxAdminHealthDrawingsValue">—</div>
-                      <div class="small text-white-50" id="pxAdminHealthDrawingsDetail">PDF + wall-type images</div>
+                      <div class="small text-white-50" id="pxAdminHealthDrawingsDetail">Download routes</div>
                     </div>
                   </div>
                   <div class="col-sm-6 col-xl-4 col-xxl-2">
@@ -460,7 +459,7 @@
                         <span class="px-admin-health-pill px-admin-health-pill-sm" id="pxAdminHealthMemoryPill">—</span>
                       </div>
                       <div class="px-admin-health-card-value" id="pxAdminHealthMemoryValue">—</div>
-                      <div class="small text-white-50" id="pxAdminHealthMemoryDetail">Node RSS vs 800 MB</div>
+                      <div class="small text-white-50" id="pxAdminHealthMemoryDetail">Node RSS</div>
                     </div>
                   </div>
                   <div class="col-sm-6 col-xl-4 col-xxl-2">
@@ -470,15 +469,12 @@
                         <span class="px-admin-health-pill px-admin-health-pill-sm" id="pxAdminHealthDiskPill">—</span>
                       </div>
                       <div class="px-admin-health-card-value" id="pxAdminHealthDiskValue">—</div>
-                      <div class="small text-white-50" id="pxAdminHealthDiskDetail">Volume for uploads</div>
+                      <div class="small text-white-50" id="pxAdminHealthDiskDetail">Uploads volume</div>
                     </div>
                   </div>
                 </div>
 
-                <h3 class="h6 text-white mb-2">My Drawings file pipeline</h3>
-                <p class="small text-white-50 mb-2">
-                  Canary PDF and JPEG requested through the same download routes as the PWA and the native app. This is not a customer file.
-                </p>
+                <h3 class="h6 text-white mb-2">My Drawings downloads</h3>
                 <div class="table-responsive mb-4">
                   <table class="table table-dark table-sm px-admin-data-table mb-0">
                     <thead>
@@ -494,18 +490,14 @@
                   </table>
                 </div>
 
-                <h3 class="h6 text-white mb-2">UptimeRobot monitors</h3>
-                <p class="small text-white-50 mb-2">
-                  HTTP(s) monitors, alert when status is not 200. No auth. These URLs never return user data or secrets.
-                </p>
+                <h3 class="h6 text-white mb-2">UptimeRobot</h3>
                 <div class="table-responsive mb-4">
                   <table class="table table-dark table-sm px-admin-data-table mb-0">
                     <thead>
                       <tr>
                         <th scope="col">Monitor</th>
                         <th scope="col">URL</th>
-                        <th scope="col">OK / fail</th>
-                        <th scope="col">Checks</th>
+                        <th scope="col">Alert</th>
                         <th scope="col"></th>
                       </tr>
                     </thead>
@@ -514,68 +506,25 @@
                 </div>
               </div>
 
-              <h3 class="h6 text-white mb-2">Process snapshot</h3>
+              <h3 class="h6 text-white mb-2 mt-1">Host</h3>
               <div class="row g-3 mb-3">
-                <div class="col-sm-6 col-xl-3">
+                <div class="col-sm-6 col-xl-4">
                   <div class="px-admin-stat-card h-100">
-                    <div class="text-white-50 small">API</div>
-                    <div class="px-admin-stat-value" id="pxAdminSysApiStatus">—</div>
-                    <div class="small text-white-50">Process responding</div>
-                  </div>
-                </div>
-                <div class="col-sm-6 col-xl-3">
-                  <div class="px-admin-stat-card h-100">
-                    <div class="text-white-50 small">Database</div>
-                    <div class="px-admin-stat-value" id="pxAdminSysDbStatus">—</div>
-                    <div class="small text-white-50" id="pxAdminSysDbLatency">Ping latency</div>
-                    <div class="small text-white-50 mt-1" id="pxAdminSysDbSize">Database size</div>
-                  </div>
-                </div>
-                <div class="col-sm-6 col-xl-3">
-                  <div class="px-admin-stat-card h-100">
-                    <div class="text-white-50 small">Uptime</div>
-                    <div class="px-admin-stat-value small" id="pxAdminSysUptime">—</div>
-                    <div class="small text-white-50">Node process</div>
-                  </div>
-                </div>
-                <div class="col-sm-6 col-xl-3">
-                  <div class="px-admin-stat-card h-100">
-                    <div class="text-white-50 small">Queue depth</div>
-                    <div class="px-admin-stat-value" id="pxAdminSysQueue">—</div>
-                    <div class="small text-white-50" id="pxAdminSysQueueNote">Background jobs</div>
-                  </div>
-                </div>
-              </div>
-
-              <h3 class="h6 text-white mb-2 mt-1">Host &amp; Node (like htop summary)</h3>
-              <p class="small text-white-50 mb-3" id="pxAdminSysHostNote">
-                System load and RAM are for the whole machine. Node RSS / heap are this process only. Node CPU % updates after each refresh (time on CPU since the previous request).
-              </p>
-              <div class="row g-3 mb-3">
-                <div class="col-sm-6 col-xl-3">
-                  <div class="px-admin-stat-card h-100">
-                    <div class="text-white-50 small">Host load avg</div>
+                    <div class="text-white-50 small">Load avg</div>
                     <div class="px-admin-stat-value small" id="pxAdminSysHostLoad">—</div>
                     <div class="small text-white-50" id="pxAdminSysHostLoadSub">1 / 5 / 15 min</div>
                   </div>
                 </div>
-                <div class="col-sm-6 col-xl-3">
+                <div class="col-sm-6 col-xl-4">
                   <div class="px-admin-stat-card h-100">
                     <div class="text-white-50 small">Host RAM</div>
                     <div class="px-admin-stat-value" id="pxAdminSysHostRam">—</div>
                     <div class="small text-white-50" id="pxAdminSysHostRamSub">System memory</div>
                   </div>
                 </div>
-                <div class="col-sm-6 col-xl-3">
+                <div class="col-sm-6 col-xl-4">
                   <div class="px-admin-stat-card h-100">
-                    <div class="text-white-50 small">Node memory</div>
-                    <div class="px-admin-stat-value small" id="pxAdminSysNodeMem">—</div>
-                    <div class="small text-white-50" id="pxAdminSysNodeMemSub">RSS · heap</div>
-                  </div>
-                </div>
-                <div class="col-sm-6 col-xl-3">
-                  <div class="px-admin-stat-card h-100">
-                    <div class="text-white-50 small">Node CPU (interval)</div>
+                    <div class="text-white-50 small">Node CPU</div>
                     <div class="px-admin-stat-value" id="pxAdminSysNodeCpu">—</div>
                     <div class="small text-white-50" id="pxAdminSysNodeCpuSub">Since last refresh</div>
                   </div>
@@ -595,16 +544,8 @@
                 <p class="small text-white-50 mb-0 mt-2" id="pxAdminSysMetricsDesc"></p>
               </div>
 
-              <div class="row g-3 mb-3">
-                <div class="col-md-6">
-                  <h3 class="h6 text-white mb-2">Connection pool (pg)</h3>
-                  <ul class="list-unstyled small text-white-50 mb-0" id="pxAdminSysPool"></ul>
-                </div>
-                <div class="col-md-6">
-                  <h3 class="h6 text-white mb-2">PostgreSQL connections</h3>
-                  <ul class="list-unstyled small text-white-50 mb-0" id="pxAdminSysPgConn"></ul>
-                </div>
-              </div>
+              <h3 class="h6 text-white mb-2">PostgreSQL connections</h3>
+              <ul class="list-unstyled small text-white-50 mb-0" id="pxAdminSysPgConn"></ul>
             </div>
           </div>
         </div>
@@ -1543,6 +1484,6 @@
       }
     })();
   </script>
-  <script src="js/proconix_administration_dashboard.js?v=health-monitor-1"></script>
+  <script src="js/proconix_administration_dashboard.js?v=health-monitor-2"></script>
 </body>
 </html>

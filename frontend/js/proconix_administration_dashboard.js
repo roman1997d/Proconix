@@ -1059,10 +1059,17 @@
             : 'Incident — a critical component is down';
     }
     if (sub) {
-      sub.textContent =
-        overall === 'ok'
-          ? 'API, database, storage, My Drawings downloads, memory and disk all passed.'
-          : 'Open the cards below to see which probe failed. Users cannot view drawings if Drawings is Error.';
+      var upParts = [];
+      if (d.uptime_seconds != null) {
+        var us = Number(d.uptime_seconds) || 0;
+        var uh = Math.floor(us / 3600);
+        var um = Math.floor((us % 3600) / 60);
+        upParts.push('Up ' + uh + 'h ' + um + 'm');
+      }
+      if (overall === 'ok') upParts.push('All probes passed');
+      else if (overall === 'degraded') upParts.push('Serving with warnings');
+      else upParts.push('A critical probe failed');
+      sub.textContent = upParts.join(' · ');
     }
     setHealthPill(pill, overall);
     if (checkedEl && health.checked_at) {
@@ -1073,7 +1080,7 @@
     }
     if (httpHint) {
       httpHint.textContent =
-        'Public /api/health would return HTTP ' + String(health.http_status || (overall === 'error' ? 503 : 200));
+        'HTTP ' + String(health.http_status || (overall === 'error' ? 503 : 200));
     }
 
     var checks = health.checks || {};
@@ -1099,14 +1106,22 @@
     Object.keys(mods).forEach(function (k) {
       if (mods[k] && mods[k] !== 'ok') moduleFails.push(k);
     });
+    var dbSnap = d.database || {};
+    var dbValue =
+      database.latency_ms != null ? String(database.latency_ms) + ' ms' : healthStatusLabel(checks.database);
+    var dbDetailParts = [];
+    if (dbSnap.size_pretty) dbDetailParts.push(String(dbSnap.size_pretty));
+    else if (dbSnap.size_bytes != null) dbDetailParts.push(String(dbSnap.size_bytes) + ' bytes');
+    if (dbSnap.name) dbDetailParts.push(String(dbSnap.name));
+    if (!dbDetailParts.length) dbDetailParts.push(database.code ? String(database.code) : 'PostgreSQL');
     fillCard(
       'pxAdminHealthCardApi',
       'pxAdminHealthApiPill',
       'pxAdminHealthApiValue',
       'pxAdminHealthApiDetail',
       checks.api,
-      healthStatusLabel(checks.api),
-      moduleFails.length ? 'Modules: ' + moduleFails.join(', ') : 'Express + loaded modules'
+      moduleFails.length ? 'Modules' : 'Express',
+      moduleFails.length ? moduleFails.join(', ') : 'Routing loaded'
     );
     fillCard(
       'pxAdminHealthCardDatabase',
@@ -1114,12 +1129,8 @@
       'pxAdminHealthDbValue',
       'pxAdminHealthDbDetail',
       checks.database,
-      healthStatusLabel(checks.database),
-      database.latency_ms != null
-        ? 'SELECT 1 · ' + String(database.latency_ms) + ' ms'
-        : database.code
-          ? String(database.code)
-          : 'PostgreSQL'
+      dbValue,
+      dbDetailParts.join(' · ')
     );
     fillCard(
       'pxAdminHealthCardStorage',
@@ -1127,30 +1138,28 @@
       'pxAdminHealthStorageValue',
       'pxAdminHealthStorageDetail',
       checks.storage,
-      healthStatusLabel(checks.storage),
-      storage.writable
-        ? 'uploads readable and writable'
-        : storage.readable
-          ? 'readable, write failed'
-          : storage.code
-            ? String(storage.code)
-            : 'uploads probe'
+      storage.writable ? 'Read / write' : storage.readable ? 'Read only' : healthStatusLabel(checks.storage),
+      storage.code ? String(storage.code) : 'uploads'
     );
+    var drawingProbes = [drawings.web, drawings.mobile, drawings.image, drawings.image_mobile];
+    var drawingOk = 0;
+    drawingProbes.forEach(function (p) {
+      if (p && p.status === 'ok') drawingOk += 1;
+    });
     fillCard(
       'pxAdminHealthCardDrawings',
       'pxAdminHealthDrawingsPill',
       'pxAdminHealthDrawingsValue',
       'pxAdminHealthDrawingsDetail',
       checks.drawings,
-      healthStatusLabel(checks.drawings),
-      checks.drawings === 'ok'
-        ? 'PWA + app PDF and wall-type images'
-        : 'Download route failed — users cannot open files'
+      drawingOk + '/4 routes',
+      checks.drawings === 'ok' ? 'PWA + app file download' : 'Users cannot open files'
     );
-    var memLine = 'Node RSS';
-    if (memory.rss_mb != null && memory.limit_mb != null) {
-      memLine = String(memory.rss_mb) + ' / ' + String(memory.limit_mb) + ' MB';
-      if (memory.rss_pct_of_limit != null) memLine += ' (' + String(memory.rss_pct_of_limit) + '%)';
+    var memValue = memory.rss_mb != null ? String(memory.rss_mb) + ' MB' : healthStatusLabel(checks.memory);
+    var memDetail = 'Node RSS';
+    if (memory.limit_mb != null) {
+      memDetail = 'Limit ' + String(memory.limit_mb) + ' MB';
+      if (memory.rss_pct_of_limit != null) memDetail += ' · ' + String(memory.rss_pct_of_limit) + '%';
     }
     fillCard(
       'pxAdminHealthCardMemory',
@@ -1158,22 +1167,22 @@
       'pxAdminHealthMemoryValue',
       'pxAdminHealthMemoryDetail',
       checks.memory,
-      healthStatusLabel(checks.memory),
-      memLine
+      memValue,
+      memDetail
     );
-    var diskLine = 'uploads volume';
-    if (disk.percent_used != null) {
-      diskLine = String(disk.percent_used) + '% used';
-      if (disk.free_mb != null) diskLine += ' · ' + String(disk.free_mb) + ' MB free';
-    } else if (disk.code) diskLine = String(disk.code);
+    var diskValue =
+      disk.percent_used != null ? String(disk.percent_used) + '%' : healthStatusLabel(checks.disk);
+    var diskDetail = 'uploads volume';
+    if (disk.free_mb != null) diskDetail = String(disk.free_mb) + ' MB free';
+    else if (disk.code) diskDetail = String(disk.code);
     fillCard(
       'pxAdminHealthCardDisk',
       'pxAdminHealthDiskPill',
       'pxAdminHealthDiskValue',
       'pxAdminHealthDiskDetail',
       checks.disk,
-      healthStatusLabel(checks.disk),
-      diskLine
+      diskValue,
+      diskDetail
     );
 
     var dBody = document.getElementById('pxAdminHealthDrawingsBody');
@@ -1206,9 +1215,6 @@
           cellText(mon.ok_http) +
           ' / ' +
           cellText(mon.fail_http) +
-          '</td>' +
-          '<td class="small text-white-50">' +
-          cellText(mon.checks || '') +
           '</td>' +
           '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-info px-admin-health-copy" data-health-url="' +
           encodeURIComponent(fullUrl) +
@@ -1486,44 +1492,7 @@
             consolePre.textContent = '';
           }
         }
-        var apiEl = document.getElementById('pxAdminSysApiStatus');
-        if (apiEl) {
-          apiEl.textContent = d.api && d.api.ok ? 'OK' : '—';
-          apiEl.className =
-            'px-admin-stat-value ' + (d.api && d.api.ok ? 'text-success' : 'text-warning');
-        }
-        var dbEl = document.getElementById('pxAdminSysDbStatus');
-        var dbLat = document.getElementById('pxAdminSysDbLatency');
-        var dbSz = document.getElementById('pxAdminSysDbSize');
         var srvMemDb = document.getElementById('pxAdminServerMemoryDbSize');
-        if (dbEl) {
-          dbEl.textContent = d.database && d.database.ok ? 'OK' : 'Down';
-          dbEl.className =
-            'px-admin-stat-value ' + (d.database && d.database.ok ? 'text-success' : 'text-danger');
-        }
-        if (dbLat) {
-          dbLat.textContent =
-            d.database && d.database.latency_ms != null
-              ? 'Ping ~' + String(d.database.latency_ms) + ' ms'
-              : 'Ping latency';
-        }
-        if (dbSz) {
-          var dbmeta = (d.database && d.database.name) ? String(d.database.name) : '';
-          var szPretty = (d.database && d.database.size_pretty) ? String(d.database.size_pretty) : '';
-          if (d.database && d.database.ok && szPretty) {
-            dbSz.textContent = szPretty + (dbmeta ? ' · ' + dbmeta : '');
-            dbSz.className = 'small text-info mt-1';
-          } else if (d.database && d.database.ok && d.database.size_bytes != null) {
-            dbSz.textContent = formatStorageBytes(Number(d.database.size_bytes)) + (dbmeta ? ' · ' + dbmeta : '');
-            dbSz.className = 'small text-info mt-1';
-          } else if (d.database && d.database.ok) {
-            dbSz.textContent = 'Size unavailable';
-            dbSz.className = 'small text-white-50 mt-1';
-          } else {
-            dbSz.textContent = 'Database size —';
-            dbSz.className = 'small text-white-50 mt-1';
-          }
-        }
         if (srvMemDb) {
           if (d.database && d.database.ok && d.database.size_pretty) {
             srvMemDb.textContent =
@@ -1537,23 +1506,8 @@
             srvMemDb.textContent = d.database && d.database.ok ? '—' : 'DB unreachable';
           }
         }
-        var up = document.getElementById('pxAdminSysUptime');
-        if (up && d.uptime_seconds != null) {
-          var s = d.uptime_seconds;
-          var h = Math.floor(s / 3600);
-          var m = Math.floor((s % 3600) / 60);
-          var sec = s % 60;
-          up.textContent = h + 'h ' + m + 'm ' + sec + 's';
-        }
-        var qd = document.getElementById('pxAdminSysQueue');
-        var qn = document.getElementById('pxAdminSysQueueNote');
-        if (qd) qd.textContent = d.queue && d.queue.depth != null ? String(d.queue.depth) : '—';
-        if (qn) qn.textContent = (d.queue && d.queue.note) || 'Background jobs';
-
         var host = d.host || {};
         var np = d.node_process || {};
-        var hostNoteEl = document.getElementById('pxAdminSysHostNote');
-        if (hostNoteEl && d.host_metrics_note) hostNoteEl.textContent = d.host_metrics_note;
 
         var hl = document.getElementById('pxAdminSysHostLoad');
         var hls = document.getElementById('pxAdminSysHostLoadSub');
@@ -1586,17 +1540,6 @@
           }
         } else if (hr) {
           hr.textContent = '—';
-        }
-
-        var nm = document.getElementById('pxAdminSysNodeMem');
-        var nms = document.getElementById('pxAdminSysNodeMemSub');
-        if (nm && np.rss_mb != null) {
-          nm.textContent = np.rss_mb + ' MB RSS';
-          if (nms && np.heap_used_mb != null && np.heap_total_mb != null) {
-            nms.textContent = 'Heap ' + np.heap_used_mb + ' / ' + np.heap_total_mb + ' MB';
-          }
-        } else if (nm) {
-          nm.textContent = '—';
         }
 
         var nc = document.getElementById('pxAdminSysNodeCpu');
@@ -1733,35 +1676,24 @@
 
         drawSystemHealthChart((d.metrics && d.metrics.buckets) || []);
 
-        var poolUl = document.getElementById('pxAdminSysPool');
-        if (poolUl) {
-          poolUl.innerHTML = '';
-          var p = d.pool || {};
-          function li(t) {
-            var li0 = document.createElement('li');
-            li0.className = 'mb-1';
-            li0.textContent = t;
-            poolUl.appendChild(li0);
-          }
-          if (p.totalCount != null) li('Total clients: ' + p.totalCount);
-          if (p.idleCount != null) li('Idle: ' + p.idleCount);
-          if (p.waitingCount != null) li('Waiting (queued for connection): ' + p.waitingCount);
-          if (poolUl.children.length === 0) li('Pool stats unavailable.');
-        }
         var pgUl = document.getElementById('pxAdminSysPgConn');
         if (pgUl) {
           pgUl.innerHTML = '';
+          var p = d.pool || {};
           var pc = d.pg_connections || {};
-          function li2(t) {
+          function liPg(t) {
             var li0 = document.createElement('li');
             li0.className = 'mb-1';
             li0.textContent = t;
             pgUl.appendChild(li0);
           }
-          if (pc.active != null) li2('Sessions to this database: ' + pc.active);
-          if (pc.max != null) li2('max_connections (server): ' + pc.max);
-          if (pc.error) li2('Note: ' + pc.error);
-          if (pgUl.children.length === 0) li2('—');
+          if (pc.active != null) liPg('Sessions to this database: ' + pc.active);
+          if (pc.max != null) liPg('max_connections: ' + pc.max);
+          if (p.totalCount != null) liPg('Pool total: ' + p.totalCount);
+          if (p.idleCount != null) liPg('Pool idle: ' + p.idleCount);
+          if (p.waitingCount != null) liPg('Pool waiting: ' + p.waitingCount);
+          if (pc.error) liPg('Note: ' + pc.error);
+          if (pgUl.children.length === 0) liPg('—');
         }
 
         var slowNote = document.getElementById('pxAdminAuditSlowNote');
