@@ -9,6 +9,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { pool } = require('../db/pool');
 const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
+const { checkMyDrawingsDownload } = require('./myDrawingsHealthProbe');
 
 const CHECK_TIMEOUT_MS = 2500;
 const HEALTH_DIR = path.join(UPLOADS_ROOT, '.health');
@@ -185,14 +186,15 @@ function worstStatus(statuses) {
 }
 
 async function runAllChecks() {
-  const [database, storage, disk] = await Promise.all([
+  const [database, storage, disk, drawings] = await Promise.all([
     checkDatabase(),
     checkStorage(),
     checkDisk(),
+    checkMyDrawingsDownload(),
   ]);
   const api = checkApi();
   const memory = checkMemory();
-  return { api, database, storage, memory, disk };
+  return { api, database, storage, memory, disk, drawings };
 }
 
 function httpStatusFor(overall, criticalError) {
@@ -207,7 +209,8 @@ function isCriticalError(checks) {
     (checks.database && checks.database.status === 'error') ||
     (checks.storage && checks.storage.status === 'error') ||
     (checks.memory && checks.memory.status === 'error') ||
-    (checks.disk && checks.disk.status === 'error')
+    (checks.disk && checks.disk.status === 'error') ||
+    (checks.drawings && checks.drawings.status === 'error')
   );
 }
 
@@ -218,6 +221,7 @@ module.exports = {
   checkStorage,
   checkMemory,
   checkDisk,
+  checkMyDrawingsDownload,
   runAllChecks,
   worstStatus,
   httpStatusFor,

@@ -20,6 +20,7 @@ function getStartupConsoleBannerLines(opts) {
     `  Register:     http://${HOST}:${PORT}/register_company.html`,
     `  API health:   http://${HOST}:${PORT}/api/health`,
     `  Health full:  http://${HOST}:${PORT}/api/health/full`,
+    `  Drawings:     http://${HOST}:${PORT}/api/health/mydrawings`,
     `  API create:   POST http://${HOST}:${PORT}/api/companies/create`,
     '-------------------------------------------',
   ];

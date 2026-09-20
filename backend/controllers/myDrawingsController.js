@@ -24,6 +24,10 @@ const {
   sendSpecImportRequest,
 } = require('../lib/myDrawingsWallTypes');
 const {
+  isHealthProbeId,
+  healthProbeDrawingItem,
+} = require('../lib/myDrawingsHealthProbe');
+const {
   listWorkspaceSites,
   loadSiteRow,
   findSiteByAccessCode,
@@ -254,7 +258,7 @@ function copyDrawingIntoTenant(item, abs) {
 }
 
 async function healDrawingPath(item, abs) {
-  if (!item || !item.id || !abs) return;
+  if (!item || item.healthProbe || isHealthProbeId(item.id) || !item.id || !abs) return;
   const next = relativeFromAbs(abs);
   if (!next || next.startsWith('..') || !next.startsWith('mydrawings/')) return;
   if (next === normalizeStoredRel(item.relative_path)) return;
@@ -2490,6 +2494,9 @@ async function loadItem(workspaceId, id, projectId) {
 }
 
 async function loadDrawingForRead(req, id) {
+  if (isHealthProbeId(id) && req.myDrawings && req.myDrawings.healthProbe) {
+    return healthProbeDrawingItem();
+  }
   const workspaceId = req.myDrawings && req.myDrawings.workspace && req.myDrawings.workspace.id;
   const n = parseInt(id, 10);
   if (!workspaceId || !Number.isInteger(n) || n < 1) return null;

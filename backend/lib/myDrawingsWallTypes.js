@@ -9,6 +9,7 @@ const { createTransport } = require('./sendCallbackRequestEmail');
 const { pool } = require('../db/pool');
 const { UPLOADS_ROOT } = require('../middleware/resolveCompanyDocsDir');
 const { currentSiteId } = require('./myDrawingsSiteScope');
+const { isHealthProbeId, probeJpegAbs } = require('./myDrawingsHealthProbe');
 
 const UPLOAD_DIR = path.join(UPLOADS_ROOT, 'mydrawings');
 const STARTER_PACK_JSON = path.join(
@@ -608,6 +609,17 @@ async function deleteWallType(req, res) {
 
 async function downloadWallTypeImage(req, res) {
   try {
+    if (isHealthProbeId(req.params.id) && req.myDrawings && req.myDrawings.healthProbe) {
+      const abs = probeJpegAbs();
+      if (!abs || !fs.existsSync(abs)) {
+        return res.status(404).json({ success: false, message: 'Image missing on server.' });
+      }
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Content-Disposition', 'inline');
+      return res.sendFile(abs);
+    }
     const item = await loadWallType(req.myDrawings.workspace.id, req.params.id, currentSiteId(req.myDrawings));
     if (!item || !item.detail_image_path) {
       return res.status(404).json({ success: false, message: 'Image not found.' });

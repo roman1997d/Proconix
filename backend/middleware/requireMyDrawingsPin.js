@@ -10,6 +10,7 @@ const {
 } = require('../controllers/myDrawingsController');
 const { attachCurrentSite } = require('../lib/myDrawingsSiteScope');
 const { readBearerToken } = require('../lib/myDrawingsJwt');
+const { isHealthProbeDownload, healthProbeContext } = require('../lib/myDrawingsHealthProbe');
 
 function readDevice(req) {
   const header = req.headers['x-mydrawings-device'];
@@ -34,6 +35,10 @@ function readAdminToken(req) {
 
 async function requireMyDrawingsPin(req, res, next) {
   try {
+    if (isHealthProbeDownload(req)) {
+      req.myDrawings = healthProbeContext();
+      return next();
+    }
     const bearer = readBearerToken(req);
     if (bearer) {
       const asJwt = await resolveJwtAuth(bearer);

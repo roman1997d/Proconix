@@ -10,6 +10,9 @@ function metricsMiddleware(req, res, next) {
   if (req.path === '/api/health' || req.path.indexOf('/api/health/') === 0) {
     return next();
   }
+  if (req.headers && req.headers['x-proconix-health-probe']) {
+    return next();
+  }
   const t0 = Date.now();
   res.on('finish', () => {
     const ms = Date.now() - t0;
