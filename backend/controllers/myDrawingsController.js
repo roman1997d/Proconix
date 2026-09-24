@@ -657,6 +657,7 @@ function normalizeAccessCode(raw) {
 
 const ACCESS_CODE_RE = /^[A-Z0-9]{6,10}$/;
 const SESSION_TTL_SQL = `INTERVAL '6 months'`;
+const ADMIN_TTL_SQL = `INTERVAL '30 days'`;
 const BRANDING_DIR = path.join(UPLOADS_ROOT, 'mydrawings-branding');
 const LOGO_TYPES = {
   'image/jpeg': '.jpg',
@@ -703,6 +704,10 @@ async function allocateAccessCode(exceptWorkspaceId, exceptProjectId) {
 
 async function dummyPinHash() {
   return bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+}
+
+function generateAdminPin() {
+  return String(crypto.randomInt(0, 10000)).padStart(4, '0');
 }
 
 async function seedTenants() {
@@ -912,11 +917,17 @@ function ensureSchema() {
   return schemaReady;
 }
 
-async function resolveWorkspaceByPin(pin) {
+async function resolveWorkspaceByPin(pin, email) {
   await ensureSchema();
-  const result = await pool.query(
-    'SELECT id, name, admin_pin_hash FROM my_drawings_workspace ORDER BY id ASC'
-  );
+  const cleaned = cleanEmail(email);
+  const result = EMAIL_RE.test(cleaned)
+    ? await pool.query(
+      'SELECT id, name, admin_pin_hash FROM my_drawings_workspace WHERE LOWER(email) = $1',
+      [cleaned]
+    )
+    : await pool.query(
+      'SELECT id, name, admin_pin_hash FROM my_drawings_workspace ORDER BY id ASC'
+    );
   for (const row of result.rows) {
     if (row.admin_pin_hash && (await bcrypt.compare(pin, row.admin_pin_hash))) {
       return { workspace: { id: row.id, name: row.name }, role: 'admin' };
@@ -1251,6 +1262,22 @@ async function issueUniquePin(workspaceId) {
   throw err;
 }
 
+async function emailWorkerPin(worker) {
+  const { pin, sha } = await issueUniquePin(worker.workspace_id);
+  const pinHash = await bcrypt.hash(pin, 10);
+  await pool.query(
+    `UPDATE my_drawings_worker
+     SET pin_hash = $2, pin_sha = $3, pin_expires_at = NOW() + INTERVAL '24 hours'
+     WHERE id = $1`,
+    [worker.id, pinHash, sha]
+  );
+  await sendPasskeyEmail({
+    to: worker.email,
+    firstName: worker.first_name,
+    pin,
+  });
+}
+
 async function sendPasskeyEmail({ to, firstName, pin }) {
   const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
   const transport = createTransport();
@@ -1394,19 +1421,24 @@ async function registerWorker(req, res) {
        RETURNING id, first_name, last_name, email, access_suspended_until, project_id, is_admin`,
       [workspace.id, siteId, firstName, lastName, email]
     );
-    const session = await issueWorkerSession(
-      { id: workspace.id, name: workspace.name, managerName: workspace.manager_name || '' },
-      inserted.rows[0]
-    );
+    const worker = { ...inserted.rows[0], workspace_id: workspace.id };
+    await emailWorkerPin(worker);
     return res.json({
-      ...session,
       success: true,
-      message: 'Account created.',
+      email: worker.email,
+      companyName: workspace.name,
+      message: 'We sent a 4-digit key to your email.',
     });
   } catch (err) {
     console.error('myDrawings register:', err);
     if (err && err.code === 'ACCESS_CLOSED') {
       return res.status(403).json(accessClosedPayload(err.until));
+    }
+    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({ success: false, message: err.message });
+    }
+    if (err && err.code === 'PIN_ALLOC') {
+      return res.status(500).json({ success: false, message: err.message });
     }
     return res.status(500).json({ success: false, message: 'Could not create your account.' });
   }
@@ -1440,6 +1472,7 @@ async function loginWorker(req, res) {
   try {
     await ensureSchema();
     const email = cleanEmail(req.body && req.body.email);
+    const password = String((req.body && req.body.password) || '');
     const accessCode = normalizeAccessCode(
       (req.body && (req.body.hostAccessCode || req.body.accessCode)) || ''
     );
@@ -1452,14 +1485,39 @@ async function loginWorker(req, res) {
     }
     if (!accessCode) {
       const manager = await pool.query(
-        `SELECT id, name, email, manager_name, access_code, project_mode, logo_path
+        `SELECT id, name, email, password_hash, manager_name, access_code, project_mode, logo_path
          FROM my_drawings_workspace
          WHERE LOWER(email) = $1`,
         [email]
       );
-      if (manager.rows[0]) {
-        return res.json(await issueAdminSession(manager.rows[0]));
+      const row = manager.rows[0];
+      if (row) {
+        if (!password) {
+          return res.json({
+            success: true,
+            kind: 'manager',
+            needsPassword: true,
+            message: 'Enter your company password.',
+          });
+        }
+        if (!row.password_hash || !(await bcrypt.compare(password, row.password_hash))) {
+          return res.status(401).json({ success: false, message: 'Incorrect company email or password.' });
+        }
+        return res.json({ ...(await issueAdminSession(row)), kind: 'manager' });
       }
+    }
+    if (isReviewDemoEmail(email)) {
+      if (accessCode && accessCode !== REVIEW_DEMO_HOST) {
+        return res.status(404).json({ success: false, message: 'That site access code is not valid.' });
+      }
+      const worker = await ensureReviewDemoWorker();
+      return res.json({
+        success: true,
+        kind: 'worker',
+        needsPin: true,
+        email: worker.email,
+        ...reviewDemoMessage(),
+      });
     }
     let rows = await findWorkersByEmail(email);
     if (accessCode) {
@@ -1482,22 +1540,30 @@ async function loginWorker(req, res) {
       return res.status(404).json({ success: false, message: 'No account found for that email.' });
     }
     if (rows.length > 1 && !accessCode) {
-      return res.status(400).json({
-        success: false,
+      return res.json({
+        success: true,
+        kind: 'worker',
+        needsAccessCode: true,
         message: 'Enter the site access code for the site you want to open.',
       });
     }
     const worker = rows[0];
-    const workspace = {
-      id: worker.workspace_id,
-      name: worker.workspace_name,
-      managerName: worker.manager_name || '',
-    };
-    return res.json(await issueWorkerSession(workspace, worker));
+    await emailWorkerPin(worker);
+    return res.json({
+      success: true,
+      kind: 'worker',
+      needsPin: true,
+      email: worker.email,
+      companyName: worker.workspace_name,
+      message: 'We sent a 4-digit key to your email.',
+    });
   } catch (err) {
     console.error('myDrawings login:', err);
     if (err && err.code === 'ACCESS_CLOSED') {
       return res.status(403).json(accessClosedPayload(err.until));
+    }
+    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({ success: false, message: err.message });
     }
     return res.status(500).json({ success: false, message: 'Could not sign in.' });
   }
@@ -1625,15 +1691,7 @@ async function requestAuthCode(req, res) {
     if (until) {
       return res.status(403).json(accessClosedPayload(until));
     }
-    const { pin, sha } = await issueUniquePin(worker.workspace_id);
-    const pinHash = await bcrypt.hash(pin, 10);
-    await pool.query(
-      `UPDATE my_drawings_worker
-       SET pin_hash = $2, pin_sha = $3, pin_expires_at = NOW() + INTERVAL '24 hours'
-       WHERE id = $1`,
-      [worker.id, pinHash, sha]
-    );
-    await sendPasskeyEmail({ to: worker.email, firstName: worker.first_name, pin });
+    await emailWorkerPin(worker);
     return res.json({
       success: true,
       email: worker.email,
@@ -2082,7 +2140,7 @@ async function issueAdminSession(row, managerName) {
   const adminToken = crypto.randomBytes(32).toString('hex');
   const opened = await pool.query(
     `INSERT INTO my_drawings_admin_session (workspace_id, token_hash, expires_at)
-     VALUES ($1, $2, NOW() + ${SESSION_TTL_SQL})
+     VALUES ($1, $2, NOW() + ${ADMIN_TTL_SQL})
      RETURNING expires_at`,
     [row.id, tokenSha(adminToken)]
   );
@@ -2120,7 +2178,7 @@ async function lookupAuth(req, res) {
       [email]
     );
     if (manager.rows[0]) {
-      return res.json({ success: true, kind: 'manager', needsPassword: false, needsAccessCode: false });
+      return res.json({ success: true, kind: 'manager', needsPassword: true, needsAccessCode: false });
     }
     const workers = await findWorkersByEmail(email);
     const open = workers.filter((row) => !suspendedUntil(row));
@@ -2131,9 +2189,9 @@ async function lookupAuth(req, res) {
       return res.json({ success: true, kind: 'none', needsPassword: false, needsAccessCode: false });
     }
     if (open.length > 1) {
-      return res.json({ success: true, kind: 'worker', needsPassword: false, needsAccessCode: false });
+      return res.json({ success: true, kind: 'worker', needsPassword: false, needsAccessCode: true });
     }
-    return res.json({ success: true, kind: 'worker', needsPassword: false, needsAccessCode: false });
+    return res.json({ success: true, kind: 'worker', needsPassword: false, needsAccessCode: false, needsPin: true });
   } catch (err) {
     console.error('myDrawings lookupAuth:', err);
     return res.status(500).json({ success: false, message: 'Could not check that email.' });
@@ -2180,7 +2238,8 @@ async function startCompany(req, res) {
       });
     }
     const accessHash = await dummyPinHash();
-    const adminHash = await dummyPinHash();
+    const adminPin = generateAdminPin();
+    const adminHash = await bcrypt.hash(adminPin, 10);
     const passwordHash = await bcrypt.hash(password, 10);
     const accessCode = await allocateAccessCode(0);
     const managerName = email.split('@')[0] || companyName;
@@ -2213,6 +2272,7 @@ async function startCompany(req, res) {
     return res.json({
       ...session,
       success: true,
+      adminPin,
       message: 'Company created.',
     });
   } catch (err) {
@@ -2252,10 +2312,11 @@ async function companyLogin(req, res) {
     if (!row) {
       return res.status(401).json({ success: false, message: 'No company account found for that email.' });
     }
-    if (password) {
-      if (!row.password_hash || !(await bcrypt.compare(password, row.password_hash))) {
-        return res.status(401).json({ success: false, message: 'Incorrect company email or password.' });
-      }
+    if (password.length < 8) {
+      return res.status(400).json({ success: false, message: 'Enter the company password.' });
+    }
+    if (!row.password_hash || !(await bcrypt.compare(password, row.password_hash))) {
+      return res.status(401).json({ success: false, message: 'Incorrect company email or password.' });
     }
     return res.json(await issueAdminSession(row));
   } catch (err) {
@@ -2268,18 +2329,44 @@ async function unlock(req, res) {
   try {
     await ensureSchema();
     const pin = String((req.body && req.body.pin) || '').trim();
+    const email = cleanEmail(req.body && req.body.email);
     if (!/^\d{4}$/.test(pin)) {
       return res.status(401).json({ success: false, message: 'Incorrect access key' });
     }
-    const resolved = await resolveWorkspaceByPin(pin);
+    const resolved = await resolveWorkspaceByPin(pin, email);
     if (!resolved || resolved.role !== 'admin') {
       return res.status(401).json({ success: false, message: 'Incorrect access key' });
     }
-    req.myDrawings = resolved;
-    return catalogResponse(req, res);
+    const found = await pool.query(
+      `SELECT id, name, email, manager_name, access_code, project_mode, logo_path
+       FROM my_drawings_workspace WHERE id = $1`,
+      [resolved.workspace.id]
+    );
+    if (!found.rows[0]) {
+      return res.status(401).json({ success: false, message: 'Incorrect access key' });
+    }
+    return res.json(await issueAdminSession(found.rows[0]));
   } catch (err) {
     console.error('myDrawings unlock:', err);
     return res.status(500).json({ success: false, message: 'Could not unlock drawings.' });
+  }
+}
+
+async function logoutSession(req, res) {
+  try {
+    await ensureSchema();
+    const adminToken = String((req.body && req.body.adminToken) || '').trim();
+    const deviceToken = String((req.body && req.body.deviceToken) || '').trim();
+    if (adminToken) {
+      await pool.query('DELETE FROM my_drawings_admin_session WHERE token_hash = $1', [tokenSha(adminToken)]);
+    }
+    if (deviceToken) {
+      await pool.query('DELETE FROM my_drawings_device WHERE token_hash = $1', [tokenSha(deviceToken)]);
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('myDrawings logout:', err);
+    return res.status(500).json({ success: false, message: 'Could not sign out.' });
   }
 }
 
@@ -2969,6 +3056,7 @@ module.exports = {
   startCompany,
   companyLogin,
   unlock,
+  logoutSession,
   getCatalog,
   listDrawings,
   getActivity,

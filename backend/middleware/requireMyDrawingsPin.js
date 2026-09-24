@@ -66,7 +66,8 @@ async function requireMyDrawingsPin(req, res, next) {
     }
     const pin = readPin(req);
     if (/^\d{4}$/.test(pin)) {
-      const byPin = await resolveWorkspaceByPin(pin);
+      const email = req.headers['x-mydrawings-email'] || (req.body && req.body.email) || '';
+      const byPin = await resolveWorkspaceByPin(pin, email);
       if (byPin && byPin.role === 'admin') {
         req.myDrawings = await attachCurrentSite(req, byPin);
         const device = readDevice(req);

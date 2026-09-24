@@ -58,18 +58,22 @@
     <section class="md-screen md-pin md-register" id="screen-login" aria-label="Sign in">
       <p class="md-pin-brand">My Drawings</p>
       <h2>Sign in</h2>
-      <p class="md-pin-hint" id="login-hint">Enter your email. You stay signed in for 6 months.</p>
+      <p class="md-pin-hint" id="login-hint">Enter your email. We will ask for a password or a 4-digit key next.</p>
       <form class="md-reg-form" id="login-form" autocomplete="on">
         <label class="mg-field">
           <span>Email</span>
           <input id="login-email" type="email" maxlength="254" autocomplete="username" autocapitalize="off" spellcheck="false" inputmode="email" required>
         </label>
-        <label class="mg-field">
-          <span>Site access code (if you work on more than one site)</span>
-          <input id="login-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Optional">
+        <label class="mg-field" id="login-password-wrap" hidden>
+          <span>Company password</span>
+          <input id="login-password" type="password" minlength="8" maxlength="120" autocomplete="current-password">
+        </label>
+        <label class="mg-field" id="login-host-wrap" hidden>
+          <span>Site access code</span>
+          <input id="login-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="6–10 characters">
         </label>
         <p class="md-error" id="login-error" role="alert"></p>
-        <button type="submit" class="md-btn md-btn-primary" id="login-continue">Sign in</button>
+        <button type="submit" class="md-btn md-btn-primary" id="login-continue">Continue</button>
       </form>
       <p class="md-pin-actions">
         <button type="button" class="md-link" id="btn-create-account">Create a simple user account</button>
@@ -80,11 +84,15 @@
     <section class="md-screen md-pin md-register" id="screen-company" aria-label="Company sign in">
       <p class="md-pin-brand">My Drawings</p>
       <h2>Company sign in</h2>
-      <p class="md-pin-hint">Enter the company email. After you sign in you can manage this company’s drawings.</p>
+      <p class="md-pin-hint">Enter the company email and password.</p>
       <form class="md-reg-form" id="company-form" autocomplete="on">
         <label class="mg-field">
           <span>Company email</span>
           <input id="company-email" type="email" maxlength="254" autocomplete="username" autocapitalize="off" spellcheck="false" inputmode="email" required>
+        </label>
+        <label class="mg-field">
+          <span>Password</span>
+          <input id="company-password" type="password" minlength="8" maxlength="120" autocomplete="current-password" required>
         </label>
         <p class="md-error" id="company-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="company-continue">Sign in</button>

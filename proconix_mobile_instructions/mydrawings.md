@@ -35,7 +35,7 @@ Răspuns verify (succes):
 
 Stocați `token` (SecureStore). La request-uri: `Authorization: Bearer <token>`.
 
-Codul expiră în 24h. JWT implicit: 30 zile (`MY_DRAWINGS_JWT_EXPIRES`).
+Codul expiră în 24h. JWT implicit: 180 zile (`MY_DRAWINGS_JWT_EXPIRES`).
 
 ---
 

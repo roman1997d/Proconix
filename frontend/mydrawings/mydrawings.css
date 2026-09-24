@@ -1133,6 +1133,7 @@ a.md-link { color: var(--md-accent); }
 .mg-form h2 { margin: 0 0 6px; font-size: 1.05rem; }
 .mg-form-note { margin: 0 0 14px; color: var(--md-muted); font-size: 0.84rem; line-height: 1.4; }
 .mg-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.mg-field[hidden] { display: none !important; }
 .mg-field span { font-size: 0.78rem; color: var(--md-faint); font-weight: 650; }
 .mg-field input[type="file"] { padding: 10px; }
 .mg-floors { border: 0; padding: 0; margin: 0 0 12px; }

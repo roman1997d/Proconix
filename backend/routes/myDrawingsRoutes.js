@@ -30,6 +30,7 @@ router.post('/auth/verify', ctrl.verifyWorker);
 router.post('/company-start', uploadCompanyLogo, handleUploadError, ctrl.startCompany);
 router.post('/company-login', ctrl.companyLogin);
 router.post('/unlock', ctrl.unlock);
+router.post('/logout', ctrl.logoutSession);
 router.get('/catalog', requireMyDrawingsPin, ctrl.getCatalog);
 router.get('/drawings', requireMyDrawingsPin, ctrl.listDrawings);
 router.get('/activity', requireMyDrawingsPin, ctrl.getActivity);
