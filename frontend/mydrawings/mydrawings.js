@@ -2399,6 +2399,7 @@
     var list = state.workers || [];
     for (var i = 0; i < list.length; i++) {
       if (list[i].availableSites && list[i].availableSites.length) return true;
+      if (list[i].sites && list[i].sites.length > 1) return true;
     }
     return false;
   }
@@ -2409,6 +2410,19 @@
       return '<span class="mg-user-email">On all sites</span>';
     }
     return '<select class="mg-user-days" data-user-add-site="' + escapeHtml(String(w.id)) + '" aria-label="Add access for">' +
+      '<option value="">Select a site</option>' +
+      sites.map(function (s) {
+        return '<option value="' + escapeHtml(String(s.id)) + '">' + escapeHtml(s.name || 'Site') + '</option>';
+      }).join('') +
+      '</select>';
+  }
+
+  function revokeForCell(w) {
+    var sites = (w && w.sites) || [];
+    if (sites.length < 2) {
+      return '<span class="mg-user-email">Only this site</span>';
+    }
+    return '<select class="mg-user-days" data-user-revoke-site="' + escapeHtml(String(w.id)) + '" aria-label="Revoke access from">' +
       '<option value="">Select a site</option>' +
       sites.map(function (s) {
         return '<option value="' + escapeHtml(String(s.id)) + '">' + escapeHtml(s.name || 'Site') + '</option>';
@@ -2469,7 +2483,7 @@
           '<th>Last seen</th>' +
           '<th>Access</th>' +
           '<th>Site manager</th>' +
-          (showAccess ? '<th>Add access for</th>' : '') +
+          (showAccess ? '<th>Add access for</th><th>Revoke access from</th>' : '') +
           '<th></th>' +
         '</tr></thead>' +
         '<tbody>' +
@@ -2502,6 +2516,7 @@
               '<td data-label="Access" class="mg-user-access">' + accessCell + '</td>' +
               '<td data-label="Admin" class="mg-user-access">' + adminCell + '</td>' +
               (showAccess ? '<td data-label="Add access for" class="mg-user-access">' + accessForCell(w) + '</td>' : '') +
+              (showAccess ? '<td data-label="Revoke access from" class="mg-user-access">' + revokeForCell(w) + '</td>' : '') +
               '<td data-label="">' +
                 '<button type="button" class="mg-user-btn is-danger" data-user-act="delete" data-user-id="' + id + '">Delete</button>' +
               '</td>' +
@@ -2623,14 +2638,52 @@
     }
   }
 
+  async function revokeWorkerSiteAccess(id, siteId) {
+    var w = workerById(id);
+    var name = w ? workerFullName(w) : 'this user';
+    var sites = (w && w.sites) || [];
+    var site = null;
+    for (var i = 0; i < sites.length; i++) {
+      if (String(sites[i].id) === String(siteId)) {
+        site = sites[i];
+        break;
+      }
+    }
+    var siteName = site && site.name ? site.name : 'this site';
+    if (!confirm('Are you sure you want to revoke access for "' + name + '" from "' + siteName + '"?')) {
+      return false;
+    }
+    try {
+      await apiJson('/workers/' + encodeURIComponent(id) + '/revoke-site', {
+        method: 'POST',
+        body: { siteId: siteId }
+      });
+      await loadWorkers();
+      return true;
+    } catch (err) {
+      alert(err && err.message ? err.message : 'Could not revoke site access.');
+      return false;
+    }
+  }
+
   function handleUsersTableChange(e) {
-    var sel = e.target && e.target.closest ? e.target.closest('[data-user-add-site]') : null;
-    if (!sel) return;
-    var id = sel.getAttribute('data-user-add-site');
-    var siteId = sel.value;
+    var addSel = e.target && e.target.closest ? e.target.closest('[data-user-add-site]') : null;
+    if (addSel) {
+      var addId = addSel.getAttribute('data-user-add-site');
+      var addSite = addSel.value;
+      if (!addId || !addSite) return;
+      addWorkerSiteAccess(addId, addSite).then(function (ok) {
+        if (!ok) addSel.value = '';
+      });
+      return;
+    }
+    var revSel = e.target && e.target.closest ? e.target.closest('[data-user-revoke-site]') : null;
+    if (!revSel) return;
+    var id = revSel.getAttribute('data-user-revoke-site');
+    var siteId = revSel.value;
     if (!id || !siteId) return;
-    addWorkerSiteAccess(id, siteId).then(function (ok) {
-      if (!ok) sel.value = '';
+    revokeWorkerSiteAccess(id, siteId).then(function (ok) {
+      if (!ok) revSel.value = '';
     });
   }
 

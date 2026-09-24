@@ -2028,6 +2028,60 @@ async function addWorkerSiteAccess(req, res) {
   }
 }
 
+async function revokeWorkerSiteAccess(req, res) {
+  try {
+    await ensureSchema();
+    if (!isCompanyHead(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Only the company head can revoke site access.' });
+    }
+    const workspaceId = req.myDrawings.workspace.id;
+    const worker = await findCompanyWorker(workspaceId, req.params.id, currentSiteId(req.myDrawings));
+    if (!worker) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    const siteId = positiveInt(req.body && (req.body.siteId || req.body.projectId));
+    const site = siteId ? await loadSiteRow(workspaceId, siteId) : null;
+    if (!site) {
+      return res.status(400).json({ success: false, message: 'Select a site.' });
+    }
+    const linked = await pool.query(
+      `SELECT w.id, w.project_id, w.email, p.name AS site_name
+       FROM my_drawings_worker w
+       JOIN my_drawings_project p ON p.id = w.project_id
+       WHERE w.workspace_id = $1 AND LOWER(w.email) = LOWER($2)`,
+      [workspaceId, worker.email]
+    );
+    if (linked.rows.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'This is their only site. Delete the user if you want to remove them completely.',
+      });
+    }
+    const target = linked.rows.find((row) => Number(row.project_id) === Number(site.id));
+    if (!target) {
+      return res.status(404).json({ success: false, message: 'This user does not have access to that site.' });
+    }
+    await pool.query(
+      'UPDATE my_drawings_project SET manager_worker_id = NULL WHERE id = $1 AND manager_worker_id = $2',
+      [target.project_id, target.id]
+    );
+    await revokeWorkerSessions(target.id);
+    await pool.query(
+      'DELETE FROM my_drawings_worker WHERE id = $1 AND workspace_id = $2',
+      [target.id, workspaceId]
+    );
+    return res.json({
+      success: true,
+      message: worker.first_name
+        ? worker.first_name + ' no longer has access to ' + (target.site_name || site.name || 'that site') + '.'
+        : 'Access revoked.',
+    });
+  } catch (err) {
+    console.error('myDrawings revokeWorkerSiteAccess:', err);
+    return res.status(500).json({ success: false, message: 'Could not revoke site access.' });
+  }
+}
+
 async function switchWorkerSite(req, res) {
   try {
     await ensureSchema();
@@ -3470,6 +3524,7 @@ module.exports = {
   getActivity,
   listWorkers,
   addWorkerSiteAccess,
+  revokeWorkerSiteAccess,
   switchWorkerSite,
   suspendWorker,
   restoreWorker,

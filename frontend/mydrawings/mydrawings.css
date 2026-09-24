@@ -916,7 +916,7 @@ a.md-link { color: var(--md-accent); }
   overflow: hidden;
   font-size: 0.88rem;
 }
-.mg-users-table.is-wide { min-width: 980px; }
+.mg-users-table.is-wide { min-width: 1140px; }
 .mg-users-table th,
 .mg-users-table td {
   text-align: left;
