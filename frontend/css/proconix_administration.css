@@ -453,12 +453,33 @@
   gap: 1rem;
 }
 
-.px-admin-companies-table .px-admin-company-row {
+.px-admin-companies-table .px-admin-company-row,
+.px-admin-md-company-row {
   cursor: pointer;
 }
 
-.px-admin-companies-table .px-admin-company-row:hover {
+.px-admin-companies-table .px-admin-company-row:hover,
+.px-admin-md-company-row:hover {
   filter: brightness(1.08);
+}
+
+.px-admin-md-edit-table input,
+.px-admin-md-edit-table select {
+  min-width: 5.5rem;
+}
+
+.px-admin-md-edit-table .form-check {
+  min-height: auto;
+  margin-bottom: 0;
+}
+
+.px-admin-md-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 8px;
+  padding: 2px;
 }
 
 .px-admin-modal-content {

@@ -428,6 +428,10 @@
           var tr = document.createElement('tr');
           var mode = String(c.project_mode || 'single');
           var modeLabel = mode === 'multi' ? 'Multi-site' : 'Single site';
+          tr.className = 'px-admin-md-company-row';
+          tr.setAttribute('data-md-company-id', String(c.id));
+          tr.setAttribute('role', 'button');
+          tr.tabIndex = 0;
           tr.innerHTML =
             '<td>' +
             cellText(c.id) +
@@ -4851,6 +4855,674 @@
         c.checked = false;
         updateHmAccountStatusUI();
       }
+    });
+  }
+
+  /* —— My Drawings company modal —— */
+  var mdModalEl = document.getElementById('pxAdminMdCompanyModal');
+  var mdModalLoading = document.getElementById('pxAdminMdCompanyModalLoading');
+  var mdModalForm = document.getElementById('pxAdminMdCompanyModalForm');
+  var mdModalFeedback = document.getElementById('pxAdminMdCompanyModalFeedback');
+  var currentMdCompanyId = null;
+  var mdClientSeq = 0;
+
+  function getMdModal() {
+    if (!mdModalEl || !window.bootstrap) return null;
+    return window.bootstrap.Modal.getOrCreateInstance(mdModalEl);
+  }
+
+  function hideMdModalFeedback() {
+    if (!mdModalFeedback) return;
+    mdModalFeedback.classList.add('d-none');
+    mdModalFeedback.textContent = '';
+  }
+
+  function showMdModalFeedback(text, kind) {
+    if (!mdModalFeedback) return;
+    mdModalFeedback.textContent = text;
+    mdModalFeedback.className = 'alert ' + (kind === 'success' ? 'alert-success' : 'alert-danger');
+    mdModalFeedback.classList.remove('d-none');
+  }
+
+  function mdField(type, value, extraClass) {
+    var el = document.createElement('input');
+    el.type = type || 'text';
+    el.className = 'form-control form-control-sm bg-dark text-white border-secondary' + (extraClass ? ' ' + extraClass : '');
+    el.value = value == null ? '' : String(value);
+    return el;
+  }
+
+  function mdCheck(checked, title) {
+    var wrap = document.createElement('div');
+    wrap.className = 'form-check';
+    var el = document.createElement('input');
+    el.type = 'checkbox';
+    el.className = 'form-check-input';
+    el.checked = !!checked;
+    if (title) el.title = title;
+    wrap.appendChild(el);
+    return { wrap: wrap, input: el };
+  }
+
+  function mdTd(node) {
+    var td = document.createElement('td');
+    if (typeof node === 'string') td.textContent = node;
+    else if (node) td.appendChild(node);
+    return td;
+  }
+
+  function mdSiteSelect(current) {
+    var sel = document.createElement('select');
+    sel.className = 'form-select form-select-sm bg-dark text-white border-secondary px-md-site-select';
+    fillMdSiteSelect(sel, current);
+    return sel;
+  }
+
+  function currentMdSiteOptions() {
+    var sitesBody = document.getElementById('pxMdSitesBody');
+    var opts = [{ value: '', label: '—' }];
+    if (!sitesBody) return opts;
+    Array.prototype.forEach.call(sitesBody.querySelectorAll('tr'), function (tr) {
+      if (tr.querySelector('.px-md-site-delete') && tr.querySelector('.px-md-site-delete').checked) return;
+      var id = tr.getAttribute('data-site-id') || tr.getAttribute('data-client-id') || '';
+      var nameInp = tr.querySelector('.px-md-site-name');
+      var label = (nameInp && nameInp.value ? nameInp.value : 'Site') + (id ? ' (' + id + ')' : '');
+      opts.push({ value: id, label: label });
+    });
+    return opts;
+  }
+
+  function fillMdSiteSelect(sel, current) {
+    var cur = current == null ? '' : String(current);
+    sel.innerHTML = '';
+    currentMdSiteOptions().forEach(function (opt) {
+      var o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (opt.value === cur) o.selected = true;
+      sel.appendChild(o);
+    });
+    if (cur && sel.value !== cur) {
+      var extra = document.createElement('option');
+      extra.value = cur;
+      extra.textContent = cur;
+      extra.selected = true;
+      sel.appendChild(extra);
+    }
+  }
+
+  function refreshMdSiteSelects() {
+    Array.prototype.forEach.call(document.querySelectorAll('.px-md-site-select'), function (sel) {
+      fillMdSiteSelect(sel, sel.value);
+    });
+  }
+
+  function toDateTimeLocal(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return (
+      d.getFullYear() +
+      '-' +
+      pad(d.getMonth() + 1) +
+      '-' +
+      pad(d.getDate()) +
+      'T' +
+      pad(d.getHours()) +
+      ':' +
+      pad(d.getMinutes())
+    );
+  }
+
+  function jsonPreview(val) {
+    if (val == null || val === '') return '{}';
+    if (typeof val === 'string') return val;
+    try {
+      return JSON.stringify(val);
+    } catch (e) {
+      return '{}';
+    }
+  }
+
+  function addMdSiteRow(site) {
+    var body = document.getElementById('pxMdSitesBody');
+    if (!body) return;
+    var tr = document.createElement('tr');
+    var data = site || {};
+    if (data.id) tr.setAttribute('data-site-id', String(data.id));
+    else {
+      mdClientSeq += 1;
+      tr.setAttribute('data-client-id', 'tmp-' + mdClientSeq);
+    }
+    var name = mdField('text', data.name);
+    name.classList.add('px-md-site-name');
+    name.addEventListener('input', refreshMdSiteSelects);
+    var code = mdField('text', data.access_code);
+    code.classList.add('px-md-site-code');
+    code.maxLength = 10;
+    var floors = mdField('number', data.floor_count);
+    floors.classList.add('px-md-site-floors');
+    floors.min = '1';
+    var extras = mdField('text', Array.isArray(data.extra_locations) ? data.extra_locations.join(', ') : data.extra_locations);
+    extras.classList.add('px-md-site-extras');
+    extras.placeholder = 'Roof, Basement';
+    var manager = mdField('number', data.manager_worker_id);
+    manager.classList.add('px-md-site-manager');
+    manager.min = '1';
+    var del = mdCheck(false, 'Delete this site');
+    del.input.classList.add('px-md-site-delete');
+    del.input.addEventListener('change', refreshMdSiteSelects);
+    tr.appendChild(mdTd(data.id ? String(data.id) : 'new'));
+    tr.appendChild(mdTd(name));
+    tr.appendChild(mdTd(code));
+    tr.appendChild(mdTd(floors));
+    tr.appendChild(mdTd(extras));
+    tr.appendChild(mdTd(manager));
+    tr.appendChild(mdTd(del.wrap));
+    body.appendChild(tr);
+    refreshMdSiteSelects();
+  }
+
+  function addMdWorkerRow(worker) {
+    var body = document.getElementById('pxMdWorkersBody');
+    if (!body) return;
+    var data = worker || {};
+    var tr = document.createElement('tr');
+    if (data.id) tr.setAttribute('data-worker-id', String(data.id));
+    var first = mdField('text', data.first_name);
+    first.classList.add('px-md-w-first');
+    var last = mdField('text', data.last_name);
+    last.classList.add('px-md-w-last');
+    var email = mdField('email', data.email);
+    email.classList.add('px-md-w-email');
+    var site = mdSiteSelect(data.project_id);
+    site.classList.add('px-md-w-site');
+    var admin = mdCheck(!!data.is_admin, 'Site manager');
+    admin.input.classList.add('px-md-w-admin');
+    var susp = mdField('datetime-local', toDateTimeLocal(data.access_suspended_until));
+    susp.classList.add('px-md-w-suspended');
+    var pin = mdField('text', '');
+    pin.classList.add('px-md-w-pin');
+    pin.placeholder = data.has_pin ? 'Has PIN' : 'None';
+    pin.maxLength = 10;
+    pin.autocomplete = 'off';
+    var clearPin = mdCheck(false, 'Clear PIN');
+    clearPin.input.classList.add('px-md-w-clear-pin');
+    var revoke = mdCheck(false, 'Revoke devices');
+    revoke.input.classList.add('px-md-w-revoke');
+    var del = mdCheck(false, 'Delete user');
+    del.input.classList.add('px-md-w-delete');
+    tr.appendChild(mdTd(data.id ? String(data.id) : 'new'));
+    tr.appendChild(mdTd(first));
+    tr.appendChild(mdTd(last));
+    tr.appendChild(mdTd(email));
+    tr.appendChild(mdTd(site));
+    tr.appendChild(mdTd(admin.wrap));
+    tr.appendChild(mdTd(susp));
+    tr.appendChild(mdTd(pin));
+    tr.appendChild(mdTd(clearPin.wrap));
+    tr.appendChild(mdTd(revoke.wrap));
+    tr.appendChild(mdTd(del.wrap));
+    body.appendChild(tr);
+  }
+
+  function addMdCategoryRow(cat) {
+    var body = document.getElementById('pxMdCategoriesBody');
+    if (!body) return;
+    var data = cat || {};
+    var tr = document.createElement('tr');
+    if (data.id) tr.setAttribute('data-category-id', String(data.id));
+    var name = mdField('text', data.name);
+    name.classList.add('px-md-c-name');
+    var sort = mdField('number', data.sort_order == null ? 0 : data.sort_order);
+    sort.classList.add('px-md-c-sort');
+    var site = mdSiteSelect(data.project_id);
+    site.classList.add('px-md-c-site');
+    var del = mdCheck(false, 'Delete category');
+    del.input.classList.add('px-md-c-delete');
+    tr.appendChild(mdTd(data.id ? String(data.id) : 'new'));
+    tr.appendChild(mdTd(name));
+    tr.appendChild(mdTd(sort));
+    tr.appendChild(mdTd(site));
+    tr.appendChild(mdTd(del.wrap));
+    body.appendChild(tr);
+  }
+
+  function addMdDrawingRow(item) {
+    var body = document.getElementById('pxMdDrawingsBody');
+    if (!body || !item) return;
+    var tr = document.createElement('tr');
+    tr.setAttribute('data-drawing-id', String(item.id));
+    var number = mdField('text', item.number);
+    number.classList.add('px-md-d-number');
+    var title = mdField('text', item.title);
+    title.classList.add('px-md-d-title');
+    var rev = mdField('text', item.revision);
+    rev.classList.add('px-md-d-rev');
+    rev.style.maxWidth = '4rem';
+    var site = mdSiteSelect(item.project_id);
+    site.classList.add('px-md-d-site');
+    var cat = mdField('number', item.category_id);
+    cat.classList.add('px-md-d-cat');
+    cat.min = '1';
+    var floors = mdField('text', Array.isArray(item.floors) ? item.floors.join(', ') : item.floors);
+    floors.classList.add('px-md-d-floors');
+    var file = document.createElement('div');
+    file.className = 'small text-white-50';
+    file.textContent = item.relative_path || item.stored_filename || '—';
+    var del = mdCheck(false, 'Delete drawing');
+    del.input.classList.add('px-md-d-delete');
+    tr.appendChild(mdTd(String(item.id)));
+    tr.appendChild(mdTd(number));
+    tr.appendChild(mdTd(title));
+    tr.appendChild(mdTd(rev));
+    tr.appendChild(mdTd(site));
+    tr.appendChild(mdTd(cat));
+    tr.appendChild(mdTd(floors));
+    tr.appendChild(mdTd(file));
+    tr.appendChild(mdTd(del.wrap));
+    body.appendChild(tr);
+  }
+
+  function addMdWallRow(wall) {
+    var body = document.getElementById('pxMdWallsBody');
+    if (!body) return;
+    var data = wall || {};
+    var tr = document.createElement('tr');
+    tr.className = 'px-md-wall-main';
+    if (data.id) tr.setAttribute('data-wall-id', String(data.id));
+    function bind(cls, val) {
+      var el = mdField('text', val);
+      el.classList.add(cls);
+      return el;
+    }
+    var code = bind('px-md-wt-code', data.code);
+    var kind = bind('px-md-wt-kind', data.kind || 'wall');
+    var name = bind('px-md-wt-name', data.name);
+    var system = bind('px-md-wt-system', data.system_ref);
+    var fire = bind('px-md-wt-fire', data.fire_minutes);
+    var acoustic = bind('px-md-wt-acoustic', data.acoustic);
+    var thick = bind('px-md-wt-thick', data.thickness);
+    var height = bind('px-md-wt-height', data.max_height_m);
+    var duty = bind('px-md-wt-duty', data.duty);
+    var site = mdSiteSelect(data.project_id);
+    site.classList.add('px-md-wt-site');
+    var clearImg = mdCheck(false, 'Clear image');
+    clearImg.input.classList.add('px-md-wt-clear-image');
+    var del = mdCheck(false, 'Delete wall type');
+    del.input.classList.add('px-md-wt-delete');
+    var systemType = bind('px-md-wt-system-type', data.system_type);
+    var fireClass = bind('px-md-wt-fire-class', data.fire_class);
+    var sort = mdField('number', data.sort_order == null ? 0 : data.sort_order);
+    sort.classList.add('px-md-wt-sort');
+    var buildup = mdField('text', jsonPreview(data.buildup));
+    buildup.classList.add('px-md-wt-buildup');
+    buildup.title = 'buildup JSON';
+    var pack = mdField('text', jsonPreview(data.pack_pages));
+    pack.classList.add('px-md-wt-pack');
+    pack.title = 'pack_pages JSON';
+    tr.appendChild(mdTd(data.id ? String(data.id) : 'new'));
+    tr.appendChild(mdTd(code));
+    tr.appendChild(mdTd(kind));
+    tr.appendChild(mdTd(name));
+    tr.appendChild(mdTd(system));
+    tr.appendChild(mdTd(fire));
+    tr.appendChild(mdTd(acoustic));
+    tr.appendChild(mdTd(thick));
+    tr.appendChild(mdTd(height));
+    tr.appendChild(mdTd(duty));
+    tr.appendChild(mdTd(site));
+    tr.appendChild(mdTd(clearImg.wrap));
+    tr.appendChild(mdTd(del.wrap));
+    var extra = document.createElement('tr');
+    extra.className = 'px-admin-md-wall-extra';
+    var extraTd = document.createElement('td');
+    extraTd.colSpan = 13;
+    extraTd.className = 'pt-0';
+    var extraWrap = document.createElement('div');
+    extraWrap.className = 'd-flex flex-wrap gap-2 pb-2';
+    function labeled(label, node) {
+      var box = document.createElement('div');
+      box.style.minWidth = '9rem';
+      box.style.flex = '1';
+      var lab = document.createElement('div');
+      lab.className = 'text-white-50 small';
+      lab.textContent = label;
+      box.appendChild(lab);
+      box.appendChild(node);
+      extraWrap.appendChild(box);
+    }
+    labeled('System type', systemType);
+    labeled('Fire class', fireClass);
+    labeled('Sort', sort);
+    labeled('Buildup JSON', buildup);
+    labeled('Pack pages JSON', pack);
+    extraTd.appendChild(extraWrap);
+    extra.appendChild(extraTd);
+    body.appendChild(tr);
+    body.appendChild(extra);
+  }
+
+  function fillMdCompanyModal(detail) {
+    if (!detail || !detail.workspace) return;
+    var ws = detail.workspace;
+    setVal('pxMd_id', ws.id);
+    setVal('pxMd_created_at', ws.created_at ? new Date(ws.created_at).toLocaleString() : '');
+    setVal('pxMd_name', ws.name);
+    setVal('pxMd_email', ws.email);
+    setVal('pxMd_manager_name', ws.manager_name);
+    setVal('pxMd_access_code', ws.access_code);
+    setVal('pxMd_new_password', '');
+    setVal('pxMd_new_admin_pin', '');
+    setVal('pxMd_new_access_pin', '');
+    var modeEl = document.getElementById('pxMd_project_mode');
+    if (modeEl) modeEl.value = ws.project_mode === 'multi' ? 'multi' : 'single';
+    var hasPass = document.getElementById('pxMd_has_password');
+    if (hasPass) hasPass.textContent = ws.has_password ? 'A password is set.' : 'No password set.';
+    var hasPin = document.getElementById('pxMd_has_admin_pin');
+    if (hasPin) hasPin.textContent = ws.has_admin_pin ? 'An admin PIN is set.' : 'No admin PIN set.';
+    var clearLogo = document.getElementById('pxMd_clear_logo');
+    if (clearLogo) clearLogo.checked = false;
+    var revokeAdm = document.getElementById('pxMd_revoke_admin_sessions');
+    if (revokeAdm) revokeAdm.checked = false;
+    var logoPrev = document.getElementById('pxMd_logo_preview');
+    var logoPath = document.getElementById('pxMd_logo_path');
+    if (ws.logo_path) {
+      if (logoPrev) {
+        logoPrev.src = '/uploads/' + String(ws.logo_path).replace(/^\/+/, '');
+        logoPrev.classList.remove('d-none');
+      }
+      if (logoPath) logoPath.textContent = ws.logo_path;
+    } else {
+      if (logoPrev) {
+        logoPrev.removeAttribute('src');
+        logoPrev.classList.add('d-none');
+      }
+      if (logoPath) logoPath.textContent = 'No logo';
+    }
+    ['pxMdSitesBody', 'pxMdWorkersBody', 'pxMdCategoriesBody', 'pxMdDrawingsBody', 'pxMdWallsBody'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = '';
+    });
+    mdClientSeq = 0;
+    (detail.sites || []).forEach(addMdSiteRow);
+    (detail.workers || []).forEach(addMdWorkerRow);
+    (detail.categories || []).forEach(addMdCategoryRow);
+    (detail.drawings || []).forEach(addMdDrawingRow);
+    (detail.wall_types || []).forEach(addMdWallRow);
+    refreshMdSiteSelects();
+  }
+
+  function collectMdPayload() {
+    var sites = [];
+    Array.prototype.forEach.call(document.querySelectorAll('#pxMdSitesBody tr'), function (tr) {
+      sites.push({
+        id: tr.getAttribute('data-site-id') || '',
+        client_id: tr.getAttribute('data-client-id') || '',
+        name: tr.querySelector('.px-md-site-name') && tr.querySelector('.px-md-site-name').value,
+        access_code: tr.querySelector('.px-md-site-code') && tr.querySelector('.px-md-site-code').value,
+        floor_count: tr.querySelector('.px-md-site-floors') && tr.querySelector('.px-md-site-floors').value,
+        extra_locations: tr.querySelector('.px-md-site-extras') && tr.querySelector('.px-md-site-extras').value,
+        manager_worker_id: tr.querySelector('.px-md-site-manager') && tr.querySelector('.px-md-site-manager').value,
+        _delete: !!(tr.querySelector('.px-md-site-delete') && tr.querySelector('.px-md-site-delete').checked),
+      });
+    });
+    var workers = [];
+    Array.prototype.forEach.call(document.querySelectorAll('#pxMdWorkersBody tr'), function (tr) {
+      workers.push({
+        id: tr.getAttribute('data-worker-id') || '',
+        first_name: tr.querySelector('.px-md-w-first') && tr.querySelector('.px-md-w-first').value,
+        last_name: tr.querySelector('.px-md-w-last') && tr.querySelector('.px-md-w-last').value,
+        email: tr.querySelector('.px-md-w-email') && tr.querySelector('.px-md-w-email').value,
+        project_id: tr.querySelector('.px-md-w-site') && tr.querySelector('.px-md-w-site').value,
+        is_admin: !!(tr.querySelector('.px-md-w-admin') && tr.querySelector('.px-md-w-admin').checked),
+        access_suspended_until: tr.querySelector('.px-md-w-suspended') && tr.querySelector('.px-md-w-suspended').value,
+        new_pin: tr.querySelector('.px-md-w-pin') && tr.querySelector('.px-md-w-pin').value,
+        clear_pin: !!(tr.querySelector('.px-md-w-clear-pin') && tr.querySelector('.px-md-w-clear-pin').checked),
+        revoke_devices: !!(tr.querySelector('.px-md-w-revoke') && tr.querySelector('.px-md-w-revoke').checked),
+        _delete: !!(tr.querySelector('.px-md-w-delete') && tr.querySelector('.px-md-w-delete').checked),
+      });
+    });
+    var categories = [];
+    Array.prototype.forEach.call(document.querySelectorAll('#pxMdCategoriesBody tr'), function (tr) {
+      categories.push({
+        id: tr.getAttribute('data-category-id') || '',
+        name: tr.querySelector('.px-md-c-name') && tr.querySelector('.px-md-c-name').value,
+        sort_order: tr.querySelector('.px-md-c-sort') && tr.querySelector('.px-md-c-sort').value,
+        project_id: tr.querySelector('.px-md-c-site') && tr.querySelector('.px-md-c-site').value,
+        _delete: !!(tr.querySelector('.px-md-c-delete') && tr.querySelector('.px-md-c-delete').checked),
+      });
+    });
+    var drawings = [];
+    Array.prototype.forEach.call(document.querySelectorAll('#pxMdDrawingsBody tr'), function (tr) {
+      drawings.push({
+        id: tr.getAttribute('data-drawing-id') || '',
+        number: tr.querySelector('.px-md-d-number') && tr.querySelector('.px-md-d-number').value,
+        title: tr.querySelector('.px-md-d-title') && tr.querySelector('.px-md-d-title').value,
+        revision: tr.querySelector('.px-md-d-rev') && tr.querySelector('.px-md-d-rev').value,
+        project_id: tr.querySelector('.px-md-d-site') && tr.querySelector('.px-md-d-site').value,
+        category_id: tr.querySelector('.px-md-d-cat') && tr.querySelector('.px-md-d-cat').value,
+        floors: tr.querySelector('.px-md-d-floors') && tr.querySelector('.px-md-d-floors').value,
+        _delete: !!(tr.querySelector('.px-md-d-delete') && tr.querySelector('.px-md-d-delete').checked),
+      });
+    });
+    var wallTypes = [];
+    Array.prototype.forEach.call(document.querySelectorAll('#pxMdWallsBody tr.px-md-wall-main'), function (tr) {
+      var extra = tr.nextElementSibling;
+      var scope = extra && extra.classList.contains('px-admin-md-wall-extra') ? extra : tr;
+      wallTypes.push({
+        id: tr.getAttribute('data-wall-id') || '',
+        code: tr.querySelector('.px-md-wt-code') && tr.querySelector('.px-md-wt-code').value,
+        kind: tr.querySelector('.px-md-wt-kind') && tr.querySelector('.px-md-wt-kind').value,
+        name: tr.querySelector('.px-md-wt-name') && tr.querySelector('.px-md-wt-name').value,
+        system_ref: tr.querySelector('.px-md-wt-system') && tr.querySelector('.px-md-wt-system').value,
+        system_type: scope.querySelector('.px-md-wt-system-type') && scope.querySelector('.px-md-wt-system-type').value,
+        fire_minutes: tr.querySelector('.px-md-wt-fire') && tr.querySelector('.px-md-wt-fire').value,
+        fire_class: scope.querySelector('.px-md-wt-fire-class') && scope.querySelector('.px-md-wt-fire-class').value,
+        acoustic: tr.querySelector('.px-md-wt-acoustic') && tr.querySelector('.px-md-wt-acoustic').value,
+        thickness: tr.querySelector('.px-md-wt-thick') && tr.querySelector('.px-md-wt-thick').value,
+        max_height_m: tr.querySelector('.px-md-wt-height') && tr.querySelector('.px-md-wt-height').value,
+        duty: tr.querySelector('.px-md-wt-duty') && tr.querySelector('.px-md-wt-duty').value,
+        project_id: tr.querySelector('.px-md-wt-site') && tr.querySelector('.px-md-wt-site').value,
+        sort_order: scope.querySelector('.px-md-wt-sort') && scope.querySelector('.px-md-wt-sort').value,
+        buildup: scope.querySelector('.px-md-wt-buildup') && scope.querySelector('.px-md-wt-buildup').value,
+        pack_pages: scope.querySelector('.px-md-wt-pack') && scope.querySelector('.px-md-wt-pack').value,
+        clear_image: !!(tr.querySelector('.px-md-wt-clear-image') && tr.querySelector('.px-md-wt-clear-image').checked),
+        _delete: !!(tr.querySelector('.px-md-wt-delete') && tr.querySelector('.px-md-wt-delete').checked),
+      });
+    });
+    return {
+      workspace: {
+        name: document.getElementById('pxMd_name') && document.getElementById('pxMd_name').value,
+        email: document.getElementById('pxMd_email') && document.getElementById('pxMd_email').value,
+        manager_name: document.getElementById('pxMd_manager_name') && document.getElementById('pxMd_manager_name').value,
+        access_code: document.getElementById('pxMd_access_code') && document.getElementById('pxMd_access_code').value,
+        project_mode: document.getElementById('pxMd_project_mode') && document.getElementById('pxMd_project_mode').value,
+        new_password: document.getElementById('pxMd_new_password') && document.getElementById('pxMd_new_password').value,
+        new_admin_pin: document.getElementById('pxMd_new_admin_pin') && document.getElementById('pxMd_new_admin_pin').value,
+        new_access_pin: document.getElementById('pxMd_new_access_pin') && document.getElementById('pxMd_new_access_pin').value,
+        clear_logo: !!(document.getElementById('pxMd_clear_logo') && document.getElementById('pxMd_clear_logo').checked),
+        revoke_admin_sessions: !!(document.getElementById('pxMd_revoke_admin_sessions') && document.getElementById('pxMd_revoke_admin_sessions').checked),
+      },
+      sites: sites,
+      workers: workers,
+      categories: categories,
+      drawings: drawings,
+      wall_types: wallTypes,
+    };
+  }
+
+  function openMdCompanyModal(id) {
+    if (!id || !session) return;
+    currentMdCompanyId = id;
+    hideMdModalFeedback();
+    if (mdModalForm) mdModalForm.classList.add('d-none');
+    if (mdModalLoading) mdModalLoading.classList.remove('d-none');
+    var modal = getMdModal();
+    if (modal) modal.show();
+    var title = document.getElementById('pxAdminMdCompanyModalLabel');
+    if (title) title.textContent = 'My Drawings company #' + id;
+    fetch('/api/platform-admin/mydrawings-companies/' + encodeURIComponent(id), {
+      method: 'GET',
+      headers: sessionHeaders(session),
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (mdModalLoading) mdModalLoading.classList.add('d-none');
+        if (out.status === 401) {
+          clearSession();
+          window.location.replace(LOGIN_URL);
+          return;
+        }
+        if (out.status !== 200 || !out.data || !out.data.success) {
+          if (mdModalForm) mdModalForm.classList.remove('d-none');
+          showMdModalFeedback((out.data && out.data.message) || 'Could not load company.', 'error');
+          return;
+        }
+        fillMdCompanyModal(out.data);
+        if (mdModalForm) mdModalForm.classList.remove('d-none');
+        if (title && out.data.workspace && out.data.workspace.name) {
+          title.textContent = out.data.workspace.name + ' · My Drawings #' + id;
+        }
+      })
+      .catch(function () {
+        if (mdModalLoading) mdModalLoading.classList.add('d-none');
+        if (mdModalForm) mdModalForm.classList.remove('d-none');
+        showMdModalFeedback('Network error.', 'error');
+      });
+  }
+
+  var tbodyMdCompanies = document.getElementById('pxAdminMdCompaniesBody');
+  if (tbodyMdCompanies) {
+    tbodyMdCompanies.addEventListener('click', function (e) {
+      var tr = e.target.closest('tr[data-md-company-id]');
+      if (!tr) return;
+      var cid = tr.getAttribute('data-md-company-id');
+      if (cid) openMdCompanyModal(cid);
+    });
+    tbodyMdCompanies.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var tr = e.target.closest('tr[data-md-company-id]');
+      if (!tr) return;
+      e.preventDefault();
+      var cid = tr.getAttribute('data-md-company-id');
+      if (cid) openMdCompanyModal(cid);
+    });
+  }
+
+  var btnMdAddSite = document.getElementById('pxMdAddSiteBtn');
+  if (btnMdAddSite) {
+    btnMdAddSite.addEventListener('click', function () {
+      addMdSiteRow({ name: 'New site' });
+    });
+  }
+  var btnMdAddWorker = document.getElementById('pxMdAddWorkerBtn');
+  if (btnMdAddWorker) {
+    btnMdAddWorker.addEventListener('click', function () {
+      addMdWorkerRow({});
+    });
+  }
+  var btnMdAddCategory = document.getElementById('pxMdAddCategoryBtn');
+  if (btnMdAddCategory) {
+    btnMdAddCategory.addEventListener('click', function () {
+      addMdCategoryRow({ name: 'New category', sort_order: 0 });
+    });
+  }
+  var btnMdAddWall = document.getElementById('pxMdAddWallBtn');
+  if (btnMdAddWall) {
+    btnMdAddWall.addEventListener('click', function () {
+      addMdWallRow({ code: '', kind: 'wall', name: '' });
+    });
+  }
+
+  var btnMdSave = document.getElementById('pxAdminMdCompanySaveBtn');
+  if (btnMdSave) {
+    btnMdSave.addEventListener('click', function () {
+      if (currentMdCompanyId == null) return;
+      hideMdModalFeedback();
+      var payload = collectMdPayload();
+      btnMdSave.disabled = true;
+      fetch('/api/platform-admin/mydrawings-companies/' + encodeURIComponent(currentMdCompanyId), {
+        method: 'PATCH',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, sessionHeaders(session)),
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          btnMdSave.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status !== 200 || !out.data || !out.data.success) {
+            showMdModalFeedback((out.data && out.data.message) || 'Save failed.', 'error');
+            return;
+          }
+          showMdModalFeedback('Saved successfully.', 'success');
+          fillMdCompanyModal(out.data);
+          loadCompaniesPanel(session);
+        })
+        .catch(function () {
+          btnMdSave.disabled = false;
+          showMdModalFeedback('Network error.', 'error');
+        });
+    });
+  }
+
+  var btnMdDel = document.getElementById('pxAdminMdCompanyDeleteBtn');
+  if (btnMdDel) {
+    btnMdDel.addEventListener('click', function () {
+      if (currentMdCompanyId == null) return;
+      var name = document.getElementById('pxMd_name') && document.getElementById('pxMd_name').value;
+      var msg =
+        'Delete My Drawings company #' +
+        currentMdCompanyId +
+        (name ? ' (' + name + ')' : '') +
+        ' and all sites, users, drawings, and wall types? This cannot be undone.';
+      if (!window.confirm(msg)) return;
+      btnMdDel.disabled = true;
+      fetch('/api/platform-admin/mydrawings-companies/' + encodeURIComponent(currentMdCompanyId), {
+        method: 'DELETE',
+        headers: sessionHeaders(session),
+        credentials: 'same-origin',
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        .then(function (out) {
+          btnMdDel.disabled = false;
+          if (out.status === 401) {
+            clearSession();
+            window.location.replace(LOGIN_URL);
+            return;
+          }
+          if (out.status !== 200 || !out.data || !out.data.success) {
+            window.alert((out.data && out.data.message) || 'Delete failed.');
+            return;
+          }
+          var m = getMdModal();
+          if (m) m.hide();
+          currentMdCompanyId = null;
+          loadCompaniesPanel(session);
+        })
+        .catch(function () {
+          btnMdDel.disabled = false;
+          window.alert('Network error.');
+        });
     });
   }
 })();

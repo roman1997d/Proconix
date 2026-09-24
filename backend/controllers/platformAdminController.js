@@ -4,6 +4,7 @@
  */
 
 const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const os = require('os');
@@ -650,6 +651,697 @@ async function listMyDrawingsCompanies(req, res) {
       success: false,
       message: 'Failed to load My Drawings companies.',
     });
+  }
+}
+
+const MD_ACCESS_CODE_RE = /^[A-Z0-9]{6,10}$/;
+const MD_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MD_ACCESS_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function mdHttpError(statusCode, message) {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
+}
+
+function normalizeMdAccessCode(raw) {
+  return String(raw || '').replace(/\s+/g, '').toUpperCase();
+}
+
+function generateMdAccessCode(length) {
+  const size = length || 8;
+  let out = '';
+  for (let i = 0; i < size; i += 1) {
+    out += MD_ACCESS_CODE_CHARS[crypto.randomInt(0, MD_ACCESS_CODE_CHARS.length)];
+  }
+  return out;
+}
+
+function parseOptionalInt(raw, field) {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const n = parseInt(String(raw), 10);
+  if (!Number.isInteger(n) || n < 1) {
+    throw mdHttpError(400, field + ' must be a positive integer.');
+  }
+  return n;
+}
+
+function parseStringArray(raw) {
+  if (Array.isArray(raw)) {
+    return raw.map((x) => String(x || '').trim()).filter(Boolean);
+  }
+  if (raw == null || raw === '') return [];
+  return String(raw)
+    .split(/[,;\n]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function parseJsonObject(raw, field) {
+  if (raw == null || raw === '') return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(String(raw));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('not object');
+    }
+    return parsed;
+  } catch (_) {
+    throw mdHttpError(400, field + ' must be a JSON object.');
+  }
+}
+
+async function unlinkMdStoredRel(rel) {
+  if (!rel) return;
+  let normalized = String(rel).trim().replace(/\\/g, '/').replace(/^\/+/, '');
+  if (normalized.startsWith('backend/uploads/')) normalized = normalized.slice('backend/uploads/'.length);
+  if (normalized.startsWith('uploads/')) normalized = normalized.slice('uploads/'.length);
+  if (!normalized) return;
+  const abs = path.resolve(UPLOADS_ROOT, normalized.split('/').join(path.sep));
+  const root = path.resolve(UPLOADS_ROOT);
+  const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+  if (abs !== root && !abs.startsWith(prefix)) return;
+  try {
+    await fsp.unlink(abs);
+  } catch (_) {
+    /* missing file is fine */
+  }
+}
+
+async function mdAccessCodeTaken(client, code, exceptWorkspaceId, exceptProjectId) {
+  const normalized = normalizeMdAccessCode(code);
+  if (!normalized) return false;
+  const ws = await client.query(
+    `SELECT id FROM my_drawings_workspace WHERE UPPER(access_code) = $1 AND id <> $2`,
+    [normalized, exceptWorkspaceId || 0]
+  );
+  if (ws.rows[0]) return true;
+  const site = await client.query(
+    `SELECT id FROM my_drawings_project WHERE UPPER(access_code) = $1 AND id <> $2`,
+    [normalized, exceptProjectId || 0]
+  );
+  return !!site.rows[0];
+}
+
+async function allocateMdAccessCode(client, exceptWorkspaceId, exceptProjectId) {
+  for (let i = 0; i < 30; i += 1) {
+    const code = generateMdAccessCode(8);
+    if (!(await mdAccessCodeTaken(client, code, exceptWorkspaceId, exceptProjectId))) {
+      return code;
+    }
+  }
+  throw mdHttpError(500, 'Could not generate a unique access code.');
+}
+
+async function assertMdAccessCodeFree(client, code, exceptWorkspaceId, exceptProjectId) {
+  const normalized = normalizeMdAccessCode(code);
+  if (!normalized) return '';
+  if (!MD_ACCESS_CODE_RE.test(normalized)) {
+    throw mdHttpError(400, 'Access code must be 6–10 letters or numbers.');
+  }
+  if (await mdAccessCodeTaken(client, normalized, exceptWorkspaceId, exceptProjectId)) {
+    throw mdHttpError(409, 'Access code ' + normalized + ' is already in use.');
+  }
+  return normalized;
+}
+
+async function fetchMyDrawingsCompanyDetail(id) {
+  const ws = await pool.query(
+    `SELECT id, name, email, manager_name, access_code, project_mode, logo_path, created_at, demo_cleared_at,
+            (password_hash IS NOT NULL AND password_hash <> '') AS has_password,
+            (admin_pin_hash IS NOT NULL AND admin_pin_hash <> '') AS has_admin_pin
+     FROM my_drawings_workspace
+     WHERE id = $1`,
+    [id]
+  );
+  if (!ws.rows[0]) return null;
+  const sites = await pool.query(
+    `SELECT id, workspace_id, name, access_code, floor_count, extra_locations, manager_worker_id, created_at
+     FROM my_drawings_project
+     WHERE workspace_id = $1
+     ORDER BY id ASC`,
+    [id]
+  );
+  const workers = await pool.query(
+    `SELECT id, workspace_id, project_id, first_name, last_name, email, is_admin, access_suspended_until, created_at,
+            (pin_hash IS NOT NULL AND pin_hash <> '') AS has_pin,
+            (SELECT COUNT(*)::int FROM my_drawings_device d WHERE d.worker_id = w.id) AS device_count
+     FROM my_drawings_worker w
+     WHERE w.workspace_id = $1
+     ORDER BY w.id ASC`,
+    [id]
+  );
+  const categories = await pool.query(
+    `SELECT id, workspace_id, project_id, name, sort_order
+     FROM my_drawings_category
+     WHERE workspace_id = $1
+     ORDER BY sort_order ASC, id ASC`,
+    [id]
+  );
+  const drawings = await pool.query(
+    `SELECT id, workspace_id, project_id, category_id, number, title, revision, size_bytes,
+            stored_filename, relative_path, mime_type, floors, created_at, updated_at
+     FROM my_drawings_item
+     WHERE workspace_id = $1
+     ORDER BY id ASC`,
+    [id]
+  );
+  const wallTypes = await pool.query(
+    `SELECT id, workspace_id, project_id, code, kind, name, system_ref, system_type, fire_minutes,
+            fire_class, acoustic, thickness, max_height_m, duty, buildup, pack_pages,
+            detail_image_path, sort_order
+     FROM my_drawings_wall_type
+     WHERE workspace_id = $1
+     ORDER BY sort_order ASC, id ASC`,
+    [id]
+  );
+  return {
+    workspace: ws.rows[0],
+    sites: sites.rows || [],
+    workers: workers.rows || [],
+    categories: categories.rows || [],
+    drawings: drawings.rows || [],
+    wall_types: wallTypes.rows || [],
+  };
+}
+
+function resolveMdProjectId(raw, clientMap, field) {
+  if (raw == null || raw === '') return null;
+  const key = String(raw);
+  if (clientMap && Object.prototype.hasOwnProperty.call(clientMap, key)) {
+    return clientMap[key];
+  }
+  return parseOptionalInt(raw, field);
+}
+
+/**
+ * GET /api/platform-admin/mydrawings-companies/:id
+ */
+async function getMyDrawingsCompany(req, res) {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid company id.' });
+  }
+  try {
+    const detail = await fetchMyDrawingsCompanyDetail(id);
+    if (!detail) {
+      return res.status(404).json({ success: false, message: 'My Drawings company not found.' });
+    }
+    return res.status(200).json({ success: true, ...detail });
+  } catch (err) {
+    if (err.code === '42P01' || err.code === '42703') {
+      return res.status(503).json({ success: false, message: 'My Drawings tables are not installed yet.' });
+    }
+    console.error('platformAdmin getMyDrawingsCompany error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to load My Drawings company.' });
+  }
+}
+
+/**
+ * PATCH /api/platform-admin/mydrawings-companies/:id
+ * Full workspace + nested sites / workers / categories / drawings / wall types.
+ */
+async function updateMyDrawingsCompany(req, res) {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid company id.' });
+  }
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const workspaceIn = body.workspace && typeof body.workspace === 'object' ? body.workspace : {};
+  const sitesIn = Array.isArray(body.sites) ? body.sites : [];
+  const workersIn = Array.isArray(body.workers) ? body.workers : [];
+  const categoriesIn = Array.isArray(body.categories) ? body.categories : [];
+  const drawingsIn = Array.isArray(body.drawings) ? body.drawings : [];
+  const wallTypesIn = Array.isArray(body.wall_types) ? body.wall_types : [];
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const exists = await client.query('SELECT id, logo_path FROM my_drawings_workspace WHERE id = $1', [id]);
+    if (!exists.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'My Drawings company not found.' });
+    }
+
+    const wsSets = [];
+    const wsVals = [];
+    let wp = 1;
+    if (Object.prototype.hasOwnProperty.call(workspaceIn, 'name')) {
+      const name = String(workspaceIn.name || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+      if (name.length < 2) throw mdHttpError(400, 'Company name is required.');
+      wsSets.push(`name = $${wp++}`);
+      wsVals.push(name);
+    }
+    if (Object.prototype.hasOwnProperty.call(workspaceIn, 'email')) {
+      const email = String(workspaceIn.email || '').trim().toLowerCase();
+      if (email && !MD_EMAIL_RE.test(email)) throw mdHttpError(400, 'Invalid company email.');
+      if (email) {
+        const taken = await client.query(
+          'SELECT id FROM my_drawings_workspace WHERE LOWER(email) = $1 AND id <> $2',
+          [email, id]
+        );
+        if (taken.rows[0]) throw mdHttpError(409, 'Another My Drawings company already uses this email.');
+      }
+      wsSets.push(`email = $${wp++}`);
+      wsVals.push(email || null);
+    }
+    if (Object.prototype.hasOwnProperty.call(workspaceIn, 'manager_name')) {
+      wsSets.push(`manager_name = $${wp++}`);
+      wsVals.push(String(workspaceIn.manager_name || '').trim().slice(0, 160) || null);
+    }
+    if (Object.prototype.hasOwnProperty.call(workspaceIn, 'access_code')) {
+      const code = await assertMdAccessCodeFree(client, workspaceIn.access_code, id, 0);
+      wsSets.push(`access_code = $${wp++}`);
+      wsVals.push(code || null);
+    }
+    if (Object.prototype.hasOwnProperty.call(workspaceIn, 'project_mode')) {
+      const mode = String(workspaceIn.project_mode || 'single').toLowerCase() === 'multi' ? 'multi' : 'single';
+      wsSets.push(`project_mode = $${wp++}`);
+      wsVals.push(mode);
+    }
+    const newPassword = typeof workspaceIn.new_password === 'string' ? workspaceIn.new_password : '';
+    if (newPassword) {
+      if (newPassword.length < 8 || newPassword.length > 120) {
+        throw mdHttpError(400, 'New password must be 8–120 characters.');
+      }
+      wsSets.push(`password_hash = $${wp++}`);
+      wsVals.push(await bcrypt.hash(newPassword, SALT_ROUNDS));
+    }
+    const newAdminPin = String(workspaceIn.new_admin_pin || '').replace(/\s+/g, '');
+    if (newAdminPin) {
+      if (!/^\d{4}$/.test(newAdminPin)) throw mdHttpError(400, 'Admin PIN must be exactly 4 digits.');
+      wsSets.push(`admin_pin_hash = $${wp++}`);
+      wsVals.push(await bcrypt.hash(newAdminPin, SALT_ROUNDS));
+    }
+    const newAccessPin = String(workspaceIn.new_access_pin || '').replace(/\s+/g, '');
+    if (newAccessPin) {
+      if (newAccessPin.length < 4 || newAccessPin.length > 32) {
+        throw mdHttpError(400, 'Access PIN must be 4–32 characters.');
+      }
+      wsSets.push(`access_pin_hash = $${wp++}`);
+      wsVals.push(await bcrypt.hash(newAccessPin, SALT_ROUNDS));
+    }
+    if (workspaceIn.clear_logo) {
+      await unlinkMdStoredRel(exists.rows[0].logo_path);
+      wsSets.push(`logo_path = $${wp++}`);
+      wsVals.push(null);
+    }
+    if (wsSets.length) {
+      wsVals.push(id);
+      await client.query(`UPDATE my_drawings_workspace SET ${wsSets.join(', ')} WHERE id = $${wp}`, wsVals);
+    }
+    if (newPassword || newAdminPin || workspaceIn.revoke_admin_sessions) {
+      await client.query('DELETE FROM my_drawings_admin_session WHERE workspace_id = $1', [id]);
+    }
+
+    const siteIdSet = new Set();
+    const existingSites = await client.query('SELECT id FROM my_drawings_project WHERE workspace_id = $1', [id]);
+    existingSites.rows.forEach((r) => siteIdSet.add(Number(r.id)));
+
+    const sitesToDelete = [];
+    const sitesToUpsert = [];
+    sitesIn.forEach((row, idx) => {
+      if (!row || typeof row !== 'object') return;
+      if (row._delete) {
+        const delId = parseOptionalInt(row.id, 'site id');
+        if (delId) sitesToDelete.push(delId);
+        return;
+      }
+      sitesToUpsert.push({ row, idx });
+    });
+
+    for (const delId of sitesToDelete) {
+      if (!siteIdSet.has(delId)) continue;
+      const files = await client.query(
+        'SELECT relative_path FROM my_drawings_item WHERE workspace_id = $1 AND project_id = $2',
+        [id, delId]
+      );
+      for (const file of files.rows) await unlinkMdStoredRel(file.relative_path);
+      const images = await client.query(
+        'SELECT detail_image_path FROM my_drawings_wall_type WHERE workspace_id = $1 AND project_id = $2',
+        [id, delId]
+      );
+      for (const img of images.rows) await unlinkMdStoredRel(img.detail_image_path);
+      await client.query(
+        'UPDATE my_drawings_worker SET project_id = NULL WHERE workspace_id = $1 AND project_id = $2',
+        [id, delId]
+      );
+      await client.query(
+        'UPDATE my_drawings_category SET project_id = NULL WHERE workspace_id = $1 AND project_id = $2',
+        [id, delId]
+      );
+      await client.query(
+        'UPDATE my_drawings_wall_type SET project_id = NULL WHERE workspace_id = $1 AND project_id = $2',
+        [id, delId]
+      );
+      await client.query('DELETE FROM my_drawings_project WHERE id = $1 AND workspace_id = $2', [delId, id]);
+      siteIdSet.delete(delId);
+    }
+
+    const siteClientMap = {};
+    for (const { row } of sitesToUpsert) {
+      const name = String(row.name || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      if (name.length < 2) throw mdHttpError(400, 'Each site needs a name.');
+      const existingId = parseOptionalInt(row.id, 'site id');
+      let code = normalizeMdAccessCode(row.access_code);
+      if (code) {
+        code = await assertMdAccessCodeFree(client, code, id, existingId || 0);
+      } else if (!existingId) {
+        code = await allocateMdAccessCode(client, id, 0);
+      } else {
+        code = undefined;
+      }
+      const floorCount = row.floor_count === '' || row.floor_count == null
+        ? null
+        : parseOptionalInt(row.floor_count, 'floor count');
+      const extras = parseStringArray(row.extra_locations);
+      const managerWorkerId = parseOptionalInt(row.manager_worker_id, 'site manager');
+      if (existingId) {
+        if (!siteIdSet.has(existingId)) throw mdHttpError(400, 'Site #' + existingId + ' is not in this company.');
+        const sets = ['name = $2', 'floor_count = $3', 'extra_locations = $4', 'manager_worker_id = $5'];
+        const vals = [existingId, name, floorCount, extras, managerWorkerId];
+        if (code !== undefined) {
+          sets.push('access_code = $6');
+          vals.push(code);
+          await client.query(
+            `UPDATE my_drawings_project SET ${sets.join(', ')} WHERE id = $1 AND workspace_id = ${id}`,
+            vals
+          );
+        } else {
+          await client.query(
+            `UPDATE my_drawings_project
+             SET name = $2, floor_count = $3, extra_locations = $4, manager_worker_id = $5
+             WHERE id = $1 AND workspace_id = $6`,
+            [existingId, name, floorCount, extras, managerWorkerId, id]
+          );
+        }
+        if (row.client_id) siteClientMap[String(row.client_id)] = existingId;
+      } else {
+        const inserted = await client.query(
+          `INSERT INTO my_drawings_project
+            (workspace_id, name, access_code, floor_count, extra_locations, manager_worker_id)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id`,
+          [id, name, code || null, floorCount, extras, managerWorkerId]
+        );
+        const newId = inserted.rows[0].id;
+        siteIdSet.add(newId);
+        if (row.client_id) siteClientMap[String(row.client_id)] = newId;
+      }
+    }
+
+    const workerIdSet = new Set(
+      (await client.query('SELECT id FROM my_drawings_worker WHERE workspace_id = $1', [id])).rows.map((r) => Number(r.id))
+    );
+    for (const row of workersIn) {
+      if (!row || typeof row !== 'object' || !row._delete) continue;
+      const delId = parseOptionalInt(row.id, 'user id');
+      if (!delId || !workerIdSet.has(delId)) continue;
+      await client.query('DELETE FROM my_drawings_worker WHERE id = $1 AND workspace_id = $2', [delId, id]);
+      workerIdSet.delete(delId);
+    }
+    for (const row of workersIn) {
+      if (!row || typeof row !== 'object' || row._delete) continue;
+      const first = String(row.first_name || '').trim().slice(0, 80);
+      const last = String(row.last_name || '').trim().slice(0, 80);
+      const email = String(row.email || '').trim().toLowerCase();
+      if (!first || !last) throw mdHttpError(400, 'Each user needs a first and last name.');
+      if (!email || !MD_EMAIL_RE.test(email)) throw mdHttpError(400, 'Each user needs a valid email.');
+      const projectId = resolveMdProjectId(row.project_id, siteClientMap, 'user site');
+      const isAdmin = row.is_admin === true || row.is_admin === 'true';
+      let suspended = null;
+      if (row.access_suspended_until) {
+        const dt = new Date(row.access_suspended_until);
+        if (Number.isNaN(dt.getTime())) throw mdHttpError(400, 'Invalid suspended-until date.');
+        suspended = dt.toISOString();
+      }
+      const existingId = parseOptionalInt(row.id, 'user id');
+      const newPin = String(row.new_pin || '').replace(/\s+/g, '');
+      let pinHash = undefined;
+      let pinSha = undefined;
+      if (row.clear_pin) {
+        pinHash = null;
+        pinSha = null;
+      } else if (newPin) {
+        if (!/^\d{4,10}$/.test(newPin)) throw mdHttpError(400, 'User PIN must be 4–10 digits.');
+        pinHash = await bcrypt.hash(newPin, SALT_ROUNDS);
+        pinSha = crypto.createHash('sha256').update('mydrawings-pin:' + newPin).digest('hex');
+      }
+      if (existingId) {
+        if (!workerIdSet.has(existingId)) throw mdHttpError(400, 'User #' + existingId + ' is not in this company.');
+        const sets = [
+          'first_name = $2',
+          'last_name = $3',
+          'email = $4',
+          'project_id = $5',
+          'is_admin = $6',
+          'access_suspended_until = $7',
+        ];
+        const vals = [existingId, first, last, email, projectId, isAdmin, suspended];
+        if (pinHash !== undefined) {
+          sets.push(`pin_hash = $${sets.length + 2}`);
+          vals.push(pinHash);
+          sets.push(`pin_sha = $${sets.length + 2}`);
+          vals.push(pinSha);
+        }
+        await client.query(
+          `UPDATE my_drawings_worker SET ${sets.join(', ')} WHERE id = $1 AND workspace_id = ${id}`,
+          vals
+        );
+        if (row.revoke_devices) {
+          await client.query('DELETE FROM my_drawings_device WHERE worker_id = $1', [existingId]);
+        }
+      } else {
+        const inserted = await client.query(
+          `INSERT INTO my_drawings_worker
+            (workspace_id, project_id, first_name, last_name, email, is_admin, access_suspended_until, pin_hash, pin_sha)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           RETURNING id`,
+          [id, projectId, first, last, email, isAdmin, suspended, pinHash || null, pinSha || null]
+        );
+        workerIdSet.add(inserted.rows[0].id);
+      }
+    }
+
+    const categoryIdSet = new Set(
+      (await client.query('SELECT id FROM my_drawings_category WHERE workspace_id = $1', [id])).rows.map((r) => Number(r.id))
+    );
+    for (const row of categoriesIn) {
+      if (!row || typeof row !== 'object' || !row._delete) continue;
+      const delId = parseOptionalInt(row.id, 'category id');
+      if (!delId || !categoryIdSet.has(delId)) continue;
+      await client.query('DELETE FROM my_drawings_category WHERE id = $1 AND workspace_id = $2', [delId, id]);
+      categoryIdSet.delete(delId);
+    }
+    for (const row of categoriesIn) {
+      if (!row || typeof row !== 'object' || row._delete) continue;
+      const name = String(row.name || '').trim().slice(0, 80);
+      if (!name) throw mdHttpError(400, 'Each category needs a name.');
+      const sortOrder = row.sort_order == null || row.sort_order === '' ? 0 : parseInt(String(row.sort_order), 10) || 0;
+      const projectId = resolveMdProjectId(row.project_id, siteClientMap, 'category site');
+      const existingId = parseOptionalInt(row.id, 'category id');
+      if (existingId) {
+        if (!categoryIdSet.has(existingId)) throw mdHttpError(400, 'Category #' + existingId + ' is not in this company.');
+        await client.query(
+          `UPDATE my_drawings_category
+           SET name = $2, sort_order = $3, project_id = $4
+           WHERE id = $1 AND workspace_id = $5`,
+          [existingId, name, sortOrder, projectId, id]
+        );
+      } else {
+        const inserted = await client.query(
+          `INSERT INTO my_drawings_category (workspace_id, project_id, name, sort_order)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id`,
+          [id, projectId, name, sortOrder]
+        );
+        categoryIdSet.add(inserted.rows[0].id);
+      }
+    }
+
+    const drawingIdSet = new Set(
+      (await client.query('SELECT id FROM my_drawings_item WHERE workspace_id = $1', [id])).rows.map((r) => Number(r.id))
+    );
+    for (const row of drawingsIn) {
+      if (!row || typeof row !== 'object' || !row._delete) continue;
+      const delId = parseOptionalInt(row.id, 'drawing id');
+      if (!delId || !drawingIdSet.has(delId)) continue;
+      const file = await client.query(
+        'SELECT relative_path FROM my_drawings_item WHERE id = $1 AND workspace_id = $2',
+        [delId, id]
+      );
+      if (file.rows[0]) await unlinkMdStoredRel(file.rows[0].relative_path);
+      await client.query('DELETE FROM my_drawings_item WHERE id = $1 AND workspace_id = $2', [delId, id]);
+      drawingIdSet.delete(delId);
+    }
+    for (const row of drawingsIn) {
+      if (!row || typeof row !== 'object' || row._delete) continue;
+      const existingId = parseOptionalInt(row.id, 'drawing id');
+      if (!existingId || !drawingIdSet.has(existingId)) {
+        throw mdHttpError(400, 'Drawings can be edited or deleted here, not created without a file.');
+      }
+      const number = String(row.number || '').trim().slice(0, 40);
+      const title = String(row.title || '').trim().slice(0, 200);
+      const revision = String(row.revision || 'A').trim().slice(0, 12) || 'A';
+      if (!number || !title) throw mdHttpError(400, 'Each drawing needs a number and title.');
+      const projectId = resolveMdProjectId(row.project_id, siteClientMap, 'drawing site');
+      const categoryId = parseOptionalInt(row.category_id, 'drawing category');
+      const floors = parseStringArray(row.floors);
+      await client.query(
+        `UPDATE my_drawings_item
+         SET number = $2, title = $3, revision = $4, project_id = $5, category_id = $6, floors = $7, updated_at = NOW()
+         WHERE id = $1 AND workspace_id = $8`,
+        [existingId, number, title, revision, projectId, categoryId, floors, id]
+      );
+    }
+
+    const wallIdSet = new Set(
+      (await client.query('SELECT id FROM my_drawings_wall_type WHERE workspace_id = $1', [id])).rows.map((r) => Number(r.id))
+    );
+    for (const row of wallTypesIn) {
+      if (!row || typeof row !== 'object' || !row._delete) continue;
+      const delId = parseOptionalInt(row.id, 'wall type id');
+      if (!delId || !wallIdSet.has(delId)) continue;
+      const img = await client.query(
+        'SELECT detail_image_path FROM my_drawings_wall_type WHERE id = $1 AND workspace_id = $2',
+        [delId, id]
+      );
+      if (img.rows[0]) await unlinkMdStoredRel(img.rows[0].detail_image_path);
+      await client.query('DELETE FROM my_drawings_wall_type WHERE id = $1 AND workspace_id = $2', [delId, id]);
+      wallIdSet.delete(delId);
+    }
+    for (const row of wallTypesIn) {
+      if (!row || typeof row !== 'object' || row._delete) continue;
+      const code = String(row.code || '').trim().slice(0, 40);
+      if (!code) throw mdHttpError(400, 'Each wall type needs a code.');
+      const kind = String(row.kind || 'wall').trim().slice(0, 20) || 'wall';
+      const name = String(row.name || '').trim().slice(0, 300);
+      const projectId = resolveMdProjectId(row.project_id, siteClientMap, 'wall type site');
+      const sortOrder = row.sort_order == null || row.sort_order === '' ? 0 : parseInt(String(row.sort_order), 10) || 0;
+      const fields = {
+        system_ref: String(row.system_ref || '').slice(0, 120),
+        system_type: String(row.system_type || '').slice(0, 200),
+        fire_minutes: String(row.fire_minutes || '').slice(0, 40),
+        fire_class: String(row.fire_class || '').slice(0, 80),
+        acoustic: String(row.acoustic || '').slice(0, 80),
+        thickness: String(row.thickness || '').slice(0, 40),
+        max_height_m: String(row.max_height_m || '').slice(0, 40),
+        duty: String(row.duty || '').slice(0, 40),
+      };
+      const buildup = parseJsonObject(row.buildup, 'Wall type buildup');
+      const packPages = parseJsonObject(row.pack_pages, 'Wall type pack pages');
+      const existingId = parseOptionalInt(row.id, 'wall type id');
+      let detailPathUpdate = '';
+      const extraVals = [];
+      if (row.clear_image) {
+        if (existingId) {
+          const img = await client.query(
+            'SELECT detail_image_path FROM my_drawings_wall_type WHERE id = $1 AND workspace_id = $2',
+            [existingId, id]
+          );
+          if (img.rows[0]) await unlinkMdStoredRel(img.rows[0].detail_image_path);
+        }
+        detailPathUpdate = ', detail_image_path = NULL';
+      }
+      if (existingId) {
+        if (!wallIdSet.has(existingId)) throw mdHttpError(400, 'Wall type #' + existingId + ' is not in this company.');
+        await client.query(
+          `UPDATE my_drawings_wall_type
+           SET code = $2, kind = $3, name = $4, system_ref = $5, system_type = $6, fire_minutes = $7,
+               fire_class = $8, acoustic = $9, thickness = $10, max_height_m = $11, duty = $12,
+               buildup = $13, pack_pages = $14, project_id = $15, sort_order = $16, updated_at = NOW()
+               ${detailPathUpdate}
+           WHERE id = $1 AND workspace_id = $17`,
+          [
+            existingId, code, kind, name, fields.system_ref, fields.system_type, fields.fire_minutes,
+            fields.fire_class, fields.acoustic, fields.thickness, fields.max_height_m, fields.duty,
+            JSON.stringify(buildup), JSON.stringify(packPages), projectId, sortOrder, id, ...extraVals,
+          ]
+        );
+      } else {
+        const inserted = await client.query(
+          `INSERT INTO my_drawings_wall_type
+            (workspace_id, project_id, code, kind, name, system_ref, system_type, fire_minutes, fire_class,
+             acoustic, thickness, max_height_m, duty, buildup, pack_pages, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+           RETURNING id`,
+          [
+            id, projectId, code, kind, name, fields.system_ref, fields.system_type, fields.fire_minutes,
+            fields.fire_class, fields.acoustic, fields.thickness, fields.max_height_m, fields.duty,
+            JSON.stringify(buildup), JSON.stringify(packPages), sortOrder,
+          ]
+        );
+        wallIdSet.add(inserted.rows[0].id);
+      }
+    }
+
+    await client.query('COMMIT');
+    const detail = await fetchMyDrawingsCompanyDetail(id);
+    return res.status(200).json({
+      success: true,
+      message: 'My Drawings company updated.',
+      ...detail,
+    });
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      /* ignore */
+    }
+    if (err && err.statusCode) {
+      return res.status(err.statusCode).json({ success: false, message: err.message });
+    }
+    if (err && err.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        message: 'A unique value is already in use (email, access code, user, category, drawing number, or wall type).',
+        detail: err.detail,
+      });
+    }
+    console.error('platformAdmin updateMyDrawingsCompany error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Update failed.' });
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * DELETE /api/platform-admin/mydrawings-companies/:id
+ */
+async function deleteMyDrawingsCompany(req, res) {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ success: false, message: 'Invalid company id.' });
+  }
+  try {
+    const ws = await pool.query('SELECT id, name, logo_path FROM my_drawings_workspace WHERE id = $1', [id]);
+    if (!ws.rows.length) {
+      return res.status(404).json({ success: false, message: 'My Drawings company not found.' });
+    }
+    const files = await pool.query(
+      'SELECT relative_path FROM my_drawings_item WHERE workspace_id = $1',
+      [id]
+    );
+    const images = await pool.query(
+      'SELECT detail_image_path FROM my_drawings_wall_type WHERE workspace_id = $1',
+      [id]
+    );
+    for (const file of files.rows) await unlinkMdStoredRel(file.relative_path);
+    for (const img of images.rows) await unlinkMdStoredRel(img.detail_image_path);
+    await unlinkMdStoredRel(ws.rows[0].logo_path);
+    await pool.query('DELETE FROM my_drawings_workspace WHERE id = $1', [id]);
+    return res.status(200).json({
+      success: true,
+      message: 'My Drawings company deleted.',
+      id,
+      name: ws.rows[0].name,
+    });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(503).json({ success: false, message: 'My Drawings tables are not installed yet.' });
+    }
+    console.error('platformAdmin deleteMyDrawingsCompany error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to delete My Drawings company.' });
   }
 }
 
@@ -2425,6 +3117,9 @@ module.exports = {
   me,
   listCompanies,
   listMyDrawingsCompanies,
+  getMyDrawingsCompany,
+  updateMyDrawingsCompany,
+  deleteMyDrawingsCompany,
   listCompaniesStorageSummary,
   getCompany,
   updateCompany,
