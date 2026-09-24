@@ -54,7 +54,7 @@ async function requireMyDrawingsPin(req, res, next) {
         req.myDrawings = await attachCurrentSite(req, asJwt);
         return next();
       }
-      return res.status(401).json({ success: false, message: 'Session expired. Request a new access key.' });
+      return res.status(401).json({ success: false, message: 'Session expired. Request a new email key.' });
     }
     const adminToken = readAdminToken(req);
     if (adminToken) {
@@ -97,7 +97,7 @@ async function requireMyDrawingsPin(req, res, next) {
       req.myDrawings = await attachCurrentSite(req, resolved);
       return next();
     }
-    return res.status(401).json({ success: false, message: 'Incorrect access key' });
+    return res.status(401).json({ success: false, message: 'Sign in again.' });
   } catch (err) {
     console.error('requireMyDrawingsPin:', err);
     return res.status(500).json({ success: false, message: 'Access check failed.' });

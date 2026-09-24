@@ -10,6 +10,7 @@
   });
 
   on($('start-form'), 'submit', submitStart);
+  on($('cs-copy'), 'click', copySiteCode);
 
   function on(el, ev, fn) {
     if (el) el.addEventListener(ev, fn);
@@ -34,15 +35,40 @@
     } catch (e) {}
   }
 
+  async function copySiteCode() {
+    var code = ($('cs-code').textContent || '').trim();
+    if (!code || code === '—') return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(code);
+      } else {
+        throw new Error('no clipboard');
+      }
+      if ($('cs-copy-ok')) {
+        $('cs-copy-ok').hidden = false;
+        $('cs-copy-ok').textContent = 'Copied. Send it to the team.';
+      }
+    } catch (e) {
+      if ($('cs-copy-ok')) {
+        $('cs-copy-ok').hidden = false;
+        $('cs-copy-ok').textContent = 'Select the code and copy it.';
+      }
+    }
+  }
+
   async function submitStart(e) {
     e.preventDefault();
+    var firstName = ($('cs-first').value || '').replace(/\s+/g, ' ').trim();
     var email = ($('cs-email').value || '').trim().toLowerCase();
     var password = $('cs-password').value || '';
     var repeat = $('cs-password-2').value || '';
     var name = ($('cs-name').value || '').replace(/\s+/g, ' ').trim();
-    var mode = (document.querySelector('input[name="cs-mode"]:checked') || {}).value || 'single';
     var logo = $('cs-logo').files && $('cs-logo').files[0];
     $('cs-error').textContent = '';
+    if (!firstName) {
+      $('cs-error').textContent = 'Enter your first name.';
+      return;
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       $('cs-error').textContent = 'Enter a valid email address.';
       return;
@@ -62,11 +88,12 @@
     $('cs-submit').disabled = true;
     try {
       var body = new FormData();
+      body.append('firstName', firstName);
       body.append('email', email);
       body.append('password', password);
       body.append('passwordRepeat', repeat);
       body.append('companyName', name);
-      body.append('projectMode', mode);
+      body.append('projectMode', 'single');
       if (logo) body.append('logo', logo);
       var res = await fetch('/api/my-drawings/company-start', {
         method: 'POST',

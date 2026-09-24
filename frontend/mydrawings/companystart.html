@@ -14,10 +14,14 @@
     <section class="md-screen md-pin md-register is-active" aria-label="Start a company">
       <p class="md-pin-brand">My Drawings</p>
       <h2>Start a company</h2>
-      <p class="md-pin-hint">Create the company account for the head person. Workers will join later with the access code.</p>
+      <p class="md-pin-hint">Create the company account. The team joins later with the site code you will get on the next screen.</p>
       <form class="md-reg-form" id="start-form" autocomplete="on">
         <label class="mg-field">
-          <span>Head person email</span>
+          <span>Your first name</span>
+          <input id="cs-first" type="text" maxlength="80" autocomplete="given-name" autocapitalize="words" spellcheck="false" required>
+        </label>
+        <label class="mg-field">
+          <span>Company email</span>
           <input id="cs-email" type="email" maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email" required>
         </label>
         <label class="mg-field">
@@ -37,29 +41,19 @@
           <input id="cs-logo" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
           <span class="md-file-name" id="cs-logo-name">No file selected</span>
         </label>
-        <fieldset class="mg-field">
-          <span>Projects</span>
-          <div class="md-choice">
-            <label>
-              <input type="radio" name="cs-mode" value="single" checked>
-              <strong>Single project</strong>
-              <span>One live job</span>
-            </label>
-            <label>
-              <input type="radio" name="cs-mode" value="multi">
-              <strong>Multi project</strong>
-              <span>Several jobs</span>
-            </label>
-          </div>
-        </fieldset>
         <p class="md-error" id="cs-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="cs-submit">Create company</button>
       </form>
       <div id="cs-done" hidden>
-        <p class="md-pin-hint">Company created. Give this access code to your workers:</p>
+        <p class="md-pin-hint">Company created. Send this site code to the team so they can join.</p>
         <p class="md-success-code" id="cs-code">—</p>
-        <p class="md-pin-hint">Administration key — save it now, it is shown once:</p>
-        <p class="md-success-code" id="cs-admin-pin">—</p>
+        <button type="button" class="md-btn md-btn-primary" id="cs-copy">Copy site code</button>
+        <p class="md-pin-hint" id="cs-copy-ok" hidden>Copied.</p>
+        <details class="md-advanced">
+          <summary>Backup key — save it now, shown once</summary>
+          <p class="md-pin-hint">Only for you. Not the site code you send to the team.</p>
+          <p class="md-success-code" id="cs-admin-pin">—</p>
+        </details>
         <a class="md-btn md-btn-primary" id="cs-open" href="/mydrawings/">Open administration</a>
       </div>
       <p class="md-pin-actions">

@@ -19,7 +19,7 @@
   async function preview() {
     token = String(queryToken() || '').trim();
     if (!token) {
-      $('rp-hint').textContent = 'This reset link is missing. Request a new one from Company sign in.';
+      $('rp-hint').textContent = 'This reset link is missing. Request a new one from Sign in.';
       return;
     }
     try {
@@ -36,7 +36,7 @@
       }
       if (data.companyName) {
         $('rp-hint').textContent =
-          'Reset the password for ' + data.companyName + '. Enter a new password and one site access code (host code) from this company.';
+          'Reset the password for ' + data.companyName + '. Enter a new password and one site code from this company.';
       }
       $('rp-form').hidden = false;
       setTimeout(function () {
@@ -62,7 +62,7 @@
       return;
     }
     if (!/^[A-Z0-9]{6,10}$/.test(host)) {
-      $('rp-error').textContent = 'Enter one site access code (host code) from this company.';
+      $('rp-error').textContent = 'Enter one site code from this company.';
       return;
     }
     $('rp-submit').disabled = true;

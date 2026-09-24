@@ -1281,7 +1281,7 @@ async function issueUniquePin(workspaceId) {
     );
     if (!clash.rows[0]) return { pin, sha };
   }
-  const err = new Error('Could not allocate an access key.');
+  const err = new Error('Could not create an email key. Try again.');
   err.code = 'PIN_ALLOC';
   throw err;
 }
@@ -1315,23 +1315,22 @@ async function sendPasskeyEmail({ to, firstName, pin }) {
     throw err;
   }
   const name = firstName ? String(firstName).trim() : 'there';
-  const subject = 'Your My Drawings access key';
+  const subject = 'Your My Drawings email key';
   const text = [
     `Hi ${name},`,
     '',
-    'Your My Drawings access key is:',
+    'Your My Drawings email key is:',
     pin,
     '',
-    'Enter this 4-digit key on the device you just used. After that, this device stays signed in.',
-    'The key expires in 24 hours.',
+    'Enter this 4-digit email key on the device you just used. It is valid 24 hours. This is not the company password.',
     '',
     'If you did not request this, you can ignore this email.',
   ].join('\n');
   const html = `
     <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:16px;color:#0f172a;">Hi ${escapeHtml(name)},</p>
-    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:16px;color:#0f172a;">Your My Drawings access key is:</p>
+    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:16px;color:#0f172a;">Your My Drawings email key is:</p>
     <p style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:32px;letter-spacing:0.28em;font-weight:700;color:#0f172a;margin:16px 0;">${escapeHtml(pin)}</p>
-    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:14px;color:#475569;">Enter this 4-digit key on the device you just used. After that, this device stays signed in. The key expires in 24 hours.</p>
+    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:14px;color:#475569;">Enter this 4-digit email key on the device you just used. It is valid 24 hours. This is not the company password.</p>
     <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:13px;color:#64748b;">If you did not request this, you can ignore this email.</p>
   `;
   await transport.sendMail({ from, to, subject, text, html });
@@ -1397,7 +1396,7 @@ async function registerWorker(req, res) {
       return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
     }
     if (!ACCESS_CODE_RE.test(accessCode)) {
-      return res.status(400).json({ success: false, message: 'Enter the site access code from your site manager.' });
+      return res.status(400).json({ success: false, message: 'Enter the site code from your site manager.' });
     }
     if (isReviewDemoEmail(email) && accessCode === REVIEW_DEMO_HOST) {
       const worker = await ensureReviewDemoWorker();
@@ -1422,7 +1421,7 @@ async function registerWorker(req, res) {
     }
     const workspace = await findWorkspaceByAccessCode(accessCode);
     if (!workspace) {
-      return res.status(404).json({ success: false, message: 'That site access code is not valid.' });
+      return res.status(404).json({ success: false, message: 'That site code is not valid.' });
     }
     const siteId = workspace.site && workspace.site.id;
     const existing = await pool.query(
@@ -1452,7 +1451,7 @@ async function registerWorker(req, res) {
       success: true,
       email: worker.email,
       companyName: workspace.name,
-      message: 'We sent a 4-digit key to your email.',
+      message: 'We sent a 4-digit email key. Check inbox and spam. Valid 24 hours.',
     });
   } catch (err) {
     console.error('myDrawings register:', err);
@@ -1533,7 +1532,7 @@ async function loginWorker(req, res) {
     }
     if (isReviewDemoEmail(email)) {
       if (accessCode && accessCode !== REVIEW_DEMO_HOST) {
-        return res.status(404).json({ success: false, message: 'That site access code is not valid.' });
+        return res.status(404).json({ success: false, message: 'That site code is not valid.' });
       }
       const worker = await ensureReviewDemoWorker();
       return res.json({
@@ -1548,7 +1547,7 @@ async function loginWorker(req, res) {
     if (accessCode) {
       const workspace = await findWorkspaceByAccessCode(accessCode);
       if (!workspace) {
-        return res.status(404).json({ success: false, message: 'That site access code is not valid.' });
+        return res.status(404).json({ success: false, message: 'That site code is not valid.' });
       }
       rows = rows.filter((row) => Number(row.project_id || 0) === Number(workspace.site && workspace.site.id)
         || Number(row.workspace_id) === Number(workspace.id));
@@ -1569,7 +1568,7 @@ async function loginWorker(req, res) {
         success: true,
         kind: 'worker',
         needsAccessCode: true,
-        message: 'Enter the site access code for the site you want to open.',
+        message: 'Enter the site code for the site you want to open.',
       });
     }
     const worker = rows[0];
@@ -1580,7 +1579,7 @@ async function loginWorker(req, res) {
       needsPin: true,
       email: worker.email,
       companyName: worker.workspace_name,
-      message: 'We sent a 4-digit key to your email.',
+      message: 'We sent a 4-digit email key. Check inbox and spam. Valid 24 hours.',
     });
   } catch (err) {
     console.error('myDrawings login:', err);
@@ -1603,7 +1602,7 @@ async function verifyWorker(req, res) {
       (req.body && (req.body.hostAccessCode || req.body.accessCode)) || ''
     );
     if (!EMAIL_RE.test(email) || !/^\d{4}$/.test(pin)) {
-      return res.status(401).json({ success: false, message: 'Incorrect access key' });
+      return res.status(401).json({ success: false, message: 'Incorrect email key' });
     }
     if (isReviewDemoEmail(email) && pin === REVIEW_DEMO_PIN) {
       const demo = await ensureReviewDemoWorker();
@@ -1626,12 +1625,12 @@ async function verifyWorker(req, res) {
     if (rows.length > 1) {
       return res.status(400).json({
         success: false,
-        message: 'Enter the site access code for the site you want to open.',
+        message: 'Enter the site code for the site you want to open.',
       });
     }
     const worker = rows[0];
     if (!worker || !worker.pin_hash) {
-      return res.status(401).json({ success: false, message: 'Incorrect access key' });
+      return res.status(401).json({ success: false, message: 'Incorrect email key' });
     }
     const until = suspendedUntil(worker);
     if (until) {
@@ -1642,7 +1641,7 @@ async function verifyWorker(req, res) {
     }
     const ok = await bcrypt.compare(pin, worker.pin_hash);
     if (!ok) {
-      return res.status(401).json({ success: false, message: 'Incorrect access key' });
+      return res.status(401).json({ success: false, message: 'Incorrect email key' });
     }
     await pool.query(
       `UPDATE my_drawings_worker
@@ -1661,7 +1660,7 @@ async function verifyWorker(req, res) {
     if (err && err.code === 'ACCESS_CLOSED') {
       return res.status(403).json(accessClosedPayload(err.until));
     }
-    return res.status(500).json({ success: false, message: 'Could not verify access key.' });
+    return res.status(500).json({ success: false, message: 'Could not verify the email key.' });
   }
 }
 
@@ -1677,7 +1676,7 @@ async function requestAuthCode(req, res) {
     }
     if (isReviewDemoEmail(email)) {
       if (accessCode && accessCode !== REVIEW_DEMO_HOST) {
-        return res.status(404).json({ success: false, message: 'That site access code is not valid.' });
+        return res.status(404).json({ success: false, message: 'That site code is not valid.' });
       }
       const worker = await ensureReviewDemoWorker();
       return res.json({
@@ -1693,7 +1692,7 @@ async function requestAuthCode(req, res) {
     if (accessCode) {
       const workspace = await findWorkspaceByAccessCode(accessCode);
       if (!workspace) {
-        return res.status(404).json({ success: false, message: 'That site access code is not valid.' });
+        return res.status(404).json({ success: false, message: 'That site code is not valid.' });
       }
       const siteId = workspace.site && workspace.site.id;
       rows = rows.filter((row) => Number(row.project_id || 0) === Number(siteId)
@@ -1702,13 +1701,13 @@ async function requestAuthCode(req, res) {
     if (!rows.length) {
       return res.status(404).json({
         success: false,
-        message: 'No account found for that email. Create an account with the site access code first.',
+        message: 'No account found for that email. Join a site with the site code first.',
       });
     }
     if (rows.length > 1) {
       return res.status(400).json({
         success: false,
-        message: 'Enter the site access code for the site you want to open.',
+        message: 'Enter the site code for the site you want to open.',
       });
     }
     const worker = rows[0];
@@ -1721,7 +1720,7 @@ async function requestAuthCode(req, res) {
       success: true,
       email: worker.email,
       companyName: worker.workspace_name,
-      message: 'We sent a 4-digit key to your email.',
+      message: 'We sent a 4-digit email key. Check inbox and spam. Valid 24 hours.',
     });
   } catch (err) {
     console.error('myDrawings requestAuthCode:', err);
@@ -1731,7 +1730,7 @@ async function requestAuthCode(req, res) {
     if (err && err.code === 'PIN_ALLOC') {
       return res.status(500).json({ success: false, message: err.message });
     }
-    return res.status(500).json({ success: false, message: 'Could not send your access key.' });
+    return res.status(500).json({ success: false, message: 'Could not send your email key.' });
   }
 }
 
@@ -2109,13 +2108,13 @@ async function updateAccessCode(req, res) {
     if (!ACCESS_CODE_RE.test(code)) {
       return res.status(400).json({
         success: false,
-        message: 'Access code must be 6 to 10 letters or numbers.',
+        message: 'Site code must be 6 to 10 letters or numbers.',
       });
     }
     if (await accessCodeTaken(code, workspaceId, siteId)) {
       return res.status(409).json({
         success: false,
-        message: 'That access code is already in use. Choose another.',
+        message: 'That site code is already in use. Choose another.',
       });
     }
     await pool.query(
@@ -2132,7 +2131,7 @@ async function updateAccessCode(req, res) {
     return res.json({
       success: true,
       accessCode: code,
-      message: generate ? 'A new access code was generated.' : 'Access code updated.',
+      message: generate ? 'A new site code was generated.' : 'Site code updated.',
     });
   } catch (err) {
     console.error('myDrawings updateAccessCode:', err);
@@ -2142,10 +2141,10 @@ async function updateAccessCode(req, res) {
     if (err && err.code === '23505') {
       return res.status(409).json({
         success: false,
-        message: 'That access code is already in use. Choose another.',
+        message: 'That site code is already in use. Choose another.',
       });
     }
-    return res.status(500).json({ success: false, message: 'Could not update the access code.' });
+    return res.status(500).json({ success: false, message: 'Could not update the site code.' });
   }
 }
 
@@ -2270,7 +2269,11 @@ async function startCompany(req, res) {
     const adminHash = await bcrypt.hash(adminPin, 10);
     const passwordHash = await bcrypt.hash(password, 10);
     const accessCode = await allocateAccessCode(0);
-    const managerName = email.split('@')[0] || companyName;
+    const firstName = String((req.body && (req.body.firstName || req.body.managerName)) || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 80);
+    const managerName = firstName || email.split('@')[0] || companyName;
     const inserted = await pool.query(
       `INSERT INTO my_drawings_workspace
         (name, access_pin_hash, admin_pin_hash, email, password_hash, manager_name, access_code, project_mode, demo_cleared_at, wall_types_pack)
@@ -2344,7 +2347,7 @@ async function companyLogin(req, res) {
         return res.status(400).json({
           success: false,
           kind: 'site_manager',
-          message: 'Site managers sign in with their own email and 4-digit key. Company email and password are only for the company head.',
+          message: 'Site managers sign in with their own email and 4-digit email key — use Sign in, not a company password.',
         });
       }
       return res.status(401).json({ success: false, message: 'No company account found for that email.' });
@@ -2385,7 +2388,7 @@ async function sendCompanyPasswordResetEmail({ to, name, companyName, resetUrl }
     'Open this link to choose a new password:',
     resetUrl,
     '',
-    'On the next page you will need one site access code (host code) from this company.',
+    'On the next page you will need one site code from this company.',
     'The link expires in 2 hours.',
     '',
     'If you did not request this, you can ignore this email. Your password will stay the same.',
@@ -2396,7 +2399,7 @@ async function sendCompanyPasswordResetEmail({ to, name, companyName, resetUrl }
     <p style="margin:24px 0;">
       <a href="${escapeHtml(resetUrl)}" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:15px;font-weight:700;">Reset password</a>
     </p>
-    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:14px;color:#475569;">On the next page you will need one site access code (host code) from this company. The link expires in 2 hours.</p>
+    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:14px;color:#475569;">On the next page you will need one site code from this company. The link expires in 2 hours.</p>
     <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:13px;color:#64748b;word-break:break-all;">${escapeHtml(resetUrl)}</p>
     <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:13px;color:#64748b;">If you did not request this, you can ignore this email. Your password will stay the same.</p>
   `;
@@ -2499,7 +2502,7 @@ async function previewCompanyPasswordReset(req, res) {
     if (!reset) {
       return res.status(400).json({
         success: false,
-        message: 'This reset link is invalid or has expired. Request a new one from Company sign in.',
+        message: 'This reset link is invalid or has expired. Request a new one from Sign in.',
       });
     }
     return res.json({
@@ -2527,7 +2530,7 @@ async function resetCompanyPassword(req, res) {
     if (!reset) {
       return res.status(400).json({
         success: false,
-        message: 'This reset link is invalid or has expired. Request a new one from Company sign in.',
+        message: 'This reset link is invalid or has expired. Request a new one from Sign in.',
       });
     }
     if (password.length < 8 || password.length > 120) {
@@ -2539,7 +2542,7 @@ async function resetCompanyPassword(req, res) {
     if (!(await accessCodeBelongsToWorkspace(reset.workspace_id, accessCode))) {
       return res.status(400).json({
         success: false,
-        message: 'Enter one site access code (host code) from this company.',
+        message: 'Enter one site code from this company.',
       });
     }
     const passwordHash = await bcrypt.hash(password, 10);
@@ -2565,11 +2568,11 @@ async function unlock(req, res) {
     const pin = String((req.body && req.body.pin) || '').trim();
     const email = cleanEmail(req.body && req.body.email);
     if (!/^\d{4}$/.test(pin)) {
-      return res.status(401).json({ success: false, message: 'Incorrect access key' });
+      return res.status(401).json({ success: false, message: 'Incorrect backup key' });
     }
     const resolved = await resolveWorkspaceByPin(pin, email);
     if (!resolved || resolved.role !== 'admin') {
-      return res.status(401).json({ success: false, message: 'Incorrect access key' });
+      return res.status(401).json({ success: false, message: 'Incorrect backup key' });
     }
     const found = await pool.query(
       `SELECT id, name, email, manager_name, access_code, project_mode, logo_path
@@ -2577,7 +2580,7 @@ async function unlock(req, res) {
       [resolved.workspace.id]
     );
     if (!found.rows[0]) {
-      return res.status(401).json({ success: false, message: 'Incorrect access key' });
+      return res.status(401).json({ success: false, message: 'Incorrect backup key' });
     }
     return res.json(await issueAdminSession(found.rows[0]));
   } catch (err) {

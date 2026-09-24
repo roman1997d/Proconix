@@ -472,7 +472,7 @@
         var data = null;
         try { data = await res.json(); } catch (e) { data = null; }
         if (res.status === 401) {
-          var bad = new Error((data && data.message) || 'Incorrect access key');
+          var bad = new Error((data && data.message) || 'Incorrect email key');
           bad.code = 'bad_pin';
           throw bad;
         }
@@ -775,10 +775,6 @@
       var el = $(sid);
       if (el) el.classList.toggle('is-active', sid === id);
     });
-    try {
-      if (id === 'screen-manage') startAdminClock();
-      else stopAdminClock();
-    } catch (e) {}
   }
 
   function setOfflineUi() {
@@ -801,7 +797,7 @@
       dots[i].classList.toggle('is-on', i < v.length);
     }
     $('pin-continue').disabled = v.length !== 4;
-    $('pin-tap').textContent = v.length ? '' : 'Tap to enter key';
+    $('pin-tap').textContent = v.length ? '' : 'Tap to enter email key';
   }
 
   function pendingDetails() {
@@ -821,10 +817,12 @@
     state.pinMode = mode === 'admin' ? 'admin' : 'worker';
     var pending = pendingDetails();
     var worker = state.pinMode === 'worker';
-    $('pin-title').textContent = worker ? 'Enter your access key' : 'Enter administration key';
+    $('pin-title').textContent = worker ? 'Enter your email key' : 'Enter backup key';
     $('pin-hint').textContent = worker
-      ? (pending.email ? 'We sent a 4-digit key to ' + pending.email : 'We sent a 4-digit key to your email')
-      : '4-digit administration key';
+      ? (pending.email
+        ? 'We sent a 4-digit email key to ' + pending.email + '. Check inbox and spam. Valid 24 hours — not the company password.'
+        : 'We sent a 4-digit email key. Check inbox and spam. Valid 24 hours — not the company password.')
+      : '4-digit backup key shown when the company was created.';
     $('pin-worker-actions').hidden = !worker;
     $('pin-admin-back-wrap').hidden = worker;
     $('pin-error').textContent = '';
@@ -863,17 +861,25 @@
     if ($('login-password')) $('login-password').value = '';
     if ($('login-host-code')) $('login-host-code').value = '';
     if ($('login-continue')) $('login-continue').textContent = 'Continue';
-    setLoginField('login-forgot-wrap', true);
+    setLoginField('login-more-wrap', true);
     if ($('login-hint')) {
-      $('login-hint').textContent = 'Enter your email. We will ask for a password or a 4-digit key next.';
+      $('login-hint').textContent = 'Work email. If you are on site, we send a 4-digit email key. Company accounts use a password.';
     }
   }
 
-  function showLogin() {
+  function showLogin(opts) {
     var pending = readPending() || {};
     if ($('login-email')) $('login-email').value = pending.email || '';
     if ($('login-error')) $('login-error').textContent = '';
     resetLoginExtras();
+    if (opts && opts.expectCompany) {
+      setLoginField('login-password-wrap', false);
+      setLoginField('login-more-wrap', false);
+      if ($('login-continue')) $('login-continue').textContent = 'Sign in';
+      if ($('login-hint')) {
+        $('login-hint').textContent = 'Company account. Enter the company email and password.';
+      }
+    }
     showScreen('screen-login');
     setTimeout(function () {
       var email = $('login-email');
@@ -882,12 +888,7 @@
   }
 
   function showCompanyLogin() {
-    if ($('company-error')) $('company-error').textContent = '';
-    showScreen('screen-company');
-    setTimeout(function () {
-      var email = $('company-email');
-      if (email) email.focus();
-    }, 200);
+    showLogin({ expectCompany: true });
   }
 
   function showForgotPassword() {
@@ -941,7 +942,7 @@
       return;
     }
     if (state.pinMode === 'admin') {
-      showCompanyLogin();
+      showLogin({ expectCompany: true });
       return;
     }
     var pending = pendingDetails();
@@ -1017,7 +1018,7 @@
       return;
     }
     if (!/^[A-Z0-9]{6,10}$/.test(hostAccessCode)) {
-      $('reg-error').textContent = 'Enter the 6–10 character site access code from your site manager.';
+      $('reg-error').textContent = 'Enter the 6–10 character site code from your site manager.';
       return;
     }
     $('reg-continue').disabled = true;
@@ -1097,7 +1098,7 @@
       return;
     }
     if (loginLookup.kind === 'worker' && loginLookup.needsAccessCode && !/^[A-Z0-9]{6,10}$/.test(host)) {
-      $('login-error').textContent = 'Enter the 6–10 character site access code.';
+      $('login-error').textContent = 'Enter the 6–10 character site code.';
       return;
     }
     $('login-continue').disabled = true;
@@ -1116,7 +1117,7 @@
       } else if (data.needsPassword) {
         setLoginField('login-password-wrap', false);
         setLoginField('login-host-wrap', true);
-        setLoginField('login-forgot-wrap', false);
+        setLoginField('login-more-wrap', false);
         $('login-continue').textContent = 'Sign in';
         $('login-hint').textContent = 'This is a company account. Enter the password.';
         setTimeout(function () { if ($('login-password')) $('login-password').focus(); }, 80);
@@ -1124,10 +1125,10 @@
         setLoginField('login-host-wrap', false);
         setLoginField('login-password-wrap', true);
         $('login-continue').textContent = 'Continue';
-        $('login-hint').textContent = data.message || 'Enter the site access code for the site you want to open.';
+        $('login-hint').textContent = data.message || 'Enter the site code for the site you want to open.';
         setTimeout(function () { if ($('login-host-code')) $('login-host-code').focus(); }, 80);
       } else if (data.needsPin) {
-        beginWorkerPin(email, host, data.message || ('We sent a 4-digit key to ' + email));
+        beginWorkerPin(email, host, data.message || ('We sent a 4-digit email key to ' + email + '. Check inbox and spam. Valid 24 hours.'));
       } else if (data.deviceToken) {
         await enterWorkerSession(data, email);
       } else {
@@ -1183,7 +1184,7 @@
         email: pending.email,
         hostAccessCode: pending.hostAccessCode || ''
       });
-      $('pin-hint').textContent = 'We sent a new 4-digit key to ' + pending.email;
+      $('pin-hint').textContent = 'We sent a new 4-digit email key to ' + pending.email + '. Check inbox and spam.';
     } catch (err) {
       $('pin-error').textContent = err && err.message ? err.message : 'Could not resend the key.';
     }
@@ -1239,7 +1240,7 @@
       }
       await enterApp(data, extra);
     } catch (err) {
-      $('pin-error').textContent = err && err.message ? err.message : 'Incorrect access key';
+      $('pin-error').textContent = err && err.message ? err.message : (state.pinMode === 'admin' ? 'Incorrect backup key' : 'Incorrect email key');
       $('screen-pin').classList.add('is-shake');
       vibrate(40);
       setTimeout(function () { $('screen-pin').classList.remove('is-shake'); }, 400);
@@ -2371,7 +2372,7 @@
   async function makeWorkerAdministrator(id) {
     var w = workerById(id);
     var name = w ? workerFullName(w) : 'this user';
-    if (!confirm('Make ' + name + ' an administrator? They will be able to manage drawings, users, and the access code.')) {
+    if (!confirm('Make ' + name + ' a site manager? They will be able to manage drawings, users, and the site code for this site.')) {
       return;
     }
     try {
@@ -2435,8 +2436,6 @@
     if (act === 'delete') deleteCompanyWorker(id);
   }
 
-  var adminClockTimer = 0;
-
   function formatWelcomeName() {
     var session = readSession() || {};
     var first = (state.firstName || session.firstName || '').trim();
@@ -2450,29 +2449,10 @@
     return name || 'Administrator';
   }
 
-  function tickAdminClock() {
-    var hour = $('ad-hour');
-    var min = $('ad-min');
-    if (!hour || !min) return;
-    var now = new Date();
-    var h = now.getHours() % 12;
-    var m = now.getMinutes();
-    var s = now.getSeconds();
-    hour.style.transform = 'rotate(' + ((h + m / 60) * 30) + 'deg)';
-    min.style.transform = 'rotate(' + ((m + s / 60) * 6) + 'deg)';
-  }
-
-  function startAdminClock() {
-    tickAdminClock();
-    if (adminClockTimer) return;
-    adminClockTimer = setInterval(tickAdminClock, 1000);
-  }
-
-  function stopAdminClock() {
-    if (adminClockTimer) {
-      clearInterval(adminClockTimer);
-      adminClockTimer = 0;
-    }
+  function roleLabel() {
+    if (state.role === 'site_manager') return 'Site manager';
+    if (state.role === 'admin') return 'Company head';
+    return 'Administrator';
   }
 
   function setAdminNavOpen(open) {
@@ -2489,12 +2469,17 @@
     var name = state.companyName || (state.project && state.project.name) || '';
     var siteBit = state.siteName ? ' · ' + state.siteName : '';
     if (company) company.textContent = name ? name + siteBit : '';
+    if ($('ad-role')) $('ad-role').textContent = roleLabel();
+    if ($('ad-home-site')) {
+      $('ad-home-site').textContent = (name || 'Company') + (state.siteName ? ' · ' + state.siteName : '');
+    }
     var total = (state.drawings || []).length;
     var drafts = (state.drawings || []).filter(function (d) { return d && d.status === 'draft'; }).length;
     if ($('ad-stat-drawings')) $('ad-stat-drawings').textContent = String(total);
     if ($('ad-stat-sites')) $('ad-stat-sites').textContent = String(state.siteCount || (state.sites || []).length || 1);
     if ($('ad-stat-published')) $('ad-stat-published').textContent = String(Math.max(0, total - drafts));
     if ($('ad-stat-draft')) $('ad-stat-draft').textContent = String(drafts);
+    if ($('ad-home-steps')) $('ad-home-steps').hidden = total > 0;
     var sitesNav = $('ad-nav-sites');
     if (sitesNav) sitesNav.hidden = !isCompanyHead();
     updateSiteFormChrome();
@@ -2505,6 +2490,27 @@
     }
     var input = $('mg-access-input');
     if (input && !input.value && state.accessCode) input.value = state.accessCode;
+  }
+
+  async function copySiteCode() {
+    var code = String(state.accessCode || '').trim();
+    var status = $('ad-home-status');
+    if (!code) {
+      if (status) status.textContent = 'Open Site code to create one.';
+      showManagePanel('access');
+      return;
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(code);
+      } else {
+        throw new Error('no clipboard');
+      }
+      if (status) status.textContent = 'Site code copied. Send it to the team.';
+    } catch (e) {
+      if (status) status.textContent = code;
+      showManagePanel('access');
+    }
   }
 
   function setSitesStatus(msg, isError) {
@@ -2744,17 +2750,17 @@
     if (input) input.value = typed;
     if (!opts.generate) {
       if (!/^[A-Z0-9]{6,10}$/.test(typed)) {
-        setAccessCodeStatus('Access code must be 6 to 10 letters or numbers.', true);
+        setAccessCodeStatus('Site code must be 6 to 10 letters or numbers.', true);
         return;
       }
       if (typed === String(state.accessCode || '').toUpperCase()) {
-        setAccessCodeStatus('That is already the current access code.', true);
+        setAccessCodeStatus('That is already the current site code.', true);
         return;
       }
-      if (!confirm('Replace the access code with ' + typed + '? New users will need this code to join.')) {
+      if (!confirm('Replace the site code with ' + typed + '? New users will need this code to join.')) {
         return;
       }
-    } else if (!confirm('Generate a new access code? The current one will stop working for new sign-ups.')) {
+    } else if (!confirm('Generate a new site code? The current one will stop working for new sign-ups.')) {
       return;
     }
     try {
@@ -2765,9 +2771,9 @@
       state.accessCode = data.accessCode || typed;
       if (input) input.value = state.accessCode;
       renderAdminChrome();
-      setAccessCodeStatus(data.message || 'Access code updated.', false);
+      setAccessCodeStatus(data.message || 'Site code updated.', false);
     } catch (err) {
-      setAccessCodeStatus(err && err.message ? err.message : 'Could not update the access code.', true);
+      setAccessCodeStatus(err && err.message ? err.message : 'Could not update the site code.', true);
     }
   }
 
@@ -3499,7 +3505,9 @@
     var installItem = standalone ? '' : '<button type="button" class="md-sheet-item" data-sheet="install"><svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>Add to Home Screen</button>';
     openSheet(
       '<h3 id="sheet-title">My Drawings</h3>' +
-      '<button type="button" class="md-sheet-item" data-sheet="administration"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2"/></svg>Administration</button>' +
+      (canManageCatalog()
+        ? '<button type="button" class="md-sheet-item" data-sheet="administration"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2"/></svg>Administration</button>'
+        : '') +
       '<button type="button" class="md-sheet-item" data-sheet="wall-types"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 20V8l8-4 8 4v12"/><path d="M9 20v-6h6v6"/><path d="M4 12h16"/></svg>Wall Types</button>' +
       '<button type="button" class="md-sheet-item" data-sheet="activity"><svg class="md-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Activity</button>' +
       '<button type="button" class="md-sheet-item" data-sheet="change-floor"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M6 20V10l6-4 6 4v10"/><path d="M10 20v-4h4v4"/></svg>Change floor' +
@@ -3508,7 +3516,7 @@
       installItem +
       '<button type="button" class="md-sheet-item" data-sheet="clear-offline"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 14h10l1-14"/></svg>Remove all offline copies</button>' +
       (canManageCatalog()
-        ? '<button type="button" class="md-sheet-item is-danger" data-sheet="lock"><svg class="md-icon" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Exit administration</button>'
+        ? '<button type="button" class="md-sheet-item" data-sheet="view-drawings"><svg class="md-icon" viewBox="0 0 24 24"><path d="M4 7h7l2 2h7v10H4z"/><path d="M4 7V5h6l2 2"/></svg>View drawings</button>'
         : '') +
       (ios && !standalone ? '<p class="md-sheet-note">On iPhone: Share → Add to Home Screen.</p>' : '')
     );
@@ -3557,7 +3565,18 @@
         openManage();
         return;
       }
-      showCompanyLogin();
+      if (state.role === 'worker') {
+        openSheet(
+          '<h3 id="sheet-title">Administration</h3>' +
+          '<p class="md-sheet-note">Administration is for the company head and the site manager. You are signed in as a site user. Ask your site manager if you need to manage this site.</p>'
+        );
+        return;
+      }
+      showLogin();
+      return;
+    }
+    if (act === 'view-drawings') {
+      closeManage();
       return;
     }
     if (act === 'activity') {
@@ -3764,9 +3783,9 @@
         }
       } else {
         var pending = readPending();
-        if (window.location.search.indexOf('company=1') !== -1) showCompanyLogin();
-        else if (pending && pending.from === 'register') showRegister();
-        else showLogin();
+        if (window.location.search.indexOf('company=1') !== -1) showLogin({ expectCompany: true });
+        else if (pending && pending.from === 'login') showLogin();
+        else showRegister();
       }
     } catch (err) {
       showLogin();
@@ -3792,25 +3811,35 @@
   on($('forgot-form'), 'submit', submitForgotPassword);
   on($('btn-company-forgot'), 'click', showForgotPassword);
   on($('btn-login-forgot'), 'click', showForgotPassword);
-  on($('btn-forgot-back'), 'click', showCompanyLogin);
+  on($('btn-forgot-back'), 'click', showLogin);
   on($('login-email'), 'input', function () {
     var email = ($('login-email').value || '').trim().toLowerCase();
     if (loginLookup.email && email !== loginLookup.email) resetLoginExtras();
   });
   on($('btn-have-account'), 'click', showLogin);
   on($('btn-create-account'), 'click', showRegister);
-  on($('btn-admin-login'), 'click', showCompanyLogin);
-  on($('btn-admin-login-2'), 'click', showCompanyLogin);
+  on($('btn-admin-login'), 'click', function () { showLogin({ expectCompany: true }); });
+  on($('btn-admin-login-2'), 'click', function () { showLogin({ expectCompany: true }); });
   on($('btn-company-back'), 'click', showLogin);
-  on($('btn-company-admin-key'), 'click', function () {
-    var email = ($('company-email') && $('company-email').value || '').trim().toLowerCase();
+  function startBackupKey() {
+    var email = (
+      ($('login-email') && $('login-email').value) ||
+      ($('company-email') && $('company-email').value) ||
+      ''
+    ).trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if ($('login-error')) $('login-error').textContent = 'Enter the company email first.';
       if ($('company-error')) $('company-error').textContent = 'Enter the company email first.';
       return;
     }
     writePending({ email: email, from: 'admin-key' });
     showPin('admin', 'login');
-  });
+  }
+  on($('btn-company-admin-key'), 'click', startBackupKey);
+  on($('btn-login-admin-key'), 'click', startBackupKey);
+  on($('btn-home-add-drawing'), 'click', function () { showManageForm({ type: 'add' }); });
+  on($('btn-home-copy-code'), 'click', copySiteCode);
+  on($('btn-home-users'), 'click', function () { showManagePanel('users'); });
   on($('pin-resend'), 'click', resendKey);
   on($('pin-change'), 'click', backFromPin);
   on($('pin-admin-back'), 'click', backFromPin);

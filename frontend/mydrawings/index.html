@@ -25,10 +25,10 @@
   </div>
 
   <div class="md-app" id="md-app">
-    <section class="md-screen md-pin md-register" id="screen-register" aria-label="Create account">
+    <section class="md-screen md-pin md-register" id="screen-register" aria-label="Join a site">
       <p class="md-pin-brand">My Drawings</p>
-      <h2>Create account</h2>
-      <p class="md-pin-hint">Simple user — enter your name, email, and the site access code from your site manager.</p>
+      <h2>Join a site</h2>
+      <p class="md-pin-hint">Enter your name, work email, and the site code from your site manager. We will email a 4-digit key.</p>
       <form class="md-reg-form" id="register-form" autocomplete="on">
         <label class="mg-field">
           <span>First name</span>
@@ -43,22 +43,24 @@
           <input id="reg-email" type="email" maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false" inputmode="email" required>
         </label>
         <label class="mg-field">
-          <span>Site access code</span>
-          <input id="reg-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="6–10 characters" required>
+          <span>Site code</span>
+          <input id="reg-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="From your site manager" required>
         </label>
         <p class="md-error" id="reg-error" role="alert"></p>
-        <button type="submit" class="md-btn md-btn-primary" id="reg-continue">Create account</button>
+        <button type="submit" class="md-btn md-btn-primary" id="reg-continue">Join site</button>
       </form>
       <p class="md-pin-actions">
         <button type="button" class="md-link" id="btn-have-account">Already have an account?</button>
-        <a class="md-link" href="/companystart">Start a company</a>
+      </p>
+      <p class="md-pin-actions md-pin-actions-quiet">
+        <a class="md-link" href="/companystart">I manage the company</a>
       </p>
     </section>
 
     <section class="md-screen md-pin md-register" id="screen-login" aria-label="Sign in">
       <p class="md-pin-brand">My Drawings</p>
       <h2>Sign in</h2>
-      <p class="md-pin-hint" id="login-hint">Enter your email. We will ask for a password or a 4-digit key next.</p>
+      <p class="md-pin-hint" id="login-hint">Work email. If you are on site, we send a 4-digit email key. Company accounts use a password.</p>
       <form class="md-reg-form" id="login-form" autocomplete="on">
         <label class="mg-field">
           <span>Email</span>
@@ -69,25 +71,28 @@
           <input id="login-password" type="password" minlength="8" maxlength="120" autocomplete="current-password">
         </label>
         <label class="mg-field" id="login-host-wrap" hidden>
-          <span>Site access code</span>
+          <span>Site code</span>
           <input id="login-host-code" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="6–10 characters">
         </label>
         <p class="md-error" id="login-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="login-continue">Continue</button>
       </form>
-      <p class="md-pin-actions" id="login-forgot-wrap" hidden>
+      <p class="md-pin-actions" id="login-more-wrap" hidden>
         <button type="button" class="md-link" id="btn-login-forgot">Forgot password?</button>
+        <button type="button" class="md-link" id="btn-login-admin-key">Use backup key</button>
       </p>
       <p class="md-pin-actions">
-        <button type="button" class="md-link" id="btn-create-account">Create a simple user account</button>
-        <a class="md-link" href="/companystart">Start a company</a>
+        <button type="button" class="md-link" id="btn-create-account">Join a site</button>
+      </p>
+      <p class="md-pin-actions md-pin-actions-quiet">
+        <a class="md-link" href="/companystart">I manage the company</a>
       </p>
     </section>
 
     <section class="md-screen md-pin md-register" id="screen-company" aria-label="Company sign in">
       <p class="md-pin-brand">My Drawings</p>
-      <h2>Company sign in</h2>
-      <p class="md-pin-hint">Enter the company email and password.</p>
+      <h2>Sign in</h2>
+      <p class="md-pin-hint">Company email and password. Site managers use Sign in with their own email key.</p>
       <form class="md-reg-form" id="company-form" autocomplete="on">
         <label class="mg-field">
           <span>Company email</span>
@@ -110,7 +115,7 @@
     <section class="md-screen md-pin md-register" id="screen-forgot" aria-label="Forgot company password">
       <p class="md-pin-brand">My Drawings</p>
       <h2>Forgot password</h2>
-      <p class="md-pin-hint">Enter the company email. Proconix will send a reset link. You will then need a new password and one site access code (host code) from this company.</p>
+      <p class="md-pin-hint">Enter the company email. We will send a reset link. On the next page you will choose a new password and enter one site code from this company.</p>
       <form class="md-reg-form" id="forgot-form" autocomplete="on">
         <label class="mg-field">
           <span>Company email</span>
@@ -121,14 +126,14 @@
         <button type="submit" class="md-btn md-btn-primary" id="forgot-continue">Send reset link</button>
       </form>
       <p class="md-pin-actions">
-        <button type="button" class="md-link" id="btn-forgot-back">Back to Company sign in</button>
+        <button type="button" class="md-link" id="btn-forgot-back">Back to Sign in</button>
       </p>
     </section>
 
     <section class="md-screen md-pin" id="screen-pin" aria-label="Access">
       <p class="md-pin-brand">My Drawings</p>
-      <h2 id="pin-title">Enter your access key</h2>
-      <p class="md-pin-hint" id="pin-hint">We sent a 4-digit key to your email</p>
+      <h2 id="pin-title">Enter your email key</h2>
+      <p class="md-pin-hint" id="pin-hint">We sent a 4-digit email key. Check your inbox and spam. It is valid 24 hours — this is not the company password.</p>
       <div class="md-pin-dots" id="pin-dots" aria-hidden="true">
         <span class="md-dot"></span>
         <span class="md-dot"></span>
@@ -136,7 +141,7 @@
         <span class="md-dot"></span>
       </div>
       <div class="md-pin-wrap">
-        <div class="md-pin-tap" id="pin-tap">Tap to enter key</div>
+        <div class="md-pin-tap" id="pin-tap">Tap to enter email key</div>
         <input
           id="pin-input"
           class="md-pin-input"
@@ -146,13 +151,13 @@
           maxlength="4"
           autocomplete="one-time-code"
           enterkeyhint="done"
-          aria-label="4-digit access key"
+          aria-label="4-digit email key"
         >
       </div>
       <p class="md-error" id="pin-error" role="alert"></p>
       <button type="button" class="md-btn md-btn-primary" id="pin-continue" disabled>Continue</button>
       <div class="md-pin-actions" id="pin-worker-actions">
-        <button type="button" class="md-link" id="pin-resend">Resend key</button>
+        <button type="button" class="md-link" id="pin-resend">Resend email key</button>
         <button type="button" class="md-link" id="pin-change">Use a different email</button>
       </div>
       <p class="md-admin-link" id="pin-admin-back-wrap" hidden>
@@ -246,11 +251,11 @@
             </button>
             <button type="button" data-ad-panel="access">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="14" r="4"/><path d="M11.5 12.5 L21 4 v4 M17 4 h4"/></svg>
-              ACCES code
+              Site code
             </button>
             <button type="button" data-ad-panel="settings">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M4.9 6.5l1.6 1.6M17.5 15.9l1.6 1.6M3 12h2.2M18.8 12H21M4.9 17.5l1.6-1.6M17.5 8.1l1.6-1.6"/></svg>
-              Setting
+              Account
             </button>
           </nav>
         </aside>
@@ -267,30 +272,26 @@
           </header>
           <div class="ad-content">
             <div class="ad-panel" id="ad-panel-home">
-              <div class="ad-dash">
-                <div class="ad-clock" id="ad-clock" aria-hidden="true">
-                  <span class="ad-clock-n" style="--a:0">12</span>
-                  <span class="ad-clock-n" style="--a:30">1</span>
-                  <span class="ad-clock-n" style="--a:60">2</span>
-                  <span class="ad-clock-n" style="--a:90">3</span>
-                  <span class="ad-clock-n" style="--a:120">4</span>
-                  <span class="ad-clock-n" style="--a:150">5</span>
-                  <span class="ad-clock-n" style="--a:180">6</span>
-                  <span class="ad-clock-n" style="--a:210">7</span>
-                  <span class="ad-clock-n" style="--a:240">8</span>
-                  <span class="ad-clock-n" style="--a:270">9</span>
-                  <span class="ad-clock-n" style="--a:300">10</span>
-                  <span class="ad-clock-n" style="--a:330">11</span>
-                  <div class="ad-clock-hour" id="ad-hour"></div>
-                  <div class="ad-clock-min" id="ad-min"></div>
-                  <div class="ad-clock-dot"></div>
-                </div>
+              <div class="ad-home">
+                <p class="ad-role" id="ad-role">Company head</p>
+                <p class="ad-home-site" id="ad-home-site"></p>
                 <ul class="ad-stats">
-                  <li><strong id="ad-stat-drawings">0</strong> DRAWINGS</li>
-                  <li><strong id="ad-stat-sites">0</strong> SITES</li>
-                  <li><strong id="ad-stat-published">0</strong> Publisheet</li>
-                  <li><strong id="ad-stat-draft">0</strong> DRAFT</li>
+                  <li><strong id="ad-stat-drawings">0</strong> Drawings</li>
+                  <li><strong id="ad-stat-sites">0</strong> Sites</li>
+                  <li><strong id="ad-stat-published">0</strong> Published</li>
+                  <li><strong id="ad-stat-draft">0</strong> Draft</li>
                 </ul>
+                <div class="ad-home-actions">
+                  <button type="button" class="md-btn md-btn-primary" id="btn-home-add-drawing">Add drawing</button>
+                  <button type="button" class="md-btn md-btn-ghost" id="btn-home-copy-code">Copy site code</button>
+                  <button type="button" class="md-btn md-btn-ghost" id="btn-home-users">Users</button>
+                </div>
+                <p class="mg-form-note" id="ad-home-status"></p>
+                <ol class="ad-home-steps" id="ad-home-steps">
+                  <li>Copy the site code and send it to the team</li>
+                  <li>Add the first drawing</li>
+                  <li>Name a site manager in Users</li>
+                </ol>
               </div>
             </div>
             <div class="ad-panel" id="ad-panel-drawings" hidden>
@@ -402,12 +403,12 @@
             <div class="ad-panel" id="ad-panel-access" hidden>
               <section class="mg-block">
                 <div class="mg-block-head">
-                  <h2>Access code</h2>
+                  <h2>Site code</h2>
                 </div>
-                <p class="mg-form-note">Give this code to workers and the site manager for this site. They will only see this site’s drawings and SPEC.</p>
+                <p class="mg-form-note">Give this site code to workers and the site manager. They will only see this site’s drawings and SPEC.</p>
                 <p class="ad-access-code" id="mg-host-code">—</p>
                 <label class="mg-field">
-                  <span>New access code</span>
+                  <span>New site code</span>
                   <input id="mg-access-input" type="text" minlength="6" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="6–10 characters">
                 </label>
                 <p class="mg-form-note">Letters and numbers only. Between 6 and 10 characters.</p>
@@ -421,9 +422,9 @@
             <div class="ad-panel" id="ad-panel-settings" hidden>
               <section class="mg-block">
                 <div class="mg-block-head">
-                  <h2>Setting</h2>
+                  <h2>Account</h2>
                 </div>
-                <p class="mg-form-note">Open the worker drawing list, or leave the company session on this device.</p>
+                <p class="mg-form-note">Open the drawings list for this site, or sign out on this device.</p>
                 <div class="ad-settings-actions">
                   <button type="button" class="md-btn md-btn-ghost" id="btn-ad-site">View site drawings</button>
                   <button type="button" class="md-btn md-btn-primary" id="btn-ad-lock">Sign out</button>
