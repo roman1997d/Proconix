@@ -4026,9 +4026,6 @@
   on($('btn-sm-add'), 'click', openSmAddModal);
   on($('sm-add-close'), 'click', closeSmAddModal);
   on($('sm-add-cancel'), 'click', closeSmAddModal);
-  on($('sm-add-modal'), 'click', function (e) {
-    if (e.target && e.target.id === 'sm-add-modal') closeSmAddModal();
-  });
   on($('sm-cat-add'), 'click', addSmCategory);
   on($('sm-cat-input'), 'keydown', function (e) {
     if (e.key === 'Enter') {
