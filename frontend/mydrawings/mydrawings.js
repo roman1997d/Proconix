@@ -2393,10 +2393,20 @@
     return [w.firstName, w.lastName].filter(Boolean).join(' ').trim() || ('User #' + w.id);
   }
 
+  function canAddSiteAccess() {
+    if (!isCompanyHead()) return false;
+    if ((state.sites || []).length > 1) return true;
+    var list = state.workers || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].availableSites && list[i].availableSites.length) return true;
+    }
+    return false;
+  }
+
   function accessForCell(w) {
     var sites = (w && w.availableSites) || [];
     if (!sites.length) {
-      return '<span class="mg-user-closed">All sites</span>';
+      return '<span class="mg-user-email">On all sites</span>';
     }
     return '<select class="mg-user-days" data-user-add-site="' + escapeHtml(String(w.id)) + '" aria-label="Add access for">' +
       '<option value="">Select a site</option>' +
@@ -2450,15 +2460,16 @@
       box.innerHTML = '';
       return;
     }
+    var showAccess = canAddSiteAccess();
     box.innerHTML =
-      '<table class="mg-users-table">' +
+      '<table class="mg-users-table' + (showAccess ? ' is-wide' : '') + '">' +
         '<thead><tr>' +
           '<th>User</th>' +
           '<th>Registered</th>' +
           '<th>Last seen</th>' +
           '<th>Access</th>' +
           '<th>Site manager</th>' +
-          (isCompanyHead() ? '<th>Add access for</th>' : '') +
+          (showAccess ? '<th>Add access for</th>' : '') +
           '<th></th>' +
         '</tr></thead>' +
         '<tbody>' +
@@ -2490,7 +2501,7 @@
               '</td>' +
               '<td data-label="Access" class="mg-user-access">' + accessCell + '</td>' +
               '<td data-label="Admin" class="mg-user-access">' + adminCell + '</td>' +
-              (isCompanyHead() ? '<td data-label="Add access for" class="mg-user-access">' + accessForCell(w) + '</td>' : '') +
+              (showAccess ? '<td data-label="Add access for" class="mg-user-access">' + accessForCell(w) + '</td>' : '') +
               '<td data-label="">' +
                 '<button type="button" class="mg-user-btn is-danger" data-user-act="delete" data-user-id="' + id + '">Delete</button>' +
               '</td>' +
@@ -2510,6 +2521,7 @@
     try {
       var data = await apiJson('/workers');
       state.workers = data.workers || [];
+      if (data.sites) state.sites = data.sites;
       renderMainAccount(data.mainAccount);
     } catch (err) {
       state.workers = [];

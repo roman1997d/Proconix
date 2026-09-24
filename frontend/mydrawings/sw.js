@@ -1,5 +1,5 @@
 /* My Drawings PWA — app shell (offline). PDFs and company Wall Types stay in IndexedDB. */
-var CACHE = 'mydrawings-shell-v71';
+var CACHE = 'mydrawings-shell-v72';
 var PRECACHE = [
   '/mydrawings/',
   '/mydrawings/index.html',
@@ -16,7 +16,7 @@ function precacheAll(cache) {
   function next() {
     if (i >= PRECACHE.length) return Promise.resolve();
     var url = PRECACHE[i++];
-    return cache.add(url).catch(function (err) {
+    return cache.add(new Request(url, { cache: 'reload' })).catch(function (err) {
       console.warn('[mydrawings-sw] precache failed', url, err && err.message ? err.message : err);
     }).then(next);
   }
