@@ -72,6 +72,7 @@
     projectMode: 'single',
     locations: DEFAULT_LOCATIONS.slice(),
     occupiedLocations: [],
+    usersFilter: 'managers',
     workerSites: [],
     siteExtraDraft: [],
     editingSiteLocationsId: '',
@@ -2463,12 +2464,23 @@
   function renderWorkersTable() {
     var box = $('mg-users-table');
     var status = $('mg-users-status');
+    var filterEl = $('mg-users-filter');
     if (!box) return;
-    var list = state.workers || [];
+    if (filterEl && filterEl.value !== state.usersFilter) filterEl.value = state.usersFilter || 'managers';
+    var all = state.workers || [];
+    var managers = all.filter(function (w) { return !!(w.isAdmin || w.isSiteManager); });
+    var list = state.usersFilter === 'all' ? all : managers;
     if (status) {
-      status.textContent = list.length
-        ? list.length + (list.length === 1 ? ' registered user' : ' registered users')
-        : 'No users registered yet';
+      if (!all.length) {
+        status.textContent = 'No users registered yet';
+      } else if (state.usersFilter === 'all') {
+        status.textContent = all.length + (all.length === 1 ? ' registered user' : ' registered users');
+      } else if (!managers.length) {
+        status.textContent = 'No site manager on this site · ' + all.length + (all.length === 1 ? ' user' : ' users') + ' in total';
+      } else {
+        status.textContent = managers.length + (managers.length === 1 ? ' site manager' : ' site managers') +
+          ' · ' + all.length + (all.length === 1 ? ' user' : ' users') + ' in total';
+      }
     }
     if (!list.length) {
       box.innerHTML = '';
@@ -4345,6 +4357,11 @@
   });
   on($('mg-users-table'), 'click', handleUsersTableClick);
   on($('mg-users-table'), 'change', handleUsersTableChange);
+  on($('mg-users-filter'), 'change', function () {
+    var el = $('mg-users-filter');
+    state.usersFilter = el && el.value === 'all' ? 'all' : 'managers';
+    renderWorkersTable();
+  });
   on($('btn-mg-add-cat'), 'click', addCategory);
   on($('btn-mg-add-site'), 'click', addSite);
   on($('btn-mg-cancel-site-edit'), 'click', function () {

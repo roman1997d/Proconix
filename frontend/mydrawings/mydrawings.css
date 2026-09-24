@@ -853,6 +853,26 @@ a.md-link { color: var(--md-accent); }
   gap: 10px;
   margin-bottom: 10px;
 }
+.mg-users-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: #5b6573;
+  flex: 0 0 auto;
+}
+.mg-users-filter span { white-space: nowrap; }
+.mg-users-filter select {
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid #d7dee8;
+  background: #fff;
+  color: #1b2433;
+  font: inherit;
+  font-weight: 650;
+}
 .mg-block-actions {
   display: flex;
   flex-wrap: wrap;
