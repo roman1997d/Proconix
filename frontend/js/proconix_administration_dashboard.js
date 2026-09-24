@@ -370,6 +370,98 @@
           alertEl.classList.remove('d-none');
         }
       });
+
+    loadMyDrawingsCompaniesPanel(sess);
+  }
+
+  function loadMyDrawingsCompaniesPanel(sess) {
+    var loading = document.getElementById('pxAdminMdCompaniesLoading');
+    var wrap = document.getElementById('pxAdminMdCompaniesTableWrap');
+    var empty = document.getElementById('pxAdminMdCompaniesEmpty');
+    var alertEl = document.getElementById('pxAdminMdCompaniesAlert');
+    var tbody = document.getElementById('pxAdminMdCompaniesBody');
+    if (!tbody || !sess) return;
+
+    if (alertEl) {
+      alertEl.classList.add('d-none');
+      alertEl.textContent = '';
+    }
+    if (empty) empty.classList.add('d-none');
+    if (wrap) wrap.classList.add('d-none');
+    tbody.innerHTML = '';
+    if (loading) {
+      loading.classList.remove('d-none');
+    }
+
+    fetch('/api/platform-admin/mydrawings-companies', {
+      method: 'GET',
+      headers: sessionHeaders(sess),
+      credentials: 'same-origin',
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      })
+      .then(function (out) {
+        if (loading) loading.classList.add('d-none');
+        if (out.status === 401) {
+          clearSession();
+          window.location.replace(LOGIN_URL);
+          return;
+        }
+        if (out.status !== 200 || !out.data || !out.data.success) {
+          if (alertEl) {
+            alertEl.className = 'alert alert-danger mb-3';
+            alertEl.textContent =
+              (out.data && out.data.message) || 'Could not load My Drawings companies.';
+            alertEl.classList.remove('d-none');
+          }
+          return;
+        }
+        var list = out.data.companies || [];
+        if (list.length === 0) {
+          if (empty) empty.classList.remove('d-none');
+          return;
+        }
+        list.forEach(function (c) {
+          var tr = document.createElement('tr');
+          var mode = String(c.project_mode || 'single');
+          var modeLabel = mode === 'multi' ? 'Multi-site' : 'Single site';
+          tr.innerHTML =
+            '<td>' +
+            cellText(c.id) +
+            '</td><td>' +
+            cellText(c.name) +
+            '</td><td>' +
+            cellText(c.email) +
+            '</td><td>' +
+            cellText(c.manager_name) +
+            '</td><td>' +
+            cellText(c.access_code) +
+            '</td><td>' +
+            cellText(modeLabel) +
+            '</td><td class="text-end">' +
+            cellText(c.site_count) +
+            '</td><td class="text-end">' +
+            cellText(c.worker_count) +
+            '</td><td class="text-end">' +
+            cellText(c.drawing_count) +
+            '</td><td>' +
+            formatDateTime(c.created_at) +
+            '</td>';
+          tbody.appendChild(tr);
+        });
+        if (wrap) wrap.classList.remove('d-none');
+      })
+      .catch(function () {
+        if (loading) loading.classList.add('d-none');
+        if (alertEl) {
+          alertEl.className = 'alert alert-danger mb-3';
+          alertEl.textContent = 'Network error while loading My Drawings companies.';
+          alertEl.classList.remove('d-none');
+        }
+      });
   }
 
   /** YYYY-MM-DD for &lt;input type="date"&gt; (UTC calendar day from stored instant). */

@@ -254,8 +254,9 @@
                 <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh
               </button>
             </div>
-            <p class="text-white-50 small mb-3">Click a row to view full record, edit fields, or delete the company. <strong>Head manager</strong> = manager row with <code class="text-info">company_id</code> = this company (prefers <code class="text-info">is_head_manager</code> = Yes, else lowest <code class="text-info">id</code>). <strong>Head manager email</strong> = that row’s <code class="text-info">email</code>.</p>
-            <p class="text-white-50 small mb-3"><strong class="text-white-50">Cloud storage</strong> shows only files stored in Site Cloud for each tenant (<code class="text-info">backend/uploads/*_{companyId}_docs/cloud</code>).</p>
+            <p class="text-white-50 small mb-3">Proconix tenants and My Drawings companies are listed separately. Click a Proconix row to view, edit, or delete. <strong>Head manager</strong> = manager row with <code class="text-info">company_id</code> = this company (prefers <code class="text-info">is_head_manager</code> = Yes, else lowest <code class="text-info">id</code>).</p>
+            <p class="text-white-50 small mb-3"><strong class="text-white-50">Cloud storage</strong> shows only files stored in Site Cloud for each Proconix tenant (<code class="text-info">backend/uploads/*_{companyId}_docs/cloud</code>).</p>
+            <h3 class="h6 text-white mb-2">Proconix tenants</h3>
             <div id="pxAdminCompaniesAlert" class="alert alert-danger d-none" role="alert"></div>
             <div id="pxAdminCompaniesLoading" class="text-white-50 py-3 d-none">Loading companies…</div>
             <div id="pxAdminCompaniesTableWrap" class="table-responsive d-none">
@@ -274,6 +275,32 @@
               </table>
             </div>
             <p id="pxAdminCompaniesEmpty" class="text-white-50 py-3 mb-0 d-none">No companies registered yet.</p>
+
+            <hr class="border-secondary my-4">
+            <h3 class="h6 text-white mb-2">My Drawings companies</h3>
+            <p class="text-white-50 small mb-3">Workspaces from <code class="text-info">my_drawings_workspace</code> — companies created on <code class="text-info">/companystart</code>. Separate from Proconix tenants above.</p>
+            <div id="pxAdminMdCompaniesAlert" class="alert alert-danger d-none" role="alert"></div>
+            <div id="pxAdminMdCompaniesLoading" class="text-white-50 py-2 d-none">Loading My Drawings companies…</div>
+            <div id="pxAdminMdCompaniesTableWrap" class="table-responsive d-none">
+              <table class="table table-dark table-striped table-hover table-sm px-admin-data-table mb-0">
+                <thead>
+                  <tr>
+                    <th scope="col">ID</th>
+                    <th scope="col">Company</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Manager</th>
+                    <th scope="col">Access code</th>
+                    <th scope="col">Mode</th>
+                    <th scope="col" class="text-end">Sites</th>
+                    <th scope="col" class="text-end">Users</th>
+                    <th scope="col" class="text-end">Drawings</th>
+                    <th scope="col">Created</th>
+                  </tr>
+                </thead>
+                <tbody id="pxAdminMdCompaniesBody"></tbody>
+              </table>
+            </div>
+            <p id="pxAdminMdCompaniesEmpty" class="text-white-50 py-3 mb-0 d-none">No My Drawings companies yet.</p>
           </div>
         </div>
 
@@ -1484,6 +1511,6 @@
       }
     })();
   </script>
-  <script src="js/proconix_administration_dashboard.js?v=health-monitor-2"></script>
+  <script src="js/proconix_administration_dashboard.js?v=md-companies-1"></script>
 </body>
 </html>

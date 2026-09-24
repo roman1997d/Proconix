@@ -594,6 +594,66 @@ async function listCompanies(req, res) {
 }
 
 /**
+ * GET /api/platform-admin/mydrawings-companies
+ * All My Drawings workspaces (companies) with site / worker / drawing counts.
+ */
+async function listMyDrawingsCompanies(req, res) {
+  const fullSql = `SELECT ws.id,
+              ws.name,
+              COALESCE(ws.email, '') AS email,
+              COALESCE(ws.manager_name, '') AS manager_name,
+              COALESCE(ws.access_code, '') AS access_code,
+              COALESCE(ws.project_mode, 'single') AS project_mode,
+              ws.created_at,
+              (SELECT COUNT(*)::int FROM my_drawings_project p WHERE p.workspace_id = ws.id) AS site_count,
+              (SELECT COUNT(*)::int FROM my_drawings_worker w WHERE w.workspace_id = ws.id) AS worker_count,
+              (SELECT COUNT(*)::int FROM my_drawings_item i WHERE i.workspace_id = ws.id) AS drawing_count
+       FROM my_drawings_workspace ws
+       ORDER BY ws.id ASC`;
+  const fallbackSql = `SELECT ws.id,
+              ws.name,
+              ''::text AS email,
+              ''::text AS manager_name,
+              ''::text AS access_code,
+              'single'::text AS project_mode,
+              ws.created_at,
+              0 AS site_count,
+              (SELECT COUNT(*)::int FROM my_drawings_worker w WHERE w.workspace_id = ws.id) AS worker_count,
+              (SELECT COUNT(*)::int FROM my_drawings_item i WHERE i.workspace_id = ws.id) AS drawing_count
+       FROM my_drawings_workspace ws
+       ORDER BY ws.id ASC`;
+  try {
+    let result;
+    try {
+      result = await pool.query(fullSql);
+    } catch (inner) {
+      if (inner && (inner.code === '42703' || inner.code === '42P01')) {
+        result = await pool.query(fallbackSql);
+      } else {
+        throw inner;
+      }
+    }
+    return res.status(200).json({
+      success: true,
+      companies: result.rows || [],
+    });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(200).json({
+        success: true,
+        companies: [],
+        message: 'My Drawings tables are not installed yet.',
+      });
+    }
+    console.error('platformAdmin listMyDrawingsCompanies error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to load My Drawings companies.',
+    });
+  }
+}
+
+/**
  * GET /api/platform-admin/companies/storage-summary
  * Per-tenant disk usage under uploads/ from referenced files and digital-docs folders.
  */
@@ -2364,6 +2424,7 @@ module.exports = {
   login,
   me,
   listCompanies,
+  listMyDrawingsCompanies,
   listCompaniesStorageSummary,
   getCompany,
   updateCompany,

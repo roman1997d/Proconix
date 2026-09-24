@@ -12,6 +12,7 @@ const {
   login,
   me,
   listCompanies,
+  listMyDrawingsCompanies,
   listCompaniesStorageSummary,
   getCompany,
   updateCompany,
@@ -90,6 +91,7 @@ router.get('/platform-users/:kind/:id', requirePlatformAdminAuth, getPlatformUse
 router.patch('/platform-users/:kind/:id', requirePlatformAdminAuth, updatePlatformUser);
 router.delete('/platform-users/:kind/:id', requirePlatformAdminAuth, deletePlatformUser);
 router.get('/companies/storage-summary', requirePlatformAdminAuth, listCompaniesStorageSummary);
+router.get('/mydrawings-companies', requirePlatformAdminAuth, listMyDrawingsCompanies);
 router.get('/companies', requirePlatformAdminAuth, listCompanies);
 router.get('/companies/:id', requirePlatformAdminAuth, getCompany);
 router.patch('/companies/:id', requirePlatformAdminAuth, updateCompany);
