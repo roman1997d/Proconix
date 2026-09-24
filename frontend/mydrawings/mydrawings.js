@@ -72,6 +72,7 @@
     projectMode: 'single',
     locations: DEFAULT_LOCATIONS.slice(),
     occupiedLocations: [],
+    workerSites: [],
     siteExtraDraft: [],
     editingSiteLocationsId: '',
     floorQuery: '',
@@ -1268,6 +1269,7 @@
     if (data.company && data.company.managerName) state.managerName = data.company.managerName;
     if (data.company && data.company.email) state.companyEmail = String(data.company.email).trim();
     if (data.sites) state.sites = data.sites;
+    if (data.workerSites) state.workerSites = data.workerSites;
     if (data.siteCount != null) state.siteCount = data.siteCount;
     if (data.projectMode) state.projectMode = data.projectMode;
     if (data.site && data.site.id) {
@@ -1292,6 +1294,7 @@
       renderManage();
     }
     syncAddDrawingsButton();
+    syncSwitchSiteButton();
   }
 
   /* ---------- List ---------- */
@@ -1343,6 +1346,7 @@
       host.innerHTML = '<div class="md-empty"><h3>No drawings' + floorHint + '</h3><p>Try another search, category, or location.</p></div>';
       updateDownloadAllBtn();
       syncAddDrawingsButton();
+      syncSwitchSiteButton();
       return;
     }
     host.innerHTML = items.map(function (d) {
@@ -1365,11 +1369,19 @@
     }).join('');
     updateDownloadAllBtn();
     syncAddDrawingsButton();
+    syncSwitchSiteButton();
   }
 
   function syncAddDrawingsButton() {
     var btn = $('btn-sm-add');
     if (btn) btn.hidden = !isSiteManager();
+  }
+
+  function syncSwitchSiteButton() {
+    var btn = $('btn-switch-site');
+    if (!btn) return;
+    var sites = state.workerSites || [];
+    btn.hidden = sites.length < 2 || isCompanyHead();
   }
 
   function fillSmCategorySelect(selected) {
@@ -2381,6 +2393,19 @@
     return [w.firstName, w.lastName].filter(Boolean).join(' ').trim() || ('User #' + w.id);
   }
 
+  function accessForCell(w) {
+    var sites = (w && w.availableSites) || [];
+    if (!sites.length) {
+      return '<span class="mg-user-closed">All sites</span>';
+    }
+    return '<select class="mg-user-days" data-user-add-site="' + escapeHtml(String(w.id)) + '" aria-label="Add access for">' +
+      '<option value="">Select a site</option>' +
+      sites.map(function (s) {
+        return '<option value="' + escapeHtml(String(s.id)) + '">' + escapeHtml(s.name || 'Site') + '</option>';
+      }).join('') +
+      '</select>';
+  }
+
   function daysSelectHtml(selected) {
     var current = String(selected || 7);
     return '<select class="mg-user-days" data-user-days aria-label="Days to close access">' +
@@ -2433,6 +2458,7 @@
           '<th>Last seen</th>' +
           '<th>Access</th>' +
           '<th>Site manager</th>' +
+          (isCompanyHead() ? '<th>Add access for</th>' : '') +
           '<th></th>' +
         '</tr></thead>' +
         '<tbody>' +
@@ -2464,6 +2490,7 @@
               '</td>' +
               '<td data-label="Access" class="mg-user-access">' + accessCell + '</td>' +
               '<td data-label="Admin" class="mg-user-access">' + adminCell + '</td>' +
+              (isCompanyHead() ? '<td data-label="Add access for" class="mg-user-access">' + accessForCell(w) + '</td>' : '') +
               '<td data-label="">' +
                 '<button type="button" class="mg-user-btn is-danger" data-user-act="delete" data-user-id="' + id + '">Delete</button>' +
               '</td>' +
@@ -2554,6 +2581,45 @@
     } catch (err) {
       alert(err && err.message ? err.message : 'Could not remove administrator access.');
     }
+  }
+
+  async function addWorkerSiteAccess(id, siteId) {
+    var w = workerById(id);
+    var name = w ? workerFullName(w) : 'this user';
+    var sites = (w && w.availableSites) || [];
+    var site = null;
+    for (var i = 0; i < sites.length; i++) {
+      if (String(sites[i].id) === String(siteId)) {
+        site = sites[i];
+        break;
+      }
+    }
+    var siteName = site && site.name ? site.name : 'this site';
+    if (!confirm('Are you sure you want to add "' + name + '" to "' + siteName + '"?')) {
+      return false;
+    }
+    try {
+      await apiJson('/workers/' + encodeURIComponent(id) + '/add-site', {
+        method: 'POST',
+        body: { siteId: siteId }
+      });
+      await loadWorkers();
+      return true;
+    } catch (err) {
+      alert(err && err.message ? err.message : 'Could not add site access.');
+      return false;
+    }
+  }
+
+  function handleUsersTableChange(e) {
+    var sel = e.target && e.target.closest ? e.target.closest('[data-user-add-site]') : null;
+    if (!sel) return;
+    var id = sel.getAttribute('data-user-add-site');
+    var siteId = sel.value;
+    if (!id || !siteId) return;
+    addWorkerSiteAccess(id, siteId).then(function (ok) {
+      if (!ok) sel.value = '';
+    });
   }
 
   async function deleteCompanyWorker(id) {
@@ -3660,6 +3726,57 @@
     $('sheet').classList.remove('is-on');
   }
 
+  function openSwitchSiteSheet() {
+    var sites = state.workerSites || [];
+    if (sites.length < 2) return;
+    var current = String(state.siteId || '');
+    openSheet(
+      '<h3 id="sheet-title">Switch site</h3>' +
+      sites.map(function (s) {
+        var id = String(s.id);
+        var on = id === current;
+        return '<button type="button" class="md-sheet-item' + (on ? ' is-on' : '') + '" data-sheet="switch-to" data-site-id="' + escapeHtml(id) + '"' + (on ? ' disabled' : '') + '>' +
+          escapeHtml(s.name || 'Site') + (on ? ' (current)' : '') +
+        '</button>';
+      }).join('')
+    );
+  }
+
+  async function switchToSite(siteId) {
+    closeSheet();
+    if (!siteId || String(siteId) === String(state.siteId)) return;
+    if (!isOnline()) {
+      alert('Connect to the internet to switch site.');
+      return;
+    }
+    var btn = $('btn-switch-site');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Switching…';
+    }
+    try {
+      var data = await apiJson('/switch-site', { method: 'POST', body: { siteId: siteId } });
+      if (typeof closeViewerQuiet === 'function') {
+        try { closeViewerQuiet(); } catch (e) {}
+      }
+      await applyRemoteCatalog(data);
+      writeSession(true, {
+        role: data.role || state.role,
+        siteId: state.siteId,
+        firstName: data.firstName || state.firstName,
+        lastName: data.lastName || state.lastName,
+        email: data.email || (readSession() && readSession().email) || ''
+      });
+      ensureFloorThenHome({ from: 'switch' });
+    } catch (err) {
+      alert(err && err.message ? err.message : 'Could not switch site.');
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Switch';
+    }
+  }
+
   function openMainMenu() {
     var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
     var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
@@ -4045,6 +4162,7 @@
   });
   on($('btn-menu'), 'click', openMainMenu);
   on($('btn-update'), 'click', updateDrawingsList);
+  on($('btn-switch-site'), 'click', openSwitchSiteSheet);
   on($('btn-download-all'), 'click', downloadAllDrawings);
   on($('btn-sm-add'), 'click', openSmAddModal);
   on($('sm-add-close'), 'click', closeSmAddModal);
@@ -4161,6 +4279,7 @@
     el.value = String(el.value || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10);
   });
   on($('mg-users-table'), 'click', handleUsersTableClick);
+  on($('mg-users-table'), 'change', handleUsersTableChange);
   on($('btn-mg-add-cat'), 'click', addCategory);
   on($('btn-mg-add-site'), 'click', addSite);
   on($('btn-mg-cancel-site-edit'), 'click', function () {
@@ -4294,7 +4413,13 @@
   on($('backdrop'), 'click', closeSheet);
   on($('sheet'), 'click', function (e) {
     var item = e.target.closest('[data-sheet]');
-    if (item) handleSheet(item.getAttribute('data-sheet'));
+    if (!item) return;
+    var act = item.getAttribute('data-sheet');
+    if (act === 'switch-to') {
+      switchToSite(item.getAttribute('data-site-id'));
+      return;
+    }
+    handleSheet(act);
   });
   on($('btn-install'), 'click', promptInstall);
 

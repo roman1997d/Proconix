@@ -1481,6 +1481,7 @@ async function openWorkerDevice(workspace, worker, project, role) {
     [worker.id]
   );
   const catalog = await loadCatalog(workspace, role || 'worker', project);
+  catalog.workerSites = await workerSitesForEmail(workspace.id, worker.email);
   const expiresAt = opened.rows[0] && opened.rows[0].expires_at;
   return {
     ...catalog,
@@ -1819,12 +1820,30 @@ async function loadCatalog(workspace, role, site) {
   };
 }
 
+async function workerSitesForEmail(workspaceId, email) {
+  const clean = cleanEmail(email);
+  if (!workspaceId || !clean) return [];
+  const rows = await pool.query(
+    `SELECT p.id, p.name
+     FROM my_drawings_worker w
+     JOIN my_drawings_project p ON p.id = w.project_id
+     WHERE w.workspace_id = $1 AND LOWER(w.email) = LOWER($2)
+     ORDER BY p.name ASC, p.id ASC`,
+    [workspaceId, clean]
+  );
+  return rows.rows.map((row) => ({ id: row.id, name: row.name || 'Site' }));
+}
+
 async function catalogResponse(req, res) {
   const payload = await loadCatalog(req.myDrawings.workspace, req.myDrawings.role, req.myDrawings.project);
   const worker = req.myDrawings && req.myDrawings.worker;
   if (worker) {
     payload.firstName = worker.firstName || worker.first_name || '';
     payload.lastName = worker.lastName || worker.last_name || '';
+    payload.workerSites = await workerSitesForEmail(
+      req.myDrawings.workspace && req.myDrawings.workspace.id,
+      worker.email
+    );
   } else if (req.myDrawings && req.myDrawings.role === 'admin') {
     const companyName = (payload.company && payload.company.managerName) || '';
     const parts = String(companyName).trim().split(/\s+/).filter(Boolean);
@@ -1895,6 +1914,7 @@ async function listWorkers(req, res) {
       [workspaceId]
     );
     const headRow = head.rows[0] || {};
+    const allSites = await listWorkspaceSites(workspaceId);
     const rows = await pool.query(
       `SELECT w.id, w.first_name, w.last_name, w.email, w.verified_at, w.created_at,
               w.access_suspended_until, w.is_admin,
@@ -1905,6 +1925,23 @@ async function listWorkers(req, res) {
        ORDER BY w.last_name ASC, w.first_name ASC, w.id ASC`,
       [workspaceId, projectId]
     );
+    const emails = rows.rows.map((r) => String(r.email || '').toLowerCase()).filter(Boolean);
+    const sitesByEmail = {};
+    if (emails.length) {
+      const linked = await pool.query(
+        `SELECT LOWER(w.email) AS email, p.id, p.name
+         FROM my_drawings_worker w
+         JOIN my_drawings_project p ON p.id = w.project_id
+         WHERE w.workspace_id = $1 AND LOWER(w.email) = ANY($2::text[])
+         ORDER BY p.name ASC, p.id ASC`,
+        [workspaceId, emails]
+      );
+      linked.rows.forEach((row) => {
+        const key = row.email;
+        if (!sitesByEmail[key]) sitesByEmail[key] = [];
+        sitesByEmail[key].push({ id: row.id, name: row.name || 'Site' });
+      });
+    }
     return res.json({
       success: true,
       mainAccount: {
@@ -1912,8 +1949,11 @@ async function listWorkers(req, res) {
         email: headRow.email || '',
         companyName: headRow.name || '',
       },
+      sites: allSites.map((s) => ({ id: s.id, name: s.name })),
       workers: rows.rows.map((r) => {
         const until = suspendedUntil(r);
+        const have = sitesByEmail[String(r.email || '').toLowerCase()] || [];
+        const haveIds = new Set(have.map((s) => Number(s.id)));
         return {
           id: r.id,
           firstName: r.first_name,
@@ -1927,12 +1967,123 @@ async function listWorkers(req, res) {
           accessClosed: !!until,
           isAdmin: !!r.is_admin,
           isSiteManager: !!r.is_admin,
+          sites: have,
+          availableSites: allSites
+            .filter((s) => !haveIds.has(Number(s.id)))
+            .map((s) => ({ id: s.id, name: s.name })),
         };
       }),
     });
   } catch (err) {
     console.error('myDrawings listWorkers:', err);
     return res.status(500).json({ success: false, message: 'Could not load users.' });
+  }
+}
+
+async function addWorkerSiteAccess(req, res) {
+  try {
+    await ensureSchema();
+    if (!isCompanyHead(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Only the company head can add site access.' });
+    }
+    const workspaceId = req.myDrawings.workspace.id;
+    const worker = await findCompanyWorker(workspaceId, req.params.id, currentSiteId(req.myDrawings));
+    if (!worker) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+    const siteId = positiveInt(req.body && (req.body.siteId || req.body.projectId));
+    const site = siteId ? await loadSiteRow(workspaceId, siteId) : null;
+    if (!site) {
+      return res.status(400).json({ success: false, message: 'Select a site.' });
+    }
+    if (Number(worker.project_id) === Number(site.id)) {
+      return res.status(409).json({ success: false, message: 'This user already has access to that site.' });
+    }
+    const exists = await pool.query(
+      `SELECT id FROM my_drawings_worker
+       WHERE workspace_id = $1 AND project_id = $2 AND LOWER(email) = LOWER($3)`,
+      [workspaceId, site.id, worker.email]
+    );
+    if (exists.rows[0]) {
+      return res.status(409).json({ success: false, message: 'This user already has access to that site.' });
+    }
+    await pool.query(
+      `INSERT INTO my_drawings_worker
+        (workspace_id, project_id, first_name, last_name, email, verified_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [workspaceId, site.id, worker.first_name, worker.last_name, worker.email]
+    );
+    return res.json({
+      success: true,
+      message: worker.first_name
+        ? worker.first_name + ' can now open ' + (site.name || 'that site') + '.'
+        : 'Access added.',
+    });
+  } catch (err) {
+    console.error('myDrawings addWorkerSiteAccess:', err);
+    if (err && err.code === '23505') {
+      return res.status(409).json({ success: false, message: 'This user already has access to that site.' });
+    }
+    return res.status(500).json({ success: false, message: 'Could not add site access.' });
+  }
+}
+
+async function switchWorkerSite(req, res) {
+  try {
+    await ensureSchema();
+    const worker = req.myDrawings && req.myDrawings.worker;
+    const workspace = req.myDrawings && req.myDrawings.workspace;
+    if (!worker || !worker.email || !workspace || !workspace.id) {
+      return res.status(400).json({ success: false, message: 'Sign in as a site user to switch sites.' });
+    }
+    const siteId = positiveInt(req.body && (req.body.siteId || req.body.projectId));
+    if (!siteId) {
+      return res.status(400).json({ success: false, message: 'Select a site.' });
+    }
+    const found = await pool.query(
+      `SELECT w.id, w.first_name, w.last_name, w.email, w.is_admin, w.project_id, w.access_suspended_until,
+              p.name AS site_name
+       FROM my_drawings_worker w
+       JOIN my_drawings_project p ON p.id = w.project_id
+       WHERE w.workspace_id = $1 AND LOWER(w.email) = LOWER($2) AND w.project_id = $3`,
+      [workspace.id, worker.email, siteId]
+    );
+    const next = found.rows[0];
+    if (!next) {
+      return res.status(404).json({ success: false, message: 'You do not have access to that site.' });
+    }
+    const until = suspendedUntil(next);
+    if (until) {
+      return res.status(403).json(accessClosedPayload(until));
+    }
+    const device = String(req.headers['x-mydrawings-device'] || (req.body && req.body.deviceToken) || '').trim();
+    if (device.length >= 16) {
+      await pool.query(
+        'UPDATE my_drawings_device SET worker_id = $2, last_seen_at = NOW() WHERE token_hash = $1',
+        [tokenSha(device), next.id]
+      );
+    }
+    const role = next.is_admin ? 'site_manager' : 'worker';
+    const project = { id: next.project_id, name: next.site_name };
+    req.myDrawings.role = role;
+    req.myDrawings.worker = {
+      id: next.id,
+      firstName: next.first_name,
+      lastName: next.last_name,
+      email: next.email,
+      projectId: next.project_id,
+    };
+    req.myDrawings.project = project;
+    const payload = await loadCatalog(workspace, role, project);
+    payload.role = role;
+    payload.firstName = next.first_name || '';
+    payload.lastName = next.last_name || '';
+    payload.email = next.email;
+    payload.workerSites = await workerSitesForEmail(workspace.id, next.email);
+    return res.json(payload);
+  } catch (err) {
+    console.error('myDrawings switchWorkerSite:', err);
+    return res.status(500).json({ success: false, message: 'Could not switch site.' });
   }
 }
 
@@ -3318,6 +3469,8 @@ module.exports = {
   listDrawings,
   getActivity,
   listWorkers,
+  addWorkerSiteAccess,
+  switchWorkerSite,
   suspendWorker,
   restoreWorker,
   deleteMyAccount,

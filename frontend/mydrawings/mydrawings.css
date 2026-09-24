@@ -456,6 +456,11 @@ a.md-link { color: var(--md-accent); }
 }
 .md-update-btn:active { background: rgba(56, 189, 248, 0.24); }
 .md-update-btn:disabled { opacity: 0.55; }
+#btn-switch-site {
+  background: rgba(167, 139, 250, 0.14);
+  border-color: rgba(167, 139, 250, 0.36);
+  color: #ede9fe;
+}
 .md-offline {
   display: none;
   align-items: center;
@@ -1344,6 +1349,8 @@ a.md-link { color: var(--md-accent); }
   font-size: 0.95rem;
 }
 .md-sheet-item:active { background: rgba(255, 255, 255, 0.06); }
+.md-sheet-item.is-on { color: #e0f2fe; }
+.md-sheet-item:disabled { opacity: 0.55; }
 .md-sheet-item.is-danger { color: var(--md-danger); }
 .md-sheet-note {
   margin: 8px 12px 0;
