@@ -771,7 +771,7 @@
 
   /* ---------- Screens ---------- */
   function showScreen(id) {
-    ['screen-register', 'screen-login', 'screen-company', 'screen-pin', 'screen-floor', 'screen-list', 'screen-activity', 'screen-wall-types', 'screen-wall-type-detail', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
+    ['screen-register', 'screen-login', 'screen-company', 'screen-forgot', 'screen-pin', 'screen-floor', 'screen-list', 'screen-activity', 'screen-wall-types', 'screen-wall-type-detail', 'screen-manage', 'screen-viewer'].forEach(function (sid) {
       var el = $(sid);
       if (el) el.classList.toggle('is-active', sid === id);
     });
@@ -863,6 +863,7 @@
     if ($('login-password')) $('login-password').value = '';
     if ($('login-host-code')) $('login-host-code').value = '';
     if ($('login-continue')) $('login-continue').textContent = 'Continue';
+    setLoginField('login-forgot-wrap', true);
     if ($('login-hint')) {
       $('login-hint').textContent = 'Enter your email. We will ask for a password or a 4-digit key next.';
     }
@@ -887,6 +888,51 @@
       var email = $('company-email');
       if (email) email.focus();
     }, 200);
+  }
+
+  function showForgotPassword() {
+    var fromCompany = ($('company-email') && $('company-email').value || '').trim().toLowerCase();
+    var fromLogin = ($('login-email') && $('login-email').value || '').trim().toLowerCase();
+    if ($('forgot-email') && (fromCompany || fromLogin)) $('forgot-email').value = fromCompany || fromLogin;
+    if ($('forgot-error')) $('forgot-error').textContent = '';
+    if ($('forgot-ok')) {
+      $('forgot-ok').hidden = true;
+      $('forgot-ok').textContent = '';
+    }
+    showScreen('screen-forgot');
+    setTimeout(function () {
+      var email = $('forgot-email');
+      if (email) email.focus();
+    }, 200);
+  }
+
+  async function submitForgotPassword(e) {
+    if (e) e.preventDefault();
+    var email = ($('forgot-email').value || '').trim().toLowerCase();
+    if ($('forgot-error')) $('forgot-error').textContent = '';
+    if ($('forgot-ok')) {
+      $('forgot-ok').hidden = true;
+      $('forgot-ok').textContent = '';
+    }
+    if (!isOnline()) {
+      $('forgot-error').textContent = 'Connect to the internet to reset the password.';
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      $('forgot-error').textContent = 'Enter the company email.';
+      return;
+    }
+    $('forgot-continue').disabled = true;
+    try {
+      var data = await postJson('/company-forgot-password', { email: email });
+      if ($('forgot-ok')) {
+        $('forgot-ok').hidden = false;
+        $('forgot-ok').textContent = (data && data.message) || 'If that email has a company account, we sent a reset link.';
+      }
+    } catch (err) {
+      $('forgot-error').textContent = err && err.message ? err.message : 'Could not send the reset link.';
+    }
+    $('forgot-continue').disabled = false;
   }
 
   function backFromPin() {
@@ -1070,6 +1116,7 @@
       } else if (data.needsPassword) {
         setLoginField('login-password-wrap', false);
         setLoginField('login-host-wrap', true);
+        setLoginField('login-forgot-wrap', false);
         $('login-continue').textContent = 'Sign in';
         $('login-hint').textContent = 'This is a company account. Enter the password.';
         setTimeout(function () { if ($('login-password')) $('login-password').focus(); }, 80);
@@ -3710,7 +3757,8 @@
         }
       } else {
         var pending = readPending();
-        if (pending && pending.from === 'register') showRegister();
+        if (window.location.search.indexOf('company=1') !== -1) showCompanyLogin();
+        else if (pending && pending.from === 'register') showRegister();
         else showLogin();
       }
     } catch (err) {
@@ -3734,6 +3782,10 @@
   on($('register-form'), 'submit', submitRegister);
   on($('login-form'), 'submit', submitLogin);
   on($('company-form'), 'submit', submitCompanyLogin);
+  on($('forgot-form'), 'submit', submitForgotPassword);
+  on($('btn-company-forgot'), 'click', showForgotPassword);
+  on($('btn-login-forgot'), 'click', showForgotPassword);
+  on($('btn-forgot-back'), 'click', showCompanyLogin);
   on($('login-email'), 'input', function () {
     var email = ($('login-email').value || '').trim().toLowerCase();
     if (loginLookup.email && email !== loginLookup.email) resetLoginExtras();

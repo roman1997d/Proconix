@@ -426,6 +426,20 @@ async function ensureSchemaInner() {
     ALTER TABLE my_drawings_admin_session
     ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS my_drawings_password_reset (
+      id SERIAL PRIMARY KEY,
+      workspace_id INT NOT NULL REFERENCES my_drawings_workspace(id) ON DELETE CASCADE,
+      token_hash VARCHAR(64) NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT uq_my_drawings_password_reset_token UNIQUE (token_hash)
+    )
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_my_drawings_password_reset_ws ON my_drawings_password_reset(workspace_id)`
+  );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_my_drawings_admin_session_ws ON my_drawings_admin_session(workspace_id)`
   );
@@ -1085,6 +1099,14 @@ function pinSha(pin) {
 
 function tokenSha(token) {
   return crypto.createHash('sha256').update('mydrawings-dev:' + token).digest('hex');
+}
+
+function resetTokenSha(token) {
+  return crypto.createHash('sha256').update('mydrawings-pwreset:' + token).digest('hex');
+}
+
+function publicAppUrl() {
+  return String(process.env.PUBLIC_APP_URL || process.env.SITE_URL || 'https://proconix.uk').replace(/\/$/, '');
 }
 
 function suspendedUntil(row) {
@@ -2325,6 +2347,203 @@ async function companyLogin(req, res) {
   }
 }
 
+async function sendCompanyPasswordResetEmail({ to, name, companyName, resetUrl }) {
+  const from = (process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@proconix.uk').trim();
+  const transport = createTransport();
+  if (!transport) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[My Drawings] company password reset for', to, resetUrl);
+      return;
+    }
+    const err = new Error('Email is not configured on this server.');
+    err.code = 'SMTP_NOT_CONFIGURED';
+    throw err;
+  }
+  const who = name ? String(name).trim() : 'there';
+  const company = companyName ? String(companyName).trim() : 'your company';
+  const subject = 'Reset your My Drawings company password';
+  const text = [
+    `Hi ${who},`,
+    '',
+    `We received a request to reset the company password for ${company} on My Drawings.`,
+    '',
+    'Open this link to choose a new password:',
+    resetUrl,
+    '',
+    'On the next page you will need one site access code (host code) from this company.',
+    'The link expires in 2 hours.',
+    '',
+    'If you did not request this, you can ignore this email. Your password will stay the same.',
+  ].join('\n');
+  const html = `
+    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:16px;color:#0f172a;">Hi ${escapeHtml(who)},</p>
+    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:16px;color:#0f172a;">We received a request to reset the company password for <strong>${escapeHtml(company)}</strong> on My Drawings.</p>
+    <p style="margin:24px 0;">
+      <a href="${escapeHtml(resetUrl)}" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:15px;font-weight:700;">Reset password</a>
+    </p>
+    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:14px;color:#475569;">On the next page you will need one site access code (host code) from this company. The link expires in 2 hours.</p>
+    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:13px;color:#64748b;word-break:break-all;">${escapeHtml(resetUrl)}</p>
+    <p style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;font-size:13px;color:#64748b;">If you did not request this, you can ignore this email. Your password will stay the same.</p>
+  `;
+  await transport.sendMail({
+    from,
+    to,
+    replyTo: (process.env.SUPPORT_REPLY_EMAIL || 'info@proconix.uk').trim() || from,
+    subject,
+    text,
+    html,
+  });
+}
+
+async function loadValidPasswordReset(token) {
+  const raw = String(token || '').trim();
+  if (!/^[a-f0-9]{64}$/i.test(raw)) return null;
+  const row = await pool.query(
+    `SELECT r.id, r.workspace_id, ws.name, ws.email, ws.manager_name
+     FROM my_drawings_password_reset r
+     JOIN my_drawings_workspace ws ON ws.id = r.workspace_id
+     WHERE r.token_hash = $1
+       AND r.used_at IS NULL
+       AND r.expires_at > NOW()`,
+    [resetTokenSha(raw)]
+  );
+  return row.rows[0] || null;
+}
+
+async function accessCodeBelongsToWorkspace(workspaceId, rawCode) {
+  const code = normalizeAccessCode(rawCode);
+  if (!ACCESS_CODE_RE.test(code)) return false;
+  const site = await pool.query(
+    `SELECT id FROM my_drawings_project
+     WHERE workspace_id = $1 AND UPPER(access_code) = $2`,
+    [workspaceId, code]
+  );
+  if (site.rows[0]) return true;
+  const ws = await pool.query(
+    `SELECT id FROM my_drawings_workspace
+     WHERE id = $1 AND UPPER(access_code) = $2`,
+    [workspaceId, code]
+  );
+  return !!ws.rows[0];
+}
+
+async function requestCompanyPasswordReset(req, res) {
+  try {
+    await ensureSchema();
+    const email = cleanEmail(req.body && req.body.email);
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ success: false, message: 'Enter the company email.' });
+    }
+    if (!allowRate('company-forgot:' + email, 3, REGISTER_WINDOW_MS)
+        || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
+      return res.status(429).json({ success: false, message: 'Too many requests. Try again later.' });
+    }
+    const found = await pool.query(
+      `SELECT id, name, email, manager_name FROM my_drawings_workspace WHERE LOWER(email) = $1`,
+      [email]
+    );
+    const generic = {
+      success: true,
+      message: 'If that email has a company account, we sent a reset link.',
+    };
+    const row = found.rows[0];
+    if (!row) return res.json(generic);
+    const token = crypto.randomBytes(32).toString('hex');
+    await pool.query(
+      `UPDATE my_drawings_password_reset
+       SET used_at = NOW()
+       WHERE workspace_id = $1 AND used_at IS NULL`,
+      [row.id]
+    );
+    await pool.query(
+      `INSERT INTO my_drawings_password_reset (workspace_id, token_hash, expires_at)
+       VALUES ($1, $2, NOW() + INTERVAL '2 hours')`,
+      [row.id, resetTokenSha(token)]
+    );
+    const resetUrl = publicAppUrl() + '/mydrawings/reset-password?token=' + encodeURIComponent(token);
+    await sendCompanyPasswordResetEmail({
+      to: row.email,
+      name: row.manager_name,
+      companyName: row.name,
+      resetUrl,
+    });
+    return res.json(generic);
+  } catch (err) {
+    console.error('myDrawings requestCompanyPasswordReset:', err);
+    if (err && err.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({ success: false, message: 'Could not send the reset email. Try again later.' });
+    }
+    return res.status(500).json({ success: false, message: 'Could not start password reset.' });
+  }
+}
+
+async function previewCompanyPasswordReset(req, res) {
+  try {
+    await ensureSchema();
+    const reset = await loadValidPasswordReset(req.query && req.query.token);
+    if (!reset) {
+      return res.status(400).json({
+        success: false,
+        message: 'This reset link is invalid or has expired. Request a new one from Company sign in.',
+      });
+    }
+    return res.json({
+      success: true,
+      companyName: reset.name,
+    });
+  } catch (err) {
+    console.error('myDrawings previewCompanyPasswordReset:', err);
+    return res.status(500).json({ success: false, message: 'Could not check the reset link.' });
+  }
+}
+
+async function resetCompanyPassword(req, res) {
+  try {
+    await ensureSchema();
+    const token = String((req.body && req.body.token) || '').trim();
+    const password = String((req.body && req.body.password) || '');
+    const passwordRepeat = String((req.body && (req.body.passwordRepeat || req.body.repeatPassword)) || '');
+    const accessCode = String((req.body && (req.body.accessCode || req.body.hostAccessCode || req.body.hostCode)) || '');
+    if (!allowRate('company-reset:' + clientIp(req), 8, REGISTER_WINDOW_MS)
+        || !allowRate('ip:' + clientIp(req), REGISTER_IP_MAX, REGISTER_WINDOW_MS)) {
+      return res.status(429).json({ success: false, message: 'Too many requests. Try again later.' });
+    }
+    const reset = await loadValidPasswordReset(token);
+    if (!reset) {
+      return res.status(400).json({
+        success: false,
+        message: 'This reset link is invalid or has expired. Request a new one from Company sign in.',
+      });
+    }
+    if (password.length < 8 || password.length > 120) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
+    }
+    if (password !== passwordRepeat) {
+      return res.status(400).json({ success: false, message: 'Passwords do not match.' });
+    }
+    if (!(await accessCodeBelongsToWorkspace(reset.workspace_id, accessCode))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Enter one site access code (host code) from this company.',
+      });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    await pool.query('UPDATE my_drawings_workspace SET password_hash = $2 WHERE id = $1', [
+      reset.workspace_id,
+      passwordHash,
+    ]);
+    await pool.query('UPDATE my_drawings_password_reset SET used_at = NOW() WHERE id = $1', [reset.id]);
+    await pool.query('DELETE FROM my_drawings_admin_session WHERE workspace_id = $1', [reset.workspace_id]);
+    return res.json({
+      success: true,
+      message: 'Password updated. Sign in with your new password.',
+    });
+  } catch (err) {
+    console.error('myDrawings resetCompanyPassword:', err);
+    return res.status(500).json({ success: false, message: 'Could not reset the password.' });
+  }
+}
+
 async function unlock(req, res) {
   try {
     await ensureSchema();
@@ -3055,6 +3274,9 @@ module.exports = {
   lookupAuth,
   startCompany,
   companyLogin,
+  requestCompanyPasswordReset,
+  previewCompanyPasswordReset,
+  resetCompanyPassword,
   unlock,
   logoutSession,
   getCatalog,

@@ -166,6 +166,15 @@ const companyStartHtmlPath = path.join(frontendDir, 'mydrawings', 'companystart.
 app.get(['/companystart', '/companystart/', '/mydrawings/companystart', '/mydrawings/companystart/'], (req, res) => {
   res.sendFile(companyStartHtmlPath);
 });
+const resetPasswordHtmlPath = path.join(frontendDir, 'mydrawings', 'reset-password.html');
+app.get([
+  '/mydrawings/reset-password',
+  '/mydrawings/reset-password/',
+  '/reset-password',
+  '/reset-password/',
+], (req, res) => {
+  res.sendFile(resetPasswordHtmlPath);
+});
 const myDrawingsPresentationHtmlPath = path.join(frontendDir, 'mydrawings-prezentation.html');
 app.get([
   '/mydrawings-prezentation',

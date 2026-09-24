@@ -75,6 +75,9 @@
         <p class="md-error" id="login-error" role="alert"></p>
         <button type="submit" class="md-btn md-btn-primary" id="login-continue">Continue</button>
       </form>
+      <p class="md-pin-actions" id="login-forgot-wrap" hidden>
+        <button type="button" class="md-link" id="btn-login-forgot">Forgot password?</button>
+      </p>
       <p class="md-pin-actions">
         <button type="button" class="md-link" id="btn-create-account">Create a simple user account</button>
         <a class="md-link" href="/companystart">Start a company</a>
@@ -98,8 +101,27 @@
         <button type="submit" class="md-btn md-btn-primary" id="company-continue">Sign in</button>
       </form>
       <p class="md-pin-actions">
+        <button type="button" class="md-link" id="btn-company-forgot">Forgot password?</button>
         <button type="button" class="md-link" id="btn-company-back">Back</button>
         <button type="button" class="md-link" id="btn-company-admin-key">Use administration key</button>
+      </p>
+    </section>
+
+    <section class="md-screen md-pin md-register" id="screen-forgot" aria-label="Forgot company password">
+      <p class="md-pin-brand">My Drawings</p>
+      <h2>Forgot password</h2>
+      <p class="md-pin-hint">Enter the company email. Proconix will send a reset link. You will then need a new password and one site access code (host code) from this company.</p>
+      <form class="md-reg-form" id="forgot-form" autocomplete="on">
+        <label class="mg-field">
+          <span>Company email</span>
+          <input id="forgot-email" type="email" maxlength="254" autocomplete="username" autocapitalize="off" spellcheck="false" inputmode="email" required>
+        </label>
+        <p class="md-error" id="forgot-error" role="alert"></p>
+        <p class="md-pin-hint" id="forgot-ok" hidden></p>
+        <button type="submit" class="md-btn md-btn-primary" id="forgot-continue">Send reset link</button>
+      </form>
+      <p class="md-pin-actions">
+        <button type="button" class="md-link" id="btn-forgot-back">Back to Company sign in</button>
       </p>
     </section>
 
