@@ -1763,7 +1763,7 @@ async function loadCatalog(workspace, role, site) {
   let accessCode = (project && project.access_code) || (current && current.accessCode) || '';
   if (manage && !accessCode && current) accessCode = current.accessCode || '';
   const wsRow = await pool.query(
-    'SELECT project_mode, manager_name FROM my_drawings_workspace WHERE id = $1',
+    'SELECT project_mode, manager_name, email FROM my_drawings_workspace WHERE id = $1',
     [workspaceId]
   );
   const projectMode = wsRow.rows[0] && wsRow.rows[0].project_mode === 'multi' ? 'multi' : 'single';
@@ -1789,6 +1789,7 @@ async function loadCatalog(workspace, role, site) {
       id: workspace.id,
       name: workspace.name,
       managerName: workspace.managerName || workspace.manager_name || (wsRow.rows[0] && wsRow.rows[0].manager_name) || '',
+      email: workspace.email || (wsRow.rows[0] && wsRow.rows[0].email) || '',
     },
     site: current
       ? {
@@ -1889,6 +1890,11 @@ async function listWorkers(req, res) {
     await ensureSchema();
     const workspaceId = req.myDrawings.workspace.id;
     const projectId = currentSiteId(req.myDrawings);
+    const head = await pool.query(
+      'SELECT name, email, manager_name FROM my_drawings_workspace WHERE id = $1',
+      [workspaceId]
+    );
+    const headRow = head.rows[0] || {};
     const rows = await pool.query(
       `SELECT w.id, w.first_name, w.last_name, w.email, w.verified_at, w.created_at,
               w.access_suspended_until, w.is_admin,
@@ -1901,6 +1907,11 @@ async function listWorkers(req, res) {
     );
     return res.json({
       success: true,
+      mainAccount: {
+        name: headRow.manager_name || headRow.name || '',
+        email: headRow.email || '',
+        companyName: headRow.name || '',
+      },
       workers: rows.rows.map((r) => {
         const until = suspendedUntil(r);
         return {

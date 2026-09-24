@@ -1266,6 +1266,7 @@
     if (data.company && data.company.name) state.companyName = data.company.name;
     else if (data.project && data.project.name) state.companyName = data.project.name;
     if (data.company && data.company.managerName) state.managerName = data.company.managerName;
+    if (data.company && data.company.email) state.companyEmail = String(data.company.email).trim();
     if (data.sites) state.sites = data.sites;
     if (data.siteCount != null) state.siteCount = data.siteCount;
     if (data.projectMode) state.projectMode = data.projectMode;
@@ -2390,6 +2391,26 @@
       '</select>';
   }
 
+  function renderMainAccount(account) {
+    var nameEl = $('mg-main-account-name');
+    var emailEl = $('mg-main-account-email');
+    var box = $('mg-main-account');
+    var name = '';
+    var email = '';
+    if (account) {
+      name = String(account.name || '').trim();
+      email = String(account.email || '').trim();
+      if (account.companyName) state.companyName = account.companyName;
+      if (name) state.managerName = name;
+      if (email) state.companyEmail = email;
+    }
+    if (!name) name = String(state.managerName || state.companyName || '').trim();
+    if (!email) email = String(state.companyEmail || '').trim();
+    if (nameEl) nameEl.textContent = name || '—';
+    if (emailEl) emailEl.textContent = email;
+    if (box) box.hidden = !name && !email;
+  }
+
   function renderWorkersTable() {
     var box = $('mg-users-table');
     var status = $('mg-users-status');
@@ -2455,12 +2476,14 @@
   async function loadWorkers() {
     var status = $('mg-users-status');
     var box = $('mg-users-table');
+    renderMainAccount();
     if (status && !(state.workers && state.workers.length)) {
       status.textContent = 'Loading users…';
     }
     try {
       var data = await apiJson('/workers');
       state.workers = data.workers || [];
+      renderMainAccount(data.mainAccount);
     } catch (err) {
       state.workers = [];
       if (status) status.textContent = err && err.message ? err.message : 'Could not load users.';
