@@ -1913,22 +1913,8 @@ a.md-link { color: var(--md-accent); }
 }
 .sm-add-row input { flex: 1; min-width: 0; }
 .sm-add-row .md-btn { width: auto; flex: 0 0 auto; }
-.sm-locs {
-  max-height: 140px;
-  overflow: auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-}
-.sm-locs label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--md-line);
-  font-size: 0.8rem;
+#sm-locs {
+  width: 100%;
 }
 .sm-add-actions {
   display: flex;

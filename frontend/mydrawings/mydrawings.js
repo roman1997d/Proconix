@@ -1386,18 +1386,16 @@
     var host = $('sm-locs');
     if (!host) return;
     var locs = siteLocations();
-    host.innerHTML = locs.map(function (loc) {
-      return '<label><input type="checkbox" value="' + escapeHtml(loc.id) + '"><span>' +
-        escapeHtml(loc.label) + '</span></label>';
+    host.innerHTML = '<option value="">All locations</option>' + locs.map(function (loc) {
+      return '<option value="' + escapeHtml(loc.id) + '">' + escapeHtml(loc.label) + '</option>';
     }).join('');
+    host.value = '';
   }
 
   function selectedSmFloors() {
     var host = $('sm-locs');
-    if (!host) return [];
-    return Array.prototype.map.call(host.querySelectorAll('input:checked'), function (el) {
-      return el.value;
-    });
+    var id = host && host.value ? String(host.value) : '';
+    return id ? [id] : [];
   }
 
   function resetSmAddForm() {
