@@ -342,6 +342,10 @@
     return state.role === 'admin';
   }
 
+  function isSiteManager() {
+    return state.role === 'site_manager';
+  }
+
   function pinHeaders(extra) {
     var headers = extra ? Object.assign({}, extra) : {};
     var adminPin = state.adminPin || (state.role === 'admin' ? sessionPin() : '');
@@ -737,7 +741,7 @@
 
   function ensureFloorThenHome(opts) {
     opts = opts || {};
-    if (state.role === 'admin' || state.role === 'site_manager') {
+    if (state.role === 'admin') {
       openManage();
       return;
     }
@@ -1286,6 +1290,7 @@
       renderAdminChrome();
       renderManage();
     }
+    syncAddDrawingsButton();
   }
 
   /* ---------- List ---------- */
@@ -1336,6 +1341,7 @@
       var floorHint = state.floor ? ' for ' + escapeHtml(state.floor.label) : '';
       host.innerHTML = '<div class="md-empty"><h3>No drawings' + floorHint + '</h3><p>Try another search, category, or location.</p></div>';
       updateDownloadAllBtn();
+      syncAddDrawingsButton();
       return;
     }
     host.innerHTML = items.map(function (d) {
@@ -1357,6 +1363,140 @@
       );
     }).join('');
     updateDownloadAllBtn();
+    syncAddDrawingsButton();
+  }
+
+  function syncAddDrawingsButton() {
+    var btn = $('btn-sm-add');
+    if (btn) btn.hidden = !isSiteManager();
+  }
+
+  function fillSmCategorySelect(selected) {
+    var sel = $('sm-category');
+    if (!sel) return;
+    var cats = (state.categories || []).slice();
+    if (!cats.length) cats = ['Uncategorised'];
+    sel.innerHTML = cats.map(function (c) {
+      var on = c === selected ? ' selected' : '';
+      return '<option value="' + escapeHtml(c) + '"' + on + '>' + escapeHtml(c) + '</option>';
+    }).join('');
+  }
+
+  function renderSmLocations() {
+    var host = $('sm-locs');
+    if (!host) return;
+    var locs = siteLocations();
+    host.innerHTML = locs.map(function (loc) {
+      return '<label><input type="checkbox" value="' + escapeHtml(loc.id) + '"><span>' +
+        escapeHtml(loc.label) + '</span></label>';
+    }).join('');
+  }
+
+  function selectedSmFloors() {
+    var host = $('sm-locs');
+    if (!host) return [];
+    return Array.prototype.map.call(host.querySelectorAll('input:checked'), function (el) {
+      return el.value;
+    });
+  }
+
+  function resetSmAddForm() {
+    if ($('sm-number')) $('sm-number').value = '';
+    if ($('sm-title')) $('sm-title').value = '';
+    if ($('sm-rev')) $('sm-rev').value = 'A';
+    if ($('sm-file')) $('sm-file').value = '';
+    if ($('sm-file-name')) $('sm-file-name').textContent = 'No file selected';
+    if ($('sm-error')) $('sm-error').textContent = '';
+    if ($('sm-cat-input')) $('sm-cat-input').value = '';
+    renderSmLocations();
+    fillSmCategorySelect(state.categories[0]);
+  }
+
+  function openSmAddModal() {
+    if (!isSiteManager() && ($('btn-sm-add') && $('btn-sm-add').hidden)) return;
+    resetSmAddForm();
+    if ($('sm-ok')) {
+      $('sm-ok').hidden = true;
+      $('sm-ok').textContent = '';
+    }
+    if ($('sm-add-modal')) $('sm-add-modal').hidden = false;
+    setTimeout(function () {
+      if ($('sm-number')) $('sm-number').focus();
+    }, 80);
+  }
+
+  function closeSmAddModal() {
+    if ($('sm-add-modal')) $('sm-add-modal').hidden = true;
+  }
+
+  async function addSmCategory() {
+    var name = ($('sm-cat-input') && $('sm-cat-input').value || '').replace(/\s+/g, ' ').trim();
+    if ($('sm-error')) $('sm-error').textContent = '';
+    if (!name) {
+      if ($('sm-error')) $('sm-error').textContent = 'Enter a category name.';
+      return;
+    }
+    try {
+      var data = await apiJson('/categories', { method: 'POST', body: { name: name } });
+      if ($('sm-cat-input')) $('sm-cat-input').value = '';
+      await applyRemoteCatalog(data);
+      renderCats();
+      renderList();
+      if ($('mg-cats')) renderManage();
+      fillSmCategorySelect(name);
+      if ($('mg-category')) fillCategorySelect(name);
+    } catch (err) {
+      if ($('sm-error')) $('sm-error').textContent = err && err.message ? err.message : 'Could not add category.';
+    }
+  }
+
+  async function submitSmAddForm(e) {
+    if (e) e.preventDefault();
+    if (!isSiteManager()) return;
+    if ($('sm-error')) $('sm-error').textContent = '';
+    if ($('sm-ok')) {
+      $('sm-ok').hidden = true;
+      $('sm-ok').textContent = '';
+    }
+    var number = ($('sm-number').value || '').trim();
+    var title = ($('sm-title').value || '').trim();
+    var category = $('sm-category') && $('sm-category').value;
+    var revision = ($('sm-rev').value || '').trim().toUpperCase() || 'A';
+    var floors = selectedSmFloors();
+    var file = $('sm-file').files && $('sm-file').files[0];
+    if (!number || !title) {
+      $('sm-error').textContent = 'Number and title are required.';
+      return;
+    }
+    if (!isPdfFile(file)) {
+      $('sm-error').textContent = 'Choose a PDF file.';
+      return;
+    }
+    $('sm-add-save').disabled = true;
+    try {
+      var data = await apiJson('/drawings', {
+        method: 'POST',
+        body: drawingFormData({
+          number: number,
+          title: title,
+          category: category,
+          revision: revision,
+          floors: floors.join(',')
+        }, file)
+      });
+      await applyRemoteCatalog(data);
+      renderCats();
+      renderList();
+      resetSmAddForm();
+      fillSmCategorySelect(category);
+      if ($('sm-ok')) {
+        $('sm-ok').hidden = false;
+        $('sm-ok').textContent = 'Saved. Add another drawing or close.';
+      }
+    } catch (err) {
+      $('sm-error').textContent = err && err.message ? err.message : 'Could not save.';
+    }
+    $('sm-add-save').disabled = false;
   }
 
   function pendingDownloads() {
@@ -3885,6 +4025,24 @@
   on($('btn-menu'), 'click', openMainMenu);
   on($('btn-update'), 'click', updateDrawingsList);
   on($('btn-download-all'), 'click', downloadAllDrawings);
+  on($('btn-sm-add'), 'click', openSmAddModal);
+  on($('sm-add-close'), 'click', closeSmAddModal);
+  on($('sm-add-cancel'), 'click', closeSmAddModal);
+  on($('sm-add-modal'), 'click', function (e) {
+    if (e.target && e.target.id === 'sm-add-modal') closeSmAddModal();
+  });
+  on($('sm-cat-add'), 'click', addSmCategory);
+  on($('sm-cat-input'), 'keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addSmCategory();
+    }
+  });
+  on($('sm-add-form'), 'submit', submitSmAddForm);
+  on($('sm-file'), 'change', function () {
+    var f = $('sm-file').files && $('sm-file').files[0];
+    if ($('sm-file-name')) $('sm-file-name').textContent = f ? f.name : 'No file selected';
+  });
   on($('btn-activity-back'), 'click', closeActivity);
   on($('btn-wall-types-back'), 'click', closeWallTypes);
   on($('btn-wall-type-detail-back'), 'click', closeWallTypeDetail);

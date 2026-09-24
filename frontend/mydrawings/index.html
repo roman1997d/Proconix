@@ -203,10 +203,16 @@
         <div class="md-cats" id="cats" role="tablist" aria-label="Categories"></div>
         <div class="md-list-tools">
           <p class="md-count" id="list-count"></p>
-          <button type="button" class="md-btn-all" id="btn-download-all" aria-label="Download all drawings">
-            <svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>
-            <span id="btn-download-all-label">Download all drawings</span>
-          </button>
+          <div class="md-list-tool-btns">
+            <button type="button" class="md-btn-all md-btn-add" id="btn-sm-add" hidden aria-label="Add drawings">
+              <svg class="md-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              <span>Add Drawings</span>
+            </button>
+            <button type="button" class="md-btn-all" id="btn-download-all" aria-label="Download all drawings">
+              <svg class="md-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>
+              <span id="btn-download-all-label">Download all drawings</span>
+            </button>
+          </div>
         </div>
         <div class="md-list" id="list"></div>
         <div class="md-install" id="install-bar">
@@ -682,6 +688,59 @@
         </button>
       </footer>
     </section>
+  </div>
+
+  <div class="sm-add-modal" id="sm-add-modal" hidden>
+    <div class="sm-add-card" role="dialog" aria-modal="true" aria-labelledby="sm-add-title">
+      <div class="sm-add-head">
+        <h3 id="sm-add-title">Add drawings</h3>
+        <button type="button" class="md-icon-btn" id="sm-add-close" aria-label="Close">
+          <svg class="md-icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <p class="md-pin-hint">Add a category if you need one, then save the drawing. The team sees it the next time they open My Drawings.</p>
+      <label class="mg-field">
+        <span>New category</span>
+        <div class="sm-add-row">
+          <input id="sm-cat-input" type="text" maxlength="80" placeholder="e.g. Architectural" autocomplete="off">
+          <button type="button" class="md-btn md-btn-ghost" id="sm-cat-add">Add</button>
+        </div>
+      </label>
+      <form class="md-reg-form" id="sm-add-form" autocomplete="off">
+        <label class="mg-field">
+          <span>Drawing number</span>
+          <input id="sm-number" type="text" maxlength="40" placeholder="A-102" required>
+        </label>
+        <label class="mg-field">
+          <span>Title</span>
+          <input id="sm-title" type="text" maxlength="200" placeholder="Ground Floor Plan" required>
+        </label>
+        <label class="mg-field">
+          <span>Category</span>
+          <select id="sm-category"></select>
+        </label>
+        <label class="mg-field">
+          <span>Revision</span>
+          <input id="sm-rev" type="text" maxlength="12" placeholder="A" value="A">
+        </label>
+        <fieldset class="mg-field">
+          <span>Floor / location</span>
+          <div class="sm-locs" id="sm-locs"></div>
+          <span class="mg-floors-hint">Leave empty to show on every location.</span>
+        </fieldset>
+        <label class="mg-field">
+          <span>PDF file</span>
+          <input id="sm-file" type="file" accept="application/pdf,.pdf" required>
+          <span class="md-file-name" id="sm-file-name">No file selected</span>
+        </label>
+        <p class="md-error" id="sm-error" role="alert"></p>
+        <p class="md-pin-hint" id="sm-ok" hidden></p>
+        <div class="sm-add-actions">
+          <button type="button" class="md-btn md-btn-ghost" id="sm-add-cancel">Cancel</button>
+          <button type="submit" class="md-btn md-btn-primary" id="sm-add-save">Save</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <div class="md-backdrop" id="backdrop"></div>
