@@ -1834,6 +1834,22 @@ async function workerSitesForEmail(workspaceId, email) {
   return rows.rows.map((row) => ({ id: row.id, name: row.name || 'Site' }));
 }
 
+async function actorGrantableSites(req, workspaceId) {
+  if (isCompanyHead(req.myDrawings)) {
+    return listWorkspaceSites(workspaceId);
+  }
+  const email = req.myDrawings && req.myDrawings.worker && req.myDrawings.worker.email;
+  if (email) return workerSitesForEmail(workspaceId, email);
+  const current = currentSiteId(req.myDrawings);
+  const all = await listWorkspaceSites(workspaceId);
+  return current ? all.filter((s) => Number(s.id) === Number(current)) : [];
+}
+
+function siteInList(sites, siteId) {
+  const id = Number(siteId);
+  return (sites || []).some((s) => Number(s.id) === id);
+}
+
 async function catalogResponse(req, res) {
   const payload = await loadCatalog(req.myDrawings.workspace, req.myDrawings.role, req.myDrawings.project);
   const worker = req.myDrawings && req.myDrawings.worker;
@@ -1915,6 +1931,8 @@ async function listWorkers(req, res) {
     );
     const headRow = head.rows[0] || {};
     const allSites = await listWorkspaceSites(workspaceId);
+    const grantable = await actorGrantableSites(req, workspaceId);
+    const grantableIds = new Set(grantable.map((s) => Number(s.id)));
     const rows = await pool.query(
       `SELECT w.id, w.first_name, w.last_name, w.email, w.verified_at, w.created_at,
               w.access_suspended_until, w.is_admin,
@@ -1949,10 +1967,11 @@ async function listWorkers(req, res) {
         email: headRow.email || '',
         companyName: headRow.name || '',
       },
-      sites: allSites.map((s) => ({ id: s.id, name: s.name })),
+      sites: grantable.map((s) => ({ id: s.id, name: s.name })),
       workers: rows.rows.map((r) => {
         const until = suspendedUntil(r);
-        const have = sitesByEmail[String(r.email || '').toLowerCase()] || [];
+        const haveAll = sitesByEmail[String(r.email || '').toLowerCase()] || [];
+        const have = haveAll.filter((s) => grantableIds.has(Number(s.id)));
         const haveIds = new Set(have.map((s) => Number(s.id)));
         return {
           id: r.id,
@@ -1968,7 +1987,7 @@ async function listWorkers(req, res) {
           isAdmin: !!r.is_admin,
           isSiteManager: !!r.is_admin,
           sites: have,
-          availableSites: allSites
+          availableSites: grantable
             .filter((s) => !haveIds.has(Number(s.id)))
             .map((s) => ({ id: s.id, name: s.name })),
         };
@@ -1983,8 +2002,8 @@ async function listWorkers(req, res) {
 async function addWorkerSiteAccess(req, res) {
   try {
     await ensureSchema();
-    if (!isCompanyHead(req.myDrawings)) {
-      return res.status(403).json({ success: false, message: 'Only the company head can add site access.' });
+    if (!canManageSite(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Site manager or company access is required.' });
     }
     const workspaceId = req.myDrawings.workspace.id;
     const worker = await findCompanyWorker(workspaceId, req.params.id, currentSiteId(req.myDrawings));
@@ -1995,6 +2014,10 @@ async function addWorkerSiteAccess(req, res) {
     const site = siteId ? await loadSiteRow(workspaceId, siteId) : null;
     if (!site) {
       return res.status(400).json({ success: false, message: 'Select a site.' });
+    }
+    const grantable = await actorGrantableSites(req, workspaceId);
+    if (!siteInList(grantable, site.id)) {
+      return res.status(403).json({ success: false, message: 'You can only add access for sites you have.' });
     }
     if (Number(worker.project_id) === Number(site.id)) {
       return res.status(409).json({ success: false, message: 'This user already has access to that site.' });
@@ -2031,8 +2054,8 @@ async function addWorkerSiteAccess(req, res) {
 async function revokeWorkerSiteAccess(req, res) {
   try {
     await ensureSchema();
-    if (!isCompanyHead(req.myDrawings)) {
-      return res.status(403).json({ success: false, message: 'Only the company head can revoke site access.' });
+    if (!canManageSite(req.myDrawings)) {
+      return res.status(403).json({ success: false, message: 'Site manager or company access is required.' });
     }
     const workspaceId = req.myDrawings.workspace.id;
     const worker = await findCompanyWorker(workspaceId, req.params.id, currentSiteId(req.myDrawings));
@@ -2043,6 +2066,10 @@ async function revokeWorkerSiteAccess(req, res) {
     const site = siteId ? await loadSiteRow(workspaceId, siteId) : null;
     if (!site) {
       return res.status(400).json({ success: false, message: 'Select a site.' });
+    }
+    const grantable = await actorGrantableSites(req, workspaceId);
+    if (!siteInList(grantable, site.id)) {
+      return res.status(403).json({ success: false, message: 'You can only revoke access from sites you have.' });
     }
     const linked = await pool.query(
       `SELECT w.id, w.project_id, w.email, p.name AS site_name

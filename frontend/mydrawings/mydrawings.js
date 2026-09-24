@@ -2395,7 +2395,7 @@
   }
 
   function canAddSiteAccess() {
-    if (!isCompanyHead()) return false;
+    if (!isCompanyHead() && !isSiteManager()) return false;
     if ((state.sites || []).length > 1) return true;
     var list = state.workers || [];
     for (var i = 0; i < list.length; i++) {
