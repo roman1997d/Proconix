@@ -4975,16 +4975,6 @@
     );
   }
 
-  function jsonPreview(val) {
-    if (val == null || val === '') return '{}';
-    if (typeof val === 'string') return val;
-    try {
-      return JSON.stringify(val);
-    } catch (e) {
-      return '{}';
-    }
-  }
-
   function addMdSiteRow(site) {
     var body = document.getElementById('pxMdSitesBody');
     if (!body) return;
@@ -5067,143 +5057,6 @@
     body.appendChild(tr);
   }
 
-  function addMdCategoryRow(cat) {
-    var body = document.getElementById('pxMdCategoriesBody');
-    if (!body) return;
-    var data = cat || {};
-    var tr = document.createElement('tr');
-    if (data.id) tr.setAttribute('data-category-id', String(data.id));
-    var name = mdField('text', data.name);
-    name.classList.add('px-md-c-name');
-    var sort = mdField('number', data.sort_order == null ? 0 : data.sort_order);
-    sort.classList.add('px-md-c-sort');
-    var site = mdSiteSelect(data.project_id);
-    site.classList.add('px-md-c-site');
-    var del = mdCheck(false, 'Delete category');
-    del.input.classList.add('px-md-c-delete');
-    tr.appendChild(mdTd(data.id ? String(data.id) : 'new'));
-    tr.appendChild(mdTd(name));
-    tr.appendChild(mdTd(sort));
-    tr.appendChild(mdTd(site));
-    tr.appendChild(mdTd(del.wrap));
-    body.appendChild(tr);
-  }
-
-  function addMdDrawingRow(item) {
-    var body = document.getElementById('pxMdDrawingsBody');
-    if (!body || !item) return;
-    var tr = document.createElement('tr');
-    tr.setAttribute('data-drawing-id', String(item.id));
-    var number = mdField('text', item.number);
-    number.classList.add('px-md-d-number');
-    var title = mdField('text', item.title);
-    title.classList.add('px-md-d-title');
-    var rev = mdField('text', item.revision);
-    rev.classList.add('px-md-d-rev');
-    rev.style.maxWidth = '4rem';
-    var site = mdSiteSelect(item.project_id);
-    site.classList.add('px-md-d-site');
-    var cat = mdField('number', item.category_id);
-    cat.classList.add('px-md-d-cat');
-    cat.min = '1';
-    var floors = mdField('text', Array.isArray(item.floors) ? item.floors.join(', ') : item.floors);
-    floors.classList.add('px-md-d-floors');
-    var file = document.createElement('div');
-    file.className = 'small text-white-50';
-    file.textContent = item.relative_path || item.stored_filename || '—';
-    var del = mdCheck(false, 'Delete drawing');
-    del.input.classList.add('px-md-d-delete');
-    tr.appendChild(mdTd(String(item.id)));
-    tr.appendChild(mdTd(number));
-    tr.appendChild(mdTd(title));
-    tr.appendChild(mdTd(rev));
-    tr.appendChild(mdTd(site));
-    tr.appendChild(mdTd(cat));
-    tr.appendChild(mdTd(floors));
-    tr.appendChild(mdTd(file));
-    tr.appendChild(mdTd(del.wrap));
-    body.appendChild(tr);
-  }
-
-  function addMdWallRow(wall) {
-    var body = document.getElementById('pxMdWallsBody');
-    if (!body) return;
-    var data = wall || {};
-    var tr = document.createElement('tr');
-    tr.className = 'px-md-wall-main';
-    if (data.id) tr.setAttribute('data-wall-id', String(data.id));
-    function bind(cls, val) {
-      var el = mdField('text', val);
-      el.classList.add(cls);
-      return el;
-    }
-    var code = bind('px-md-wt-code', data.code);
-    var kind = bind('px-md-wt-kind', data.kind || 'wall');
-    var name = bind('px-md-wt-name', data.name);
-    var system = bind('px-md-wt-system', data.system_ref);
-    var fire = bind('px-md-wt-fire', data.fire_minutes);
-    var acoustic = bind('px-md-wt-acoustic', data.acoustic);
-    var thick = bind('px-md-wt-thick', data.thickness);
-    var height = bind('px-md-wt-height', data.max_height_m);
-    var duty = bind('px-md-wt-duty', data.duty);
-    var site = mdSiteSelect(data.project_id);
-    site.classList.add('px-md-wt-site');
-    var clearImg = mdCheck(false, 'Clear image');
-    clearImg.input.classList.add('px-md-wt-clear-image');
-    var del = mdCheck(false, 'Delete wall type');
-    del.input.classList.add('px-md-wt-delete');
-    var systemType = bind('px-md-wt-system-type', data.system_type);
-    var fireClass = bind('px-md-wt-fire-class', data.fire_class);
-    var sort = mdField('number', data.sort_order == null ? 0 : data.sort_order);
-    sort.classList.add('px-md-wt-sort');
-    var buildup = mdField('text', jsonPreview(data.buildup));
-    buildup.classList.add('px-md-wt-buildup');
-    buildup.title = 'buildup JSON';
-    var pack = mdField('text', jsonPreview(data.pack_pages));
-    pack.classList.add('px-md-wt-pack');
-    pack.title = 'pack_pages JSON';
-    tr.appendChild(mdTd(data.id ? String(data.id) : 'new'));
-    tr.appendChild(mdTd(code));
-    tr.appendChild(mdTd(kind));
-    tr.appendChild(mdTd(name));
-    tr.appendChild(mdTd(system));
-    tr.appendChild(mdTd(fire));
-    tr.appendChild(mdTd(acoustic));
-    tr.appendChild(mdTd(thick));
-    tr.appendChild(mdTd(height));
-    tr.appendChild(mdTd(duty));
-    tr.appendChild(mdTd(site));
-    tr.appendChild(mdTd(clearImg.wrap));
-    tr.appendChild(mdTd(del.wrap));
-    var extra = document.createElement('tr');
-    extra.className = 'px-admin-md-wall-extra';
-    var extraTd = document.createElement('td');
-    extraTd.colSpan = 13;
-    extraTd.className = 'pt-0';
-    var extraWrap = document.createElement('div');
-    extraWrap.className = 'd-flex flex-wrap gap-2 pb-2';
-    function labeled(label, node) {
-      var box = document.createElement('div');
-      box.style.minWidth = '9rem';
-      box.style.flex = '1';
-      var lab = document.createElement('div');
-      lab.className = 'text-white-50 small';
-      lab.textContent = label;
-      box.appendChild(lab);
-      box.appendChild(node);
-      extraWrap.appendChild(box);
-    }
-    labeled('System type', systemType);
-    labeled('Fire class', fireClass);
-    labeled('Sort', sort);
-    labeled('Buildup JSON', buildup);
-    labeled('Pack pages JSON', pack);
-    extraTd.appendChild(extraWrap);
-    extra.appendChild(extraTd);
-    body.appendChild(tr);
-    body.appendChild(extra);
-  }
-
   function fillMdCompanyModal(detail) {
     if (!detail || !detail.workspace) return;
     var ws = detail.workspace;
@@ -5241,16 +5094,13 @@
       }
       if (logoPath) logoPath.textContent = 'No logo';
     }
-    ['pxMdSitesBody', 'pxMdWorkersBody', 'pxMdCategoriesBody', 'pxMdDrawingsBody', 'pxMdWallsBody'].forEach(function (id) {
+    ['pxMdSitesBody', 'pxMdWorkersBody'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.innerHTML = '';
     });
     mdClientSeq = 0;
     (detail.sites || []).forEach(addMdSiteRow);
     (detail.workers || []).forEach(addMdWorkerRow);
-    (detail.categories || []).forEach(addMdCategoryRow);
-    (detail.drawings || []).forEach(addMdDrawingRow);
-    (detail.wall_types || []).forEach(addMdWallRow);
     refreshMdSiteSelects();
   }
 
@@ -5284,54 +5134,6 @@
         _delete: !!(tr.querySelector('.px-md-w-delete') && tr.querySelector('.px-md-w-delete').checked),
       });
     });
-    var categories = [];
-    Array.prototype.forEach.call(document.querySelectorAll('#pxMdCategoriesBody tr'), function (tr) {
-      categories.push({
-        id: tr.getAttribute('data-category-id') || '',
-        name: tr.querySelector('.px-md-c-name') && tr.querySelector('.px-md-c-name').value,
-        sort_order: tr.querySelector('.px-md-c-sort') && tr.querySelector('.px-md-c-sort').value,
-        project_id: tr.querySelector('.px-md-c-site') && tr.querySelector('.px-md-c-site').value,
-        _delete: !!(tr.querySelector('.px-md-c-delete') && tr.querySelector('.px-md-c-delete').checked),
-      });
-    });
-    var drawings = [];
-    Array.prototype.forEach.call(document.querySelectorAll('#pxMdDrawingsBody tr'), function (tr) {
-      drawings.push({
-        id: tr.getAttribute('data-drawing-id') || '',
-        number: tr.querySelector('.px-md-d-number') && tr.querySelector('.px-md-d-number').value,
-        title: tr.querySelector('.px-md-d-title') && tr.querySelector('.px-md-d-title').value,
-        revision: tr.querySelector('.px-md-d-rev') && tr.querySelector('.px-md-d-rev').value,
-        project_id: tr.querySelector('.px-md-d-site') && tr.querySelector('.px-md-d-site').value,
-        category_id: tr.querySelector('.px-md-d-cat') && tr.querySelector('.px-md-d-cat').value,
-        floors: tr.querySelector('.px-md-d-floors') && tr.querySelector('.px-md-d-floors').value,
-        _delete: !!(tr.querySelector('.px-md-d-delete') && tr.querySelector('.px-md-d-delete').checked),
-      });
-    });
-    var wallTypes = [];
-    Array.prototype.forEach.call(document.querySelectorAll('#pxMdWallsBody tr.px-md-wall-main'), function (tr) {
-      var extra = tr.nextElementSibling;
-      var scope = extra && extra.classList.contains('px-admin-md-wall-extra') ? extra : tr;
-      wallTypes.push({
-        id: tr.getAttribute('data-wall-id') || '',
-        code: tr.querySelector('.px-md-wt-code') && tr.querySelector('.px-md-wt-code').value,
-        kind: tr.querySelector('.px-md-wt-kind') && tr.querySelector('.px-md-wt-kind').value,
-        name: tr.querySelector('.px-md-wt-name') && tr.querySelector('.px-md-wt-name').value,
-        system_ref: tr.querySelector('.px-md-wt-system') && tr.querySelector('.px-md-wt-system').value,
-        system_type: scope.querySelector('.px-md-wt-system-type') && scope.querySelector('.px-md-wt-system-type').value,
-        fire_minutes: tr.querySelector('.px-md-wt-fire') && tr.querySelector('.px-md-wt-fire').value,
-        fire_class: scope.querySelector('.px-md-wt-fire-class') && scope.querySelector('.px-md-wt-fire-class').value,
-        acoustic: tr.querySelector('.px-md-wt-acoustic') && tr.querySelector('.px-md-wt-acoustic').value,
-        thickness: tr.querySelector('.px-md-wt-thick') && tr.querySelector('.px-md-wt-thick').value,
-        max_height_m: tr.querySelector('.px-md-wt-height') && tr.querySelector('.px-md-wt-height').value,
-        duty: tr.querySelector('.px-md-wt-duty') && tr.querySelector('.px-md-wt-duty').value,
-        project_id: tr.querySelector('.px-md-wt-site') && tr.querySelector('.px-md-wt-site').value,
-        sort_order: scope.querySelector('.px-md-wt-sort') && scope.querySelector('.px-md-wt-sort').value,
-        buildup: scope.querySelector('.px-md-wt-buildup') && scope.querySelector('.px-md-wt-buildup').value,
-        pack_pages: scope.querySelector('.px-md-wt-pack') && scope.querySelector('.px-md-wt-pack').value,
-        clear_image: !!(tr.querySelector('.px-md-wt-clear-image') && tr.querySelector('.px-md-wt-clear-image').checked),
-        _delete: !!(tr.querySelector('.px-md-wt-delete') && tr.querySelector('.px-md-wt-delete').checked),
-      });
-    });
     return {
       workspace: {
         name: document.getElementById('pxMd_name') && document.getElementById('pxMd_name').value,
@@ -5347,9 +5149,6 @@
       },
       sites: sites,
       workers: workers,
-      categories: categories,
-      drawings: drawings,
-      wall_types: wallTypes,
     };
   }
 
@@ -5426,18 +5225,6 @@
   if (btnMdAddWorker) {
     btnMdAddWorker.addEventListener('click', function () {
       addMdWorkerRow({});
-    });
-  }
-  var btnMdAddCategory = document.getElementById('pxMdAddCategoryBtn');
-  if (btnMdAddCategory) {
-    btnMdAddCategory.addEventListener('click', function () {
-      addMdCategoryRow({ name: 'New category', sort_order: 0 });
-    });
-  }
-  var btnMdAddWall = document.getElementById('pxMdAddWallBtn');
-  if (btnMdAddWall) {
-    btnMdAddWall.addEventListener('click', function () {
-      addMdWallRow({ code: '', kind: 'wall', name: '' });
     });
   }
 

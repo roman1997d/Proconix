@@ -697,20 +697,6 @@ function parseStringArray(raw) {
     .filter(Boolean);
 }
 
-function parseJsonObject(raw, field) {
-  if (raw == null || raw === '') return {};
-  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
-  try {
-    const parsed = JSON.parse(String(raw));
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('not object');
-    }
-    return parsed;
-  } catch (_) {
-    throw mdHttpError(400, field + ' must be a JSON object.');
-  }
-}
-
 async function unlinkMdStoredRel(rel) {
   if (!rel) return;
   let normalized = String(rel).trim().replace(/\\/g, '/').replace(/^\/+/, '');
@@ -791,37 +777,10 @@ async function fetchMyDrawingsCompanyDetail(id) {
      ORDER BY w.id ASC`,
     [id]
   );
-  const categories = await pool.query(
-    `SELECT id, workspace_id, project_id, name, sort_order
-     FROM my_drawings_category
-     WHERE workspace_id = $1
-     ORDER BY sort_order ASC, id ASC`,
-    [id]
-  );
-  const drawings = await pool.query(
-    `SELECT id, workspace_id, project_id, category_id, number, title, revision, size_bytes,
-            stored_filename, relative_path, mime_type, floors, created_at, updated_at
-     FROM my_drawings_item
-     WHERE workspace_id = $1
-     ORDER BY id ASC`,
-    [id]
-  );
-  const wallTypes = await pool.query(
-    `SELECT id, workspace_id, project_id, code, kind, name, system_ref, system_type, fire_minutes,
-            fire_class, acoustic, thickness, max_height_m, duty, buildup, pack_pages,
-            detail_image_path, sort_order
-     FROM my_drawings_wall_type
-     WHERE workspace_id = $1
-     ORDER BY sort_order ASC, id ASC`,
-    [id]
-  );
   return {
     workspace: ws.rows[0],
     sites: sites.rows || [],
     workers: workers.rows || [],
-    categories: categories.rows || [],
-    drawings: drawings.rows || [],
-    wall_types: wallTypes.rows || [],
   };
 }
 
@@ -859,7 +818,7 @@ async function getMyDrawingsCompany(req, res) {
 
 /**
  * PATCH /api/platform-admin/mydrawings-companies/:id
- * Full workspace + nested sites / workers / categories / drawings / wall types.
+ * Workspace + nested sites / workers.
  */
 async function updateMyDrawingsCompany(req, res) {
   const id = parseInt(req.params.id, 10);
@@ -870,9 +829,6 @@ async function updateMyDrawingsCompany(req, res) {
   const workspaceIn = body.workspace && typeof body.workspace === 'object' ? body.workspace : {};
   const sitesIn = Array.isArray(body.sites) ? body.sites : [];
   const workersIn = Array.isArray(body.workers) ? body.workers : [];
-  const categoriesIn = Array.isArray(body.categories) ? body.categories : [];
-  const drawingsIn = Array.isArray(body.drawings) ? body.drawings : [];
-  const wallTypesIn = Array.isArray(body.wall_types) ? body.wall_types : [];
 
   const client = await pool.connect();
   try {
@@ -1123,158 +1079,6 @@ async function updateMyDrawingsCompany(req, res) {
       }
     }
 
-    const categoryIdSet = new Set(
-      (await client.query('SELECT id FROM my_drawings_category WHERE workspace_id = $1', [id])).rows.map((r) => Number(r.id))
-    );
-    for (const row of categoriesIn) {
-      if (!row || typeof row !== 'object' || !row._delete) continue;
-      const delId = parseOptionalInt(row.id, 'category id');
-      if (!delId || !categoryIdSet.has(delId)) continue;
-      await client.query('DELETE FROM my_drawings_category WHERE id = $1 AND workspace_id = $2', [delId, id]);
-      categoryIdSet.delete(delId);
-    }
-    for (const row of categoriesIn) {
-      if (!row || typeof row !== 'object' || row._delete) continue;
-      const name = String(row.name || '').trim().slice(0, 80);
-      if (!name) throw mdHttpError(400, 'Each category needs a name.');
-      const sortOrder = row.sort_order == null || row.sort_order === '' ? 0 : parseInt(String(row.sort_order), 10) || 0;
-      const projectId = resolveMdProjectId(row.project_id, siteClientMap, 'category site');
-      const existingId = parseOptionalInt(row.id, 'category id');
-      if (existingId) {
-        if (!categoryIdSet.has(existingId)) throw mdHttpError(400, 'Category #' + existingId + ' is not in this company.');
-        await client.query(
-          `UPDATE my_drawings_category
-           SET name = $2, sort_order = $3, project_id = $4
-           WHERE id = $1 AND workspace_id = $5`,
-          [existingId, name, sortOrder, projectId, id]
-        );
-      } else {
-        const inserted = await client.query(
-          `INSERT INTO my_drawings_category (workspace_id, project_id, name, sort_order)
-           VALUES ($1, $2, $3, $4)
-           RETURNING id`,
-          [id, projectId, name, sortOrder]
-        );
-        categoryIdSet.add(inserted.rows[0].id);
-      }
-    }
-
-    const drawingIdSet = new Set(
-      (await client.query('SELECT id FROM my_drawings_item WHERE workspace_id = $1', [id])).rows.map((r) => Number(r.id))
-    );
-    for (const row of drawingsIn) {
-      if (!row || typeof row !== 'object' || !row._delete) continue;
-      const delId = parseOptionalInt(row.id, 'drawing id');
-      if (!delId || !drawingIdSet.has(delId)) continue;
-      const file = await client.query(
-        'SELECT relative_path FROM my_drawings_item WHERE id = $1 AND workspace_id = $2',
-        [delId, id]
-      );
-      if (file.rows[0]) await unlinkMdStoredRel(file.rows[0].relative_path);
-      await client.query('DELETE FROM my_drawings_item WHERE id = $1 AND workspace_id = $2', [delId, id]);
-      drawingIdSet.delete(delId);
-    }
-    for (const row of drawingsIn) {
-      if (!row || typeof row !== 'object' || row._delete) continue;
-      const existingId = parseOptionalInt(row.id, 'drawing id');
-      if (!existingId || !drawingIdSet.has(existingId)) {
-        throw mdHttpError(400, 'Drawings can be edited or deleted here, not created without a file.');
-      }
-      const number = String(row.number || '').trim().slice(0, 40);
-      const title = String(row.title || '').trim().slice(0, 200);
-      const revision = String(row.revision || 'A').trim().slice(0, 12) || 'A';
-      if (!number || !title) throw mdHttpError(400, 'Each drawing needs a number and title.');
-      const projectId = resolveMdProjectId(row.project_id, siteClientMap, 'drawing site');
-      const categoryId = parseOptionalInt(row.category_id, 'drawing category');
-      const floors = parseStringArray(row.floors);
-      await client.query(
-        `UPDATE my_drawings_item
-         SET number = $2, title = $3, revision = $4, project_id = $5, category_id = $6, floors = $7, updated_at = NOW()
-         WHERE id = $1 AND workspace_id = $8`,
-        [existingId, number, title, revision, projectId, categoryId, floors, id]
-      );
-    }
-
-    const wallIdSet = new Set(
-      (await client.query('SELECT id FROM my_drawings_wall_type WHERE workspace_id = $1', [id])).rows.map((r) => Number(r.id))
-    );
-    for (const row of wallTypesIn) {
-      if (!row || typeof row !== 'object' || !row._delete) continue;
-      const delId = parseOptionalInt(row.id, 'wall type id');
-      if (!delId || !wallIdSet.has(delId)) continue;
-      const img = await client.query(
-        'SELECT detail_image_path FROM my_drawings_wall_type WHERE id = $1 AND workspace_id = $2',
-        [delId, id]
-      );
-      if (img.rows[0]) await unlinkMdStoredRel(img.rows[0].detail_image_path);
-      await client.query('DELETE FROM my_drawings_wall_type WHERE id = $1 AND workspace_id = $2', [delId, id]);
-      wallIdSet.delete(delId);
-    }
-    for (const row of wallTypesIn) {
-      if (!row || typeof row !== 'object' || row._delete) continue;
-      const code = String(row.code || '').trim().slice(0, 40);
-      if (!code) throw mdHttpError(400, 'Each wall type needs a code.');
-      const kind = String(row.kind || 'wall').trim().slice(0, 20) || 'wall';
-      const name = String(row.name || '').trim().slice(0, 300);
-      const projectId = resolveMdProjectId(row.project_id, siteClientMap, 'wall type site');
-      const sortOrder = row.sort_order == null || row.sort_order === '' ? 0 : parseInt(String(row.sort_order), 10) || 0;
-      const fields = {
-        system_ref: String(row.system_ref || '').slice(0, 120),
-        system_type: String(row.system_type || '').slice(0, 200),
-        fire_minutes: String(row.fire_minutes || '').slice(0, 40),
-        fire_class: String(row.fire_class || '').slice(0, 80),
-        acoustic: String(row.acoustic || '').slice(0, 80),
-        thickness: String(row.thickness || '').slice(0, 40),
-        max_height_m: String(row.max_height_m || '').slice(0, 40),
-        duty: String(row.duty || '').slice(0, 40),
-      };
-      const buildup = parseJsonObject(row.buildup, 'Wall type buildup');
-      const packPages = parseJsonObject(row.pack_pages, 'Wall type pack pages');
-      const existingId = parseOptionalInt(row.id, 'wall type id');
-      let detailPathUpdate = '';
-      const extraVals = [];
-      if (row.clear_image) {
-        if (existingId) {
-          const img = await client.query(
-            'SELECT detail_image_path FROM my_drawings_wall_type WHERE id = $1 AND workspace_id = $2',
-            [existingId, id]
-          );
-          if (img.rows[0]) await unlinkMdStoredRel(img.rows[0].detail_image_path);
-        }
-        detailPathUpdate = ', detail_image_path = NULL';
-      }
-      if (existingId) {
-        if (!wallIdSet.has(existingId)) throw mdHttpError(400, 'Wall type #' + existingId + ' is not in this company.');
-        await client.query(
-          `UPDATE my_drawings_wall_type
-           SET code = $2, kind = $3, name = $4, system_ref = $5, system_type = $6, fire_minutes = $7,
-               fire_class = $8, acoustic = $9, thickness = $10, max_height_m = $11, duty = $12,
-               buildup = $13, pack_pages = $14, project_id = $15, sort_order = $16, updated_at = NOW()
-               ${detailPathUpdate}
-           WHERE id = $1 AND workspace_id = $17`,
-          [
-            existingId, code, kind, name, fields.system_ref, fields.system_type, fields.fire_minutes,
-            fields.fire_class, fields.acoustic, fields.thickness, fields.max_height_m, fields.duty,
-            JSON.stringify(buildup), JSON.stringify(packPages), projectId, sortOrder, id, ...extraVals,
-          ]
-        );
-      } else {
-        const inserted = await client.query(
-          `INSERT INTO my_drawings_wall_type
-            (workspace_id, project_id, code, kind, name, system_ref, system_type, fire_minutes, fire_class,
-             acoustic, thickness, max_height_m, duty, buildup, pack_pages, sort_order)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-           RETURNING id`,
-          [
-            id, projectId, code, kind, name, fields.system_ref, fields.system_type, fields.fire_minutes,
-            fields.fire_class, fields.acoustic, fields.thickness, fields.max_height_m, fields.duty,
-            JSON.stringify(buildup), JSON.stringify(packPages), sortOrder,
-          ]
-        );
-        wallIdSet.add(inserted.rows[0].id);
-      }
-    }
-
     await client.query('COMMIT');
     const detail = await fetchMyDrawingsCompanyDetail(id);
     return res.status(200).json({
@@ -1294,7 +1098,7 @@ async function updateMyDrawingsCompany(req, res) {
     if (err && err.code === '23505') {
       return res.status(409).json({
         success: false,
-        message: 'A unique value is already in use (email, access code, user, category, drawing number, or wall type).',
+        message: 'A unique value is already in use (email, access code, or user).',
         detail: err.detail,
       });
     }
