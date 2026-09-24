@@ -101,14 +101,36 @@ async function attachCurrentSite(req, ctx) {
     const fromCtx = ctx.project && positiveInt(ctx.project.id);
     const owned = fromCtx && sites.find((s) => Number(s.id) === Number(fromCtx));
     ctx.project = owned || sites[0] || ctx.project || null;
+    ctx.sites = ctx.project ? sites.filter((s) => Number(s.id) === Number(ctx.project.id)) : [];
+    ctx.siteCount = ctx.sites.length;
     return ctx;
   }
-  if (ctx.role === 'admin' || ctx.role === 'site_manager') {
+  if (ctx.role === 'site_manager') {
+    const assigned =
+      positiveInt(ctx.project && ctx.project.id) ||
+      positiveInt(ctx.worker && (ctx.worker.projectId || ctx.worker.project_id));
+    const owned = assigned ? sites.filter((s) => Number(s.id) === Number(assigned)) : [];
+    ctx.sites = owned.length ? owned : sites.slice(0, 1);
+    ctx.siteCount = ctx.sites.length;
+    ctx.project = ctx.sites[0] || ctx.project || null;
+    return ctx;
+  }
+  if (ctx.role === 'admin') {
     const wanted = requestedSiteId(req);
     const match = wanted && sites.find((s) => Number(s.id) === Number(wanted));
     ctx.project = match || (ctx.project && sites.find((s) => Number(s.id) === Number(ctx.project.id))) || sites[0] || null;
   }
   return ctx;
+}
+
+function sitesVisibleTo(ctx, sites) {
+  const list = Array.isArray(sites) ? sites : [];
+  if (!ctx || ctx.role === 'admin') return list;
+  const assigned =
+    positiveInt(ctx.project && ctx.project.id) ||
+    positiveInt(ctx.worker && (ctx.worker.projectId || ctx.worker.project_id));
+  if (!assigned) return list.slice(0, 1);
+  return list.filter((s) => Number(s.id) === Number(assigned));
 }
 
 function canManageSite(ctx) {
@@ -130,6 +152,7 @@ module.exports = {
   loadSiteRow,
   findSiteByAccessCode,
   attachCurrentSite,
+  sitesVisibleTo,
   canManageSite,
   isCompanyHead,
   currentSiteId,

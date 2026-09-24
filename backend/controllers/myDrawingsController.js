@@ -33,6 +33,7 @@ const {
   loadSiteRow,
   findSiteByAccessCode,
   attachCurrentSite,
+  sitesVisibleTo,
   canManageSite,
   isCompanyHead,
   currentSiteId,
@@ -1011,6 +1012,7 @@ async function resolveJwtAuth(token) {
       firstName: row.first_name,
       lastName: row.last_name,
       email: row.email,
+      projectId: project.id,
     },
     project: { id: project.id, name: project.name },
   };
@@ -1373,6 +1375,7 @@ async function resolveDeviceToken(token) {
       firstName: row.first_name,
       lastName: row.last_name,
       email: row.email,
+      projectId: project ? project.id : row.project_id || null,
     },
     project: project ? { id: project.id, name: project.name } : null,
   };
@@ -1752,7 +1755,10 @@ async function loadCatalog(workspace, role, site) {
      ORDER BY i.number ASC`,
     [workspaceId, projectId || null]
   );
-  const sites = await listWorkspaceSites(workspaceId);
+  const allSites = await listWorkspaceSites(workspaceId);
+  const sites = role === 'admin'
+    ? allSites
+    : allSites.filter((s) => !projectId || Number(s.id) === Number(projectId));
   const current = sites.find((s) => Number(s.id) === Number(projectId)) || sites[0] || null;
   const manage = role === 'admin' || role === 'site_manager';
   let accessCode = (project && project.access_code) || (current && current.accessCode) || '';
@@ -2332,6 +2338,15 @@ async function companyLogin(req, res) {
     );
     const row = found.rows[0];
     if (!row) {
+      const workers = await findWorkersByEmail(email);
+      const siteManager = workers.find((w) => w.is_admin && !suspendedUntil(w));
+      if (siteManager) {
+        return res.status(400).json({
+          success: false,
+          kind: 'site_manager',
+          message: 'Site managers sign in with their own email and 4-digit key. Company email and password are only for the company head.',
+        });
+      }
       return res.status(401).json({ success: false, message: 'No company account found for that email.' });
     }
     if (password.length < 8) {
@@ -3104,7 +3119,10 @@ async function listSites(req, res) {
     if (!canManageSite(req.myDrawings)) {
       return res.status(403).json({ success: false, message: 'Site manager or company access is required.' });
     }
-    const sites = await listWorkspaceSites(req.myDrawings.workspace.id);
+    const sites = sitesVisibleTo(
+      req.myDrawings,
+      await listWorkspaceSites(req.myDrawings.workspace.id)
+    );
     return res.json({
       success: true,
       sites,
@@ -3198,6 +3216,9 @@ async function updateSiteLocations(req, res) {
     const workspaceId = req.myDrawings.workspace.id;
     const site = await loadSiteRow(workspaceId, req.params.id);
     if (!site) return res.status(404).json({ success: false, message: 'Site not found.' });
+    if (req.myDrawings.role === 'site_manager' && Number(site.id) !== Number(currentSiteId(req.myDrawings))) {
+      return res.status(403).json({ success: false, message: 'You can only manage the site you were assigned to.' });
+    }
     const floorCount = parseFloorCount(req.body && (req.body.floorCount != null ? req.body.floorCount : req.body.floorsCount), null);
     if (floorCount == null) {
       return res.status(400).json({ success: false, message: 'Enter how many floors this site has.' });

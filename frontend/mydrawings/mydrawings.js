@@ -1231,7 +1231,7 @@
         });
         extra = {
           deviceToken: data.deviceToken,
-          role: 'worker',
+          role: data.role || 'worker',
           firstName: data.firstName || pending.firstName,
           lastName: data.lastName || pending.lastName,
           email: data.email || pending.email
@@ -1250,6 +1250,7 @@
   }
 
   function applyCatalog(data) {
+    if (data.role) state.role = data.role;
     state.project = data.project || { name: 'Project' };
     state.categories = data.categories || [];
     state.drawings = data.drawings || [];
@@ -2495,7 +2496,7 @@
     if ($('ad-stat-published')) $('ad-stat-published').textContent = String(Math.max(0, total - drafts));
     if ($('ad-stat-draft')) $('ad-stat-draft').textContent = String(drafts);
     var sitesNav = $('ad-nav-sites');
-    if (sitesNav) sitesNav.hidden = !canManageCatalog();
+    if (sitesNav) sitesNav.hidden = !isCompanyHead();
     updateSiteFormChrome();
     var codeEl = $('mg-host-code');
     if (codeEl) {
@@ -2610,8 +2611,10 @@
           (site.accessCode ? '<p class="mg-item-meta">Code ' + escapeHtml(site.accessCode) + '</p>' : '') +
         '</div>' +
         '<div class="mg-item-actions">' +
-          (on ? '' : '<button type="button" class="mg-user-btn" data-site-act="open" data-site-id="' + id + '">Open</button>') +
-          '<button type="button" class="mg-user-btn" data-site-act="locations" data-site-id="' + id + '">Locations</button>' +
+          (on || !isCompanyHead() ? '' : '<button type="button" class="mg-user-btn" data-site-act="open" data-site-id="' + id + '">Open</button>') +
+          (String(state.siteId) === id || isCompanyHead()
+            ? '<button type="button" class="mg-user-btn" data-site-act="locations" data-site-id="' + id + '">Locations</button>'
+            : '') +
           (isCompanyHead() ? '<button type="button" class="mg-user-btn is-danger" data-site-act="close" data-site-id="' + id + '">Close site</button>' : '') +
         '</div>' +
       '</div>';
@@ -2686,6 +2689,10 @@
   }
 
   async function openSite(id) {
+    if (!isCompanyHead()) {
+      setSitesStatus('You can only manage the site you were assigned to.', true);
+      return;
+    }
     state.siteId = id;
     wallTypesCache = null;
     try {
